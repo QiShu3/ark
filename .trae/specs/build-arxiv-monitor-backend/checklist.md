@@ -1,0 +1,5 @@
+- [ ] 已确认后端统一使用 /arxiv 前缀，并通过 arxiv 库实现检索
+- [ ] 已确认仅保留 papers 单表（主键、所属用户、收藏状态、已读状态）
+- [ ] 已移除 paper_versions、crawl_jobs、crawl_logs 相关设计与接口
+- [ ] 已给出最小 API 闭环：search、state upsert、state list、health
+- [ ] 已包含单元、集成、点火（冒烟）测试要求

@@ -1,0 +1,8 @@
+protocol_version = "2025-03-26"
+
+[deepseek]
+allow_tools = { time = ["get_current_time"], todo = ["list_today", "focus_current", "focus_today", "focus_start", "focus_stop"] }
+
+[[servers]]
+name = "time"
+command = ["python", "-u", "MCP/servers/mcp_time_server.py"]
