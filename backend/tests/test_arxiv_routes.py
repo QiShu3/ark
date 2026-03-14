@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from fastapi import FastAPI
@@ -168,7 +168,7 @@ def test_search_endpoint_returns_mapped_results(monkeypatch) -> None:
                 arxiv_id="2501.00001",
                 title="Paper A",
                 authors=["Alice", "Bob"],
-                published=datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
                 summary="Summary",
             )
         ]
@@ -178,7 +178,12 @@ def test_search_endpoint_returns_mapped_results(monkeypatch) -> None:
     client = TestClient(app)
     resp = client.post(
         "/api/arxiv/search",
-        json={"keywords": "llm", "limit": 1, "sort_by": "submitted_date", "sort_order": "descending"},
+        json={
+            "keywords": "llm",
+            "limit": 1,
+            "sort_by": "submitted_date",
+            "sort_order": "descending",
+        },
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -195,7 +200,12 @@ def test_state_upsert_and_list_flow(monkeypatch) -> None:
 
     upsert_resp = client.put(
         "/api/arxiv/papers/state",
-        json={"arxiv_id": "2501.00001", "is_favorite": True, "is_read": False, "is_skipped": True},
+        json={
+            "arxiv_id": "2501.00001",
+            "is_favorite": True,
+            "is_read": False,
+            "is_skipped": True,
+        },
     )
     assert upsert_resp.status_code == 200
     assert upsert_resp.json()["is_favorite"] is True
@@ -235,7 +245,7 @@ def test_search_uses_stale_cache_when_429(monkeypatch) -> None:
                 arxiv_id="2501.00001",
                 title="Cached",
                 authors=["Alice"],
-                published=datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
                 summary="cached summary",
             )
         ],
@@ -284,14 +294,14 @@ def test_refresh_daily_candidates_filters_skipped(monkeypatch) -> None:
                 arxiv_id="2501.00001",
                 title="A",
                 authors=["Alice"],
-                published=datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
                 summary="s1",
             ),
             ArxivPaperOut(
                 arxiv_id="2501.00002",
                 title="B",
                 authors=["Bob"],
-                published=datetime(2026, 1, 2, tzinfo=timezone.utc).isoformat(),
+                published=datetime(2026, 1, 2, tzinfo=UTC).isoformat(),
                 summary="s2",
             ),
         ]
@@ -329,7 +339,12 @@ def test_search_429_without_cache_returns_429(monkeypatch) -> None:
     monkeypatch.setattr("routes.arxiv_routes._search_sync", _raise_429)
     resp = TestClient(_build_app()).post(
         "/api/arxiv/search",
-        json={"keywords": "llm", "limit": 1, "sort_by": "submitted_date", "sort_order": "descending"},
+        json={
+            "keywords": "llm",
+            "limit": 1,
+            "sort_by": "submitted_date",
+            "sort_order": "descending",
+        },
     )
     assert resp.status_code == 429
     assert "限流" in (resp.json() or {}).get("detail", "")

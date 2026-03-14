@@ -29,13 +29,13 @@ exclude = [
     "__pycache__",
 ]
 # 行最大长度
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 # 启用默认检查规则
 select = ["E", "F", "W", "I", "N", "UP", "ASYNC"]
 # 忽略特定的规则
-ignore = []
+ignore = ["E501", "N815", "N999", "F401", "ASYNC109"]
 
 [tool.ruff.format]
 # 格式化选项

@@ -1,6 +1,6 @@
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 
@@ -76,7 +76,13 @@ def main() -> None:
 
         if not initialized:
             if msg_id is not None:
-                _send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32002, "message": "Not initialized"}})
+                _send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32002, "message": "Not initialized"},
+                    }
+                )
             continue
 
         if method == "tools/list" and msg_id is not None:
@@ -112,7 +118,10 @@ def main() -> None:
                         {
                             "jsonrpc": "2.0",
                             "id": msg_id,
-                            "result": {"content": [{"type": "text", "text": err}], "isError": True},
+                            "result": {
+                                "content": [{"type": "text", "text": err}],
+                                "isError": True,
+                            },
                         }
                     )
                     continue
@@ -122,7 +131,10 @@ def main() -> None:
                         "id": msg_id,
                         "result": {
                             "content": [
-                                {"type": "text", "text": json.dumps(payload, ensure_ascii=False)},
+                                {
+                                    "type": "text",
+                                    "text": json.dumps(payload, ensure_ascii=False),
+                                },
                             ],
                             "isError": False,
                         },
@@ -130,11 +142,23 @@ def main() -> None:
                 )
                 continue
 
-            _send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32602, "message": f"Unknown tool: {name}"}})
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32602, "message": f"Unknown tool: {name}"},
+                }
+            )
             continue
 
         if msg_id is not None:
-            _send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": f"Method not found: {method}"}})
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                }
+            )
 
 
 if __name__ == "__main__":

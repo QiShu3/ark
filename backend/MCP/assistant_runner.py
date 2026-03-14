@@ -13,18 +13,20 @@
 - 安全控制：allowlist 控制在 DeepSeek 可见的工具集合；环境变量 MCP_ALLOW_TOOLS 优先，回退配置文件
 - 内置工具：无需子进程；直接使用当前 HTTP 请求上下文（Bearer token）与数据库连接池执行
 """
-import os
+
 import json
+import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 from fastapi import Request
 
+from routes.auth_routes import _user_from_token as _auth_user_from_token
+
 from .mcp_registry import MCPRegistry
 from .mcp_stdio import MCPProtocolError
-from routes.auth_routes import _user_from_token as _auth_user_from_token
 
 
 def _deepseek_chat_completions_url(base_url: str) -> str:
@@ -46,7 +48,12 @@ async def _call_deepseek_chat(messages: list[dict[str, Any]], tools: list[dict[s
     base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
     url = _deepseek_chat_completions_url(base_url)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload: dict[str, Any] = {"model": model, "messages": messages, "temperature": 0.7, "stream": False}
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "stream": False,
+    }
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
@@ -87,7 +94,9 @@ def _load_tool_allowlist(registry: MCPRegistry) -> dict[str, set[str]] | None:
     return out
 
 
-async def _build_server_tools_payload(registry: MCPRegistry) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str]]]:
+async def _build_server_tools_payload(
+    registry: MCPRegistry,
+) -> tuple[list[dict[str, Any]], dict[str, tuple[str, str]]]:
     """根据 MCPRegistry 收集各 server 的工具，并结合 allowlist 生成 DeepSeek function 规格。
     返回：
     - tools_payload：DeepSeek tools 参数中的 function 数组
@@ -199,6 +208,7 @@ async def _builtin_todo_list_today(request: Request) -> str:
     ]
     return json.dumps({"today_tasks": data}, ensure_ascii=False)
 
+
 async def _builtin_focus_current(request: Request) -> str:
     token = _bearer_token_from_request(request)
     if not token:
@@ -220,8 +230,9 @@ async def _builtin_focus_current(request: Request) -> str:
         )
         if row is None:
             return json.dumps({"is_focusing": False}, ensure_ascii=False)
-        from datetime import datetime, timezone
-        dur = int((datetime.now(timezone.utc) - row["start_time"]).total_seconds())
+        from datetime import datetime
+
+        dur = int((datetime.now(UTC) - row["start_time"]).total_seconds())
         if dur < 0:
             dur = 0
         task_row = await conn.fetchrow(
@@ -250,6 +261,7 @@ async def _builtin_focus_current(request: Request) -> str:
         },
     }
     return json.dumps(payload, ensure_ascii=False)
+
 
 async def _builtin_focus_today(request: Request) -> str:
     token = _bearer_token_from_request(request)
@@ -296,6 +308,7 @@ async def _builtin_focus_today(request: Request) -> str:
         seconds = 0
     return json.dumps({"seconds": seconds, "minutes": seconds // 60}, ensure_ascii=False)
 
+
 async def _builtin_focus_start(request: Request, args: dict[str, Any]) -> str:
     """敏感操作：开始专注
     说明：
@@ -325,6 +338,7 @@ async def _builtin_focus_start(request: Request, args: dict[str, Any]) -> str:
         },
         ensure_ascii=False,
     )
+
 
 async def _builtin_focus_stop(request: Request) -> str:
     """敏感操作：结束专注
@@ -362,7 +376,7 @@ async def _builtin_arxiv_daily_candidates(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
@@ -375,7 +389,14 @@ async def _builtin_arxiv_daily_candidates(request: Request) -> str:
             int(user.id),
             today,
         )
-    papers = [{"arxiv_id": str(r["arxiv_id"]), "title": str(r["title"]), "summary": str(r["summary"])} for r in rows]
+    papers = [
+        {
+            "arxiv_id": str(r["arxiv_id"]),
+            "title": str(r["title"]),
+            "summary": str(r["summary"]),
+        }
+        for r in rows
+    ]
     return json.dumps({"daily_candidates": papers}, ensure_ascii=False)
 
 
@@ -389,7 +410,7 @@ async def _builtin_arxiv_daily_prepare_add_tasks(request: Request, args: dict[st
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     ids_arg = args.get("arxiv_ids")
     requested = [str(x).strip() for x in ids_arg] if isinstance(ids_arg, list) else []
     async with pool.acquire() as conn:
@@ -427,7 +448,11 @@ async def _builtin_arxiv_daily_prepare_add_tasks(request: Request, args: dict[st
             "operation": "daily_batch_create_tasks",
             "title": f"将今日 {len(selected_ids)} 篇论文加入任务",
             "message": "将为每篇论文创建一条任务，包含标题与摘要要点，确认后执行。",
-            "request": {"method": "POST", "url": "/api/arxiv/daily/tasks/commit", "body": {"arxiv_ids": selected_ids}},
+            "request": {
+                "method": "POST",
+                "url": "/api/arxiv/daily/tasks/commit",
+                "body": {"arxiv_ids": selected_ids},
+            },
         },
         ensure_ascii=False,
     )
@@ -441,17 +466,14 @@ def _is_daily_allowed_tool_name(tool_name: str) -> bool:
         return True
     if name.startswith("todo__"):
         return (
-            "list" in name
-            or "get" in name
-            or "query" in name
-            or "add" in name
-            or "create" in name
-            or "insert" in name
+            "list" in name or "get" in name or "query" in name or "add" in name or "create" in name or "insert" in name
         )
     return False
 
 
-def _build_builtin_tools_payload(registry: MCPRegistry, *, scope: str = "general") -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _build_builtin_tools_payload(
+    registry: MCPRegistry, *, scope: str = "general"
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """构建内置工具（无需 stdio 服务器）的 DeepSeek function 规范与执行映射。
     allowlist 控制项：
     - 当 allowlist 不为空，且 'todo' 组中包含 'list_today' 时才暴露该内置工具
@@ -465,15 +487,34 @@ def _build_builtin_tools_payload(registry: MCPRegistry, *, scope: str = "general
     executors: dict[str, Any] = {}
     if include_todo:
         allowed_set = set(allow.get("todo")) if allow is not None and allow.get("todo") else set()
+
         def add_tool(name: str, desc: str, exec_key: str):
-            payload.append({"type": "function", "function": {"name": name, "description": desc, "parameters": {"type": "object", "properties": {}}}})
+            payload.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": desc,
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            )
             executors[name] = exec_key
+
         if not allowed_set:
             return payload, executors
         if "list_today" in allowed_set:
-            add_tool("todo__list_today", "查询当前用户的今日任务（需登录）", "builtin_todo_list_today")
+            add_tool(
+                "todo__list_today",
+                "查询当前用户的今日任务（需登录）",
+                "builtin_todo_list_today",
+            )
         if "focus_current" in allowed_set:
-            add_tool("todo__focus_current", "查询当前是否专注，以及所专注的任务与时长", "builtin_focus_current")
+            add_tool(
+                "todo__focus_current",
+                "查询当前是否专注，以及所专注的任务与时长",
+                "builtin_focus_current",
+            )
         if "focus_today" in allowed_set:
             add_tool("todo__focus_today", "查询今日专注总时长", "builtin_focus_today")
         if "focus_start" in allowed_set:
@@ -485,7 +526,12 @@ def _build_builtin_tools_payload(registry: MCPRegistry, *, scope: str = "general
                         "description": "发起开始专注的确认请求（需要 task_id）",
                         "parameters": {
                             "type": "object",
-                            "properties": {"task_id": {"type": "string", "description": "目标任务 UUID"}},
+                            "properties": {
+                                "task_id": {
+                                    "type": "string",
+                                    "description": "目标任务 UUID",
+                                }
+                            },
                             "required": ["task_id"],
                         },
                     },
@@ -546,7 +592,9 @@ async def chat_with_tools(
     if builtin_payload:
         tools_payload.extend(builtin_payload)
     if scope == "daily":
-        allowed_names = {_["function"]["name"] for _ in tools_payload if _is_daily_allowed_tool_name(_["function"]["name"])}
+        allowed_names = {
+            _["function"]["name"] for _ in tools_payload if _is_daily_allowed_tool_name(_["function"]["name"])
+        }
         tools_payload = [tool for tool in tools_payload if tool["function"]["name"] in allowed_names]
         name_mapping = {k: v for k, v in name_mapping.items() if k in allowed_names}
         builtin_execs = {k: v for k, v in builtin_execs.items() if k in allowed_names}
@@ -639,7 +687,14 @@ async def get_tools_overview(registry: MCPRegistry) -> dict[str, Any]:
             servers.append(
                 {
                     "name": name,
-                    "tools": [{"name": t.name, "description": t.description, "inputSchema": t.input_schema} for t in tools],
+                    "tools": [
+                        {
+                            "name": t.name,
+                            "description": t.description,
+                            "inputSchema": t.input_schema,
+                        }
+                        for t in tools
+                    ],
                 }
             )
         except Exception as e:

@@ -1,7 +1,7 @@
 import random
 import string
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -76,7 +76,7 @@ def _run() -> int:
             print("unexpected status after patch:", r.text)
             return 1
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         r = c.post(
             "/todo/tasks/" + task_id + "/focus-logs",
             headers=headers,
