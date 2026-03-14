@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
 import { useAuthStore } from '../lib/auth';
@@ -8,19 +8,12 @@ export default function RequireAuth() {
   const expiresAt = useAuthStore((s) => s.expiresAt);
   const clear = useAuthStore((s) => s.clear);
   const location = useLocation();
-  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setNow(Date.now());
-  }, [token, expiresAt]);
+    if (token && expiresAt && Date.now() >= expiresAt) clear();
+  }, [token, expiresAt, clear]);
 
-  const expired = !!expiresAt && now >= expiresAt;
-
-  useEffect(() => {
-    if (token && expired) clear();
-  }, [token, expired, clear]);
-
-  if (!token || !expiresAt || expired) {
+  if (!token || !expiresAt) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
