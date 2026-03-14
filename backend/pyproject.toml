@@ -35,7 +35,12 @@ line-length = 120
 # 启用默认检查规则
 select = ["E", "F", "W", "I", "N", "UP", "ASYNC"]
 # 忽略特定的规则
-ignore = ["E501", "N815", "N999", "F401", "ASYNC109"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"MCP/__init__.py" = ["F401", "N999"]
+"MCP/mcp_stdio.py" = ["ASYNC109"]
+"MCP/mcp_types.py" = ["N815"]
 
 [tool.ruff.format]
 # 格式化选项

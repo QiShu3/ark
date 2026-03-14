@@ -9,16 +9,13 @@ export default function RequireAuth() {
   const clear = useAuthStore((s) => s.clear);
   const location = useLocation();
 
-  const expired = !!expiresAt && Date.now() >= expiresAt;
-
   useEffect(() => {
-    if (token && expired) clear();
-  }, [token, expired, clear]);
+    if (token && expiresAt && Date.now() >= expiresAt) clear();
+  }, [token, expiresAt, clear]);
 
-  if (!token || !expiresAt || expired) {
+  if (!token || !expiresAt) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   return <Outlet />;
 }
-
