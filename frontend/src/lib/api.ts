@@ -35,7 +35,7 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
   const res = await apiFetch(path, init);
   if (res.status === 401) {
     useAuthStore.getState().clear();
-    if (window.location.pathname !== '/login') window.location.assign('/login');
+    if (!window.location.hash.startsWith('#/login')) window.location.hash = '#/login';
   }
   if (!res.ok) {
     const detail = await _parseErrorDetail(res);
