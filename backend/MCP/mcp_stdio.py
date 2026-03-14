@@ -97,7 +97,13 @@ class MCPStdioClient:
         with contextlib.suppress(Exception):
             await proc.wait()
 
-    async def request(self, method: str, params: dict[str, Any] | None = None, *, timeout: float = 20.0) -> dict[str, Any]:
+    async def request(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 20.0,
+    ) -> dict[str, Any]:
         """发送带 id 的 JSON-RPC 请求并等待响应，超时抛出异常。"""
         if self._proc is None:
             raise MCPProtocolError("MCP client 未启动")

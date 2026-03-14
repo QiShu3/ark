@@ -52,7 +52,13 @@ def main() -> None:
 
         if not initialized:
             if msg_id is not None:
-                _send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32002, "message": "Not initialized"}})
+                _send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32002, "message": "Not initialized"},
+                    }
+                )
             continue
 
         if method == "tools/list" and msg_id is not None:
@@ -76,7 +82,10 @@ def main() -> None:
                                 "description": "Add two numbers.",
                                 "inputSchema": {
                                     "type": "object",
-                                    "properties": {"a": {"type": "number"}, "b": {"type": "number"}},
+                                    "properties": {
+                                        "a": {"type": "number"},
+                                        "b": {"type": "number"},
+                                    },
                                     "required": ["a", "b"],
                                 },
                             },
@@ -92,30 +101,63 @@ def main() -> None:
             if name == "echo":
                 text = args.get("text")
                 out = str(text) if text is not None else ""
-                _send({"jsonrpc": "2.0", "id": msg_id, "result": {"content": [{"type": "text", "text": out}], "isError": False}})
+                _send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "result": {
+                            "content": [{"type": "text", "text": out}],
+                            "isError": False,
+                        },
+                    }
+                )
                 continue
             if name == "add":
                 try:
                     a = float(args.get("a"))
                     b = float(args.get("b"))
                     out = str(a + b)
-                    _send({"jsonrpc": "2.0", "id": msg_id, "result": {"content": [{"type": "text", "text": out}], "isError": False}})
+                    _send(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": msg_id,
+                            "result": {
+                                "content": [{"type": "text", "text": out}],
+                                "isError": False,
+                            },
+                        }
+                    )
                     continue
                 except Exception:
                     _send(
                         {
                             "jsonrpc": "2.0",
                             "id": msg_id,
-                            "result": {"content": [{"type": "text", "text": "invalid numbers"}], "isError": True},
+                            "result": {
+                                "content": [{"type": "text", "text": "invalid numbers"}],
+                                "isError": True,
+                            },
                         }
                     )
                     continue
 
-            _send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32602, "message": f"Unknown tool: {name}"}})
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32602, "message": f"Unknown tool: {name}"},
+                }
+            )
             continue
 
         if msg_id is not None:
-            _send({"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": f"Method not found: {method}"}})
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                }
+            )
 
 
 if __name__ == "__main__":

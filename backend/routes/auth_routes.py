@@ -4,7 +4,7 @@ import hmac
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -12,7 +12,6 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
@@ -53,7 +52,7 @@ class _AuthUser:
 
 def _utc_now() -> datetime:
     """返回当前 UTC 时间（timezone-aware）。"""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _token_ttl_seconds() -> int:

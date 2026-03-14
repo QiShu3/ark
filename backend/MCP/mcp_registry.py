@@ -16,7 +16,13 @@ except Exception:  # pragma: no cover
 
 
 class MCPRegistry:
-    def __init__(self, servers: list[MCPServerConfig], *, protocol_version: str = "2025-03-26", allowlist: dict[str, set[str]] | None = None) -> None:
+    def __init__(
+        self,
+        servers: list[MCPServerConfig],
+        *,
+        protocol_version: str = "2025-03-26",
+        allowlist: dict[str, set[str]] | None = None,
+    ) -> None:
         """维护 MCP 子进程客户端集合，提供工具枚举与调用能力。"""
         self._servers = servers
         self._protocol_version = protocol_version
@@ -25,7 +31,7 @@ class MCPRegistry:
         self._allowlist = allowlist
 
     @classmethod
-    def from_env(cls) -> "MCPRegistry":
+    def from_env(cls) -> MCPRegistry:
         """从环境变量 MCP_SERVERS/MCP_PROTOCOL_VERSION 构造注册表。"""
         raw = os.getenv("MCP_SERVERS", "").strip()
         protocol_version = os.getenv("MCP_PROTOCOL_VERSION", "2025-03-26").strip() or "2025-03-26"
@@ -61,7 +67,7 @@ class MCPRegistry:
         return cls(servers, protocol_version=protocol_version)
 
     @classmethod
-    def from_config_dir(cls, dir_path: str | Path) -> "MCPRegistry":
+    def from_config_dir(cls, dir_path: str | Path) -> MCPRegistry:
         """从目录加载 mcp.toml；若不存在则回退到环境变量。"""
         file_path = Path(dir_path).resolve() / "mcp.toml"
         if not file_path.exists() or tomllib is None:
@@ -69,7 +75,7 @@ class MCPRegistry:
         return cls._from_config_file(file_path)
 
     @classmethod
-    def _from_config_file(cls, file_path: str | Path) -> "MCPRegistry":
+    def _from_config_file(cls, file_path: str | Path) -> MCPRegistry:
         """内部方法：解析 TOML 配置构造注册表。"""
         path = Path(file_path).resolve()
         base_dir = path.parent.parent  # backend 目录
@@ -148,7 +154,7 @@ class MCPRegistry:
             raise MCPProtocolError(f"tools/list 失败: {res['error']}")
         tools: list[MCPTool] = []
         result = res.get("result") or {}
-        for t in (result.get("tools") or []):
+        for t in result.get("tools") or []:
             if not isinstance(t, dict):
                 continue
             name = t.get("name")
@@ -180,7 +186,7 @@ class MCPRegistry:
         result = res.get("result") or {}
         is_error = bool(result.get("isError"))
         content_items: list[MCPToolResultContent] = []
-        for c in (result.get("content") or []):
+        for c in result.get("content") or []:
             if not isinstance(c, dict):
                 continue
             ctype = c.get("type")

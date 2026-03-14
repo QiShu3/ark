@@ -1,16 +1,16 @@
 import random
 import string
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import routes.arxiv_routes as arxiv_routes
 from main import app
 from routes.arxiv_routes import ArxivPaperOut
-import routes.arxiv_routes as arxiv_routes
 
 
 class _FakeConn:
@@ -75,7 +75,7 @@ def _run() -> int:
                 arxiv_id="2501.00001",
                 title="Paper A",
                 authors=["Alice", "Bob"],
-                published=datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
                 summary="Summary",
             )
         ]
@@ -111,7 +111,12 @@ def _run() -> int:
             r = c.post(
                 "/arxiv/search",
                 headers=headers,
-                json={"keywords": "llm", "limit": 1, "sort_by": "submitted_date", "sort_order": "descending"},
+                json={
+                    "keywords": "llm",
+                    "limit": 1,
+                    "sort_by": "submitted_date",
+                    "sort_order": "descending",
+                },
             )
             if r.status_code != 200:
                 print("arxiv search failed:", r.status_code, r.text)

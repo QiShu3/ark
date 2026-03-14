@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from routes.auth_routes import get_current_user
-
 
 router = APIRouter(prefix="/todo", tags=["todo"])
 
@@ -142,8 +141,12 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_tasks_user_deleted_start_date ON tasks(user_id, is_deleted, start_date);"
         )
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_focus_logs_user_start ON focus_logs(user_id, start_time DESC);")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_focus_logs_task_start ON focus_logs(task_id, start_time DESC);")
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_focus_logs_user_start ON focus_logs(user_id, start_time DESC);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_focus_logs_task_start ON focus_logs(task_id, start_time DESC);"
+        )
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_open_per_user ON focus_logs(user_id) WHERE end_at IS NULL;"
         )
@@ -151,9 +154,7 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE focus_logs ALTER COLUMN end_at DROP NOT NULL;")
         await conn.execute("ALTER TABLE focus_logs DROP CONSTRAINT IF EXISTS chk_focus_logs_duration;")
         await conn.execute("ALTER TABLE focus_logs DROP CONSTRAINT IF EXISTS chk_focus_logs_end_at;")
-        await conn.execute(
-            "ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_duration CHECK (duration >= 0);"
-        )
+        await conn.execute("ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_duration CHECK (duration >= 0);")
         await conn.execute(
             "ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time);"
         )
@@ -183,9 +184,7 @@ def _row_to_focus_log(row: asyncpg.Record) -> FocusLogOut:
     """将 asyncpg.Record 转为 FocusLogOut。"""
     # 当 end_at 为空表示进行中的专注，动态计算到当前的持续时长
     _dynamic_duration = (
-        int((datetime.now(timezone.utc) - row["start_time"]).total_seconds())
-        if row["end_at"] is None
-        else int(row["duration"])
+        int((datetime.now(UTC) - row["start_time"]).total_seconds()) if row["end_at"] is None else int(row["duration"])
     )
     return FocusLogOut(
         id=row["id"],
@@ -400,7 +399,10 @@ async def create_focus_log(
     """创建专注记录并累计到任务实际时长。"""
     end_at = _normalize_focus_end_at(body)
     if end_at < body.start_time:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end_at 不能早于 start_time")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="end_at 不能早于 start_time",
+        )
 
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
@@ -521,7 +523,7 @@ async def stop_focus(
             )
             if open_row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的专注")
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             start = open_row["start_time"]
             dur = int((now - start).total_seconds())
             if dur < 0:

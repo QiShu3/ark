@@ -6,7 +6,8 @@ import re
 import time
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import date, datetime, time as time_of_day, timezone
+from datetime import UTC, date, datetime
+from datetime import time as time_of_day
 from threading import Lock
 from typing import Annotated, Any, Literal
 
@@ -16,7 +17,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from routes.auth_routes import get_current_user
-
 
 router = APIRouter(prefix="/api/arxiv", tags=["arxiv"])
 
@@ -109,9 +109,6 @@ class DailyTaskBatchCreateOut(BaseModel):
     created_count: int
     skipped_count: int
     task_ids: list[str]
-
-
-
 
 
 @dataclass(frozen=True)
@@ -335,8 +332,8 @@ async def _refresh_daily_candidates_for_user(
             """
             SELECT arxiv_id
             FROM papers
-            WHERE user_id = $1 
-              AND arxiv_id = ANY($2::text[]) 
+            WHERE user_id = $1
+              AND arxiv_id = ANY($2::text[])
               AND (is_read = TRUE OR is_favorite = TRUE OR is_skipped = TRUE)
             """,
             user_id,
@@ -379,7 +376,7 @@ async def _daily_scheduler_loop(app: Any) -> None:
         try:
             pool = getattr(getattr(app, "state", None), "auth_pool", None)
             if pool is not None:
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 today = now.date()
                 current_hhmm = f"{now.hour:02d}:{now.minute:02d}"
                 async with pool.acquire() as conn:
@@ -760,7 +757,7 @@ async def upsert_daily_config(
 ) -> DailyConfigOut:
     """创建或更新每日配置，并立刻刷新当日候选集。"""
     pool = _pool_from_request(request)
-    run_day = datetime.now(timezone.utc).date()
+    run_day = datetime.now(UTC).date()
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
@@ -818,7 +815,7 @@ async def refresh_daily_candidates(
 ) -> list[DailyCandidateOut]:
     """手动刷新当日候选集。"""
     pool = _pool_from_request(request)
-    run_day = datetime.now(timezone.utc).date()
+    run_day = datetime.now(UTC).date()
     async with pool.acquire() as conn:
         async with conn.transaction():
             config_row = await conn.fetchrow(
@@ -847,7 +844,7 @@ async def list_daily_candidates(
 ) -> list[DailyCandidateOut]:
     """查询当日候选论文列表。"""
     pool = _pool_from_request(request)
-    run_day = datetime.now(timezone.utc).date()
+    run_day = datetime.now(UTC).date()
     async with pool.acquire() as conn:
         return await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
 
@@ -859,7 +856,7 @@ async def get_daily_summary(
 ) -> dict[str, str]:
     """基于当日候选论文生成中文总结。"""
     pool = _pool_from_request(request)
-    run_day = datetime.now(timezone.utc).date()
+    run_day = datetime.now(UTC).date()
     async with pool.acquire() as conn:
         candidates = await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
     if not candidates:
@@ -872,9 +869,8 @@ async def get_daily_summary(
         "1）2-4 句主题概览；\n2）给出建议优先阅读顺序（按论文序号）；\n3）每条优先建议附一句理由。\n\n"
         + "\n\n".join(blocks)
     )
-    from main import _DEFAULT_SYSTEM_PROMPT
+    from main import _DEFAULT_SYSTEM_PROMPT, _mcp_registry
     from MCP.assistant_runner import chat_with_tools
-    from main import _mcp_registry
 
     messages = [
         {"role": "system", "content": _DEFAULT_SYSTEM_PROMPT},
@@ -903,7 +899,11 @@ async def prepare_daily_tasks_action(
         "operation": "daily_batch_create_tasks",
         "title": f"将今日 {len(ids)} 篇论文加入任务",
         "message": f"将按每篇论文创建一条任务，共 {len(ids)} 条。确认后执行。",
-        "request": {"method": "POST", "url": "/api/arxiv/daily/tasks/commit", "body": {"arxiv_ids": ids}},
+        "request": {
+            "method": "POST",
+            "url": "/api/arxiv/daily/tasks/commit",
+            "body": {"arxiv_ids": ids},
+        },
     }
 
 
@@ -918,7 +918,7 @@ async def commit_daily_tasks(
     if not ids:
         raise HTTPException(status_code=422, detail="缺少 arxiv_ids")
     pool = _pool_from_request(request)
-    run_day = datetime.now(timezone.utc).date()
+    run_day = datetime.now(UTC).date()
     created_ids: list[str] = []
     skipped = 0
     async with pool.acquire() as conn:
@@ -966,9 +966,6 @@ async def commit_daily_tasks(
                 )
                 created_ids.append(str(task_row["id"]))
     return DailyTaskBatchCreateOut(created_count=len(created_ids), skipped_count=skipped, task_ids=created_ids)
-
-
-
 
 
 @router.get("/health")

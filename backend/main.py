@@ -1,23 +1,26 @@
 import os
- 
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
- 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from MCP.assistant_runner import (
+    chat_with_tools as mcp_chat_with_tools,
+)
+from MCP.assistant_runner import (
+    get_tools_overview as mcp_get_tools_overview,
+)
 from MCP.mcp_registry import MCPRegistry
- 
-from MCP.assistant_runner import get_tools_overview as mcp_get_tools_overview, chat_with_tools as mcp_chat_with_tools
-from routes.arxiv_routes import close_arxiv, init_arxiv, router as arxiv_router
-from routes.auth_routes import close_auth, init_auth, router as auth_router
-from routes.todo_routes import init_todo, router as todo_router
- 
-
+from routes.arxiv_routes import close_arxiv, init_arxiv
+from routes.arxiv_routes import router as arxiv_router
+from routes.auth_routes import close_auth, init_auth
+from routes.auth_routes import router as auth_router
+from routes.todo_routes import init_todo
+from routes.todo_routes import router as todo_router
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH, override=False)
@@ -39,9 +42,6 @@ class ChatResponse(BaseModel):
     actions: list[dict[str, Any]] = Field(default_factory=list)
 
 
- 
-
-
 _mcp_registry = (
     MCPRegistry.from_env()
     if os.getenv("MCP_SERVERS", "").strip()
@@ -53,9 +53,6 @@ _DEFAULT_SYSTEM_PROMPT = (
     "当用户要求查看/查询数据库、时间、文件等信息时，优先选择合适的 tool 调用；"
     "拿到 tool 结果后，再用简洁中文总结给用户。不要声称“无法访问”，除非确实没有任何可用工具。"
 )
-
-
- 
 
 
 @asynccontextmanager
