@@ -13,3 +13,31 @@ dependencies = [
   "python-dotenv>=1.0.1",
   "uvicorn[standard]>=0.30.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+]
+
+[tool.ruff]
+# 设置 Python 版本
+target-version = "py311"
+# 排除的代码目录
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+]
+# 行最大长度
+line-length = 88
+
+[tool.ruff.lint]
+# 启用默认检查规则
+select = ["E", "F", "W", "I", "N", "UP", "ASYNC"]
+# 忽略特定的规则
+ignore = []
+
+[tool.ruff.format]
+# 格式化选项
+quote-style = "double"
+indent-style = "space"
