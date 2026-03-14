@@ -23,3 +23,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Deployment and AI tools
+.vercel
+.trae
+.vercelignore
+vercel.json

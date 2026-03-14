@@ -6,6 +6,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -95,9 +96,21 @@ def _verify_password(password: str, *, password_hash_b64: str, salt_b64: str) ->
 
 def _database_url() -> str:
     """从环境变量读取 Postgres 连接串。"""
-    url = os.getenv("DATABASE_URL", "").strip()
+    url = (
+        os.getenv("DATABASE_URL", "").strip()
+        or os.getenv("SUPABASE_DB_URL", "").strip()
+        or os.getenv("POSTGRES_URL", "").strip()
+    )
     if not url:
-        raise RuntimeError("DATABASE_URL 未配置")
+        raise RuntimeError("DATABASE_URL 未配置（可用 SUPABASE_DB_URL / POSTGRES_URL）")
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.hostname.endswith(".supabase.co"):
+        q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        if "sslmode" not in q:
+            q["sslmode"] = "require"
+            url = urlunparse(parsed._replace(query=urlencode(q)))
     return url
 
 
@@ -334,4 +347,3 @@ async def list_users(
         )
         for r in rows
     ]
-
