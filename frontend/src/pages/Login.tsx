@@ -89,7 +89,7 @@ export default function Login() {
     <div className="relative w-screen h-screen overflow-hidden bg-black text-white font-sans">
       <div className="fixed inset-0 z-0">
         <img
-          src="/images/background.jpg"
+          src={`${import.meta.env.BASE_URL}images/background.jpg`}
           alt="Background"
           className="w-full h-full object-cover opacity-60"
         />
