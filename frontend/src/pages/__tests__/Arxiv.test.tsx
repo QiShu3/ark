@@ -57,6 +57,7 @@ describe('Arxiv Page', () => {
           summary: 'Summary',
         }));
       }
+      if (url === '/api/arxiv/papers/tags') return [];
       return {};
     });
   });
