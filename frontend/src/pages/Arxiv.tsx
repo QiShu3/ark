@@ -198,6 +198,7 @@ const Arxiv: React.FC = () => {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [isExecutingAction, setIsExecutingAction] = useState(false);
   const [currentDailyIndex, setCurrentDailyIndex] = useState(0);
+  const [isConfigExpanded, setIsConfigExpanded] = useState(false);
   const savedViewCacheRef = useRef<Partial<Record<SavedViewMode, SavedViewCache>>>({});
   const dailyViewCacheRef = useRef<DailyViewCache>({
     config: null,
@@ -503,6 +504,7 @@ const Arxiv: React.FC = () => {
         summary: summaryData.summary,
         isReady: true,
       };
+      setIsConfigExpanded(false);
     } catch (e) {
       setDailyError(e instanceof Error ? e.message : '保存每日配置失败');
     } finally {
@@ -791,107 +793,121 @@ const Arxiv: React.FC = () => {
 
           {viewMode === 'daily' && (
             <div className="space-y-4">
-              <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
-                  <input
-                    value={dailyKeywords}
-                    onChange={(e) => setDailyKeywords(e.target.value)}
-                    placeholder="关键词"
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400 lg:col-span-2"
-                  />
-                  <select
-                    value={dailyCategory}
-                    onChange={(e) => setDailyCategory(e.target.value)}
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={dailyAuthor}
-                    onChange={(e) => setDailyAuthor(e.target.value)}
-                    placeholder="作者（可选）"
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  />
-                  <select
-                    value={String(dailyLimit)}
-                    onChange={(e) => setDailyLimit(Number(e.target.value))}
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  >
-                    <option value="10">10 条</option>
-                    <option value="20">20 条</option>
-                    <option value="50">50 条</option>
-                  </select>
-                  <input
-                    type="time"
-                    value={dailyUpdateTime}
-                    onChange={(e) => setDailyUpdateTime(e.target.value)}
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  />
-                  <select
-                    value={dailySortBy}
-                    onChange={(e) => setDailySortBy(e.target.value as SortBy)}
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  >
-                    <option value="submitted_date">提交时间</option>
-                    <option value="last_updated_date">更新时间</option>
-                    <option value="relevance">相关性</option>
-                  </select>
-                  <select
-                    value={dailySortOrder}
-                    onChange={(e) => setDailySortOrder(e.target.value as SortOrder)}
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  >
-                    <option value="descending">降序</option>
-                    <option value="ascending">升序</option>
-                  </select>
-                  <select
-                    value={dailySearchField}
-                    onChange={(e) => setDailySearchField(e.target.value as SearchField)}
-                    className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
-                  >
-                    <option value="title">标题</option>
-                    <option value="summary">摘要</option>
-                  </select>
-                </div>
-                <div className="mt-4 flex items-center gap-3">
+              {!isConfigExpanded ? (
+                <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg flex items-center gap-4">
                   <button
+                    onClick={() => setIsConfigExpanded(true)}
+                    className="h-10 px-5 rounded-lg bg-blue-500/80 hover:bg-blue-500 transition-colors"
+                  >
+                    每日配置更改
+                  </button>
+                  <span className="text-sm text-white/70 ml-auto">
+                    {dailyConfig?.last_run_on ? `最近刷新：${dailyConfig.last_run_on}` : '尚未生成候选集'}
+                  </span>
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+                    <input
+                      value={dailyKeywords}
+                      onChange={(e) => setDailyKeywords(e.target.value)}
+                      placeholder="关键词"
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400 lg:col-span-2"
+                    />
+                    <select
+                      value={dailyCategory}
+                      onChange={(e) => setDailyCategory(e.target.value)}
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    >
+                      {CATEGORIES.map((cat) => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={dailyAuthor}
+                      onChange={(e) => setDailyAuthor(e.target.value)}
+                      placeholder="作者（可选）"
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    />
+                    <select
+                      value={String(dailyLimit)}
+                      onChange={(e) => setDailyLimit(Number(e.target.value))}
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    >
+                      <option value="10">10 条</option>
+                      <option value="20">20 条</option>
+                      <option value="50">50 条</option>
+                    </select>
+                    <input
+                      type="time"
+                      value={dailyUpdateTime}
+                      onChange={(e) => setDailyUpdateTime(e.target.value)}
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    />
+                    <select
+                      value={dailySortBy}
+                      onChange={(e) => setDailySortBy(e.target.value as SortBy)}
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    >
+                      <option value="submitted_date">提交时间</option>
+                      <option value="last_updated_date">更新时间</option>
+                      <option value="relevance">相关性</option>
+                    </select>
+                    <select
+                      value={dailySortOrder}
+                      onChange={(e) => setDailySortOrder(e.target.value as SortOrder)}
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    >
+                      <option value="descending">降序</option>
+                      <option value="ascending">升序</option>
+                    </select>
+                    <select
+                      value={dailySearchField}
+                      onChange={(e) => setDailySearchField(e.target.value as SearchField)}
+                      className="h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+                    >
+                      <option value="title">标题</option>
+                      <option value="summary">摘要</option>
+                    </select>
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
                     onClick={saveDailyConfig}
                     disabled={dailyBusy || !dailyKeywords.trim()}
                     className="h-10 px-5 rounded-lg bg-blue-500/80 hover:bg-blue-500 disabled:opacity-50 transition-colors"
                   >
                     保存每日配置
                   </button>
-                  <button
-                    onClick={refreshDailyCandidates}
-                    disabled={dailyBusy}
-                    className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
-                  >
-                    立即刷新
-                  </button>
-                  <button
-                    onClick={generateDailySummary}
-                    disabled={dailyBusy}
-                    className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
-                  >
-                    生成今日总结
-                  </button>
-                  <button
-                    onClick={askCreateDailyTasks}
-                    disabled={dailyCandidates.length === 0}
-                    className="h-10 px-4 rounded-lg bg-emerald-500/70 hover:bg-emerald-500 border border-emerald-300/30 transition-colors disabled:opacity-50"
-                  >
-                    将今日论文加入任务
-                  </button>
-                  <span className="text-sm text-white/70 ml-auto">
-                    {dailyConfig?.last_run_on ? `最近刷新：${dailyConfig.last_run_on}` : '尚未生成候选集'}
-                  </span>
+                    <button
+                      onClick={refreshDailyCandidates}
+                      disabled={dailyBusy}
+                      className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
+                    >
+                      立即刷新
+                    </button>
+                    <button
+                      onClick={generateDailySummary}
+                      disabled={dailyBusy}
+                      className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
+                    >
+                      生成今日总结
+                    </button>
+                    <button
+                      onClick={askCreateDailyTasks}
+                      disabled={dailyCandidates.length === 0}
+                      className="h-10 px-4 rounded-lg bg-emerald-500/70 hover:bg-emerald-500 border border-emerald-300/30 transition-colors disabled:opacity-50"
+                    >
+                      将今日论文加入任务
+                    </button>
+                    <span className="text-sm text-white/70 ml-auto">
+                      {dailyConfig?.last_run_on ? `最近刷新：${dailyConfig.last_run_on}` : '尚未生成候选集'}
+                    </span>
+                  </div>
+                  {dailyError ? <div className="mt-2 text-sm text-red-300">{dailyError}</div> : null}
                 </div>
-                {dailyError ? <div className="mt-2 text-sm text-red-300">{dailyError}</div> : null}
-              </div>
+              )}
 
               <AIAssistantShell className="h-[360px]">
                 <ChatBox
