@@ -1061,8 +1061,8 @@ const Arxiv: React.FC = () => {
                         .filter((item): item is PaperTag => Boolean(item));
                       return (
                         <>
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg min-h-[300px] flex flex-col transition-all duration-300">
-                      <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-6 flex-1">
+                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg h-[500px] flex flex-col transition-all duration-300">
+                      <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-6 flex-1 overflow-y-auto min-h-0 pr-2">
                         <div className="flex-1">
                           <a
                             href={`https://arxiv.org/abs/${dailyCandidates[currentDailyIndex].arxiv_id}`}
@@ -1124,7 +1124,7 @@ const Arxiv: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2 shrink-0">
                         {selectedDailyTags.length > 0 ? (
                           selectedDailyTags.map((tag) => (
                             <span
@@ -1142,10 +1142,10 @@ const Arxiv: React.FC = () => {
                       </div>
 
                       {/* Dashed Separator */}
-                      <div className="my-4 border-t border-dashed border-white/20" />
+                      <div className="my-4 border-t border-dashed border-white/20 shrink-0" />
 
                       {/* Navigation (Lower Part) */}
-                      <div className="flex items-center justify-between select-none">
+                      <div className="flex items-center justify-between select-none shrink-0">
                         <button
                           onClick={() => setCurrentDailyIndex(Math.max(0, currentDailyIndex - 1))}
                           disabled={currentDailyIndex === 0}
