@@ -842,11 +842,40 @@ async def list_daily_candidates(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> list[DailyCandidateOut]:
-    """查询当日候选论文列表。"""
+    """查询当日候选论文列表。若当日无数据且存在配置，则自动触发生成。"""
     pool = _pool_from_request(request)
     run_day = datetime.now(UTC).date()
     async with pool.acquire() as conn:
-        return await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
+        # 1. 尝试获取现有候选列表
+        candidates = await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
+        if candidates:
+            return candidates
+
+        # 2. 若无候选，检查配置并自动生成
+        async with conn.transaction():
+            config_row = await conn.fetchrow(
+                """
+                SELECT user_id, keywords, category, author, limit_count, sort_by, sort_order, search_field, update_time, updated_at, last_run_on
+                FROM arxiv_daily_configs
+                WHERE user_id = $1
+                """,
+                int(user.id),
+            )
+            if config_row is None:
+                return []
+
+            # 如果今天已经运行过（last_run_on == today），说明已经尝试生成过了（可能结果为空），不再重复触发
+            if config_row["last_run_on"] == run_day:
+                return []
+
+            await _refresh_daily_candidates_for_user(
+                conn,
+                user_id=int(user.id),
+                candidate_day=run_day,
+                config_row=config_row,
+            )
+            # 3. 获取新生成的候选列表
+            return await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
 
 
 @router.get("/daily/summary")
