@@ -1034,39 +1034,6 @@ async def list_daily_candidates(
             return await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
 
 
-@router.get("/daily/summary")
-async def get_daily_summary(
-    request: Request,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> dict[str, str]:
-    """基于当日候选论文生成中文总结。"""
-    pool = _pool_from_request(request)
-    run_day = datetime.now(UTC).date()
-    async with pool.acquire() as conn:
-        candidates = await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
-    if not candidates:
-        return {"summary": "今日暂无候选论文。你可以先保存或刷新每日配置。"}
-    blocks = []
-    for idx, paper in enumerate(candidates[:20], start=1):
-        blocks.append(f"{idx}. 标题：{paper.title}\n摘要：{paper.summary}")
-    prompt = (
-        "请基于以下论文列表，输出中文简要阅读秘书报告：\n"
-        "1）2-4 句主题概览；\n2）给出建议优先阅读顺序（按论文序号）；\n3）每条优先建议附一句理由。\n\n"
-        + "\n\n".join(blocks)
-    )
-    from main import _DEFAULT_SYSTEM_PROMPT, _mcp_registry
-    from MCP.assistant_runner import chat_with_tools
-
-    messages = [
-        {"role": "system", "content": _DEFAULT_SYSTEM_PROMPT},
-        {"role": "user", "content": prompt},
-    ]
-    reply, _ = await chat_with_tools(messages, request, _mcp_registry)
-    if not reply:
-        raise HTTPException(status_code=502, detail="生成每日总结失败")
-    return {"summary": reply}
-
-
 @router.post("/daily/tasks/prepare")
 async def prepare_daily_tasks_action(
     request: Request,

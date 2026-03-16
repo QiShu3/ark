@@ -82,7 +82,6 @@ type SavedViewCache = {
 type DailyViewCache = {
   config: DailyConfig | null;
   candidates: DailyCandidate[];
-  summary: string;
   isReady: boolean;
 };
 
@@ -231,7 +230,6 @@ const Arxiv: React.FC = () => {
   const [dailyUpdateTime, setDailyUpdateTime] = useState('09:00');
   const [dailyConfig, setDailyConfig] = useState<DailyConfig | null>(null);
   const [dailyCandidates, setDailyCandidates] = useState<DailyCandidate[]>([]);
-  const [dailySummary, setDailySummary] = useState('');
   const [dailyBusy, setDailyBusy] = useState(false);
   const [dailyError, setDailyError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -250,7 +248,6 @@ const Arxiv: React.FC = () => {
   const dailyViewCacheRef = useRef<DailyViewCache>({
     config: null,
     candidates: [],
-    summary: '',
     isReady: false,
   });
 
@@ -281,12 +278,8 @@ const Arxiv: React.FC = () => {
   const canSearch = keywords.trim().length > 0;
   const resultCountText = useMemo(() => `结果 ${papers.length} 条`, [papers.length]);
   const dailyAssistantInitialMessage = useMemo(() => {
-    const text = dailySummary.trim();
-    if (text) {
-      return `我是每日秘书，已为你生成今日总结：\n\n${text}`;
-    }
     return '我是每日秘书。可总结今日论文，并在你确认后批量创建任务。';
-  }, [dailySummary]);
+  }, []);
 
   const loadPaperStates = useCallback(async () => {
     const rows = await apiJson<PaperState[]>('/api/arxiv/papers?limit=200');
@@ -321,7 +314,6 @@ const Arxiv: React.FC = () => {
     dailyViewCacheRef.current = {
       config: null,
       candidates: [],
-      summary: '',
       isReady: false,
     };
   }, []);
@@ -434,7 +426,6 @@ const Arxiv: React.FC = () => {
         const cached = dailyViewCacheRef.current;
         applyDailyConfig(cached.config);
         setDailyCandidates(cached.candidates);
-        setDailySummary(cached.summary);
         return;
       }
       setDailyBusy(true);
@@ -447,13 +438,9 @@ const Arxiv: React.FC = () => {
         const candidates = await apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates');
         setDailyCandidates(candidates);
 
-        const summaryData = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
-        setDailySummary(summaryData.summary);
-
         dailyViewCacheRef.current = {
           config,
           candidates,
-          summary: summaryData.summary,
           isReady: true,
         };
       } catch (e) {
@@ -536,23 +523,6 @@ const Arxiv: React.FC = () => {
     return mapped;
   }, [paperTags]);
 
-  const generateDailySummary = useCallback(async () => {
-    setDailyBusy(true);
-    setDailyError(null);
-    try {
-      const data = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
-      setDailySummary(data.summary);
-      dailyViewCacheRef.current = {
-        ...dailyViewCacheRef.current,
-        summary: data.summary,
-      };
-    } catch (e) {
-      setDailyError(e instanceof Error ? e.message : '生成总结失败');
-    } finally {
-      setDailyBusy(false);
-    }
-  }, []);
-
   const saveDailyConfig = useCallback(async () => {
     setDailyBusy(true);
     setDailyError(null);
@@ -572,17 +542,12 @@ const Arxiv: React.FC = () => {
           update_time: dailyUpdateTime,
         }),
       });
-      const [candidates, summaryData] = await Promise.all([
-        apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates'),
-        apiJson<{ summary: string }>('/api/arxiv/daily/summary'),
-      ]);
+      const candidates = await apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates');
       applyDailyConfig(config);
       setDailyCandidates(candidates);
-      setDailySummary(summaryData.summary);
       dailyViewCacheRef.current = {
         config,
         candidates,
-        summary: summaryData.summary,
         isReady: true,
       };
       setIsConfigExpanded(false);
@@ -610,13 +575,10 @@ const Arxiv: React.FC = () => {
     try {
       invalidateDailyCache();
       const rows = await apiJson<DailyCandidate[]>('/api/arxiv/daily/refresh', { method: 'POST' });
-      const summaryData = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
       setDailyCandidates(rows);
-      setDailySummary(summaryData.summary);
       dailyViewCacheRef.current = {
         config: dailyConfig,
         candidates: rows,
-        summary: summaryData.summary,
         isReady: true,
       };
       await loadPaperStates();
@@ -627,11 +589,6 @@ const Arxiv: React.FC = () => {
       setDailyBusy(false);
     }
   }, [dailyConfig, invalidateDailyCache, invalidateSavedViewCache, loadPaperStates]);
-
-  useEffect(() => {
-    if (viewMode !== 'daily') return;
-    loadDailyViewData().catch(() => undefined);
-  }, [viewMode, loadDailyViewData]);
 
   const askCreateDailyTasks = useCallback(async () => {
     setDailyError(null);
@@ -1078,13 +1035,6 @@ const Arxiv: React.FC = () => {
                       className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
                     >
                       立即刷新
-                    </button>
-                    <button
-                      onClick={generateDailySummary}
-                      disabled={dailyBusy}
-                      className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
-                    >
-                      生成今日总结
                     </button>
                     <button
                       onClick={askCreateDailyTasks}
