@@ -75,6 +75,17 @@ class FocusTodayOut(BaseModel):
     minutes: int
 
 
+class TaskFocusStats(BaseModel):
+    id: UUID
+    title: str
+    duration: int
+
+
+class FocusStatsOut(BaseModel):
+    total_duration: int
+    tasks: list[TaskFocusStats]
+
+
 def _pool_from_request(request: Request) -> asyncpg.Pool:
     """从 FastAPI request 中获取数据库连接池（复用 auth_pool）。"""
     pool = getattr(getattr(request.app, "state", None), "auth_pool", None)
@@ -615,3 +626,74 @@ async def get_today_focus_duration(
     if seconds < 0:
         seconds = 0
     return FocusTodayOut(seconds=seconds, minutes=seconds // 60)
+
+
+@router.get("/focus/stats", response_model=FocusStatsOut)
+async def get_focus_stats(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    range_query: Annotated[Literal["today", "week", "month"], Query(alias="range")],
+) -> FocusStatsOut:
+    """获取专注统计信息。"""
+    pool = _pool_from_request(request)
+
+    now = datetime.now(UTC)
+    if range_query == "today":
+        range_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_query == "week":
+        range_start = (now - timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+    else:  # month
+        range_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            WITH bounds AS (
+                SELECT $2::TIMESTAMPTZ AS range_start,
+                       NOW() AS range_end
+            ),
+            log_durations AS (
+                SELECT
+                    fl.task_id,
+                    GREATEST(
+                        0,
+                        EXTRACT(
+                            epoch FROM (
+                                LEAST(COALESCE(fl.end_at, NOW()), b.range_end)
+                                - GREATEST(fl.start_time, b.range_start)
+                            )
+                        )
+                    )::BIGINT AS duration
+                FROM focus_logs fl
+                CROSS JOIN bounds b
+                WHERE fl.user_id = $1
+                  AND fl.start_time < b.range_end
+                  AND COALESCE(fl.end_at, NOW()) > b.range_start
+            )
+            SELECT
+                t.id,
+                t.title,
+                SUM(ld.duration)::BIGINT as total_duration
+            FROM log_durations ld
+            JOIN tasks t ON ld.task_id = t.id
+            GROUP BY t.id, t.title
+            HAVING SUM(ld.duration) > 0
+            ORDER BY total_duration DESC
+            """,
+            int(user.id),
+            range_start,
+        )
+
+    tasks_stats = [
+        TaskFocusStats(
+            id=row["id"],
+            title=row["title"],
+            duration=row["total_duration"],
+        )
+        for row in rows
+    ]
+
+    total_duration = sum(t.duration for t in tasks_stats)
+    return FocusStatsOut(total_duration=total_duration, tasks=tasks_stats)
