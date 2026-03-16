@@ -6,7 +6,6 @@ vi.mock('./lib/api', () => ({
   apiJson: vi.fn().mockImplementation(async (url) => {
     if (url === '/api/arxiv/daily/config') return null;
     if (url === '/api/arxiv/daily/candidates') return [];
-    if (url === '/api/arxiv/daily/summary') return { summary: '' };
     if (url === '/api/arxiv/papers?limit=200') return [];
     return [];
   }),

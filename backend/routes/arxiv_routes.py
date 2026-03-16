@@ -51,6 +51,7 @@ class PaperStateUpsertRequest(BaseModel):
     is_favorite: bool = False
     is_read: bool = False
     is_skipped: bool = False
+    tag_ids: list[int] = Field(default_factory=list)
 
 
 class PaperDetailsRequest(BaseModel):
@@ -63,6 +64,19 @@ class PaperStateOut(BaseModel):
     is_favorite: bool
     is_read: bool
     is_skipped: bool
+    tag_ids: list[int]
+
+
+class PaperTagCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=32)
+    color: str = Field(min_length=1, max_length=32)
+
+
+class PaperTagOut(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    color: str
 
 
 class DailyConfigUpsertRequest(BaseModel):
@@ -153,6 +167,7 @@ async def init_arxiv(app: Any) -> None:
               is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
               is_read BOOLEAN NOT NULL DEFAULT FALSE,
               is_skipped BOOLEAN NOT NULL DEFAULT FALSE,
+              tag_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
               UNIQUE (user_id, arxiv_id)
             );
             """
@@ -166,6 +181,25 @@ async def init_arxiv(app: Any) -> None:
         await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_skipped BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS tag_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb;")
+        await conn.execute("UPDATE papers SET tag_ids_json = '[]'::jsonb WHERE tag_ids_json IS NULL;")
+        await conn.execute("ALTER TABLE papers ALTER COLUMN tag_ids_json SET DEFAULT '[]'::jsonb;")
+        await conn.execute("ALTER TABLE papers ALTER COLUMN tag_ids_json SET NOT NULL;")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS paper_tag_defs (
+              id BIGSERIAL PRIMARY KEY,
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              name TEXT NOT NULL,
+              color TEXT NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE(user_id, name)
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_paper_tag_defs_user_created ON paper_tag_defs(user_id, created_at DESC);"
+        )
         await conn.execute(
             """
             DO $$
@@ -538,13 +572,42 @@ async def _search_arxiv(payload: ArxivSearchRequest) -> list[ArxivPaperOut]:
         raise HTTPException(status_code=502, detail=f"ArXiv 检索失败: {exc}") from exc
 
 
+def _parse_jsonb_int_list(raw_value: Any) -> list[int]:
+    parsed: Any = raw_value
+    if isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(parsed, list):
+        return []
+    values: list[int] = []
+    for item in parsed:
+        if isinstance(item, int):
+            values.append(item)
+        elif isinstance(item, str) and item.isdigit():
+            values.append(int(item))
+    return values
+
+
 def _row_to_paper_state(row: asyncpg.Record) -> PaperStateOut:
+    tag_ids = _parse_jsonb_int_list(row.get("tag_ids_json", []))
     return PaperStateOut(
         user_id=int(row["user_id"]),
         arxiv_id=str(row["arxiv_id"]),
         is_favorite=bool(row["is_favorite"]),
         is_read=bool(row["is_read"]),
         is_skipped=bool(row["is_skipped"]),
+        tag_ids=tag_ids,
+    )
+
+
+def _row_to_paper_tag(row: asyncpg.Record) -> PaperTagOut:
+    return PaperTagOut(
+        id=int(row["id"]),
+        user_id=int(row["user_id"]),
+        name=str(row["name"]),
+        color=str(row["color"]),
     )
 
 
@@ -595,15 +658,16 @@ async def upsert_paper_state(
         async with conn.transaction():
             row = await conn.fetchrow(
                 """
-                INSERT INTO papers(user_id, arxiv_id, title, is_favorite, is_read, is_skipped)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO papers(user_id, arxiv_id, title, is_favorite, is_read, is_skipped, tag_ids_json)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
                 ON CONFLICT (user_id, arxiv_id)
                 DO UPDATE SET
                   is_favorite = EXCLUDED.is_favorite,
                   is_read = EXCLUDED.is_read,
                   is_skipped = EXCLUDED.is_skipped,
-                  title = EXCLUDED.title
-                RETURNING user_id, arxiv_id, is_favorite, is_read, is_skipped
+                  title = EXCLUDED.title,
+                  tag_ids_json = EXCLUDED.tag_ids_json
+                RETURNING user_id, arxiv_id, is_favorite, is_read, is_skipped, tag_ids_json
                 """,
                 int(user.id),
                 payload.arxiv_id.strip(),
@@ -611,6 +675,7 @@ async def upsert_paper_state(
                 payload.is_favorite,
                 payload.is_read,
                 payload.is_skipped,
+                json.dumps(sorted(set(payload.tag_ids))),
             )
             await conn.execute(
                 """
@@ -660,7 +725,7 @@ async def list_paper_states(
     offset_i = len(args)
     where_sql = " AND ".join(clauses)
     sql = f"""
-        SELECT user_id, arxiv_id, is_favorite, is_read, is_skipped
+        SELECT user_id, arxiv_id, is_favorite, is_read, is_skipped, tag_ids_json
         FROM papers
         WHERE {where_sql}
         ORDER BY arxiv_id DESC
@@ -670,6 +735,97 @@ async def list_paper_states(
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, *args)
     return [_row_to_paper_state(row) for row in rows]
+
+
+@router.get("/papers/tags", response_model=list[PaperTagOut])
+async def list_paper_tags(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[PaperTagOut]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, name, color
+            FROM paper_tag_defs
+            WHERE user_id = $1
+            ORDER BY created_at ASC, id ASC
+            """,
+            int(user.id),
+        )
+    return [_row_to_paper_tag(row) for row in rows]
+
+
+@router.post("/papers/tags", response_model=PaperTagOut)
+async def create_paper_tag(
+    request: Request,
+    payload: PaperTagCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> PaperTagOut:
+    pool = _pool_from_request(request)
+    name = payload.name.strip()
+    color = payload.color.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="标签名不能为空")
+    if not color:
+        raise HTTPException(status_code=422, detail="标签颜色不能为空")
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO paper_tag_defs(user_id, name, color)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, name)
+            DO UPDATE SET color = EXCLUDED.color
+            RETURNING id, user_id, name, color
+            """,
+            int(user.id),
+            name,
+            color,
+        )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建标签失败")
+    return _row_to_paper_tag(row)
+
+
+@router.delete("/papers/tags/{tag_id}")
+async def delete_paper_tag(
+    tag_id: int,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                DELETE FROM paper_tag_defs
+                WHERE user_id = $1 AND id = $2
+                RETURNING id
+                """,
+                int(user.id),
+                tag_id,
+            )
+            if row is None:
+                raise HTTPException(status_code=404, detail="标签不存在")
+            await conn.execute(
+                """
+                UPDATE papers
+                SET tag_ids_json = to_jsonb(
+                  COALESCE(
+                    ARRAY(
+                      SELECT value::BIGINT
+                      FROM jsonb_array_elements_text(tag_ids_json) AS value
+                      WHERE value::BIGINT <> $2
+                    ),
+                    ARRAY[]::BIGINT[]
+                  )
+                )
+                WHERE user_id = $1
+                """,
+                int(user.id),
+                tag_id,
+            )
+    return {"ok": True}
 
 
 async def _fetch_daily_candidates(
@@ -876,39 +1032,6 @@ async def list_daily_candidates(
             )
             # 3. 获取新生成的候选列表
             return await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
-
-
-@router.get("/daily/summary")
-async def get_daily_summary(
-    request: Request,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> dict[str, str]:
-    """基于当日候选论文生成中文总结。"""
-    pool = _pool_from_request(request)
-    run_day = datetime.now(UTC).date()
-    async with pool.acquire() as conn:
-        candidates = await _fetch_daily_candidates(conn, user_id=int(user.id), candidate_day=run_day)
-    if not candidates:
-        return {"summary": "今日暂无候选论文。你可以先保存或刷新每日配置。"}
-    blocks = []
-    for idx, paper in enumerate(candidates[:20], start=1):
-        blocks.append(f"{idx}. 标题：{paper.title}\n摘要：{paper.summary}")
-    prompt = (
-        "请基于以下论文列表，输出中文简要阅读秘书报告：\n"
-        "1）2-4 句主题概览；\n2）给出建议优先阅读顺序（按论文序号）；\n3）每条优先建议附一句理由。\n\n"
-        + "\n\n".join(blocks)
-    )
-    from main import _DEFAULT_SYSTEM_PROMPT, _mcp_registry
-    from MCP.assistant_runner import chat_with_tools
-
-    messages = [
-        {"role": "system", "content": _DEFAULT_SYSTEM_PROMPT},
-        {"role": "user", "content": prompt},
-    ]
-    reply, _ = await chat_with_tools(messages, request, _mcp_registry)
-    if not reply:
-        raise HTTPException(status_code=502, detail="生成每日总结失败")
-    return {"summary": reply}
 
 
 @router.post("/daily/tasks/prepare")

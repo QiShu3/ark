@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { ArrowUp, ArrowDown, History, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, History, ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import ChatBox from '../components/ChatBox';
 import AIAssistantShell from '../components/AIAssistantShell';
@@ -25,9 +25,17 @@ type PaperState = {
   is_favorite: boolean;
   is_read: boolean;
   is_skipped: boolean;
+  tag_ids: number[];
 };
 
-type PaperStateMap = Record<string, Pick<PaperState, 'is_favorite' | 'is_read' | 'is_skipped'>>;
+type PaperStateMap = Record<string, Pick<PaperState, 'is_favorite' | 'is_read' | 'is_skipped' | 'tag_ids'>>;
+
+type PaperTag = {
+  id: number;
+  user_id: number;
+  name: string;
+  color: string;
+};
 
 type DailyConfig = {
   user_id: number;
@@ -74,7 +82,6 @@ type SavedViewCache = {
 type DailyViewCache = {
   config: DailyConfig | null;
   candidates: DailyCandidate[];
-  summary: string;
   isReady: boolean;
 };
 
@@ -92,6 +99,21 @@ const CATEGORIES = [
   { value: 'physics', label: '物理 (physics)' },
   { value: 'q-bio', label: '定量生物学 (q-bio)' },
 ];
+
+const TAG_COLORS = [
+  { value: 'zinc', style: 'bg-zinc-500/25 border-zinc-300/40 text-zinc-100' },
+  { value: 'red', style: 'bg-red-500/25 border-red-300/40 text-red-100' },
+  { value: 'orange', style: 'bg-orange-500/25 border-orange-300/40 text-orange-100' },
+  { value: 'amber', style: 'bg-amber-500/25 border-amber-300/40 text-amber-100' },
+  { value: 'emerald', style: 'bg-emerald-500/25 border-emerald-300/40 text-emerald-100' },
+  { value: 'cyan', style: 'bg-cyan-500/25 border-cyan-300/40 text-cyan-100' },
+  { value: 'blue', style: 'bg-blue-500/25 border-blue-300/40 text-blue-100' },
+  { value: 'violet', style: 'bg-violet-500/25 border-violet-300/40 text-violet-100' },
+  { value: 'pink', style: 'bg-pink-500/25 border-pink-300/40 text-pink-100' },
+];
+
+const resolveTagColorClass = (color: string) =>
+  TAG_COLORS.find((item) => item.value === color)?.style || 'bg-white/10 border-white/20 text-white/85';
 
 const formatDate = (dateStr: string) => {
   try {
@@ -195,6 +217,7 @@ const Arxiv: React.FC = () => {
   const [papers, setPapers] = useState<ArxivPaper[]>([]);
   const [searchResults, setSearchResults] = useState<ArxivPaper[]>([]);
   const [stateMap, setStateMap] = useState<PaperStateMap>({});
+  const [paperTags, setPaperTags] = useState<PaperTag[]>([]);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [dailyKeywords, setDailyKeywords] = useState('llm');
@@ -207,19 +230,24 @@ const Arxiv: React.FC = () => {
   const [dailyUpdateTime, setDailyUpdateTime] = useState('09:00');
   const [dailyConfig, setDailyConfig] = useState<DailyConfig | null>(null);
   const [dailyCandidates, setDailyCandidates] = useState<DailyCandidate[]>([]);
-  const [dailySummary, setDailySummary] = useState('');
   const [dailyBusy, setDailyBusy] = useState(false);
   const [dailyError, setDailyError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [isExecutingAction, setIsExecutingAction] = useState(false);
   const [currentDailyIndex, setCurrentDailyIndex] = useState(0);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
+  const [tagPickerPaper, setTagPickerPaper] = useState<ArxivPaper | null>(null);
+  const [isTagEditMode, setIsTagEditMode] = useState(false);
+  const [tagModalBusy, setTagModalBusy] = useState(false);
+  const [showTagCreateModal, setShowTagCreateModal] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0].value);
+  const [tagToDelete, setTagToDelete] = useState<PaperTag | null>(null);
   const savedViewCacheRef = useRef<Partial<Record<PaperCollectionMode, SavedViewCache>>>({});
   const [paperCollectionMode, setPaperCollectionMode] = useState<PaperCollectionMode>('all');
   const dailyViewCacheRef = useRef<DailyViewCache>({
     config: null,
     candidates: [],
-    summary: '',
     isReady: false,
   });
 
@@ -250,20 +278,26 @@ const Arxiv: React.FC = () => {
   const canSearch = keywords.trim().length > 0;
   const resultCountText = useMemo(() => `结果 ${papers.length} 条`, [papers.length]);
   const dailyAssistantInitialMessage = useMemo(() => {
-    const text = dailySummary.trim();
-    if (text) {
-      return `我是每日秘书，已为你生成今日总结：\n\n${text}`;
-    }
     return '我是每日秘书。可总结今日论文，并在你确认后批量创建任务。';
-  }, [dailySummary]);
+  }, []);
 
   const loadPaperStates = useCallback(async () => {
     const rows = await apiJson<PaperState[]>('/api/arxiv/papers?limit=200');
     const mapped: PaperStateMap = {};
     rows.forEach((row) => {
-      mapped[row.arxiv_id] = { is_favorite: row.is_favorite, is_read: row.is_read, is_skipped: row.is_skipped };
+      mapped[row.arxiv_id] = {
+        is_favorite: row.is_favorite,
+        is_read: row.is_read,
+        is_skipped: row.is_skipped,
+        tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids : [],
+      };
     });
     setStateMap(mapped);
+  }, []);
+
+  const loadPaperTags = useCallback(async () => {
+    const rows = await apiJson<PaperTag[]>('/api/arxiv/papers/tags');
+    setPaperTags(rows);
   }, []);
 
   const invalidateSavedViewCache = useCallback((modes?: PaperCollectionMode[]) => {
@@ -280,7 +314,6 @@ const Arxiv: React.FC = () => {
     dailyViewCacheRef.current = {
       config: null,
       candidates: [],
-      summary: '',
       isReady: false,
     };
   }, []);
@@ -332,7 +365,12 @@ const Arxiv: React.FC = () => {
         const mapped: PaperStateMap = {};
         const targetIds: string[] = [];
         stateRows.forEach((row) => {
-          mapped[row.arxiv_id] = { is_favorite: row.is_favorite, is_read: row.is_read, is_skipped: row.is_skipped };
+          mapped[row.arxiv_id] = {
+            is_favorite: row.is_favorite,
+            is_read: row.is_read,
+            is_skipped: row.is_skipped,
+            tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids : [],
+          };
           if (mode === 'all' && (row.is_favorite || row.is_read || row.is_skipped)) {
             targetIds.push(row.arxiv_id);
           } else if (mode === 'favorites' && row.is_favorite) {
@@ -388,7 +426,6 @@ const Arxiv: React.FC = () => {
         const cached = dailyViewCacheRef.current;
         applyDailyConfig(cached.config);
         setDailyCandidates(cached.candidates);
-        setDailySummary(cached.summary);
         return;
       }
       setDailyBusy(true);
@@ -401,13 +438,9 @@ const Arxiv: React.FC = () => {
         const candidates = await apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates');
         setDailyCandidates(candidates);
 
-        const summaryData = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
-        setDailySummary(summaryData.summary);
-
         dailyViewCacheRef.current = {
           config,
           candidates,
-          summary: summaryData.summary,
           isReady: true,
         };
       } catch (e) {
@@ -430,13 +463,14 @@ const Arxiv: React.FC = () => {
   }, [viewMode, paperCollectionMode, fetchSavedPapers, loadDailyViewData, searchResults]);
 
   const upsertState = useCallback(
-    async (paper: ArxivPaper, patch: Partial<Pick<PaperState, 'is_favorite' | 'is_read' | 'is_skipped'>>) => {
-      const current = stateMap[paper.arxiv_id] || { is_favorite: false, is_read: false, is_skipped: false };
+    async (paper: ArxivPaper, patch: Partial<Pick<PaperState, 'is_favorite' | 'is_read' | 'is_skipped' | 'tag_ids'>>) => {
+      const current = stateMap[paper.arxiv_id] || { is_favorite: false, is_read: false, is_skipped: false, tag_ids: [] };
       
       const next = {
         is_favorite: patch.is_favorite ?? current.is_favorite,
         is_read: patch.is_read ?? current.is_read,
         is_skipped: patch.is_skipped ?? current.is_skipped,
+        tag_ids: patch.tag_ids ?? current.tag_ids,
       };
       setSavingId(paper.arxiv_id);
       setError(null);
@@ -450,11 +484,17 @@ const Arxiv: React.FC = () => {
             is_favorite: next.is_favorite,
             is_read: next.is_read,
             is_skipped: next.is_skipped,
+            tag_ids: next.tag_ids,
           }),
         });
         setStateMap((prev) => ({
           ...prev,
-          [saved.arxiv_id]: { is_favorite: saved.is_favorite, is_read: saved.is_read, is_skipped: saved.is_skipped },
+          [saved.arxiv_id]: {
+            is_favorite: saved.is_favorite,
+            is_read: saved.is_read,
+            is_skipped: saved.is_skipped,
+            tag_ids: Array.isArray(saved.tag_ids) ? saved.tag_ids : [],
+          },
         }));
         invalidateSavedViewCache();
         if (viewMode === 'papers') {
@@ -473,22 +513,15 @@ const Arxiv: React.FC = () => {
     loadPaperStates().catch(() => undefined);
   }, [loadPaperStates]);
 
-  const generateDailySummary = useCallback(async () => {
-    setDailyBusy(true);
-    setDailyError(null);
-    try {
-      const data = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
-      setDailySummary(data.summary);
-      dailyViewCacheRef.current = {
-        ...dailyViewCacheRef.current,
-        summary: data.summary,
-      };
-    } catch (e) {
-      setDailyError(e instanceof Error ? e.message : '生成总结失败');
-    } finally {
-      setDailyBusy(false);
-    }
-  }, []);
+  useEffect(() => {
+    loadPaperTags().catch(() => undefined);
+  }, [loadPaperTags]);
+
+  const tagMap = useMemo(() => {
+    const mapped = new Map<number, PaperTag>();
+    paperTags.forEach((tag) => mapped.set(tag.id, tag));
+    return mapped;
+  }, [paperTags]);
 
   const saveDailyConfig = useCallback(async () => {
     setDailyBusy(true);
@@ -509,17 +542,12 @@ const Arxiv: React.FC = () => {
           update_time: dailyUpdateTime,
         }),
       });
-      const [candidates, summaryData] = await Promise.all([
-        apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates'),
-        apiJson<{ summary: string }>('/api/arxiv/daily/summary'),
-      ]);
+      const candidates = await apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates');
       applyDailyConfig(config);
       setDailyCandidates(candidates);
-      setDailySummary(summaryData.summary);
       dailyViewCacheRef.current = {
         config,
         candidates,
-        summary: summaryData.summary,
         isReady: true,
       };
       setIsConfigExpanded(false);
@@ -547,13 +575,10 @@ const Arxiv: React.FC = () => {
     try {
       invalidateDailyCache();
       const rows = await apiJson<DailyCandidate[]>('/api/arxiv/daily/refresh', { method: 'POST' });
-      const summaryData = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
       setDailyCandidates(rows);
-      setDailySummary(summaryData.summary);
       dailyViewCacheRef.current = {
         config: dailyConfig,
         candidates: rows,
-        summary: summaryData.summary,
         isReady: true,
       };
       await loadPaperStates();
@@ -564,11 +589,6 @@ const Arxiv: React.FC = () => {
       setDailyBusy(false);
     }
   }, [dailyConfig, invalidateDailyCache, invalidateSavedViewCache, loadPaperStates]);
-
-  useEffect(() => {
-    if (viewMode !== 'daily') return;
-    loadDailyViewData().catch(() => undefined);
-  }, [viewMode, loadDailyViewData]);
 
   const askCreateDailyTasks = useCallback(async () => {
     setDailyError(null);
@@ -615,6 +635,82 @@ const Arxiv: React.FC = () => {
     await loadPaperStates();
     invalidateSavedViewCache();
   }, [invalidateSavedViewCache, loadPaperStates]);
+
+  const openTagPicker = useCallback((paper: ArxivPaper) => {
+    setTagPickerPaper(paper);
+    setIsTagEditMode(false);
+    setTagToDelete(null);
+  }, []);
+
+  const closeTagPicker = useCallback(() => {
+    setTagPickerPaper(null);
+    setIsTagEditMode(false);
+    setTagToDelete(null);
+    setTagModalBusy(false);
+  }, []);
+
+  const createTag = useCallback(async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    setTagModalBusy(true);
+    setError(null);
+    try {
+      await apiJson<PaperTag>('/api/arxiv/papers/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color: newTagColor }),
+      });
+      await loadPaperTags();
+      setNewTagName('');
+      setShowTagCreateModal(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '创建标签失败');
+    } finally {
+      setTagModalBusy(false);
+    }
+  }, [loadPaperTags, newTagColor, newTagName]);
+
+  const toggleTagSelection = useCallback(async (paper: ArxivPaper, tagId: number) => {
+    const current = stateMap[paper.arxiv_id] || { is_favorite: false, is_read: false, is_skipped: false, tag_ids: [] };
+    const exists = current.tag_ids.includes(tagId);
+    const nextTagIds = exists ? current.tag_ids.filter((id) => id !== tagId) : [...current.tag_ids, tagId];
+    await upsertState(paper, { tag_ids: nextTagIds });
+  }, [stateMap, upsertState]);
+
+  const requestDeleteTag = useCallback((tag: PaperTag) => {
+    setTagToDelete(tag);
+  }, []);
+
+  const cancelDeleteTag = useCallback(() => {
+    setTagToDelete(null);
+  }, []);
+
+  const commitDeleteTag = useCallback(async () => {
+    if (!tagToDelete) return;
+    setTagModalBusy(true);
+    setError(null);
+    try {
+      await apiJson(`/api/arxiv/papers/tags/${tagToDelete.id}`, { method: 'DELETE' });
+      await Promise.all([loadPaperTags(), loadPaperStates()]);
+      invalidateSavedViewCache();
+      if (viewMode === 'papers') {
+        await fetchSavedPapers(paperCollectionMode, true);
+      }
+      setTagToDelete(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除标签失败');
+    } finally {
+      setTagModalBusy(false);
+    }
+  }, [
+    fetchSavedPapers,
+    invalidateSavedViewCache,
+    loadPaperStates,
+    loadPaperTags,
+    paperCollectionMode,
+    tagToDelete,
+    viewMode,
+  ]);
 
 
 
@@ -941,13 +1037,6 @@ const Arxiv: React.FC = () => {
                       立即刷新
                     </button>
                     <button
-                      onClick={generateDailySummary}
-                      disabled={dailyBusy}
-                      className="h-10 px-4 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
-                    >
-                      生成今日总结
-                    </button>
-                    <button
                       onClick={askCreateDailyTasks}
                       disabled={dailyCandidates.length === 0}
                       className="h-10 px-4 rounded-lg bg-emerald-500/70 hover:bg-emerald-500 border border-emerald-300/30 transition-colors disabled:opacity-50"
@@ -964,6 +1053,14 @@ const Arxiv: React.FC = () => {
               <div className="space-y-4">
                 {dailyCandidates.length > 0 ? (
                   <>
+                    {(() => {
+                      const dailyPaper = dailyCandidates[currentDailyIndex];
+                      const dailyState = stateMap[dailyPaper.arxiv_id] || { is_favorite: false, is_read: false, is_skipped: false, tag_ids: [] };
+                      const selectedDailyTags = dailyState.tag_ids
+                        .map((tagId) => tagMap.get(tagId))
+                        .filter((item): item is PaperTag => Boolean(item));
+                      return (
+                        <>
                     <div className="flex items-center justify-between bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-3 mt-4 select-none">
                       <button
                         onClick={() => setCurrentDailyIndex(Math.max(0, currentDailyIndex - 1))}
@@ -1007,44 +1104,70 @@ const Arxiv: React.FC = () => {
                         <div className="flex flex-col gap-2 md:min-w-[150px]">
                           <button
                             disabled={savingId === dailyCandidates[currentDailyIndex].arxiv_id}
-                            onClick={() => upsertState(dailyCandidates[currentDailyIndex], { is_favorite: !stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_favorite })}
+                            onClick={() => upsertState(dailyPaper, { is_favorite: !dailyState.is_favorite })}
                             className={`h-8 px-3 rounded-lg border text-sm transition-colors ${
-                              stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_favorite
+                              dailyState.is_favorite
                                 ? 'bg-yellow-500/30 border-yellow-300/60 text-yellow-100'
                                 : 'bg-black/30 border-white/20 text-white/80 hover:bg-white/15'
                             }`}
                           >
-                            {stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_favorite ? '已收藏' : '收藏'}
+                            {dailyState.is_favorite ? '已收藏' : '收藏'}
                           </button>
                           <button
                             disabled={savingId === dailyCandidates[currentDailyIndex].arxiv_id}
                             onClick={() =>
-                              upsertState(dailyCandidates[currentDailyIndex], { is_read: !stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_read })
+                              upsertState(dailyPaper, { is_read: !dailyState.is_read })
                             }
                             className={`h-8 px-3 rounded-lg border text-sm transition-colors ${
-                              stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_read
+                              dailyState.is_read
                                 ? 'bg-emerald-500/30 border-emerald-300/60 text-emerald-100'
                                 : 'bg-black/30 border-white/20 text-white/80 hover:bg-white/15'
                             }`}
                           >
-                            {stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_read ? '已读' : '标记已读'}
+                            {dailyState.is_read ? '已读' : '标记已读'}
                           </button>
                           <button
                             disabled={savingId === dailyCandidates[currentDailyIndex].arxiv_id}
                             onClick={() =>
-                              upsertState(dailyCandidates[currentDailyIndex], { is_skipped: !stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_skipped })
+                              upsertState(dailyPaper, { is_skipped: !dailyState.is_skipped })
                             }
                             className={`h-8 px-3 rounded-lg border text-sm transition-colors ${
-                              stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_skipped
+                              dailyState.is_skipped
                                 ? 'bg-violet-500/30 border-violet-300/60 text-violet-100'
                                 : 'bg-black/30 border-white/20 text-white/80 hover:bg-white/15'
                             }`}
                           >
-                            {stateMap[dailyCandidates[currentDailyIndex].arxiv_id]?.is_skipped ? '已跳过' : '跳过'}
+                            {dailyState.is_skipped ? '已跳过' : '跳过'}
+                          </button>
+                          <button
+                            disabled={savingId === dailyCandidates[currentDailyIndex].arxiv_id}
+                            onClick={() => openTagPicker(dailyPaper)}
+                            className="h-8 px-3 rounded-lg border text-sm transition-colors bg-black/30 border-white/20 text-white/80 hover:bg-white/15"
+                          >
+                            标签
                           </button>
                         </div>
                       </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedDailyTags.length > 0 ? (
+                          selectedDailyTags.map((tag) => (
+                            <span
+                              key={tag.id}
+                              className={`px-2.5 py-1 rounded-lg border text-xs ${resolveTagColorClass(tag.color)}`}
+                            >
+                              {tag.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg border text-xs bg-black/20 border-white/15 text-white/50">
+                            暂无标签
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    </>
+                      );
+                    })()}
                   </>
                 ) : (
                   <div className="text-center text-white/50 py-10">暂无当日候选论文</div>
@@ -1071,8 +1194,11 @@ const Arxiv: React.FC = () => {
 
           <div className="mt-6 space-y-4 pb-8">
             {viewMode !== 'daily' && papers.map((paper) => {
-              const state = stateMap[paper.arxiv_id] || { is_favorite: false, is_read: false, is_skipped: false };
+              const state = stateMap[paper.arxiv_id] || { is_favorite: false, is_read: false, is_skipped: false, tag_ids: [] };
               const saving = savingId === paper.arxiv_id;
+              const selectedTags = state.tag_ids
+                .map((tagId) => tagMap.get(tagId))
+                .filter((item): item is PaperTag => Boolean(item));
               return (
                 <div
                   key={paper.arxiv_id}
@@ -1128,7 +1254,27 @@ const Arxiv: React.FC = () => {
                       >
                         {state.is_skipped ? '已跳过' : '跳过'}
                       </button>
+                      <button
+                        disabled={saving}
+                        onClick={() => openTagPicker(paper)}
+                        className="h-8 px-3 rounded-lg border text-sm transition-colors bg-black/30 border-white/20 text-white/80 hover:bg-white/15"
+                      >
+                        标签
+                      </button>
                     </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedTags.length > 0 ? (
+                      selectedTags.map((tag) => (
+                        <span key={tag.id} className={`px-2.5 py-1 rounded-lg border text-xs ${resolveTagColorClass(tag.color)}`}>
+                          {tag.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-lg border text-xs bg-black/20 border-white/15 text-white/50">
+                        暂无标签
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -1175,6 +1321,134 @@ const Arxiv: React.FC = () => {
           </div>
         </div>
       </div>
+      {tagPickerPaper ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 rounded-2xl">
+          <div className="w-[92%] max-w-xl bg-zinc-900/90 border border-white/10 rounded-2xl p-4 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-white text-base font-medium">标签</div>
+              <button
+                onClick={closeTagPicker}
+                className="px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-white/70"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="max-h-[48vh] overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex flex-wrap gap-2">
+                {paperTags.map((tag) => {
+                  const selected = (stateMap[tagPickerPaper.arxiv_id]?.tag_ids || []).includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => (isTagEditMode ? requestDeleteTag(tag) : toggleTagSelection(tagPickerPaper, tag.id))}
+                      className={`relative px-2.5 py-1 rounded-lg border text-xs transition-colors ${resolveTagColorClass(tag.color)} ${isTagEditMode ? 'tag-edit-wiggle hover:opacity-80' : ''}`}
+                    >
+                      {tag.name}
+                      {isTagEditMode ? (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border border-red-300 flex items-center justify-center">
+                          <X size={10} className="text-white" />
+                        </span>
+                      ) : selected ? (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border border-emerald-300 flex items-center justify-center">
+                          <Check size={10} className="text-white" />
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+                {isTagEditMode ? (
+                  <button
+                    onClick={() => setShowTagCreateModal(true)}
+                    className="w-7 h-7 rounded-lg border border-white/20 bg-white/5 hover:bg-white/10 text-white/80 flex items-center justify-center"
+                  >
+                    <Plus size={14} />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex justify-end mt-3">
+              <button
+                onClick={() => setIsTagEditMode((prev) => !prev)}
+                className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                  isTagEditMode
+                    ? 'bg-blue-500/30 border-blue-300/60 text-blue-100'
+                    : 'bg-white/10 border-white/20 text-white/85 hover:bg-white/15'
+                }`}
+              >
+                编辑
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {showTagCreateModal ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 rounded-2xl">
+          <div className="w-[92%] max-w-md bg-zinc-900/95 border border-white/10 rounded-2xl p-4 shadow-xl">
+            <div className="text-white text-base font-medium mb-3">新增标签</div>
+            <input
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              placeholder="标签名字"
+              className="w-full h-10 rounded-lg bg-black/30 border border-white/15 px-3 outline-none focus:border-blue-400"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {TAG_COLORS.map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => setNewTagColor(item.value)}
+                  className={`px-2.5 py-1 rounded-lg border text-xs ${item.style} ${
+                    newTagColor === item.value ? 'ring-2 ring-emerald-400/70' : ''
+                  }`}
+                >
+                  {item.value}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowTagCreateModal(false)}
+                className="px-3 py-2 rounded-lg bg-white/10 text-white/80 hover:bg-white/15"
+                disabled={tagModalBusy}
+              >
+                取消
+              </button>
+              <button
+                onClick={createTag}
+                className="px-3 py-2 rounded-lg bg-blue-500/80 text-white hover:bg-blue-500 disabled:opacity-60"
+                disabled={tagModalBusy || !newTagName.trim()}
+              >
+                {tagModalBusy ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {tagToDelete ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 rounded-2xl">
+          <div className="w-[92%] max-w-md bg-zinc-900/95 border border-white/10 rounded-2xl p-4 shadow-xl">
+            <div className="text-white text-base font-medium mb-2">删除标签</div>
+            <div className="text-white/70 text-sm mb-4">
+              确认删除标签「{tagToDelete.name}」？
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={cancelDeleteTag}
+                className="px-3 py-2 rounded-lg bg-white/10 text-white/80 hover:bg-white/15"
+                disabled={tagModalBusy}
+              >
+                取消
+              </button>
+              <button
+                onClick={commitDeleteTag}
+                className="px-3 py-2 rounded-lg bg-red-500/80 text-white hover:bg-red-500 disabled:opacity-60"
+                disabled={tagModalBusy}
+              >
+                {tagModalBusy ? '删除中...' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {confirmAction ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 rounded-2xl">
           <div className="w-[92%] max-w-md bg-zinc-900/90 border border-white/10 rounded-2xl p-4 shadow-xl">
