@@ -93,6 +93,21 @@ const CATEGORIES = [
   { value: 'q-bio', label: '定量生物学 (q-bio)' },
 ];
 
+const formatDate = (dateStr: string) => {
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  } catch {
+    return dateStr;
+  }
+};
+
 const PaperSummary: React.FC<{ summary: string }> = ({ summary }) => {
   const [expanded, setExpanded] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -374,14 +389,16 @@ const Arxiv: React.FC = () => {
       setDailyBusy(true);
       setDailyError(null);
       try {
-        const [config, candidates, summaryData] = await Promise.all([
-          apiJson<DailyConfig | null>('/api/arxiv/daily/config'),
-          apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates'),
-          apiJson<{ summary: string }>('/api/arxiv/daily/summary'),
-        ]);
+        // 串行加载，确保数据依赖关系正确，并避免 summary 接口读不到刚生成的 candidates
+        const config = await apiJson<DailyConfig | null>('/api/arxiv/daily/config');
         applyDailyConfig(config);
+
+        const candidates = await apiJson<DailyCandidate[]>('/api/arxiv/daily/candidates');
         setDailyCandidates(candidates);
+
+        const summaryData = await apiJson<{ summary: string }>('/api/arxiv/daily/summary');
         setDailySummary(summaryData.summary);
+
         dailyViewCacheRef.current = {
           config,
           candidates,
@@ -793,6 +810,11 @@ const Arxiv: React.FC = () => {
 
           {viewMode === 'daily' && (
             <div className="space-y-4">
+              {dailyError ? (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-200 text-sm">
+                  {dailyError}
+                </div>
+              ) : null}
               {!isConfigExpanded ? (
                 <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg flex items-center gap-4">
                   <button
@@ -802,7 +824,7 @@ const Arxiv: React.FC = () => {
                     每日配置更改
                   </button>
                   <span className="text-sm text-white/70 ml-auto">
-                    {dailyConfig?.last_run_on ? `最近刷新：${dailyConfig.last_run_on}` : '尚未生成候选集'}
+                    {dailyConfig?.updated_at ? `最近刷新：${formatDate(dailyConfig.updated_at)}` : '尚未生成候选集'}
                   </span>
                 </div>
               ) : (
@@ -902,27 +924,11 @@ const Arxiv: React.FC = () => {
                       将今日论文加入任务
                     </button>
                     <span className="text-sm text-white/70 ml-auto">
-                      {dailyConfig?.last_run_on ? `最近刷新：${dailyConfig.last_run_on}` : '尚未生成候选集'}
+                      {dailyConfig?.updated_at ? `最近刷新：${formatDate(dailyConfig.updated_at)}` : '尚未生成候选集'}
                     </span>
                   </div>
-                  {dailyError ? <div className="mt-2 text-sm text-red-300">{dailyError}</div> : null}
                 </div>
               )}
-
-              <AIAssistantShell className="h-[360px]">
-                <ChatBox
-                  apiPath="/api/chat"
-                  scope="daily"
-                  placeholder="例如：总结今日论文并建议阅读顺序"
-                  sendLabel="发送"
-                  quickReplies={[
-                    '请总结今日候选论文',
-                    '按优先级给我阅读顺序',
-                    '把今日论文加入任务（需确认）',
-                  ]}
-                  initialAssistantMessage={dailyAssistantInitialMessage}
-                />
-              </AIAssistantShell>
 
               <div className="space-y-4">
                 {dailyCandidates.length > 0 ? (
@@ -1013,6 +1019,21 @@ const Arxiv: React.FC = () => {
                   <div className="text-center text-white/50 py-10">暂无当日候选论文</div>
                 )}
               </div>
+
+              <AIAssistantShell className="h-[360px]">
+                <ChatBox
+                  apiPath="/api/chat"
+                  scope="daily"
+                  placeholder="例如：总结今日论文并建议阅读顺序"
+                  sendLabel="发送"
+                  quickReplies={[
+                    '请总结今日候选论文',
+                    '按优先级给我阅读顺序',
+                    '把今日论文加入任务（需确认）',
+                  ]}
+                  initialAssistantMessage={dailyAssistantInitialMessage}
+                />
+              </AIAssistantShell>
 
             </div>
           )}
