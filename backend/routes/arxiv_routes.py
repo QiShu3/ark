@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import time
 from copy import deepcopy
@@ -17,6 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from routes.auth_routes import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/arxiv", tags=["arxiv"])
 
@@ -540,11 +543,14 @@ def _search_sync(payload: ArxivSearchRequest) -> list[ArxivPaperOut]:
         )
         papers: list[ArxivPaperOut] = []
         for result in client.results(search, offset=payload.offset):
+            authors = [n for n in (str(author.name).strip() for author in result.authors) if n]
+            if not authors:
+                logger.warning(f"No authors found for {result.entry_id} (title: {result.title})")
             papers.append(
                 ArxivPaperOut(
                     arxiv_id=_normalize_arxiv_id(str(result.entry_id)),
                     title=str(result.title).strip(),
-                    authors=[str(author.name).strip() for author in result.authors],
+                    authors=authors,
                     published=result.published.isoformat(),
                     summary=str(result.summary).strip(),
                 )
@@ -868,7 +874,17 @@ async def _fetch_daily_candidates(
     items: list[DailyCandidateOut] = []
     for row in rows:
         raw_authors = row["authors_json"]
-        authors = raw_authors if isinstance(raw_authors, list) else []
+        authors = []
+        if isinstance(raw_authors, list):
+            authors = raw_authors
+        elif isinstance(raw_authors, str):
+            try:
+                parsed = json.loads(raw_authors)
+                if isinstance(parsed, list):
+                    authors = parsed
+            except json.JSONDecodeError:
+                pass
+
         items.append(
             DailyCandidateOut(
                 arxiv_id=str(row["arxiv_id"]),

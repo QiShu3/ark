@@ -159,7 +159,7 @@ const PaperSummary: React.FC<{ summary: string }> = ({ summary }) => {
 
   return (
     <div className="mt-3 relative">
-      <div className={`text-sm text-white/85 ${expanded ? '' : 'line-clamp-4'}`}>
+      <div className={`text-sm text-white/85 ${expanded ? '' : 'line-clamp-6'}`}>
         <ReactMarkdown>{summary}</ReactMarkdown>
       </div>
       <div className="flex justify-end mt-1 gap-2">
@@ -1061,32 +1061,8 @@ const Arxiv: React.FC = () => {
                         .filter((item): item is PaperTag => Boolean(item));
                       return (
                         <>
-                    <div className="flex items-center justify-between bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-3 mt-4 select-none">
-                      <button
-                        onClick={() => setCurrentDailyIndex(Math.max(0, currentDailyIndex - 1))}
-                        disabled={currentDailyIndex === 0}
-                        className="px-4 py-2 rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent text-white/80 transition-colors flex items-center gap-2 active:scale-95 duration-200"
-                      >
-                        <ChevronLeft size={20} />
-                        <span className="text-sm font-medium">上一篇</span>
-                      </button>
-                      
-                      <div className="text-sm font-bold text-white/90 bg-black/40 px-6 py-2 rounded-full border border-white/10 shadow-inner min-w-[100px] text-center">
-                        {currentDailyIndex + 1} / {dailyCandidates.length}
-                      </div>
-                      
-                      <button
-                        onClick={() => setCurrentDailyIndex(Math.min(dailyCandidates.length - 1, currentDailyIndex + 1))}
-                        disabled={currentDailyIndex === dailyCandidates.length - 1}
-                        className="px-4 py-2 rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent text-white/80 transition-colors flex items-center gap-2 active:scale-95 duration-200"
-                      >
-                        <span className="text-sm font-medium">下一篇</span>
-                        <ChevronRight size={20} />
-                      </button>
-                    </div>
-
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg min-h-[300px] flex flex-col transition-all duration-300">
-                      <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-6 flex-1">
+                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg h-[400px] flex flex-col transition-all duration-300">
+                      <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-6 flex-1 overflow-y-auto min-h-0 pr-2">
                         <div className="flex-1">
                           <a
                             href={`https://arxiv.org/abs/${dailyCandidates[currentDailyIndex].arxiv_id}`}
@@ -1148,7 +1124,7 @@ const Arxiv: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2 shrink-0">
                         {selectedDailyTags.length > 0 ? (
                           selectedDailyTags.map((tag) => (
                             <span
@@ -1163,6 +1139,34 @@ const Arxiv: React.FC = () => {
                             暂无标签
                           </span>
                         )}
+                      </div>
+
+                      {/* Dashed Separator */}
+                      <div className="my-4 border-t border-dashed border-white/20 shrink-0" />
+
+                      {/* Navigation (Lower Part) */}
+                      <div className="flex items-center justify-between select-none shrink-0">
+                        <button
+                          onClick={() => setCurrentDailyIndex(Math.max(0, currentDailyIndex - 1))}
+                          disabled={currentDailyIndex === 0}
+                          className="px-4 py-2 rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent text-white/80 transition-colors flex items-center gap-2 active:scale-95 duration-200"
+                        >
+                          <ChevronLeft size={20} />
+                          <span className="text-sm font-medium">上一篇</span>
+                        </button>
+                        
+                        <div className="text-sm font-bold text-white/90 bg-black/40 px-6 py-2 rounded-full border border-white/10 shadow-inner min-w-[100px] text-center">
+                          {currentDailyIndex + 1} / {dailyCandidates.length}
+                        </div>
+                        
+                        <button
+                          onClick={() => setCurrentDailyIndex(Math.min(dailyCandidates.length - 1, currentDailyIndex + 1))}
+                          disabled={currentDailyIndex === dailyCandidates.length - 1}
+                          className="px-4 py-2 rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent text-white/80 transition-colors flex items-center gap-2 active:scale-95 duration-200"
+                        >
+                          <span className="text-sm font-medium">下一篇</span>
+                          <ChevronRight size={20} />
+                        </button>
                       </div>
                     </div>
                     </>
