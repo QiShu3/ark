@@ -9,7 +9,7 @@ import { apiJson } from '../lib/api';
 type SortBy = 'relevance' | 'submitted_date' | 'last_updated_date';
 type SortOrder = 'ascending' | 'descending';
 type SearchField = 'title' | 'summary';
-type ViewMode = 'search' | 'favorites' | 'read' | 'skipped' | 'daily';
+type ViewMode = 'search' | 'papers' | 'daily';
 
 type ArxivPaper = {
   arxiv_id: string;
@@ -64,7 +64,7 @@ type ConfirmAction = {
   };
 };
 
-type SavedViewMode = Extract<ViewMode, 'favorites' | 'read' | 'skipped'>;
+type PaperCollectionMode = 'all' | 'favorites' | 'read' | 'skipped';
 
 type SavedViewCache = {
   papers: ArxivPaper[];
@@ -214,7 +214,8 @@ const Arxiv: React.FC = () => {
   const [isExecutingAction, setIsExecutingAction] = useState(false);
   const [currentDailyIndex, setCurrentDailyIndex] = useState(0);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
-  const savedViewCacheRef = useRef<Partial<Record<SavedViewMode, SavedViewCache>>>({});
+  const savedViewCacheRef = useRef<Partial<Record<PaperCollectionMode, SavedViewCache>>>({});
+  const [paperCollectionMode, setPaperCollectionMode] = useState<PaperCollectionMode>('all');
   const dailyViewCacheRef = useRef<DailyViewCache>({
     config: null,
     candidates: [],
@@ -265,7 +266,7 @@ const Arxiv: React.FC = () => {
     setStateMap(mapped);
   }, []);
 
-  const invalidateSavedViewCache = useCallback((modes?: SavedViewMode[]) => {
+  const invalidateSavedViewCache = useCallback((modes?: PaperCollectionMode[]) => {
     if (!modes || modes.length === 0) {
       savedViewCacheRef.current = {};
       return;
@@ -315,7 +316,7 @@ const Arxiv: React.FC = () => {
   }, [author, category, keywords, limit, sortBy, sortOrder, searchField, saveToHistory]);
 
   const fetchSavedPapers = useCallback(
-    async (mode: SavedViewMode, forceRefresh = false) => {
+    async (mode: PaperCollectionMode, forceRefresh = false) => {
       if (!forceRefresh) {
         const cached = savedViewCacheRef.current[mode];
         if (cached) {
@@ -332,7 +333,9 @@ const Arxiv: React.FC = () => {
         const targetIds: string[] = [];
         stateRows.forEach((row) => {
           mapped[row.arxiv_id] = { is_favorite: row.is_favorite, is_read: row.is_read, is_skipped: row.is_skipped };
-          if (mode === 'favorites' && row.is_favorite) {
+          if (mode === 'all' && (row.is_favorite || row.is_read || row.is_skipped)) {
+            targetIds.push(row.arxiv_id);
+          } else if (mode === 'favorites' && row.is_favorite) {
             targetIds.push(row.arxiv_id);
           } else if (mode === 'read' && row.is_read) {
             targetIds.push(row.arxiv_id);
@@ -342,7 +345,9 @@ const Arxiv: React.FC = () => {
         });
         setStateMap(mapped);
 
-        if (targetIds.length === 0) {
+        const dedupedTargetIds = [...new Set(targetIds)];
+
+        if (dedupedTargetIds.length === 0) {
           setPapers([]);
           savedViewCacheRef.current[mode] = { papers: [], stateMap: mapped };
           return;
@@ -351,7 +356,7 @@ const Arxiv: React.FC = () => {
         const details = await apiJson<ArxivPaper[]>('/api/arxiv/papers/details', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ arxiv_ids: targetIds }),
+          body: JSON.stringify({ arxiv_ids: dedupedTargetIds }),
         });
         setPapers(details);
         savedViewCacheRef.current[mode] = { papers: details, stateMap: mapped };
@@ -415,18 +420,14 @@ const Arxiv: React.FC = () => {
   );
 
   useEffect(() => {
-    if (viewMode === 'favorites') {
-      fetchSavedPapers('favorites');
-    } else if (viewMode === 'read') {
-      fetchSavedPapers('read');
-    } else if (viewMode === 'skipped') {
-      fetchSavedPapers('skipped');
+    if (viewMode === 'papers') {
+      fetchSavedPapers(paperCollectionMode);
     } else if (viewMode === 'daily') {
       loadDailyViewData();
     } else {
       setPapers(searchResults);
     }
-  }, [viewMode, fetchSavedPapers, loadDailyViewData, searchResults]);
+  }, [viewMode, paperCollectionMode, fetchSavedPapers, loadDailyViewData, searchResults]);
 
   const upsertState = useCallback(
     async (paper: ArxivPaper, patch: Partial<Pick<PaperState, 'is_favorite' | 'is_read' | 'is_skipped'>>) => {
@@ -456,8 +457,8 @@ const Arxiv: React.FC = () => {
           [saved.arxiv_id]: { is_favorite: saved.is_favorite, is_read: saved.is_read, is_skipped: saved.is_skipped },
         }));
         invalidateSavedViewCache();
-        if (viewMode === 'favorites' || viewMode === 'read' || viewMode === 'skipped') {
-          await fetchSavedPapers(viewMode, true);
+        if (viewMode === 'papers') {
+          await fetchSavedPapers(paperCollectionMode, true);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : '状态更新失败');
@@ -465,7 +466,7 @@ const Arxiv: React.FC = () => {
         setSavingId(null);
       }
     },
-    [fetchSavedPapers, invalidateSavedViewCache, stateMap, viewMode],
+    [fetchSavedPapers, invalidateSavedViewCache, paperCollectionMode, stateMap, viewMode],
   );
 
   useEffect(() => {
@@ -654,34 +655,17 @@ const Arxiv: React.FC = () => {
                 搜索
               </button>
               <button
-                onClick={() => setViewMode('favorites')}
+                onClick={() => {
+                  setViewMode('papers');
+                  setPaperCollectionMode('all');
+                }}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  viewMode === 'favorites'
+                  viewMode === 'papers'
                     ? 'bg-blue-500 text-white'
                     : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
                 }`}
               >
-                收藏
-              </button>
-              <button
-                onClick={() => setViewMode('read')}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  viewMode === 'read'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
-                }`}
-              >
-                已读
-              </button>
-              <button
-                onClick={() => setViewMode('skipped')}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  viewMode === 'skipped'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
-                }`}
-              >
-                跳过
+                论文集
               </button>
             </div>
           </div>
@@ -806,6 +790,53 @@ const Arxiv: React.FC = () => {
               {error ? <span className="text-sm text-red-300 ml-auto">{error}</span> : null}
             </div>
           </div>
+          )}
+
+          {viewMode === 'papers' && (
+            <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-4 shadow-lg flex items-center gap-2">
+              <button
+                onClick={() => setPaperCollectionMode('all')}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  paperCollectionMode === 'all'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                全部
+              </button>
+              <button
+                onClick={() => setPaperCollectionMode('favorites')}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  paperCollectionMode === 'favorites'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                收藏
+              </button>
+              <button
+                onClick={() => setPaperCollectionMode('read')}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  paperCollectionMode === 'read'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                已读
+              </button>
+              <button
+                onClick={() => setPaperCollectionMode('skipped')}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  paperCollectionMode === 'skipped'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                跳过
+              </button>
+              <span className="text-sm text-white/70 ml-auto">{resultCountText}</span>
+              {error ? <span className="text-sm text-red-300">{error}</span> : null}
+            </div>
           )}
 
           {viewMode === 'daily' && (
@@ -1130,11 +1161,13 @@ const Arxiv: React.FC = () => {
               <div className="text-center text-white/50 py-12">
                 {viewMode === 'search'
                   ? '输入条件后点击搜索，避免触发 ArXiv 限流'
-                  : viewMode === 'favorites'
+                  : viewMode === 'papers' && paperCollectionMode === 'all'
+                  ? '暂无论文'
+                  : viewMode === 'papers' && paperCollectionMode === 'favorites'
                   ? '暂无收藏的论文'
-                  : viewMode === 'read'
+                  : viewMode === 'papers' && paperCollectionMode === 'read'
                   ? '暂无已读的论文'
-                  : viewMode === 'skipped'
+                  : viewMode === 'papers' && paperCollectionMode === 'skipped'
                   ? '暂无跳过的论文'
                   : ''}
               </div>
