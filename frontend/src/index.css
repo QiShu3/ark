@@ -10,3 +10,17 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+@keyframes tag-edit-wiggle {
+  0% {
+    transform: rotate(-1.8deg);
+  }
+  100% {
+    transform: rotate(1.8deg);
+  }
+}
+
+.tag-edit-wiggle {
+  transform-origin: 50% 50%;
+  animation: tag-edit-wiggle 0.18s ease-in-out infinite alternate;
+}
