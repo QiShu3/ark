@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
+import FocusStats from './FocusStats';
 
 interface Task {
   id: string;
@@ -631,9 +632,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 </button>
               </div>
               
-              {/* 内容区域占位 */}
-              <div className="flex-1 p-6 flex items-center justify-center text-white/30">
-                <span>专注时长统计内容占位</span>
+              {/* 内容区域 */}
+              <div className="flex-1 p-6 overflow-hidden">
+                <FocusStats 
+                  onTaskClick={(taskId) => {
+                    const t = tasks.find(x => x.id === taskId);
+                    if (t) _openEditTask(t);
+                  }} 
+                />
               </div>
             </div>
           </div>
