@@ -15,11 +15,11 @@ from typing import Annotated, Any, Literal
 import arxiv
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-
-logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 
 from routes.auth_routes import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/arxiv", tags=["arxiv"])
 
