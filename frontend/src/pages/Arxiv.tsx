@@ -159,7 +159,7 @@ const PaperSummary: React.FC<{ summary: string }> = ({ summary }) => {
 
   return (
     <div className="mt-3 relative">
-      <div className={`text-sm text-white/85 ${expanded ? '' : 'line-clamp-4'}`}>
+      <div className={`text-sm text-white/85 ${expanded ? '' : 'line-clamp-6'}`}>
         <ReactMarkdown>{summary}</ReactMarkdown>
       </div>
       <div className="flex justify-end mt-1 gap-2">
