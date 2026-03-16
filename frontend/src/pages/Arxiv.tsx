@@ -1061,7 +1061,7 @@ const Arxiv: React.FC = () => {
                         .filter((item): item is PaperTag => Boolean(item));
                       return (
                         <>
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg h-[500px] flex flex-col transition-all duration-300">
+                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 p-5 shadow-lg h-[400px] flex flex-col transition-all duration-300">
                       <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-6 flex-1 overflow-y-auto min-h-0 pr-2">
                         <div className="flex-1">
                           <a
