@@ -40,7 +40,6 @@ describe('Arxiv Page', () => {
         };
       }
       if (url === '/api/arxiv/daily/candidates') return [];
-      if (url === '/api/arxiv/daily/summary') return { summary: 'summary' };
       if (url === '/api/arxiv/papers?limit=200') return [];
       if (url === '/api/arxiv/papers?limit=500') {
         return [
