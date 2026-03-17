@@ -1109,14 +1109,13 @@ async def commit_daily_tasks(
                     continue
                 task_row = await conn.fetchrow(
                     """
-                    INSERT INTO tasks(user_id, title, content, category, status, priority, target_duration, start_date, due_date)
-                    VALUES ($1, $2, $3, $4, 'todo', 1, 0, NOW(), NULL)
+                    INSERT INTO tasks(user_id, title, content, status, priority, target_duration, start_date, due_date)
+                    VALUES ($1, $2, $3, 'todo', 1, 0, NOW(), NULL)
                     RETURNING id
                     """,
                     int(user.id),
                     f"[Arxiv] {str(row['title'])}",
                     f"论文摘要要点：\n{str(row['summary'])}",
-                    "arxiv-daily",
                 )
                 if task_row is None:
                     skipped += 1
