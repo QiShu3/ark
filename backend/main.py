@@ -71,16 +71,9 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=_lifespan, title="Ark Backend", version="0.1.0")
 
-_cors_allow_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
-_cors_allow_origins = (
-    [s.strip() for s in _cors_allow_origins_env.split(",") if s.strip()]
-    if _cors_allow_origins_env
-    else ["http://localhost:5173", "http://127.0.0.1:5173"]
-)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_allow_origins,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
