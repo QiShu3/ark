@@ -1,0 +1,17 @@
+{$DOMAIN} {
+  encode zstd gzip
+
+  @root path /
+  redir @root /ark/ 302
+
+  @api path /api/* /auth/* /todo/* /arxiv/* /health
+  reverse_proxy @api api:8000
+
+  reverse_proxy /ark/* web:80
+
+  header {
+    # Basic hardening; adjust if needed.
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+  }
+}
