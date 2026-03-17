@@ -1,0 +1,35 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [ main, feacture/auto-deploy-backend ]
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf "%s" "$DEPLOY_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H www.strangetalking.xin >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy by pulling latest main
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=yes root@www.strangetalking.xin '
+            set -euo pipefail
+            cd /home/ark
+            git pull origin main
+            cd backend
+            echo "Backend source updated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          '
