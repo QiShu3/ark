@@ -8,10 +8,15 @@ interface Task {
   user_id: number;
   title: string;
   content: string | null;
-  category: string;
-  status: 'todo' | 'doing' | 'done';
+  status: 'todo' | 'done';
   priority: number;
   target_duration: number;
+  current_cycle_count: number;
+  target_cycle_count: number;
+  cycle_period: 'daily' | 'weekly' | 'monthly' | 'custom';
+  cycle_every_days: number | null;
+  event: string;
+  tags: string[];
   actual_duration: number;
   start_date: string | null;
   due_date: string | null;
@@ -51,23 +56,34 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [currentFocus, setCurrentFocus] = useState<FocusSession | null>(null);
   const [focusDurationStr, setFocusDurationStr] = useState('0min');
   const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
+  const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
+  const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
+  const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
 
   const [createTaskSubmitting, setCreateTaskSubmitting] = useState(false);
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
   const [createTaskForm, setCreateTaskForm] = useState<{
     title: string;
     content: string;
-    category: string;
     priority: 0 | 1 | 2 | 3;
     targetMinutes: number;
+    targetCycleCount: number;
+    cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
+    customCycleDays: number;
+    event: string;
+    tagsText: string;
     startDate: string;
     dueDate: string;
   }>({
     title: '',
     content: '',
-    category: '',
     priority: 0,
     targetMinutes: 25,
+    targetCycleCount: 1,
+    cyclePeriod: 'daily',
+    customCycleDays: 1,
+    event: '',
+    tagsText: '',
     startDate: '',
     dueDate: '',
   });
@@ -82,19 +98,27 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [editTaskForm, setEditTaskForm] = useState<{
     title: string;
     content: string;
-    category: string;
-    status: 'todo' | 'doing' | 'done';
     priority: 0 | 1 | 2 | 3;
     targetMinutes: number;
+    currentCycleCount: number;
+    targetCycleCount: number;
+    cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
+    customCycleDays: number;
+    event: string;
+    tagsText: string;
     startDate: string;
     dueDate: string;
   }>({
     title: '',
     content: '',
-    category: '',
-    status: 'todo',
     priority: 0,
     targetMinutes: 0,
+    currentCycleCount: 0,
+    targetCycleCount: 1,
+    cyclePeriod: 'daily',
+    customCycleDays: 1,
+    event: '',
+    tagsText: '',
     startDate: '',
     dueDate: '',
   });
@@ -134,6 +158,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     }
   }, [showTaskModal, activeTab]);
 
+  useEffect(() => {
+    if (!focusTargetTaskId) return;
+    const task = tasks.find((t) => t.id === focusTargetTaskId);
+    if (!task || task.status === 'done') {
+      setFocusTargetTaskId(null);
+    }
+  }, [tasks, focusTargetTaskId]);
+
 
   function _resetCreateTaskForm(): void {
     setCreateTaskSubmitting(false);
@@ -141,9 +173,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     setCreateTaskForm({
       title: '',
       content: '',
-      category: '',
       priority: 0,
       targetMinutes: 25,
+      targetCycleCount: 1,
+      cyclePeriod: 'daily',
+      customCycleDays: 1,
+      event: '',
+      tagsText: '',
       startDate: '',
       dueDate: '',
     });
@@ -210,10 +246,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     setEditTaskForm({
       title: task.title,
       content: task.content || '',
-      category: task.category,
-      status: task.status,
       priority: task.priority as 0 | 1 | 2 | 3,
       targetMinutes: Math.round(task.target_duration / 60),
+      currentCycleCount: task.current_cycle_count,
+      targetCycleCount: task.target_cycle_count,
+      cyclePeriod: task.cycle_period,
+      customCycleDays: task.cycle_every_days ?? 1,
+      event: task.event || '',
+      tagsText: task.tags.join(', '),
       startDate: task.start_date ? new Date(task.start_date).toISOString().slice(0, 16) : '',
       dueDate: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : '',
     });
@@ -227,16 +267,25 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     try {
       const startDate = editTaskForm.startDate ? new Date(editTaskForm.startDate).toISOString() : null;
       const dueDate = editTaskForm.dueDate ? new Date(editTaskForm.dueDate).toISOString() : null;
+      const cycleEveryDays = editTaskForm.cyclePeriod === 'custom' ? Math.max(1, Math.floor(editTaskForm.customCycleDays || 1)) : null;
+      const tags = editTaskForm.tagsText
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
       await apiJson(`/todo/tasks/${selectedTask.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: editTaskForm.title.trim(),
           content: editTaskForm.content.trim() || null,
-          category: editTaskForm.category.trim(),
-          status: editTaskForm.status,
           priority: editTaskForm.priority,
           target_duration: Math.round(editTaskForm.targetMinutes * 60),
+          current_cycle_count: Math.max(0, Math.floor(editTaskForm.currentCycleCount || 0)),
+          target_cycle_count: Math.max(0, Math.floor(editTaskForm.targetCycleCount || 0)),
+          cycle_period: editTaskForm.cyclePeriod,
+          cycle_every_days: cycleEveryDays,
+          event: editTaskForm.event.trim(),
+          tags,
           start_date: startDate,
           due_date: dueDate,
         }),
@@ -308,8 +357,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-1">
                     <div className={`w-2 h-2 rounded-full ${
-                      task.status === 'doing' ? 'bg-blue-500' :
-                      'bg-white/30'
+                      task.status === 'done' ? 'bg-green-500/50' : 'bg-white/30'
                     }`} />
                     <span className="font-medium text-white/90 line-clamp-1">
                       {task.title}
@@ -349,14 +397,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   </div>
                 </div>
                 
-                {(task.content || task.category || task.due_date) && (
+                {(task.content || task.due_date) && (
                   <div className="flex items-center gap-4 text-xs text-white/40 pl-4">
-                    {task.category && (
-                      <span className="flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-white/30" />
-                        {task.category}
-                      </span>
-                    )}
                     {task.due_date && (
                       <span className={new Date(task.due_date) < new Date() ? 'text-red-400' : ''}>
                         {new Date(task.due_date).toLocaleDateString()} 截止
@@ -368,7 +410,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             ))
           ) : (
             <div className="text-center py-8 text-white/20 text-sm">
-              暂无进行中的任务
+              暂无待办任务
             </div>
           )}
         </div>
@@ -419,6 +461,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   function _pickTodayFocusTask(): Task | null {
     if (!tasks.length) return null;
     try {
+      if (focusTargetTaskId) {
+        const picked = tasks.find((t) => t.id === focusTargetTaskId && t.status !== 'done');
+        if (picked) return picked;
+      }
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -492,6 +538,41 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     }
   }
 
+  function _switchFocusTarget(task: Task) {
+    if (task.status === 'done') return;
+    setFocusTargetTaskId(task.id);
+    setShowFocusTaskPicker(false);
+  }
+
+  async function _handleCompleteAndStopFocus(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (focusQuickActionBusy) return;
+    const targetTaskId = currentFocus?.task_id ?? _pickTodayFocusTask()?.id ?? null;
+    if (!targetTaskId) {
+      alert('没有可完成的即将专注任务');
+      return;
+    }
+    setFocusQuickActionBusy(true);
+    try {
+      await apiJson(`/todo/tasks/${targetTaskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done' }),
+      });
+      if (currentFocus?.task_id === targetTaskId) {
+        await apiJson('/todo/focus/stop', { method: 'POST' });
+        setCurrentFocus(null);
+      }
+      setFocusTargetTaskId((prev) => (prev === targetTaskId ? null : prev));
+      await Promise.all([_loadTasks(), _loadCurrentFocus(), _loadTodayFocus()]);
+    } catch (e) {
+      console.error('Failed to complete and stop focus', e);
+      alert('完成任务失败');
+    } finally {
+      setFocusQuickActionBusy(false);
+    }
+  }
+
   async function _submitCreateTask(): Promise<void> {
     if (createTaskSubmitting) return;
     const title = createTaskForm.title.trim();
@@ -510,16 +591,26 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     try {
       const startDate = createTaskForm.startDate ? new Date(createTaskForm.startDate).toISOString() : null;
       const dueDate = createTaskForm.dueDate ? new Date(createTaskForm.dueDate).toISOString() : null;
+      const cycleEveryDays = createTaskForm.cyclePeriod === 'custom' ? Math.max(1, Math.floor(createTaskForm.customCycleDays || 1)) : null;
+      const tags = createTaskForm.tagsText
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean);
       await apiJson('/todo/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
           content: createTaskForm.content.trim() ? createTaskForm.content : null,
-          category: createTaskForm.category.trim(),
           status: 'todo',
           priority: createTaskForm.priority,
           target_duration: Math.round(targetMinutes * 60),
+          current_cycle_count: 0,
+          target_cycle_count: Math.max(0, Math.floor(createTaskForm.targetCycleCount || 0)),
+          cycle_period: createTaskForm.cyclePeriod,
+          cycle_every_days: cycleEveryDays,
+          event: createTaskForm.event.trim(),
+          tags,
           start_date: startDate,
           due_date: dueDate,
         }),
@@ -532,6 +623,72 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     } finally {
       setCreateTaskSubmitting(false);
     }
+  }
+
+  function _renderCalendarView() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const today = now.getDate();
+    const monthLabel = `${year}年${month + 1}月`;
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    const cells = Array.from({ length: 42 }, (_, i) => {
+      const offset = i - firstWeekday + 1;
+      if (offset < 1) {
+        return {
+          day: daysInPrevMonth + offset,
+          inCurrentMonth: false,
+          isToday: false,
+        };
+      }
+      if (offset > daysInMonth) {
+        return {
+          day: offset - daysInMonth,
+          inCurrentMonth: false,
+          isToday: false,
+        };
+      }
+      return {
+        day: offset,
+        inCurrentMonth: true,
+        isToday: offset === today,
+      };
+    });
+
+    return (
+      <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-3 flex flex-col">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-white/85 text-sm font-semibold">日历</span>
+          <span className="text-white/60 text-xs">{monthLabel}</span>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-[10px] text-white/45 mb-1">
+          {weekdays.map((day) => (
+            <div key={day} className="h-5 flex items-center justify-center">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1 flex-1">
+          {cells.map((cell, idx) => (
+            <div
+              key={`${cell.day}-${idx}`}
+              className={`h-6 rounded flex items-center justify-center text-[11px] ${
+                cell.isToday
+                  ? 'bg-blue-500/70 text-white font-semibold'
+                  : cell.inCurrentMonth
+                    ? 'text-white/80 bg-white/[0.03]'
+                    : 'text-white/25'
+              }`}
+            >
+              {cell.day}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (index === 0) {
@@ -557,8 +714,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-white/80 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // TODO: 切换专注模式
-                  console.log('Switch focus mode');
+                  setShowFocusTaskPicker(true);
+                  _loadTasks();
                 }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -566,6 +723,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   <path d="M19 7H3"/>
                   <path d="M5 17l5 5 5-5"/>
                   <path d="M5 17h16"/>
+                </svg>
+              </button>
+              <button
+                className="absolute top-14 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-emerald-300 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={_handleCompleteAndStopFocus}
+                disabled={focusQuickActionBusy}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </button>
 
@@ -613,6 +779,52 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             </button>
           </div>
         </div>
+
+        {showFocusTaskPicker && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowFocusTaskPicker(false)}
+          >
+            <div
+              className="w-[560px] max-w-[92vw] max-h-[72vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
+                <h3 className="text-lg font-bold text-white">全部任务</h3>
+                <button
+                  onClick={() => setShowFocusTaskPicker(false)}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto max-h-[calc(72vh-56px)] flex flex-col gap-2">
+                {tasks.filter((task) => task.status !== 'done').map((task) => (
+                  <button
+                    key={task.id}
+                    onClick={() => _switchFocusTarget(task)}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                      focusTargetTaskId === task.id
+                          ? 'border-blue-500/40 bg-blue-500/10 text-white'
+                          : 'border-white/10 bg-white/5 text-white/85 hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{task.title}</span>
+                      <span className="text-xs text-white/45">待办</span>
+                    </div>
+                  </button>
+                ))}
+                {tasks.filter((task) => task.status !== 'done').length === 0 && (
+                  <div className="text-center text-white/35 py-6">暂无任务</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 专注时长统计悬浮页面 */}
         {showStatsModal && (
@@ -678,29 +890,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">分类</label>
-                    <input
-                      value={editTaskForm.category}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, category: e.target.value }))}
-                      placeholder="例如：工作/学习"
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">优先级</label>
-                    <select
-                      value={editTaskForm.priority}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    >
-                      <option value={0}>0 低</option>
-                      <option value={1}>1</option>
-                      <option value={2}>2</option>
-                      <option value={3}>3 高</option>
-                    </select>
-                  </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-white/70">优先级</label>
+                  <select
+                    value={editTaskForm.priority}
+                    onChange={(e) => setEditTaskForm((s) => ({ ...s, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    <option value={0}>0 低</option>
+                    <option value={1}>1</option>
+                    <option value={2}>2</option>
+                    <option value={3}>3 高</option>
+                  </select>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -725,18 +926,55 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">状态</label>
+                    <label className="text-sm text-white/70">循环周期</label>
                     <select
-                      value={editTaskForm.status}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, status: e.target.value as 'todo' | 'doing' | 'done' }))}
+                      value={editTaskForm.cyclePeriod}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
                       className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     >
-                      <option value="todo">待办</option>
-                      <option value="doing">进行中</option>
-                      <option value="done">已完成</option>
+                      <option value="daily">每日</option>
+                      <option value="weekly">每周</option>
+                      <option value="monthly">每月</option>
+                      <option value="custom">自定义</option>
                     </select>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">当前循环次数</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editTaskForm.currentCycleCount}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, currentCycleCount: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">目的循环次数</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editTaskForm.targetCycleCount}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, targetCycleCount: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                </div>
+
+                {editTaskForm.cyclePeriod === 'custom' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">自定义间隔（天）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={editTaskForm.customCycleDays}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, customCycleDays: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
@@ -755,6 +993,27 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       value={editTaskForm.dueDate}
                       onChange={(e) => setEditTaskForm((s) => ({ ...s, dueDate: e.target.value }))}
                       className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">事件</label>
+                    <input
+                      value={editTaskForm.event}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, event: e.target.value }))}
+                      placeholder="例如：晨间阅读"
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">标签</label>
+                    <input
+                      value={editTaskForm.tagsText}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, tagsText: e.target.value }))}
+                      placeholder="逗号分隔，例如：学习,arxiv"
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                   </div>
                 </div>
@@ -904,15 +1163,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">分类</label>
-                    <input
-                      value={createTaskForm.category}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, category: e.target.value }))}
-                      placeholder="例如：工作/学习"
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
                     <label className="text-sm text-white/70">优先级</label>
                     <select
                       value={createTaskForm.priority}
@@ -949,14 +1199,43 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">状态</label>
-                    <input
-                      value="todo"
-                      disabled
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60"
-                    />
+                    <label className="text-sm text-white/70">循环周期</label>
+                    <select
+                      value={createTaskForm.cyclePeriod}
+                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    >
+                      <option value="daily">每日</option>
+                      <option value="weekly">每周</option>
+                      <option value="monthly">每月</option>
+                      <option value="custom">自定义</option>
+                    </select>
                   </div>
                 </div>
+
+                <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">目的循环次数</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={createTaskForm.targetCycleCount}
+                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, targetCycleCount: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                </div>
+
+                {createTaskForm.cyclePeriod === 'custom' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">自定义间隔（天）</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={createTaskForm.customCycleDays}
+                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, customCycleDays: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
@@ -975,6 +1254,27 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       value={createTaskForm.dueDate}
                       onChange={(e) => setCreateTaskForm((s) => ({ ...s, dueDate: e.target.value }))}
                       className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">事件</label>
+                    <input
+                      value={createTaskForm.event}
+                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, event: e.target.value }))}
+                      placeholder="例如：晨间阅读"
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">标签</label>
+                    <input
+                      value={createTaskForm.tagsText}
+                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, tagsText: e.target.value }))}
+                      placeholder="逗号分隔，例如：学习,arxiv"
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                   </div>
                 </div>
@@ -1012,21 +1312,25 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     return (
       <div className="flex-1 flex gap-2">
         {Array.from({ length: split }).map((_, subIndex) => (
-          <div
-            key={subIndex}
-            onClick={index === 3 && subIndex === 2 ? () => navigate('/apps') : undefined}
-            className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${
-              index === 3 && subIndex === 2 ? 'cursor-pointer' : ''
-            }`}
-          >
-            {index === 3 && subIndex === 2 ? (
-              <span className="text-white/80 font-medium">应用中心</span>
-            ) : index === 3 && subIndex === 0 ? (
-              <span className="text-white/80 font-medium">成就</span>
-            ) : (
-              <span>Placeholder {index + 1}-{subIndex + 1}</span>
-            )}
-          </div>
+          index === 1 && subIndex === 0 ? (
+            <React.Fragment key={subIndex}>{_renderCalendarView()}</React.Fragment>
+          ) : (
+            <div
+              key={subIndex}
+              onClick={index === 3 && subIndex === 2 ? () => navigate('/apps') : undefined}
+              className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${
+                index === 3 && subIndex === 2 ? 'cursor-pointer' : ''
+              }`}
+            >
+              {index === 3 && subIndex === 2 ? (
+                <span className="text-white/80 font-medium">应用中心</span>
+              ) : index === 3 && subIndex === 0 ? (
+                <span className="text-white/80 font-medium">成就</span>
+              ) : (
+                <span>Placeholder {index + 1}-{subIndex + 1}</span>
+              )}
+            </div>
+          )
         ))}
       </div>
     );

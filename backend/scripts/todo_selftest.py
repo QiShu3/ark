@@ -44,7 +44,6 @@ def _run() -> int:
             json={
                 "title": "test task",
                 "content": "hello",
-                "category": "学习",
                 "status": "todo",
                 "priority": 2,
                 "target_duration": 1500,
@@ -68,11 +67,11 @@ def _run() -> int:
             print("task not found in list:", r.text)
             return 1
 
-        r = c.patch("/todo/tasks/" + task_id, headers=headers, json={"status": "doing"})
+        r = c.patch("/todo/tasks/" + task_id, headers=headers, json={"status": "done"})
         if r.status_code != 200:
             print("patch task failed:", r.status_code, r.text)
             return 1
-        if (r.json() or {}).get("status") != "doing":
+        if (r.json() or {}).get("status") != "done":
             print("unexpected status after patch:", r.text)
             return 1
 
