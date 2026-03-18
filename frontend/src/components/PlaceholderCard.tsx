@@ -41,6 +41,34 @@ interface TodayFocusSummary {
   minutes: number;
 }
 
+type CreateTaskForm = {
+  title: string;
+  content: string;
+  priority: 0 | 1 | 2 | 3;
+  targetMinutes: number;
+  targetCycleCount: number;
+  cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
+  customCycleDays: number;
+  event: string;
+  tagsText: string;
+  startDate: string;
+  dueDate: string;
+};
+
+const CREATE_TASK_FORM_DEFAULTS: CreateTaskForm = {
+  title: '',
+  content: '',
+  priority: 0,
+  targetMinutes: 25,
+  targetCycleCount: 1,
+  cyclePeriod: 'daily',
+  customCycleDays: 1,
+  event: '',
+  tagsText: '',
+  startDate: '',
+  dueDate: '',
+};
+
 /**
  * 右侧占位卡片组件
  * 用于展示占位内容
@@ -49,6 +77,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [showTaskAssistantModal, setShowTaskAssistantModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'daily' | 'weekly' | 'periodic' | 'custom' | 'all'>('today');
   const navigate = useNavigate();
 
@@ -62,31 +91,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   const [createTaskSubmitting, setCreateTaskSubmitting] = useState(false);
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
-  const [createTaskForm, setCreateTaskForm] = useState<{
-    title: string;
-    content: string;
-    priority: 0 | 1 | 2 | 3;
-    targetMinutes: number;
-    targetCycleCount: number;
-    cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
-    customCycleDays: number;
-    event: string;
-    tagsText: string;
-    startDate: string;
-    dueDate: string;
-  }>({
-    title: '',
-    content: '',
-    priority: 0,
-    targetMinutes: 25,
-    targetCycleCount: 1,
-    cyclePeriod: 'daily',
-    customCycleDays: 1,
-    event: '',
-    tagsText: '',
-    startDate: '',
-    dueDate: '',
-  });
+  const [createTaskForm, setCreateTaskForm] = useState<CreateTaskForm>(CREATE_TASK_FORM_DEFAULTS);
+  const [showCreateTaskMoreFields, setShowCreateTaskMoreFields] = useState(false);
+  const [taskAssistantInput, setTaskAssistantInput] = useState('');
+  const [taskAssistantError, setTaskAssistantError] = useState<string | null>(null);
+  const [taskAssistantSubmitting, setTaskAssistantSubmitting] = useState(false);
 
   // Task Management State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -170,19 +179,124 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   function _resetCreateTaskForm(): void {
     setCreateTaskSubmitting(false);
     setCreateTaskError(null);
-    setCreateTaskForm({
-      title: '',
-      content: '',
-      priority: 0,
-      targetMinutes: 25,
-      targetCycleCount: 1,
-      cyclePeriod: 'daily',
-      customCycleDays: 1,
-      event: '',
-      tagsText: '',
-      startDate: '',
-      dueDate: '',
-    });
+    setCreateTaskForm({ ...CREATE_TASK_FORM_DEFAULTS });
+    setShowCreateTaskMoreFields(false);
+  }
+
+  function _openCreateTaskModal(preset?: Partial<CreateTaskForm>): void {
+    const nowDate = new Date();
+    const localNow = new Date(nowDate.getTime() - nowDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const nextStartDate = preset?.startDate && preset.startDate.trim() ? preset.startDate : localNow;
+    setCreateTaskError(null);
+    setShowCreateTaskMoreFields(false);
+    setCreateTaskForm({ ...CREATE_TASK_FORM_DEFAULTS, ...(preset || {}), startDate: nextStartDate });
+    setShowCreateTaskModal(true);
+  }
+
+  function _toDateTimeLocal(value: unknown): string {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().slice(0, 16);
+  }
+
+  function _parseJsonObject(candidate: string): Record<string, unknown> | null {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  function _extractJsonObject(text: string): Record<string, unknown> | null {
+    const direct = text.trim();
+    if (!direct) return null;
+    const directParsed = _parseJsonObject(direct);
+    if (directParsed) return directParsed;
+    const fenced = direct.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
+      const fencedParsed = _parseJsonObject(fenced[1].trim());
+      if (fencedParsed) return fencedParsed;
+    }
+    const start = direct.indexOf('{');
+    const end = direct.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      return _parseJsonObject(direct.slice(start, end + 1));
+    }
+    return null;
+  }
+
+  function _limitTitleLength(value: string, maxChars: number): string {
+    return Array.from(value).slice(0, maxChars).join('');
+  }
+
+  function _draftToCreateTaskForm(inputText: string, draft: Record<string, unknown>): Partial<CreateTaskForm> {
+    const titleRaw = (typeof draft.title === 'string' ? draft.title : inputText.trim()).trim() || '新任务';
+    const title = _limitTitleLength(titleRaw, 10);
+    const content = typeof draft.content === 'string'
+      ? draft.content
+      : (typeof draft.description === 'string' ? draft.description : '');
+    const priorityRaw = Number(draft.priority);
+    const targetMinutesRaw = Number(draft.targetMinutes);
+    const targetCycleCountRaw = Number(draft.targetCycleCount);
+    const customCycleDaysRaw = Number(draft.customCycleDays);
+    const cyclePeriodRaw = typeof draft.cyclePeriod === 'string' ? draft.cyclePeriod : '';
+    const tagsValue = Array.isArray(draft.tags)
+      ? draft.tags.filter((x): x is string => typeof x === 'string').join(', ')
+      : (typeof draft.tagsText === 'string' ? draft.tagsText : '');
+    return {
+      title,
+      content,
+      priority: (Number.isFinite(priorityRaw) ? Math.min(3, Math.max(0, Math.round(priorityRaw))) : 0) as 0 | 1 | 2 | 3,
+      targetMinutes: Number.isFinite(targetMinutesRaw) && targetMinutesRaw >= 0 ? Math.round(targetMinutesRaw) : 25,
+      targetCycleCount: Number.isFinite(targetCycleCountRaw) && targetCycleCountRaw >= 0 ? Math.round(targetCycleCountRaw) : 1,
+      cyclePeriod: cyclePeriodRaw === 'daily' || cyclePeriodRaw === 'weekly' || cyclePeriodRaw === 'monthly' || cyclePeriodRaw === 'custom'
+        ? cyclePeriodRaw
+        : 'daily',
+      customCycleDays: Number.isFinite(customCycleDaysRaw) && customCycleDaysRaw >= 1 ? Math.round(customCycleDaysRaw) : 1,
+      event: typeof draft.event === 'string' ? draft.event : '',
+      tagsText: tagsValue,
+      startDate: _toDateTimeLocal(draft.startDate),
+      dueDate: _toDateTimeLocal(draft.dueDate),
+    };
+  }
+
+  async function _generateTaskByAssistant(): Promise<void> {
+    if (taskAssistantSubmitting) return;
+    const text = taskAssistantInput.trim();
+    if (!text) {
+      setTaskAssistantError('请输入任务描述');
+      return;
+    }
+    setTaskAssistantSubmitting(true);
+    setTaskAssistantError(null);
+    try {
+      const res = await apiJson<{ reply: string }>('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `请将以下任务描述解析成一个 JSON 对象，仅返回 JSON，不要返回其他文字。字段包含：title, content, priority(0-3), targetMinutes, targetCycleCount, cyclePeriod(daily|weekly|monthly|custom), customCycleDays, event, tags(字符串数组), startDate, dueDate。其中 title 必须简练且不超过 10 个字。任务描述：${text}`,
+          history: [],
+          scope: 'general',
+        }),
+      });
+      const payload = _extractJsonObject(typeof res.reply === 'string' ? res.reply : '');
+      if (!payload) {
+        throw new Error('AI 返回格式无法识别');
+      }
+      const preset = _draftToCreateTaskForm(text, payload);
+      setShowTaskAssistantModal(false);
+      setTaskAssistantInput('');
+      _openCreateTaskModal(preset);
+    } catch (e) {
+      setTaskAssistantError(e instanceof Error ? e.message : '快捷生成失败');
+    } finally {
+      setTaskAssistantSubmitting(false);
+    }
   }
 
   async function _loadTasks() {
@@ -768,8 +882,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               className="absolute bottom-2 right-2 w-8 h-8 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white shadow-lg transition-all hover:scale-105 active:scale-95 group-hover/task:opacity-100 opacity-60 backdrop-blur-sm"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowCreateTaskModal(true);
-                setCreateTaskError(null);
+                setTaskAssistantError(null);
+                setShowTaskAssistantModal(true);
               }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1163,87 +1277,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">优先级</label>
-                    <select
-                      value={createTaskForm.priority}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    >
-                      <option value={0}>0 低</option>
-                      <option value={1}>1</option>
-                      <option value={2}>2</option>
-                      <option value={3}>3 高</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">备注</label>
-                  <textarea
-                    value={createTaskForm.content}
-                    onChange={(e) => setCreateTaskForm((s) => ({ ...s, content: e.target.value }))}
-                    placeholder="可选：补充描述/拆解步骤"
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
                     <label className="text-sm text-white/70">目标时长（分钟）</label>
                     <input
                       type="number"
                       min={0}
                       value={createTaskForm.targetMinutes}
                       onChange={(e) => setCreateTaskForm((s) => ({ ...s, targetMinutes: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">循环周期</label>
-                    <select
-                      value={createTaskForm.cyclePeriod}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    >
-                      <option value="daily">每日</option>
-                      <option value="weekly">每周</option>
-                      <option value="monthly">每月</option>
-                      <option value="custom">自定义</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">目的循环次数</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={createTaskForm.targetCycleCount}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, targetCycleCount: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                </div>
-
-                {createTaskForm.cyclePeriod === 'custom' && (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">自定义间隔（天）</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={createTaskForm.customCycleDays}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, customCycleDays: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">开始日期</label>
-                    <input
-                      type="datetime-local"
-                      value={createTaskForm.startDate}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, startDate: e.target.value }))}
                       className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                   </div>
@@ -1258,26 +1297,103 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">事件</label>
-                    <input
-                      value={createTaskForm.event}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, event: e.target.value }))}
-                      placeholder="例如：晨间阅读"
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">标签</label>
-                    <input
-                      value={createTaskForm.tagsText}
-                      onChange={(e) => setCreateTaskForm((s) => ({ ...s, tagsText: e.target.value }))}
-                      placeholder="逗号分隔，例如：学习,arxiv"
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-white/70">标签</label>
+                  <input
+                    value={createTaskForm.tagsText}
+                    onChange={(e) => setCreateTaskForm((s) => ({ ...s, tagsText: e.target.value }))}
+                    placeholder="逗号分隔，例如：学习,arxiv"
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  />
                 </div>
+
+                {showCreateTaskMoreFields && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">优先级</label>
+                        <select
+                          value={createTaskForm.priority}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                          <option value={0}>0 低</option>
+                          <option value={1}>1</option>
+                          <option value={2}>2</option>
+                          <option value={3}>3 高</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">循环周期</label>
+                        <select
+                          value={createTaskForm.cyclePeriod}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                          <option value="daily">每日</option>
+                          <option value="weekly">每周</option>
+                          <option value="monthly">每月</option>
+                          <option value="custom">自定义</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-white/70">备注</label>
+                      <textarea
+                        value={createTaskForm.content}
+                        onChange={(e) => setCreateTaskForm((s) => ({ ...s, content: e.target.value }))}
+                        placeholder="可选：补充描述/拆解步骤"
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-white/70">目的循环次数</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={createTaskForm.targetCycleCount}
+                        onChange={(e) => setCreateTaskForm((s) => ({ ...s, targetCycleCount: Number(e.target.value) }))}
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+
+                    {createTaskForm.cyclePeriod === 'custom' && (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">自定义间隔（天）</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={createTaskForm.customCycleDays}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, customCycleDays: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">开始日期</label>
+                        <input
+                          type="datetime-local"
+                          value={createTaskForm.startDate}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, startDate: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">事件</label>
+                        <input
+                          value={createTaskForm.event}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, event: e.target.value }))}
+                          placeholder="例如：晨间阅读"
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {createTaskError && <div className="text-sm text-red-400">{createTaskError}</div>}
 
@@ -1293,6 +1409,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     取消
                   </button>
                   <button
+                    onClick={() => setShowCreateTaskMoreFields((v) => !v)}
+                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={createTaskSubmitting}
+                  >
+                    {showCreateTaskMoreFields ? '收起' : '更多'}
+                  </button>
+                  <button
                     onClick={_submitCreateTask}
                     className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     disabled={createTaskSubmitting}
@@ -1300,6 +1423,65 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     {createTaskSubmitting ? '创建中...' : '创建'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {showTaskAssistantModal && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => {
+              setShowTaskAssistantModal(false);
+              setTaskAssistantError(null);
+            }}
+          >
+            <div
+              className="w-[560px] h-[420px] max-w-[92vw] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex-[1] border-b border-white/10 px-5 bg-white/5 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">任务解析助手</h3>
+                <button
+                  onClick={() => {
+                    setShowTaskAssistantModal(false);
+                    setTaskAssistantError(null);
+                  }}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-[4] p-5 flex flex-col gap-3">
+                <textarea
+                  value={taskAssistantInput}
+                  onChange={(e) => setTaskAssistantInput(e.target.value)}
+                  placeholder="请输入任务目标、截止时间、优先级等信息，助手会自动帮你填充任务参数"
+                  className="w-full h-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                  autoFocus
+                />
+                {taskAssistantError ? <div className="text-sm text-red-400">{taskAssistantError}</div> : null}
+              </div>
+              <div className="flex-[1] px-5 pb-5 flex items-end justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowTaskAssistantModal(false);
+                    _openCreateTaskModal();
+                  }}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-colors"
+                  disabled={taskAssistantSubmitting}
+                >
+                  自定义任务
+                </button>
+                <button
+                  onClick={_generateTaskByAssistant}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={taskAssistantSubmitting}
+                >
+                  {taskAssistantSubmitting ? '生成中...' : '快捷生成任务'}
+                </button>
               </div>
             </div>
           </div>
