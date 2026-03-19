@@ -70,6 +70,28 @@ class TaskOut(BaseModel):
     updated_at: datetime
 
 
+class EventCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    due_at: datetime
+    is_primary: bool = False
+
+
+class EventUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    due_at: datetime | None = None
+    is_primary: bool | None = None
+
+
+class EventOut(BaseModel):
+    id: UUID
+    user_id: int
+    name: str
+    due_at: datetime
+    is_primary: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class FocusLogCreateRequest(BaseModel):
     duration: int = Field(gt=0)
     start_time: datetime
@@ -231,6 +253,27 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time);"
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS events (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              name VARCHAR(255) NOT NULL,
+              due_at TIMESTAMPTZ NOT NULL,
+              is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;")
+        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE events ALTER COLUMN name SET NOT NULL;")
+        await conn.execute("ALTER TABLE events ALTER COLUMN due_at SET NOT NULL;")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_user_due_at ON events(user_id, due_at ASC);")
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_events_primary_per_user ON events(user_id) WHERE is_primary = TRUE;"
+        )
 
 
 def _row_to_task(row: asyncpg.Record) -> TaskOut:
@@ -253,6 +296,19 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         start_date=row["start_date"],
         due_date=row["due_date"],
         is_deleted=bool(row["is_deleted"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_event(row: asyncpg.Record) -> EventOut:
+    """将 asyncpg.Record 转为 EventOut。"""
+    return EventOut(
+        id=row["id"],
+        user_id=int(row["user_id"]),
+        name=str(row["name"]),
+        due_at=row["due_at"],
+        is_primary=bool(row["is_primary"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -471,6 +527,177 @@ async def delete_task(
         )
     if not tag.startswith("UPDATE ") or tag.endswith(" 0"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    return {"ok": True}
+
+
+@router.post("/events", response_model=EventOut)
+async def create_event(
+    request: Request,
+    body: EventCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventOut:
+    """创建事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if body.is_primary:
+                await conn.execute(
+                    """
+                    UPDATE events
+                    SET is_primary = FALSE, updated_at = NOW()
+                    WHERE user_id = $1 AND is_primary = TRUE
+                    """,
+                    int(user.id),
+                )
+            row = await conn.fetchrow(
+                """
+                INSERT INTO events(user_id, name, due_at, is_primary)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at
+                """,
+                int(user.id),
+                body.name,
+                body.due_at,
+                body.is_primary,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建事件失败")
+    return _row_to_event(row)
+
+
+@router.get("/events", response_model=list[EventOut])
+async def list_events(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[EventOut]:
+    """列出当前用户全部事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+            FROM events
+            WHERE user_id = $1
+            ORDER BY due_at ASC, created_at DESC
+            """,
+            int(user.id),
+        )
+    return [_row_to_event(row) for row in rows]
+
+
+@router.get("/events/primary", response_model=EventOut)
+async def get_primary_event(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventOut:
+    """获取当前用户主事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+            FROM events
+            WHERE user_id = $1 AND is_primary = TRUE
+            """,
+            int(user.id),
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="主事件不存在")
+    return _row_to_event(row)
+
+
+@router.patch("/events/{event_id}", response_model=EventOut)
+async def update_event(
+    request: Request,
+    event_id: UUID,
+    body: EventUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventOut:
+    """更新事件。"""
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        pool = _pool_from_request(request)
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+                FROM events
+                WHERE id = $1 AND user_id = $2
+                """,
+                event_id,
+                int(user.id),
+            )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+        return _row_to_event(row)
+
+    allowed_cols: dict[str, str] = {
+        "name": "name",
+        "due_at": "due_at",
+        "is_primary": "is_primary",
+    }
+
+    sets: list[str] = []
+    args: list[Any] = []
+    is_primary = patch.get("is_primary")
+
+    for key, value in patch.items():
+        col = allowed_cols.get(key)
+        if col is None:
+            continue
+        args.append(value)
+        sets.append(f"{col} = ${len(args)}")
+
+    if not sets:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可更新字段")
+
+    args.append(event_id)
+    event_i = len(args)
+    args.append(int(user.id))
+    user_i = len(args)
+
+    sql = f"""
+        UPDATE events
+        SET {", ".join(sets)}, updated_at = NOW()
+        WHERE id = ${event_i} AND user_id = ${user_i}
+        RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at
+    """
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if is_primary is True:
+                await conn.execute(
+                    """
+                    UPDATE events
+                    SET is_primary = FALSE, updated_at = NOW()
+                    WHERE user_id = $1 AND is_primary = TRUE AND id <> $2
+                    """,
+                    int(user.id),
+                    event_id,
+                )
+            row = await conn.fetchrow(sql, *args)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+    return _row_to_event(row)
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(
+    request: Request,
+    event_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    """删除事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        tag = await conn.execute(
+            "DELETE FROM events WHERE id = $1 AND user_id = $2",
+            event_id,
+            int(user.id),
+        )
+    if not tag.startswith("DELETE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
     return {"ok": True}
 
 
