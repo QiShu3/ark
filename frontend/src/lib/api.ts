@@ -43,3 +43,64 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
   }
   return res.json() as Promise<T>;
 }
+
+/**
+ * SSE 流式请求辅助函数。
+ * 使用 fetch + ReadableStream 消费 SSE data: 行，每解析一个 JSON 对象调用一次 onEvent。
+ */
+export async function apiSSE(
+  path: string,
+  body: unknown,
+  onEvent: (event: Record<string, unknown>) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(path, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (res.status === 401) {
+    useAuthStore.getState().clear();
+    if (!window.location.hash.startsWith('#/login')) window.location.hash = '#/login';
+    throw new Error('未登录');
+  }
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('无法读取 SSE 流');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) continue;
+      if (trimmed.startsWith('data:')) {
+        const jsonStr = trimmed.slice(5).trim();
+        if (!jsonStr) continue;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          onEvent(parsed);
+        } catch {
+          // ignore malformed JSON
+        }
+      }
+    }
+  }
+}

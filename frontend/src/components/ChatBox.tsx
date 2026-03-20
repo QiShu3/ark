@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { apiFetch, apiJson } from '../lib/api';
+import { apiFetch, apiJson, apiSSE } from '../lib/api';
 
 /**
  * 聊天框组件
@@ -14,6 +14,7 @@ type ChatBoxProps = {
   sendLabel?: string;
   quickReplies?: string[];
   initialAssistantMessage?: string;
+  stream?: boolean;
 };
 
 const ChatBox: React.FC<ChatBoxProps> = ({
@@ -24,12 +25,14 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   sendLabel = 'Send',
   quickReplies: quickRepliesProp,
   initialAssistantMessage,
+  stream = true,
 }) => {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showQuickChat, setShowQuickChat] = useState(true);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   type ChatAction = {
     title?: unknown;
     operation?: unknown;
@@ -58,7 +61,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, messages[messages.length - 1]?.content, toolStatus]);
 
   useEffect(() => {
     if (!initialAssistantMessage?.trim()) return;
@@ -68,36 +71,89 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     });
   }, [initialAssistantMessage]);
 
-  const sendMessage = async (customText?: string) => {
+  const sendMessage = useCallback(async (customText?: string) => {
     const text = (customText || input).trim();
     if (!text || isSending) return;
 
     setError(null);
     setIsSending(true);
+    setToolStatus(null);
     if (!customText) setInput('');
 
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
 
-    try {
-      const data = await apiJson<{ reply: string; actions?: ChatAction[] }>(apiPath, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history, scope }),
-      });
-      const reply = (data.reply || '').trim();
-      if (!reply) throw new Error('空回复');
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
-      if (Array.isArray(data.actions) && data.actions.length > 0) {
-        setPendingActions(data.actions);
-        setIsConfirming(true);
+    if (stream) {
+      // 流式模式：使用 SSE
+      let assistantContent = '';
+      let hasCreatedAssistantMsg = false;
+      try {
+        await apiSSE(
+          `${apiPath}/stream`,
+          { message: text, history, scope },
+          (event) => {
+            const eventType = event.type as string;
+            if (eventType === 'delta') {
+              const chunk = (event.content as string) || '';
+              assistantContent += chunk;
+              const currentContent = assistantContent;
+              if (!hasCreatedAssistantMsg) {
+                hasCreatedAssistantMsg = true;
+                setMessages((prev) => [...prev, { role: 'assistant', content: currentContent }]);
+              } else {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: 'assistant', content: currentContent };
+                  return updated;
+                });
+              }
+              setToolStatus(null);
+            } else if (eventType === 'tool_call') {
+              const toolName = (event.name as string) || '工具';
+              setToolStatus(`正在调用：${toolName}`);
+            } else if (eventType === 'actions') {
+              const acts = event.actions as ChatAction[];
+              if (Array.isArray(acts) && acts.length > 0) {
+                setPendingActions(acts);
+                setIsConfirming(true);
+              }
+            } else if (eventType === 'error') {
+              setError((event.message as string) || '流式响应错误');
+            }
+            // 'done' 事件不需要特殊处理
+          },
+        );
+        if (!assistantContent.trim()) {
+          setError('AI 返回了空回复');
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '发送失败');
+      } finally {
+        setIsSending(false);
+        setToolStatus(null);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '发送失败');
-    } finally {
-      setIsSending(false);
+    } else {
+      // 非流式模式：保留原有逻辑
+      try {
+        const data = await apiJson<{ reply: string; actions?: ChatAction[] }>(apiPath, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, history, scope }),
+        });
+        const reply = (data.reply || '').trim();
+        if (!reply) throw new Error('空回复');
+
+        setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+        if (Array.isArray(data.actions) && data.actions.length > 0) {
+          setPendingActions(data.actions);
+          setIsConfirming(true);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '发送失败');
+      } finally {
+        setIsSending(false);
+      }
     }
-  };
+  }, [input, isSending, stream, apiPath, history, scope]);
 
   const currentAction = pendingActions.length > 0 ? pendingActions[0] : null;
 
@@ -207,6 +263,12 @@ const ChatBox: React.FC<ChatBoxProps> = ({
         {error ? (
           <div className="text-red-200 bg-red-500/10 p-2 rounded w-fit max-w-[80%]">
             {error}
+          </div>
+        ) : null}
+
+        {toolStatus ? (
+          <div className="text-blue-200 bg-blue-500/10 p-2 rounded w-fit max-w-[80%] animate-pulse text-sm">
+            🔧 {toolStatus}
           </div>
         ) : null}
       </div>
