@@ -17,6 +17,7 @@
 import json
 import os
 import re
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -62,6 +63,63 @@ async def _call_deepseek_chat(messages: list[dict[str, Any]], tools: list[dict[s
     data = resp.json()
     msg = data["choices"][0]["message"]
     return msg
+
+
+async def _call_deepseek_chat_stream(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """流式调用 DeepSeek chat completions，逐 chunk yield SSE 数据。
+
+    仅在不携带 tools 时使用（即最终回复阶段）。
+    每个 yield 的 dict 包含 type='delta' 或 type='done'。
+    """
+    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("DEEPSEEK_API_KEY 未配置")
+    model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat").strip() or "deepseek-chat"
+    base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
+    url = _deepseek_chat_completions_url(base_url)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "stream": True,
+    }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            resp.raise_for_status()
+            buffer = ""
+            async for raw_line in resp.aiter_lines():
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    line = line[6:]
+                if line == "[DONE]":
+                    return
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                choices = chunk.get("choices")
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                content = delta.get("content")
+                if content:
+                    buffer += content
+                    yield {"type": "delta", "content": content}
+                # 如果流式返回了 tool_calls，回退到非流式模式处理
+                tool_calls = delta.get("tool_calls")
+                if tool_calls:
+                    # 流中出现了 tool_calls，需要收集完整后返回
+                    yield {"type": "_tool_calls_in_stream", "chunk": chunk}
+                    return
 
 
 def _safe_tool_name(server: str, tool: str) -> str:
@@ -744,6 +802,134 @@ async def chat_with_tools(
             return content.strip(), actions
         return "", actions
     return "", actions
+
+
+async def chat_with_tools_stream(
+    messages: list[dict[str, Any]],
+    request: Request,
+    registry: MCPRegistry,
+    *,
+    scope: str = "general",
+) -> AsyncGenerator[dict[str, Any], None]:
+    """流式聊天主流程：
+    1) 构建工具列表（同 chat_with_tools）
+    2) 工具调用轮使用非流式（需要完整解析 tool_calls），yield 工具调用进度
+    3) 最终文本回复使用流式，yield delta 事件
+    4) 最终 yield done 事件
+    """
+    max_loops = int(os.getenv("CHAT_MAX_TOOL_LOOPS", "4").strip() or "4")
+    max_tool_output_chars = int(os.getenv("TOOL_MAX_OUTPUT_CHARS", "4000").strip() or "4000")
+    tools_payload: list[dict[str, Any]] = []
+    name_mapping: dict[str, tuple[str, str]] = {}
+    actions: list[dict[str, Any]] = []
+    if registry.server_names():
+        tools_payload, name_mapping = await _build_server_tools_payload(registry)
+    builtin_payload, builtin_execs = _build_builtin_tools_payload(registry, scope=scope)
+    if builtin_payload:
+        tools_payload.extend(builtin_payload)
+    if scope == "daily":
+        allowed_names = {
+            _["function"]["name"] for _ in tools_payload if _is_daily_allowed_tool_name(_["function"]["name"])
+        }
+        tools_payload = [tool for tool in tools_payload if tool["function"]["name"] in allowed_names]
+        name_mapping = {k: v for k, v in name_mapping.items() if k in allowed_names}
+        builtin_execs = {k: v for k, v in builtin_execs.items() if k in allowed_names}
+
+    for loop_idx in range(max_loops + 1):
+        # 工具调用轮：使用非流式以完整解析 tool_calls
+        assistant_msg = await _call_deepseek_chat(messages, tools_payload if tools_payload else None)
+        tool_calls = assistant_msg.get("tool_calls")
+        if isinstance(tool_calls, list) and tool_calls:
+            messages.append(assistant_msg)
+            for tc in tool_calls:
+                if not isinstance(tc, dict):
+                    continue
+                tc_id = tc.get("id")
+                fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+                fn_name = fn.get("name")
+                fn_args = fn.get("arguments")
+                if not isinstance(fn_name, str) or not isinstance(tc_id, str):
+                    continue
+                # yield 工具调用进度
+                yield {"type": "tool_call", "name": fn_name}
+                if scope == "daily" and not _is_daily_allowed_tool_name(fn_name):
+                    tool_text = "权限受限：每日秘书仅允许查看任务与新增任务，不允许删除任务"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "content": tool_text})
+                    continue
+                args_obj: dict[str, Any] = {}
+                if isinstance(fn_args, dict):
+                    args_obj = fn_args
+                elif isinstance(fn_args, str) and fn_args.strip():
+                    try:
+                        parsed = json.loads(fn_args)
+                        if isinstance(parsed, dict):
+                            args_obj = parsed
+                    except Exception:
+                        args_obj = {}
+                server_tool = name_mapping.get(fn_name)
+                if server_tool is None:
+                    if fn_name in builtin_execs:
+                        try:
+                            if fn_name == "todo__list_today":
+                                tool_text = await _builtin_todo_list_today(request)
+                            elif fn_name == "todo__event_primary":
+                                tool_text = await _builtin_event_primary(request)
+                            elif fn_name == "todo__events_list":
+                                tool_text = await _builtin_events_list(request)
+                            elif fn_name == "todo__focus_current":
+                                tool_text = await _builtin_focus_current(request)
+                            elif fn_name == "todo__focus_today":
+                                tool_text = await _builtin_focus_today(request)
+                            elif fn_name == "todo__focus_start":
+                                tool_text = await _builtin_focus_start(request, args_obj)
+                            elif fn_name == "todo__focus_stop":
+                                tool_text = await _builtin_focus_stop(request)
+                            elif fn_name == "arxiv__daily_candidates":
+                                tool_text = await _builtin_arxiv_daily_candidates(request)
+                            elif fn_name == "arxiv__daily_prepare_add_tasks":
+                                tool_text = await _builtin_arxiv_daily_prepare_add_tasks(request, args_obj)
+                            else:
+                                tool_text = "工具未注册或被禁用"
+                        except Exception as e:
+                            tool_text = f"内置工具调用失败: {e}"
+                    else:
+                        tool_text = "工具未注册或被禁用"
+                else:
+                    server, tool = server_tool
+                    try:
+                        result = await registry.call_tool(server, tool, args_obj)
+                        tool_text = _tool_result_to_text(result, max_chars=max_tool_output_chars)
+                    except MCPProtocolError as e:
+                        tool_text = f"MCP 调用失败: {e}"
+                # 收集确认动作
+                try:
+                    parsed_action = json.loads(tool_text)
+                    if isinstance(parsed_action, dict) and parsed_action.get("action") == "confirm":
+                        actions.append(parsed_action)
+                except Exception:
+                    pass
+                messages.append({"role": "tool", "tool_call_id": tc_id, "content": tool_text})
+            continue
+
+        # 无 tool_calls：最终回复阶段，使用流式输出
+        content = assistant_msg.get("content")
+        if isinstance(content, str) and content.strip():
+            # 非流式已经拿到了完整回复，逐段 yield 以模拟流式效果
+            # 更好的做法是重新以 stream=True 发一次，但为了避免重复花费 tokens，
+            # 直接将已获得的内容分段发送
+            chunk_size = 4
+            text = content.strip()
+            for i in range(0, len(text), chunk_size):
+                yield {"type": "delta", "content": text[i : i + chunk_size]}
+        if actions:
+            yield {"type": "actions", "actions": actions}
+        yield {"type": "done"}
+        return
+
+    # 超过最大轮数
+    if actions:
+        yield {"type": "actions", "actions": actions}
+    yield {"type": "done"}
 
 
 async def get_tools_overview(registry: MCPRegistry) -> dict[str, Any]:
