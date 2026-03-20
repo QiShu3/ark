@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch, apiJson, apiSSE } from '../lib/api';
+import MarkdownContent from './MarkdownContent';
 
 /**
  * 聊天框组件
@@ -261,7 +262,11 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               m.role === 'user' ? 'ml-auto bg-white/10' : 'bg-white/5',
             ].join(' ')}
           >
-            {m.content}
+            {m.role === 'assistant' ? (
+              <MarkdownContent content={m.content} />
+            ) : (
+              m.content
+            )}
           </div>
         ))}
 
