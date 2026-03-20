@@ -209,6 +209,63 @@ async def _builtin_todo_list_today(request: Request) -> str:
     return json.dumps({"today_tasks": data}, ensure_ascii=False)
 
 
+def _event_row_to_payload(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "name": str(row["name"]),
+        "due_at": row["due_at"].isoformat() if row["due_at"] else None,
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "is_primary": bool(row["is_primary"]),
+    }
+
+
+async def _builtin_event_primary(request: Request) -> str:
+    token = _bearer_token_from_request(request)
+    if not token:
+        return "未登录，无法查询主事件"
+    pool = getattr(getattr(request.app, "state", None), "auth_pool", None)
+    if pool is None:
+        return "系统未初始化数据库连接"
+    user = await _auth_user_from_token(pool, token)
+    if user is None:
+        return "登录已失效或无效"
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, name, due_at, created_at, is_primary
+            FROM events
+            WHERE user_id = $1 AND is_primary = TRUE
+            LIMIT 1
+            """,
+            int(user.id),
+        )
+    return json.dumps({"primary_event": _event_row_to_payload(row) if row else None}, ensure_ascii=False)
+
+
+async def _builtin_events_list(request: Request) -> str:
+    token = _bearer_token_from_request(request)
+    if not token:
+        return "未登录，无法查询事件列表"
+    pool = getattr(getattr(request.app, "state", None), "auth_pool", None)
+    if pool is None:
+        return "系统未初始化数据库连接"
+    user = await _auth_user_from_token(pool, token)
+    if user is None:
+        return "登录已失效或无效"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, name, due_at, created_at, is_primary
+            FROM events
+            WHERE user_id = $1
+            ORDER BY due_at ASC, created_at DESC
+            LIMIT 100
+            """,
+            int(user.id),
+        )
+    return json.dumps({"events": [_event_row_to_payload(row) for row in rows]}, ensure_ascii=False)
+
+
 async def _builtin_focus_current(request: Request) -> str:
     token = _bearer_token_from_request(request)
     if not token:
@@ -509,6 +566,18 @@ def _build_builtin_tools_payload(
                 "查询当前用户的今日任务（需登录）",
                 "builtin_todo_list_today",
             )
+        if scope != "daily" and "event_primary" in allowed_set:
+            add_tool(
+                "todo__event_primary",
+                "查询当前用户的主事件（需登录）",
+                "builtin_event_primary",
+            )
+        if scope != "daily" and "events_list" in allowed_set:
+            add_tool(
+                "todo__events_list",
+                "查询当前用户的全部事件列表（需登录）",
+                "builtin_events_list",
+            )
         if "focus_current" in allowed_set:
             add_tool(
                 "todo__focus_current",
@@ -632,6 +701,10 @@ async def chat_with_tools(
                         try:
                             if fn_name == "todo__list_today":
                                 tool_text = await _builtin_todo_list_today(request)
+                            elif fn_name == "todo__event_primary":
+                                tool_text = await _builtin_event_primary(request)
+                            elif fn_name == "todo__events_list":
+                                tool_text = await _builtin_events_list(request)
                             elif fn_name == "todo__focus_current":
                                 tool_text = await _builtin_focus_current(request)
                             elif fn_name == "todo__focus_today":
