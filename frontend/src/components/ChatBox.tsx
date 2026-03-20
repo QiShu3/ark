@@ -33,6 +33,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showQuickChat, setShowQuickChat] = useState(true);
   const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
   type ChatAction = {
     title?: unknown;
     operation?: unknown;
@@ -61,7 +62,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages.length, messages[messages.length - 1]?.content, toolStatus]);
+  }, [messages.length, messages[messages.length - 1]?.content, toolStatus, isTyping]);
 
   useEffect(() => {
     if (!initialAssistantMessage?.trim()) return;
@@ -78,6 +79,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     setError(null);
     setIsSending(true);
     setToolStatus(null);
+    setIsTyping(true);
     if (!customText) setInput('');
 
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
@@ -107,6 +109,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                 });
               }
               setToolStatus(null);
+              setIsTyping(false);
             } else if (eventType === 'tool_call') {
               const toolName = (event.name as string) || '工具';
               setToolStatus(`正在调用：${toolName}`);
@@ -130,6 +133,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       } finally {
         setIsSending(false);
         setToolStatus(null);
+        setIsTyping(false);
       }
     } else {
       // 非流式模式：保留原有逻辑
@@ -151,6 +155,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
         setError(e instanceof Error ? e.message : '发送失败');
       } finally {
         setIsSending(false);
+        setIsTyping(false);
       }
     }
   }, [input, isSending, stream, apiPath, history, scope]);
@@ -269,6 +274,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({
         {toolStatus ? (
           <div className="text-blue-200 bg-blue-500/10 p-2 rounded w-fit max-w-[80%] animate-pulse text-sm">
             🔧 {toolStatus}
+          </div>
+        ) : isTyping ? (
+          <div className="text-white/50 bg-white/5 p-2 rounded w-fit max-w-[80%] animate-pulse text-sm">
+            ✏️ 正在输入中...
           </div>
         ) : null}
       </div>
