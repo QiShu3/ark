@@ -18,13 +18,20 @@ import json
 import os
 import re
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 from fastapi import Request
 
 from routes.auth_routes import _user_from_token as _auth_user_from_token
+from services.arxiv_service import get_daily_candidates, get_daily_candidates_for_tasks
+from services.todo_service import (
+    get_events_list,
+    get_focus_current,
+    get_focus_today,
+    get_primary_event,
+    get_today_tasks,
+)
 
 from .mcp_registry import MCPRegistry
 from .mcp_stdio import MCPProtocolError
@@ -215,6 +222,8 @@ def _bearer_token_from_request(request: Request) -> str | None:
     return None
 
 
+
+
 async def _builtin_todo_list_today(request: Request) -> str:
     """内置工具：查询当前登录用户的“今日任务”。
     说明：
@@ -231,50 +240,9 @@ async def _builtin_todo_list_today(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            WITH bounds AS (
-              SELECT date_trunc('day', NOW()) AS day_start,
-                     date_trunc('day', NOW()) + interval '1 day' AS day_end
-            )
-            SELECT id, title, status, priority, start_date, due_date
-            FROM tasks t
-            CROSS JOIN bounds b
-            WHERE t.user_id = $1
-              AND t.is_deleted = FALSE
-              AND (
-                (t.start_date IS NOT NULL AND t.start_date >= b.day_start AND t.start_date < b.day_end)
-                OR
-                (t.due_date IS NOT NULL AND t.due_date >= b.day_start AND t.due_date < b.day_end)
-              )
-            ORDER BY priority DESC, updated_at DESC
-            LIMIT 100
-            """,
-            int(user.id),
-        )
-    data = [
-        {
-            "id": str(r["id"]),
-            "title": str(r["title"]),
-            "status": str(r["status"]),
-            "priority": int(r["priority"]),
-            "start_date": r["start_date"].isoformat() if r["start_date"] else None,
-            "due_date": r["due_date"].isoformat() if r["due_date"] else None,
-        }
-        for r in rows
-    ]
+
+    data = await get_today_tasks(pool, int(user.id))
     return json.dumps({"today_tasks": data}, ensure_ascii=False)
-
-
-def _event_row_to_payload(row: Any) -> dict[str, Any]:
-    return {
-        "id": str(row["id"]),
-        "name": str(row["name"]),
-        "due_at": row["due_at"].isoformat() if row["due_at"] else None,
-        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-        "is_primary": bool(row["is_primary"]),
-    }
 
 
 async def _builtin_event_primary(request: Request) -> str:
@@ -287,17 +255,9 @@ async def _builtin_event_primary(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT id, name, due_at, created_at, is_primary
-            FROM events
-            WHERE user_id = $1 AND is_primary = TRUE
-            LIMIT 1
-            """,
-            int(user.id),
-        )
-    return json.dumps({"primary_event": _event_row_to_payload(row) if row else None}, ensure_ascii=False)
+
+    event = await get_primary_event(pool, int(user.id))
+    return json.dumps({"primary_event": event}, ensure_ascii=False)
 
 
 async def _builtin_events_list(request: Request) -> str:
@@ -310,18 +270,9 @@ async def _builtin_events_list(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, name, due_at, created_at, is_primary
-            FROM events
-            WHERE user_id = $1
-            ORDER BY due_at ASC, created_at DESC
-            LIMIT 100
-            """,
-            int(user.id),
-        )
-    return json.dumps({"events": [_event_row_to_payload(row) for row in rows]}, ensure_ascii=False)
+
+    events = await get_events_list(pool, int(user.id))
+    return json.dumps({"events": events}, ensure_ascii=False)
 
 
 async def _builtin_focus_current(request: Request) -> str:
@@ -334,47 +285,8 @@ async def _builtin_focus_current(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT id, user_id, task_id, duration, start_time, end_at, created_at
-            FROM focus_logs
-            WHERE user_id = $1 AND end_at IS NULL
-            """,
-            int(user.id),
-        )
-        if row is None:
-            return json.dumps({"is_focusing": False}, ensure_ascii=False)
-        from datetime import datetime
 
-        dur = int((datetime.now(UTC) - row["start_time"]).total_seconds())
-        if dur < 0:
-            dur = 0
-        task_row = await conn.fetchrow(
-            """
-            SELECT id, title, status
-            FROM tasks
-            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
-            """,
-            row["task_id"],
-            int(user.id),
-        )
-    payload = {
-        "is_focusing": True,
-        "task": (
-            {
-                "id": str(task_row["id"]),
-                "title": str(task_row["title"]),
-                "status": str(task_row["status"]),
-            }
-            if task_row
-            else {"id": str(row["task_id"])}
-        ),
-        "focus": {
-            "start_time": row["start_time"].isoformat(),
-            "duration_seconds": dur,
-        },
-    }
+    payload = await get_focus_current(pool, int(user.id))
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -388,40 +300,9 @@ async def _builtin_focus_today(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            WITH bounds AS (
-              SELECT date_trunc('day', NOW()) AS day_start,
-                     date_trunc('day', NOW()) + interval '1 day' AS day_end
-            )
-            SELECT
-              COALESCE(
-                SUM(
-                  GREATEST(
-                    0,
-                    EXTRACT(
-                      epoch FROM (
-                        LEAST(COALESCE(fl.end_at, NOW()), b.day_end)
-                        - GREATEST(fl.start_time, b.day_start)
-                      )
-                    )
-                  )
-                ),
-                0
-              )::BIGINT AS seconds
-            FROM focus_logs fl
-            CROSS JOIN bounds b
-            WHERE fl.user_id = $1
-              AND fl.start_time < b.day_end
-              AND COALESCE(fl.end_at, NOW()) > b.day_start
-            """,
-            int(user.id),
-        )
-    seconds = int((row or {}).get("seconds") or 0)
-    if seconds < 0:
-        seconds = 0
-    return json.dumps({"seconds": seconds, "minutes": seconds // 60}, ensure_ascii=False)
+
+    payload = await get_focus_today(pool, int(user.id))
+    return json.dumps(payload, ensure_ascii=False)
 
 
 async def _builtin_focus_start(request: Request, args: dict[str, Any]) -> str:
@@ -491,27 +372,8 @@ async def _builtin_arxiv_daily_candidates(request: Request) -> str:
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    today = datetime.now(UTC).date()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT arxiv_id, title, summary
-            FROM arxiv_daily_candidates
-            WHERE user_id = $1 AND candidate_date = $2
-            ORDER BY created_at DESC
-            LIMIT 50
-            """,
-            int(user.id),
-            today,
-        )
-    papers = [
-        {
-            "arxiv_id": str(r["arxiv_id"]),
-            "title": str(r["title"]),
-            "summary": str(r["summary"]),
-        }
-        for r in rows
-    ]
+
+    papers = await get_daily_candidates(pool, int(user.id))
     return json.dumps({"daily_candidates": papers}, ensure_ascii=False)
 
 
@@ -525,38 +387,14 @@ async def _builtin_arxiv_daily_prepare_add_tasks(request: Request, args: dict[st
     user = await _auth_user_from_token(pool, token)
     if user is None:
         return "登录已失效或无效"
-    today = datetime.now(UTC).date()
+
     ids_arg = args.get("arxiv_ids")
     requested = [str(x).strip() for x in ids_arg] if isinstance(ids_arg, list) else []
-    async with pool.acquire() as conn:
-        if requested:
-            rows = await conn.fetch(
-                """
-                SELECT arxiv_id, title, summary
-                FROM arxiv_daily_candidates
-                WHERE user_id = $1 AND candidate_date = $2 AND arxiv_id = ANY($3::text[])
-                ORDER BY created_at DESC
-                LIMIT 50
-                """,
-                int(user.id),
-                today,
-                requested,
-            )
-        else:
-            rows = await conn.fetch(
-                """
-                SELECT arxiv_id, title, summary
-                FROM arxiv_daily_candidates
-                WHERE user_id = $1 AND candidate_date = $2
-                ORDER BY created_at DESC
-                LIMIT 10
-                """,
-                int(user.id),
-                today,
-            )
-    selected_ids = [str(r["arxiv_id"]) for r in rows]
+
+    selected_ids = await get_daily_candidates_for_tasks(pool, int(user.id), requested)
     if not selected_ids:
         return "今日暂无可添加到任务的论文候选"
+
     return json.dumps(
         {
             "action": "confirm",
