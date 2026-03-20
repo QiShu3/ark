@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,9 +8,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sse_starlette.sse import EventSourceResponse
 
 from MCP.assistant_runner import (
     chat_with_tools as mcp_chat_with_tools,
+)
+from MCP.assistant_runner import (
+    chat_with_tools_stream as mcp_chat_with_tools_stream,
 )
 from MCP.assistant_runner import (
     get_tools_overview as mcp_get_tools_overview,
@@ -105,3 +110,17 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     if not reply:
         raise HTTPException(status_code=502, detail="DeepSeek 返回空回复")
     return ChatResponse(reply=reply, actions=actions)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(req: ChatRequest, request: Request):
+    """流式聊天接口，通过 SSE 实时推送模型回复与工具调用进度。"""
+    messages = [m.model_dump() for m in req.history]
+    messages.insert(0, {"role": "system", "content": _DEFAULT_SYSTEM_PROMPT})
+    messages.append({"role": "user", "content": req.message})
+
+    async def event_generator():
+        async for event in mcp_chat_with_tools_stream(messages, request, _mcp_registry, scope=req.scope):
+            yield {"data": json.dumps(event, ensure_ascii=False)}
+
+    return EventSourceResponse(event_generator())
