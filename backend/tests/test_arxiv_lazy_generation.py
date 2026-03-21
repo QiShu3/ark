@@ -1,4 +1,3 @@
-
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -45,7 +44,7 @@ async def test_lazy_generation(monkeypatch):
                 authors=["Author A"],
                 published="2023-01-01",
                 summary="Test Summary",
-                is_read=False
+                is_read=False,
             )
         ]
 
@@ -68,11 +67,12 @@ async def test_lazy_generation(monkeypatch):
         "search_field": "title",
         "update_time": "09:00",
         "updated_at": "2023-01-01",
-        "last_run_on": None
+        "last_run_on": None,
     }
 
     # Setup FastAPI app
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(arxiv_routes.router)
     app.dependency_overrides[get_current_user] = lambda: MagicMock(id=1)
@@ -92,6 +92,7 @@ async def test_lazy_generation(monkeypatch):
 
     # Verify transaction was used
     mock_conn.transaction.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_no_lazy_generation_if_no_config(monkeypatch):
@@ -124,6 +125,7 @@ async def test_no_lazy_generation_if_no_config(monkeypatch):
 
     # Setup FastAPI app
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(arxiv_routes.router)
     app.dependency_overrides[get_current_user] = lambda: MagicMock(id=1)
