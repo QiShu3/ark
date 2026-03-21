@@ -1315,7 +1315,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   </div>
                   <div className="flex flex-col gap-2">
                     {workflowPresets.map((preset) => (
-                      <div key={preset.id} className={`rounded-lg border p-3 ${preset.is_default ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}>
+                      <div
+                        key={preset.id}
+                        className={`rounded-lg border p-3 cursor-pointer transition-colors ${preset.is_default ? 'border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                        onClick={() => _editWorkflowPreset(preset)}
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="font-medium text-white">{preset.name}</div>
@@ -1326,9 +1330,24 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           {preset.is_default && <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/30">默认</span>}
                         </div>
                         <div className="flex items-center gap-2 mt-3">
-                          <button onClick={() => _editWorkflowPreset(preset)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">编辑</button>
-                          <button onClick={() => _setDefaultWorkflowPreset(preset.id)} className="text-xs px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30">设为默认</button>
-                          <button onClick={() => _deleteWorkflowPreset(preset.id)} className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30">删除</button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              _setDefaultWorkflowPreset(preset.id);
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30"
+                          >
+                            设为默认
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              _deleteWorkflowPreset(preset.id);
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30"
+                          >
+                            删除
+                          </button>
                         </div>
                       </div>
                     ))}
