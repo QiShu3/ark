@@ -29,6 +29,7 @@ from services.todo_service import (
     get_events_list,
     get_focus_current,
     get_focus_today,
+    get_focus_workflow_current,
     get_primary_event,
     get_today_tasks,
 )
@@ -305,6 +306,20 @@ async def _builtin_focus_today(request: Request) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
+async def _builtin_focus_workflow_current(request: Request) -> str:
+    token = _bearer_token_from_request(request)
+    if not token:
+        return "未登录，无法查询专注工作流"
+    pool = getattr(getattr(request.app, "state", None), "auth_pool", None)
+    if pool is None:
+        return "系统未初始化数据库连接"
+    user = await _auth_user_from_token(pool, token)
+    if user is None:
+        return "登录已失效或无效"
+    payload = await get_focus_workflow_current(pool, int(user.id))
+    return json.dumps(payload, ensure_ascii=False)
+
+
 async def _builtin_focus_start(request: Request, args: dict[str, Any]) -> str:
     """敏感操作：开始专注
     说明：
@@ -411,6 +426,45 @@ async def _builtin_arxiv_daily_prepare_add_tasks(request: Request, args: dict[st
     )
 
 
+async def _builtin_focus_workflow_ai_create(request: Request, args: dict[str, Any]) -> str:
+    token = _bearer_token_from_request(request)
+    if not token:
+        return "未登录，无法创建专注工作流"
+    task_id = str(args.get("task_id") or "").strip()
+    if not task_id:
+        return "缺少任务标识 task_id"
+    focus_duration = int(args.get("focus_duration") or 1500)
+    break_duration = int(args.get("break_duration") or 300)
+    return json.dumps(
+        {
+            "action": "confirm",
+            "operation": "focus_workflow_ai_create",
+            "title": "创建专注工作流",
+            "message": "将创建专注-休息工作流并立即开始专注，是否确认？",
+            "request": {
+                "method": "POST",
+                "url": "/todo/focus/workflow/ai-create",
+                "headers": {
+                    "Authorization": "Bearer <token>",
+                    "X-AI-Authorized": "true",
+                    "Content-Type": "application/json",
+                },
+                "body": {
+                    "task_id": task_id,
+                    "focus_duration": focus_duration,
+                    "break_duration": break_duration,
+                },
+            },
+            "context": {
+                "task_id": task_id,
+                "focus_duration": focus_duration,
+                "break_duration": break_duration,
+            },
+        },
+        ensure_ascii=False,
+    )
+
+
 def _is_daily_allowed_tool_name(tool_name: str) -> bool:
     name = tool_name.lower()
     if "delete" in name or "remove" in name or "drop" in name:
@@ -435,7 +489,7 @@ def _build_builtin_tools_payload(
     include_todo = True
     if allow is not None:
         allowed = allow.get("todo")
-        include_todo = bool(allowed and ("list_today" in allowed))
+        include_todo = allowed is not None and len(allowed) > 0
     payload: list[dict[str, Any]] = []
     executors: dict[str, Any] = {}
     if include_todo:
@@ -482,6 +536,12 @@ def _build_builtin_tools_payload(
             )
         if "focus_today" in allowed_set:
             add_tool("todo__focus_today", "查询今日专注总时长", "builtin_focus_today")
+        if "focus_workflow_current" in allowed_set:
+            add_tool(
+                "todo__focus_workflow_current",
+                "查询当前专注工作流状态、阶段剩余时间与是否待确认",
+                "builtin_focus_workflow_current",
+            )
         if "focus_start" in allowed_set:
             payload.append(
                 {
@@ -505,6 +565,26 @@ def _build_builtin_tools_payload(
             executors["todo__focus_start"] = "builtin_focus_start"
         if "focus_stop" in allowed_set:
             add_tool("todo__focus_stop", "发起结束专注的确认请求", "builtin_focus_stop")
+        if "focus_workflow_ai_create" in allowed_set:
+            payload.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "todo__focus_workflow_ai_create",
+                        "description": "发起 AI 创建专注工作流的确认请求（需要 task_id）",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "task_id": {"type": "string", "description": "目标任务 UUID"},
+                                "focus_duration": {"type": "integer", "description": "专注阶段时长（秒）"},
+                                "break_duration": {"type": "integer", "description": "休息阶段时长（秒）"},
+                            },
+                            "required": ["task_id"],
+                        },
+                    },
+                }
+            )
+            executors["todo__focus_workflow_ai_create"] = "builtin_focus_workflow_ai_create"
     if scope == "daily":
         payload.append(
             {
@@ -605,10 +685,14 @@ async def chat_with_tools(
                                 tool_text = await _builtin_focus_current(request)
                             elif fn_name == "todo__focus_today":
                                 tool_text = await _builtin_focus_today(request)
+                            elif fn_name == "todo__focus_workflow_current":
+                                tool_text = await _builtin_focus_workflow_current(request)
                             elif fn_name == "todo__focus_start":
                                 tool_text = await _builtin_focus_start(request, args_obj)
                             elif fn_name == "todo__focus_stop":
                                 tool_text = await _builtin_focus_stop(request)
+                            elif fn_name == "todo__focus_workflow_ai_create":
+                                tool_text = await _builtin_focus_workflow_ai_create(request, args_obj)
                             elif fn_name == "arxiv__daily_candidates":
                                 tool_text = await _builtin_arxiv_daily_candidates(request)
                             elif fn_name == "arxiv__daily_prepare_add_tasks":
@@ -718,10 +802,14 @@ async def chat_with_tools_stream(
                                 tool_text = await _builtin_focus_current(request)
                             elif fn_name == "todo__focus_today":
                                 tool_text = await _builtin_focus_today(request)
+                            elif fn_name == "todo__focus_workflow_current":
+                                tool_text = await _builtin_focus_workflow_current(request)
                             elif fn_name == "todo__focus_start":
                                 tool_text = await _builtin_focus_start(request, args_obj)
                             elif fn_name == "todo__focus_stop":
                                 tool_text = await _builtin_focus_stop(request)
+                            elif fn_name == "todo__focus_workflow_ai_create":
+                                tool_text = await _builtin_focus_workflow_ai_create(request, args_obj)
                             elif fn_name == "arxiv__daily_candidates":
                                 tool_text = await _builtin_arxiv_daily_candidates(request)
                             elif fn_name == "arxiv__daily_prepare_add_tasks":

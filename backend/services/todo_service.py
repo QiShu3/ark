@@ -155,3 +155,51 @@ async def get_focus_today(pool: Any, user_id: int) -> dict[str, int]:
     if seconds < 0:
         seconds = 0
     return {"seconds": seconds, "minutes": seconds // 60}
+
+
+async def get_focus_workflow_current(pool: Any, user_id: int) -> dict[str, Any]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT task_id, workflow_name, phases, current_phase_index,
+                   focus_duration, break_duration, current_phase,
+                   phase_started_at, phase_planned_duration, pending_confirmation
+            FROM focus_workflows
+            WHERE user_id = $1 AND status = 'active'
+            """,
+            int(user_id),
+        )
+        if row is None:
+            return {"state": "normal"}
+        task = None
+        if row["task_id"] is not None:
+            task_row = await conn.fetchrow(
+                "SELECT id, title, status FROM tasks WHERE id = $1 AND user_id = $2",
+                row["task_id"],
+                int(user_id),
+            )
+            if task_row is not None:
+                task = {
+                    "id": str(task_row["id"]),
+                    "title": str(task_row["title"]),
+                    "status": str(task_row["status"]),
+                }
+    phases = row["phases"] if isinstance(row["phases"], list) else []
+    elapsed = int((datetime.now(UTC) - row["phase_started_at"]).total_seconds())
+    remaining = int(row["phase_planned_duration"]) - elapsed
+    pending = bool(row["pending_confirmation"]) or remaining <= 0
+    if pending:
+        remaining = 0
+    if remaining < 0:
+        remaining = 0
+    return {
+        "state": row["current_phase"],
+        "workflow_name": str(row["workflow_name"] or "默认工作流"),
+        "current_phase_index": int(row["current_phase_index"]),
+        "phases": phases,
+        "pending_confirmation": pending,
+        "remaining_seconds": remaining,
+        "focus_duration": int(row["focus_duration"]),
+        "break_duration": int(row["break_duration"]),
+        "task": task,
+    }
