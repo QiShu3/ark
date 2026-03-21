@@ -181,6 +181,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     _loadWorkflowPresets();
   }, []);
 
+  // Listen for global reload event so all cards stay cleanly in sync
+  useEffect(() => {
+    const handleReload = () => {
+      _loadTasks();
+      _loadCurrentFocus();
+      _loadTodayFocus();
+      _loadFocusWorkflow();
+    };
+    window.addEventListener('ark:reload-focus', handleReload);
+    return () => window.removeEventListener('ark:reload-focus', handleReload);
+  }, []);
+
   useEffect(() => {
     if (index !== 0) return;
     const handler = () => {
@@ -644,6 +656,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         alert(`恭喜完成${res.completed_workflow_name}工作流`);
       }
       await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to confirm focus workflow', e);
       alert('阶段确认失败');
@@ -659,6 +672,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       });
       setCurrentFocus(res as FocusSession);
       await Promise.all([_loadTasks(), _loadFocusWorkflow()]);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to start focus', e);
       alert('开始专注失败');
@@ -672,6 +686,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       });
       setCurrentFocus(null);
       await Promise.all([_loadTasks(), _loadFocusWorkflow()]);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to stop focus', e);
     }
@@ -728,6 +743,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       });
       setShowEditTaskModal(false);
       _loadTasks();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       setEditTaskError(e instanceof Error ? e.message : '编辑任务失败');
     } finally {
@@ -741,6 +757,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     try {
       await apiJson(`/todo/tasks/${task.id}`, { method: 'DELETE' });
       _loadTasks();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to delete task', e);
     }
@@ -755,6 +772,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         body: JSON.stringify({ status: 'done' })
       });
       _loadTasks();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to complete task', e);
     }
@@ -939,6 +957,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         try {
           await apiJson('/todo/focus/workflow/skip_phase', { method: 'POST' });
           await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
+          window.dispatchEvent(new CustomEvent('ark:reload-focus'));
         } catch (err) {
           console.error('Failed to skip phase', err);
         }
@@ -1015,6 +1034,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       }
       setFocusTargetTaskId((prev) => (prev === targetTaskId ? null : prev));
       await Promise.all([_loadTasks(), _loadCurrentFocus(), _loadTodayFocus()]);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to complete and stop focus', e);
       alert('完成任务失败');
@@ -1067,6 +1087,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       });
       setShowCreateTaskModal(false);
       _resetCreateTaskForm();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '创建任务失败';
       setCreateTaskError(msg);
