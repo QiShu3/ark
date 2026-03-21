@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
 import FocusStats from './FocusStats';
+import WorkflowProgressBar from './WorkflowProgressBar';
 
 interface Task {
   id: string;
@@ -135,6 +136,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [taskAssistantInput, setTaskAssistantInput] = useState('');
   const [taskAssistantError, setTaskAssistantError] = useState<string | null>(null);
   const [taskAssistantSubmitting, setTaskAssistantSubmitting] = useState(false);
+  const [workflowRenderTick, setWorkflowRenderTick] = useState(() => Date.now());
 
   // Task Management State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -176,7 +178,28 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     _loadCurrentFocus();
     _loadTodayFocus();
     _loadFocusWorkflow();
+    _loadWorkflowPresets();
   }, []);
+
+  useEffect(() => {
+    if (index !== 0) return;
+    const handler = () => {
+      setWorkflowError(null);
+      setEditingWorkflowId(null);
+      setWorkflowForm({
+        name: '',
+        phases: [
+          { phase_type: 'focus', duration: 25 * 60 },
+          { phase_type: 'break', duration: 5 * 60 },
+        ],
+        isDefault: workflowPresets.length === 0,
+      });
+      setShowWorkflowModal(true);
+      _loadWorkflowPresets();
+    };
+    window.addEventListener('ark:open-workflow-modal', handler);
+    return () => window.removeEventListener('ark:open-workflow-modal', handler);
+  }, [index, workflowPresets.length]);
 
   // Sync today focus minutes periodically
   useEffect(() => {
@@ -220,12 +243,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     };
 
     const updateTimer = () => {
+      const now = Date.now();
       if (targetEndTimeRef.current === null) {
         if (focusWorkflow?.state !== 'normal' && focusWorkflow?.pending_confirmation) {
           setFocusDurationStr('00:00');
         } else if (currentFocus) {
           const start = new Date(currentFocus.start_time).getTime();
-          const now = new Date().getTime();
           const diffMinutes = Math.floor((now - start) / 60000);
           setFocusDurationStr(`${diffMinutes}min`);
         } else {
@@ -234,9 +257,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         return;
       }
 
-      let left = Math.round((targetEndTimeRef.current - Date.now()) / 1000);
+      setWorkflowRenderTick(now);
+      const left = Math.round((targetEndTimeRef.current - now) / 1000);
       if (left <= 0) {
-        left = 0;
         setFocusDurationStr(formatTime(0));
         if (!isFetchingRef.current) {
           isFetchingRef.current = true;
@@ -255,6 +278,39 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
   }, [currentFocus, focusWorkflow?.state, focusWorkflow?.pending_confirmation]);
+
+  const workflowForProgress = React.useMemo<FocusWorkflow>(() => {
+    if (!focusWorkflow) {
+      return {
+        state: 'normal',
+        task_id: null,
+        task_title: null,
+        pending_confirmation: false,
+        remaining_seconds: null,
+      };
+    }
+    if (
+      focusWorkflow.state === 'normal'
+      || focusWorkflow.pending_confirmation
+      || focusWorkflow.remaining_seconds === null
+      || targetEndTimeRef.current === null
+    ) {
+      return focusWorkflow;
+    }
+    const liveRemaining = Math.max(0, Math.round((targetEndTimeRef.current - workflowRenderTick) / 1000));
+    if (liveRemaining === focusWorkflow.remaining_seconds) {
+      return focusWorkflow;
+    }
+    return {
+      ...focusWorkflow,
+      remaining_seconds: liveRemaining,
+    };
+  }, [focusWorkflow, workflowRenderTick]);
+
+  const defaultWorkflowName = React.useMemo(() => {
+    const preset = workflowPresets.find((item) => item.is_default) ?? workflowPresets[0];
+    return preset?.name?.trim() || '工作流';
+  }, [workflowPresets]);
 
   useEffect(() => {
     if (showTaskModal && activeTab === 'all') {
@@ -447,21 +503,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       console.error('Failed to load workflow presets', e);
       setWorkflowError(e instanceof Error ? e.message : '加载工作流失败');
     }
-  }
-
-  function _openWorkflowModal() {
-    setWorkflowError(null);
-    setEditingWorkflowId(null);
-    setWorkflowForm({
-      name: '',
-      phases: [
-        { phase_type: 'focus', duration: 25 * 60 },
-        { phase_type: 'break', duration: 5 * 60 },
-      ],
-      isDefault: workflowPresets.length === 0,
-    });
-    setShowWorkflowModal(true);
-    _loadWorkflowPresets();
   }
 
   function _editWorkflowPreset(preset: WorkflowPreset) {
@@ -1122,15 +1163,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               }`}
               onClick={_handleFocusToggle}
             >
-              <button
-                className="absolute top-2 left-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/50 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-10 text-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  _openWorkflowModal();
-                }}
-              >
-                工作流
-              </button>
               {/* 右上角切换按钮 */}
               <button 
                 className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-white/80 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center"
@@ -1994,9 +2026,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }
 
   if (split > 1) {
+    const mergePlaceholders = index === 2 && split === 2;
+    const subCardCount = mergePlaceholders ? 1 : split;
+    const showWorkflowProgress = mergePlaceholders && focusWorkflow?.state !== 'normal';
     return (
       <div className="flex-1 flex gap-2">
-        {Array.from({ length: split }).map((_, subIndex) => (
+        {Array.from({ length: subCardCount }).map((_, subIndex) => (
           index === 1 && subIndex === 0 ? (
             <React.Fragment key={subIndex}>{_renderCalendarView()}</React.Fragment>
           ) : (
@@ -2007,10 +2042,22 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 index === 3 && subIndex === 2 ? 'cursor-pointer' : ''
               }`}
             >
-              {index === 3 && subIndex === 2 ? (
+              {showWorkflowProgress ? (
+                <WorkflowProgressBar workflow={workflowForProgress} />
+              ) : index === 3 && subIndex === 2 ? (
                 <span className="text-white/80 font-medium">应用中心</span>
               ) : index === 3 && subIndex === 0 ? (
                 <span className="text-white/80 font-medium">成就</span>
+              ) : mergePlaceholders ? (
+                <button
+                  className="px-4 py-2 rounded-lg bg-black/20 hover:bg-black/40 text-white/70 hover:text-white transition-colors text-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.dispatchEvent(new Event('ark:open-workflow-modal'));
+                  }}
+                >
+                  {defaultWorkflowName}
+                </button>
               ) : (
                 <span>Placeholder {index + 1}-{subIndex + 1}</span>
               )}
