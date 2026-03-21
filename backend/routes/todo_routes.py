@@ -1626,6 +1626,84 @@ async def get_focus_workflow_current(
     return _row_to_focus_workflow(row, task_title=task_title)
 
 
+@router.post("/focus/workflow/skip_phase", response_model=FocusWorkflowOut)
+async def skip_focus_workflow_phase(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """跳过当前阶段的剩余时间，直接将其置为待确认状态。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation
+                FROM focus_workflows
+                WHERE user_id = $1 AND status = 'active'
+                """,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if bool(row["pending_confirmation"]):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段已结束，请确认流转")
+
+            # 将其强制置为待确认
+            await conn.execute(
+                """
+                UPDATE focus_workflows
+                SET pending_confirmation = TRUE, updated_at = NOW()
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            current_phase_type = str(row["current_phase"])
+            if current_phase_type == "focus":
+                open_row = await conn.fetchrow(
+                    """
+                    SELECT id, start_time
+                    FROM focus_logs
+                    WHERE user_id = $1 AND end_at IS NULL
+                    """,
+                    int(user.id),
+                )
+                if open_row is not None:
+                    now = datetime.now(UTC)
+                    dur = int((now - open_row["start_time"]).total_seconds())
+                    if dur < 0:
+                        dur = 0
+                    await conn.execute(
+                        "UPDATE focus_logs SET end_at = NOW(), duration = $1 WHERE id = $2",
+                        dur,
+                        open_row["id"],
+                    )
+                    await conn.execute(
+                        "UPDATE tasks SET actual_duration = actual_duration + $1, updated_at = NOW() WHERE id = $2",
+                        dur,
+                        row["task_id"],
+                    )
+
+            # 重新获取以返回最新状态
+            updated_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation
+                FROM focus_workflows
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            task_row = await conn.fetchrow(
+                "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
+                updated_row["task_id"],
+                int(user.id),
+            )
+    return _row_to_focus_workflow(updated_row, task_title=str(task_row["title"]) if task_row else None)
+
+
 @router.post("/focus/workflow/confirm", response_model=FocusWorkflowOut)
 async def confirm_focus_workflow_transition(
     request: Request,
