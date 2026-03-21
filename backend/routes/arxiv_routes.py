@@ -184,7 +184,9 @@ async def init_arxiv(app: Any) -> None:
         await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_skipped BOOLEAN NOT NULL DEFAULT FALSE;")
-        await conn.execute("ALTER TABLE papers ADD COLUMN IF NOT EXISTS tag_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb;")
+        await conn.execute(
+            "ALTER TABLE papers ADD COLUMN IF NOT EXISTS tag_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb;"
+        )
         await conn.execute("UPDATE papers SET tag_ids_json = '[]'::jsonb WHERE tag_ids_json IS NULL;")
         await conn.execute("ALTER TABLE papers ALTER COLUMN tag_ids_json SET DEFAULT '[]'::jsonb;")
         await conn.execute("ALTER TABLE papers ALTER COLUMN tag_ids_json SET NOT NULL;")

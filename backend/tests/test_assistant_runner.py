@@ -207,9 +207,7 @@ async def test_stream_text_only_yields_delta_and_done(monkeypatch) -> None:
     request = _make_request(None, token="")
 
     events = []
-    async for evt in chat_with_tools_stream(
-        [{"role": "user", "content": "hi"}], request, registry
-    ):
+    async for evt in chat_with_tools_stream([{"role": "user", "content": "hi"}], request, registry):
         events.append(evt)
 
     types = [e["type"] for e in events]
@@ -232,9 +230,7 @@ async def test_stream_with_tool_call_yields_tool_call_event(monkeypatch) -> None
             return {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [
-                    {"id": "tc_1", "function": {"name": "todo__list_today", "arguments": "{}"}}
-                ],
+                "tool_calls": [{"id": "tc_1", "function": {"name": "todo__list_today", "arguments": "{}"}}],
             }
         return {"content": "完成", "role": "assistant"}
 
@@ -246,9 +242,7 @@ async def test_stream_with_tool_call_yields_tool_call_event(monkeypatch) -> None
     request = _make_request(None, token="tok")
 
     events = []
-    async for evt in chat_with_tools_stream(
-        [{"role": "user", "content": "hi"}], request, registry
-    ):
+    async for evt in chat_with_tools_stream([{"role": "user", "content": "hi"}], request, registry):
         events.append(evt)
 
     types = [e["type"] for e in events]
@@ -286,9 +280,7 @@ async def test_stream_confirm_action_yields_actions_event(monkeypatch) -> None:
     request = _make_request(None, token="tok")
 
     events = []
-    async for evt in chat_with_tools_stream(
-        [{"role": "user", "content": "开始"}], request, registry
-    ):
+    async for evt in chat_with_tools_stream([{"role": "user", "content": "开始"}], request, registry):
         events.append(evt)
 
     types = [e["type"] for e in events]
@@ -309,12 +301,9 @@ async def test_stream_empty_reply_still_yields_done(monkeypatch) -> None:
     request = _make_request(None, token="")
 
     events = []
-    async for evt in chat_with_tools_stream(
-        [{"role": "user", "content": "hi"}], request, registry
-    ):
+    async for evt in chat_with_tools_stream([{"role": "user", "content": "hi"}], request, registry):
         events.append(evt)
 
     types = [e["type"] for e in events]
     assert types[-1] == "done"
     assert "delta" not in types
-
