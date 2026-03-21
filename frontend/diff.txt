@@ -1,0 +1,641 @@
+diff --git a/frontend/src/components/PlaceholderCard.tsx b/frontend/src/components/PlaceholderCard.tsx
+index 1ec1c1f..1ed8642 100644
+--- a/frontend/src/components/PlaceholderCard.tsx
++++ b/frontend/src/components/PlaceholderCard.tsx
+@@ -41,6 +41,30 @@ interface TodayFocusSummary {
+   minutes: number;
+ }
+ 
++interface FocusWorkflow {
++  state: 'normal' | 'focus' | 'break';
++  workflow_name?: string | null;
++  current_phase_index?: number | null;
++  phases?: { phase_type: 'focus' | 'break'; duration: number }[];
++  task_id: string | null;
++  task_title: string | null;
++  pending_confirmation: boolean;
++  remaining_seconds: number | null;
++  completed_workflow_name?: string | null;
++}
++
++interface WorkflowPreset {
++  id: string;
++  user_id: number;
++  name: string;
++  focus_duration: number;
++  break_duration: number;
++  phases: { phase_type: 'focus' | 'break'; duration: number }[];
++  is_default: boolean;
++  created_at: string;
++  updated_at: string;
++}
++
+ type CreateTaskForm = {
+   title: string;
+   content: string;
+@@ -85,6 +109,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+   const [currentFocus, setCurrentFocus] = useState<FocusSession | null>(null);
+   const [focusDurationStr, setFocusDurationStr] = useState('0min');
+   const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
++  const [focusWorkflow, setFocusWorkflow] = useState<FocusWorkflow | null>(null);
++  const [confirmingFocusPhase, setConfirmingFocusPhase] = useState(false);
++  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
++  const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>([]);
++  const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
++  const [workflowError, setWorkflowError] = useState<string | null>(null);
++  const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null);
++  const [workflowForm, setWorkflowForm] = useState<{ name: string; phases: { phase_type: 'focus' | 'break'; duration: number }[]; isDefault: boolean }>({
++    name: '',
++    phases: [
++      { phase_type: 'focus', duration: 25 * 60 },
++      { phase_type: 'break', duration: 5 * 60 },
++    ],
++    isDefault: false,
++  });
+   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
+   const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
+   const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
+@@ -136,30 +175,86 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+     _loadTasks();
+     _loadCurrentFocus();
+     _loadTodayFocus();
++    _loadFocusWorkflow();
++  }, []);
++
++  // Sync today focus minutes periodically
++  useEffect(() => {
++    const timer = setInterval(() => {
++      _loadTodayFocus();
++      _loadFocusWorkflow();
++    }, 60000);
++    return () => clearInterval(timer);
+   }, []);
+ 
+-  // Update focus duration timer
++  // Calculate a stable end time to prevent countdown jitter/flashback
++  const targetEndTimeRef = React.useRef<number | null>(null);
++  const isFetchingRef = React.useRef(false);
++
+   useEffect(() => {
+-    if (!currentFocus) {
+-      setFocusDurationStr('0min');
++    if (!focusWorkflow || focusWorkflow.state === 'normal' || focusWorkflow.remaining_seconds === null || focusWorkflow.remaining_seconds === undefined) {
++      targetEndTimeRef.current = null;
++      return;
++    }
++    if (focusWorkflow.pending_confirmation) {
++      targetEndTimeRef.current = null;
+       return;
+     }
++    const newEnd = Date.now() + focusWorkflow.remaining_seconds * 1000;
++    if (targetEndTimeRef.current === null) {
++      targetEndTimeRef.current = newEnd;
++    } else {
++      // If difference is small (< 3s), keep the old target to avoid visual flashback
++      if (Math.abs(newEnd - targetEndTimeRef.current) >= 3000) {
++        targetEndTimeRef.current = newEnd;
++      }
++    }
++  }, [focusWorkflow]);
+ 
+-    const updateDuration = () => {
+-      // 更新当前任务专注时长
+-      const start = new Date(currentFocus.start_time).getTime();
+-      const now = new Date().getTime();
+-      const diffMinutes = Math.floor((now - start) / 60000);
+-      setFocusDurationStr(`${diffMinutes}min`);
+-      
+-      // 同时刷新今日专注总时长，保持同步
+-      _loadTodayFocus();
++  // Update local countdown for focus workflow
++  useEffect(() => {
++    const formatTime = (secs: number) => {
++      const m = Math.floor(secs / 60);
++      const s = secs % 60;
++      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+     };
+ 
+-    updateDuration();
+-    const timer = setInterval(updateDuration, 60000); // Update every minute
++    const updateTimer = () => {
++      if (targetEndTimeRef.current === null) {
++        if (focusWorkflow?.state !== 'normal' && focusWorkflow?.pending_confirmation) {
++          setFocusDurationStr('00:00');
++        } else if (currentFocus) {
++          const start = new Date(currentFocus.start_time).getTime();
++          const now = new Date().getTime();
++          const diffMinutes = Math.floor((now - start) / 60000);
++          setFocusDurationStr(`${diffMinutes}min`);
++        } else {
++          setFocusDurationStr('0min');
++        }
++        return;
++      }
++
++      let left = Math.round((targetEndTimeRef.current - Date.now()) / 1000);
++      if (left <= 0) {
++        left = 0;
++        setFocusDurationStr(formatTime(0));
++        if (!isFetchingRef.current) {
++          isFetchingRef.current = true;
++          _loadFocusWorkflow().finally(() => {
++            isFetchingRef.current = false;
++          });
++        }
++      } else {
++        setFocusDurationStr(formatTime(left));
++      }
++    };
++
++    // Initial update
++    updateTimer();
++
++    const timer = setInterval(updateTimer, 1000);
+     return () => clearInterval(timer);
+-  }, [currentFocus]);
++  }, [currentFocus, focusWorkflow?.state, focusWorkflow?.pending_confirmation]);
+ 
+   useEffect(() => {
+     if (showTaskModal && activeTab === 'all') {
+@@ -330,13 +425,199 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+     }
+   }
+ 
++  async function _loadFocusWorkflow() {
++    try {
++      const res = await apiJson('/todo/focus/workflow/current');
++      const workflow = res as FocusWorkflow;
++      setFocusWorkflow(workflow);
++      if (workflow.state !== 'focus' || workflow.pending_confirmation) {
++        setCurrentFocus(null);
++      }
++    } catch (e) {
++      console.error('Failed to load focus workflow', e);
++      setFocusWorkflow({ state: 'normal', task_id: null, task_title: null, pending_confirmation: false, remaining_seconds: null });
++    }
++  }
++
++  async function _loadWorkflowPresets() {
++    try {
++      const res = await apiJson('/todo/focus/workflows');
++      setWorkflowPresets(res as WorkflowPreset[]);
++    } catch (e) {
++      console.error('Failed to load workflow presets', e);
++      setWorkflowError(e instanceof Error ? e.message : '加载工作流失败');
++    }
++  }
++
++  function _openWorkflowModal() {
++    setWorkflowError(null);
++    setEditingWorkflowId(null);
++    setWorkflowForm({
++      name: '',
++      phases: [
++        { phase_type: 'focus', duration: 25 * 60 },
++        { phase_type: 'break', duration: 5 * 60 },
++      ],
++      isDefault: workflowPresets.length === 0,
++    });
++    setShowWorkflowModal(true);
++    _loadWorkflowPresets();
++  }
++
++  function _editWorkflowPreset(preset: WorkflowPreset) {
++    setEditingWorkflowId(preset.id);
++    setWorkflowForm({
++      name: preset.name,
++      phases: preset.phases.length
++        ? preset.phases.map((phase) => ({ phase_type: phase.phase_type, duration: phase.duration }))
++        : [
++            { phase_type: 'focus', duration: preset.focus_duration },
++            { phase_type: 'break', duration: preset.break_duration },
++          ],
++      isDefault: preset.is_default,
++    });
++    setWorkflowError(null);
++  }
++
++  function _updateWorkflowPhase(index: number, patch: Partial<{ phase_type: 'focus' | 'break'; duration: number }>) {
++    setWorkflowForm((s) => {
++      const next = s.phases.map((phase, i) => (i === index ? { ...phase, ...patch } : phase));
++      return { ...s, phases: next };
++    });
++  }
++
++  function _addWorkflowPhase() {
++    setWorkflowForm((s) => {
++      const last = s.phases[s.phases.length - 1];
++      const nextType: 'focus' | 'break' = last?.phase_type === 'focus' ? 'break' : 'focus';
++      return { ...s, phases: [...s.phases, { phase_type: nextType, duration: 5 * 60 }] };
++    });
++  }
++
++  function _removeWorkflowPhase(index: number) {
++    setWorkflowForm((s) => {
++      if (s.phases.length <= 1) return s;
++      return { ...s, phases: s.phases.filter((_, i) => i !== index) };
++    });
++  }
++
++  async function _submitWorkflowPreset() {
++    if (workflowSubmitting) return;
++    const name = workflowForm.name.trim();
++    if (!name) {
++      setWorkflowError('请输入工作流名称');
++      return;
++    }
++    if (!workflowForm.phases.length) {
++      setWorkflowError('至少配置一个阶段');
++      return;
++    }
++    for (let i = 0; i < workflowForm.phases.length; i++) {
++      const phase = workflowForm.phases[i];
++      if (phase.duration < 60) {
++        setWorkflowError('每个阶段时长不能小于 60 秒');
++        return;
++      }
++      if (i > 0 && workflowForm.phases[i - 1].phase_type === phase.phase_type) {
++        setWorkflowError('相邻阶段必须交替 focus / break');
++        return;
++      }
++    }
++    if (workflowForm.phases[0].phase_type !== 'focus') {
++      setWorkflowError('第一个阶段必须是专注');
++      return;
++    }
++    const focusDuration = workflowForm.phases.find((phase) => phase.phase_type === 'focus')?.duration ?? 1500;
++    const breakDuration = workflowForm.phases.find((phase) => phase.phase_type === 'break')?.duration ?? 300;
++    setWorkflowSubmitting(true);
++    setWorkflowError(null);
++    try {
++      const body = JSON.stringify({
++        name,
++        phases: workflowForm.phases.map((phase) => ({
++          phase_type: phase.phase_type,
++          duration: Math.round(phase.duration),
++        })),
++        focus_duration: Math.round(focusDuration),
++        break_duration: Math.round(breakDuration),
++        is_default: workflowForm.isDefault,
++      });
++      if (editingWorkflowId) {
++        await apiJson(`/todo/focus/workflows/${editingWorkflowId}`, {
++          method: 'PATCH',
++          headers: { 'Content-Type': 'application/json' },
++          body,
++        });
++      } else {
++        await apiJson('/todo/focus/workflows', {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/json' },
++          body,
++        });
++      }
++      setEditingWorkflowId(null);
++      setWorkflowForm({
++        name: '',
++        phases: [
++          { phase_type: 'focus', duration: 25 * 60 },
++          { phase_type: 'break', duration: 5 * 60 },
++        ],
++        isDefault: false,
++      });
++      await _loadWorkflowPresets();
++    } catch (e) {
++      setWorkflowError(e instanceof Error ? e.message : '保存工作流失败');
++    } finally {
++      setWorkflowSubmitting(false);
++    }
++  }
++
++  async function _deleteWorkflowPreset(presetId: string) {
++    if (!window.confirm('确认删除该工作流吗？')) return;
++    try {
++      await apiJson(`/todo/focus/workflows/${presetId}`, { method: 'DELETE' });
++      if (editingWorkflowId === presetId) {
++        setEditingWorkflowId(null);
++      }
++      await _loadWorkflowPresets();
++    } catch (e) {
++      setWorkflowError(e instanceof Error ? e.message : '删除工作流失败');
++    }
++  }
++
++  async function _setDefaultWorkflowPreset(presetId: string) {
++    try {
++      await apiJson(`/todo/focus/workflows/${presetId}/default`, { method: 'POST' });
++      await _loadWorkflowPresets();
++    } catch (e) {
++      setWorkflowError(e instanceof Error ? e.message : '设置默认工作流失败');
++    }
++  }
++
++  async function _confirmFocusWorkflowPhase() {
++    if (confirmingFocusPhase) return;
++    setConfirmingFocusPhase(true);
++    try {
++      const res = await apiJson('/todo/focus/workflow/confirm', { method: 'POST' }) as FocusWorkflow;
++      if (res.state === 'normal' && res.completed_workflow_name) {
++        alert(`恭喜完成${res.completed_workflow_name}工作流`);
++      }
++      await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
++    } catch (e) {
++      console.error('Failed to confirm focus workflow', e);
++      alert('阶段确认失败');
++    } finally {
++      setConfirmingFocusPhase(false);
++    }
++  }
++
+   async function _startFocus(taskId: string) {
+     try {
+       const res = await apiJson(`/todo/tasks/${taskId}/focus/start`, {
+         method: 'POST'
+       });
+       setCurrentFocus(res as FocusSession);
+-      _loadTasks(); // Reload tasks to update UI if needed
++      await Promise.all([_loadTasks(), _loadFocusWorkflow()]);
+     } catch (e) {
+       console.error('Failed to start focus', e);
+       alert('开始专注失败');
+@@ -349,7 +630,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+         method: 'POST'
+       });
+       setCurrentFocus(null);
+-      _loadTasks();
++      await Promise.all([_loadTasks(), _loadFocusWorkflow()]);
+     } catch (e) {
+       console.error('Failed to stop focus', e);
+     }
+@@ -610,6 +891,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+   async function _handleFocusToggle(e: React.MouseEvent) {
+     e.stopPropagation();
+     
++    if (focusWorkflow && focusWorkflow.state !== 'normal') {
++      if (confirm('当前正在工作流中，是否结束整个工作流？')) {
++        await _stopFocus();
++      }
++      return;
++    }
++
+     // 如果当前正在专注，则停止
+     if (currentFocus) {
+       // 简单的停止逻辑，或者根据需求：如果点击的是同一个任务则停止，不同任务则切换？
+@@ -808,10 +1096,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+   if (index === 0) {
+     const targetTask = _pickTodayFocusTask();
+     const isFocusing = !!currentFocus;
++    const isWorkflowActive = !!focusWorkflow && focusWorkflow.state !== 'normal';
++    const hasPendingTransition = !!focusWorkflow?.pending_confirmation;
++    const isBreakPhase = focusWorkflow?.state === 'break';
++    
+     // 如果正在专注，显示正在专注的任务名；否则显示即将专注的任务名
+-    const displayTaskTitle = isFocusing 
+-      ? tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务'
+-      : targetTask?.title || '无计划';
++    let displayTaskTitle = targetTask?.title || '无计划';
++    if (isWorkflowActive) {
++      if (isBreakPhase) {
++        displayTaskTitle = '休息中...';
++      } else {
++        displayTaskTitle = focusWorkflow?.task_title || tasks.find(t => t.id === focusWorkflow?.task_id)?.title || '未知任务';
++      }
++    } else if (isFocusing) {
++      displayTaskTitle = tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务';
++    }
+ 
+     return (
+       <>
+@@ -819,10 +1118,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+           <div className="flex-[2] flex flex-col rounded overflow-hidden">
+             <div 
+               className={`group relative flex-[2] bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${
+-                isFocusing ? 'bg-blue-500/10 border border-blue-500/20' : ''
++                isFocusing || isWorkflowActive ? 'bg-blue-500/10 border border-blue-500/20' : ''
+               }`}
+               onClick={_handleFocusToggle}
+             >
++              <button
++                className="absolute top-2 left-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/50 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-10 text-xs"
++                onClick={(e) => {
++                  e.stopPropagation();
++                  _openWorkflowModal();
++                }}
++              >
++                工作流
++              </button>
+               {/* 右上角切换按钮 */}
+               <button 
+                 className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-white/80 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center"
+@@ -849,21 +1157,43 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+                 </svg>
+               </button>
+ 
+-              <span className={`text-4xl font-bold group-hover:opacity-0 transition-opacity duration-300 ${
+-                isFocusing ? 'text-blue-400' : ''
+-              }`}>
+-                {isFocusing ? focusDurationStr : `${todayFocusMinutes}min`}
+-              </span>
++              <div className="flex flex-col items-center justify-center group-hover:opacity-0 transition-opacity duration-300">
++                {isWorkflowActive && (
++                  <span className="text-sm font-medium text-white/70 mb-1">
++                    {focusWorkflow.state === 'focus' ? '专注阶段' : '休息阶段'}
++                  </span>
++                )}
++                <span className={`text-4xl font-bold ${
++                  isFocusing || isWorkflowActive ? 'text-blue-400' : ''
++                }`}>
++                  {isFocusing || isWorkflowActive ? focusDurationStr : `${todayFocusMinutes}min`}
++                </span>
++              </div>
++              
+               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                 <span className="text-2xl font-bold">
+-                  {isFocusing ? '结束专注' : '开始专注'}
++                  {isWorkflowActive ? '结束工作流' : (isFocusing ? '结束专注' : '开始专注')}
+                 </span>
+                 <span className="text-sm text-white/60 mt-1">
+-                  {isFocusing ? '正在专注于：' : '即将专注于：'}
++                  {isWorkflowActive && isBreakPhase ? '' : (isFocusing || isWorkflowActive ? '正在专注于：' : '即将专注于：')}
+                   {displayTaskTitle}
+                 </span>
+               </div>
+             </div>
++            {hasPendingTransition && (
++              <div className="flex items-center justify-between px-3 py-2 text-sm bg-amber-500/15 border-t border-amber-400/30">
++                <span>
++                  {isBreakPhase ? '休息阶段已结束，等待确认进入专注' : '专注阶段已结束，等待确认进入休息'}
++                </span>
++                <button
++                  onClick={_confirmFocusWorkflowPhase}
++                  disabled={confirmingFocusPhase}
++                  className="px-3 py-1 rounded bg-amber-400/80 text-black font-medium hover:bg-amber-300 disabled:opacity-60"
++                >
++                  {confirmingFocusPhase ? '确认中' : '确认流转'}
++                </button>
++              </div>
++            )}
+             <div 
+               className="flex-1 bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors cursor-pointer"
+               onClick={() => setShowStatsModal(true)}
+@@ -940,6 +1270,160 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
+           </div>
+         )}
+ 
++        {showWorkflowModal && (
++          <div
++            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
++            onClick={() => setShowWorkflowModal(false)}
++          >
++            <div
++              className="w-[760px] max-w-[94vw] max-h-[78vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
++              onClick={(e) => e.stopPropagation()}
++            >
++              <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
++                <h3 className="text-lg font-bold text-white">工作流管理</h3>
++                <button
++                  onClick={() => setShowWorkflowModal(false)}
++                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
++                >
++                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
++                    <line x1="18" y1="6" x2="6" y2="18"></line>
++                    <line x1="6" y1="6" x2="18" y2="18"></line>
++                  </svg>
++                </button>
++              </div>
++              <div className="grid grid-cols-2 gap-0 h-[calc(78vh-56px)]">
++                <div className="border-r border-white/10 p-4 overflow-y-auto">
++                  <div className="flex items-center justify-between mb-3">
++                    <span className="text-sm text-white/70">已保存工作流</span>
++                    <button
++                      onClick={() => {
++                        setEditingWorkflowId(null);
++                        setWorkflowForm({
++                          name: '',
++                          phases: [
++                            { phase_type: 'focus', duration: 25 * 60 },
++                            { phase_type: 'break', duration: 5 * 60 },
++                          ],
++                          isDefault: workflowPresets.length === 0,
++                        });
++                        setWorkflowError(null);
++                      }}
++                      className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
++                    >
++                      新建
++                    </button>
++                  </div>
++                  <div className="flex flex-col gap-2">
++                    {workflowPresets.map((preset) => (
++                      <div key={preset.id} className={`rounded-lg border p-3 ${preset.is_default ? 'border-blue-500/40 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}>
++                        <div className="flex items-start justify-between gap-2">
++                          <div>
++                            <div className="font-medium text-white">{preset.name}</div>
++                            <div className="text-xs text-white/60 mt-1">
++                              {preset.phases.map((phase, idx) => `${idx + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`).join(' · ')}
++                            </div>
++                          </div>
++                          {preset.is_default && <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/30">默认</span>}
++                        </div>
++                        <div className="flex items-center gap-2 mt-3">
++                          <button onClick={() => _editWorkflowPreset(preset)} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">编辑</button>
++                          <button onClick={() => _setDefaultWorkflowPreset(preset.id)} className="text-xs px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30">设为默认</button>
++                          <button onClick={() => _deleteWorkflowPreset(preset.id)} className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30">删除</button>
++                        </div>
++                      </div>
++                    ))}
++                    {workflowPresets.length === 0 && (
++                      <div className="text-center text-white/35 py-8">暂无工作流，先创建一个</div>
++                    )}
++                  </div>
++                </div>
++                <div className="p-4 overflow-y-auto">
++                  <h4 className="text-sm text-white/70 mb-3">{editingWorkflowId ? '编辑工作流' : '创建工作流'}</h4>
++                  <div className="flex flex-col gap-3">
++                    <div className="flex flex-col gap-2">
++                      <label className="text-xs text-white/60">名称</label>
++                      <input
++                        value={workflowForm.name}
++                        onChange={(e) => setWorkflowForm((s) => ({ ...s, name: e.target.value }))}
++                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
++                        placeholder="例如：番茄默认"
++                      />
++                    </div>
++                    <div className="flex items-center justify-between">
++                      <span className="text-xs text-white/60">阶段配置</span>
++                      <button onClick={_addWorkflowPhase} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">新增阶段</button>
++                    </div>
++                    <div className="flex flex-col gap-2">
++                      {workflowForm.phases.map((phase, idx) => (
++                        <div key={`${phase.phase_type}-${idx}`} className="grid grid-cols-[1fr,1fr,auto] gap-2">
++                          <select
++                            value={phase.phase_type}
++                            onChange={(e) => _updateWorkflowPhase(idx, { phase_type: e.target.value as 'focus' | 'break' })}
++                            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
++                          >
++                            <option value="focus">专注</option>
++                            <option value="break">休息</option>
++                          </select>
++                          <input
++                            type="number"
++                            min={1}
++                            value={Math.round(phase.duration / 60)}
++                            onChange={(e) => _updateWorkflowPhase(idx, { duration: Math.max(60, Number(e.target.value || 1) * 60) })}
++                            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
++                          />
++                          <button
++                            onClick={() => _removeWorkflowPhase(idx)}
++                            className="px-2 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs"
++                            disabled={workflowForm.phases.length <= 1}
++                          >
++                            删除
++                          </button>
++                        </div>
++                      ))}
++                    </div>
++                    <label className="inline-flex items-center gap-2 text-sm text-white/75">
++                      <input
++                        type="checkbox"
++                        checked={workflowForm.isDefault}
++                        onChange={(e) => setWorkflowForm((s) => ({ ...s, isDefault: e.target.checked }))}
++                      />
++                      设为默认工作流
++                    </label>
++                    {workflowError && <div className="text-sm text-red-400">{workflowError}</div>}
++                    <div className="flex items-center justify-end gap-2 pt-2">
++                      <button
++                        onClick={() => {
++                          setEditingWorkflowId(null);
++                          setWorkflowForm({
++                            name: '',
++                            phases: [
++                              { phase_type: 'focus', duration: 25 * 60 },
++                              { phase_type: 'break', duration: 5 * 60 },
++                            ],
++                            isDefault: false,
++                          });
++                          setWorkflowError(null);
++                        }}
++                        className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20"
++                        disabled={workflowSubmitting}
++                      >
++                        重置
++                      </button>
++                      <button
++                        onClick={_submitWorkflowPreset}
++                        className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60"
++                        disabled={workflowSubmitting}
++                      >
++                        {workflowSubmitting ? '保存中...' : (editingWorkflowId ? '保存修改' : '创建工作流')}
++                      </button>
++                    </div>
++                  </div>
++                </div>
++              </div>
++            </div>
++          </div>
++        )}
++
+         {/* 专注时长统计悬浮页面 */}
+         {showStatsModal && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
