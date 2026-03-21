@@ -30,11 +30,17 @@ interface PlaceholderCardProps {
   split?: number;
 }
 
-interface FocusSession {
-  id: string;
-  task_id: string;
-  start_time: string;
-  duration: number;
+type PomodoroStatus = 'normal' | 'focus' | 'rest';
+
+interface PomodoroCurrent {
+  status: PomodoroStatus;
+  workflow_task_id: string | null;
+  current_task_id: string | null;
+  started_at: string | null;
+  elapsed_seconds: number;
+  limit_seconds: number | null;
+  remaining_seconds: number | null;
+  requires_confirmation: boolean;
 }
 
 interface TodayFocusSummary {
@@ -82,7 +88,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const navigate = useNavigate();
 
   // Focus State
-  const [currentFocus, setCurrentFocus] = useState<FocusSession | null>(null);
+  const [pomodoroCurrent, setPomodoroCurrent] = useState<PomodoroCurrent | null>(null);
   const [focusDurationStr, setFocusDurationStr] = useState('0min');
   const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
@@ -140,16 +146,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   // Update focus duration timer
   useEffect(() => {
-    if (!currentFocus) {
+    if (!pomodoroCurrent || pomodoroCurrent.status === 'normal' || !pomodoroCurrent.started_at) {
       setFocusDurationStr('0min');
       return;
     }
 
     const updateDuration = () => {
       // 更新当前任务专注时长
-      const start = new Date(currentFocus.start_time).getTime();
+      const start = new Date(pomodoroCurrent.started_at).getTime();
       const now = new Date().getTime();
-      const diffMinutes = Math.floor((now - start) / 60000);
+      const diffSecondsRaw = Math.floor((now - start) / 1000);
+      const diffSecondsSafe = diffSecondsRaw < 0 ? 0 : diffSecondsRaw;
+      const limited = pomodoroCurrent.limit_seconds
+        ? Math.min(diffSecondsSafe, pomodoroCurrent.limit_seconds)
+        : diffSecondsSafe;
+      const diffMinutes = Math.floor(limited / 60);
       setFocusDurationStr(`${diffMinutes}min`);
       
       // 同时刷新今日专注总时长，保持同步
@@ -159,7 +170,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     updateDuration();
     const timer = setInterval(updateDuration, 60000); // Update every minute
     return () => clearInterval(timer);
-  }, [currentFocus]);
+  }, [pomodoroCurrent]);
 
   useEffect(() => {
     if (showTaskModal && activeTab === 'all') {
@@ -313,11 +324,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   async function _loadCurrentFocus() {
     try {
-      const res = await apiJson('/todo/focus/current');
-      setCurrentFocus(res as FocusSession);
+      const res = await apiJson('/todo/pomodoro/current');
+      setPomodoroCurrent(res as PomodoroCurrent);
     } catch {
-      // 404 means no focus, which is fine
-      setCurrentFocus(null);
+      setPomodoroCurrent(null);
     }
   }
 
@@ -335,8 +345,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       const res = await apiJson(`/todo/tasks/${taskId}/focus/start`, {
         method: 'POST'
       });
-      setCurrentFocus(res as FocusSession);
-      _loadTasks(); // Reload tasks to update UI if needed
+      setPomodoroCurrent({
+        status: 'focus',
+        workflow_task_id: (res as { task_id: string }).task_id,
+        current_task_id: (res as { task_id: string }).task_id,
+        started_at: (res as { start_time: string }).start_time,
+        elapsed_seconds: 0,
+        limit_seconds: (res as { limit_seconds?: number }).limit_seconds ?? 1500,
+        remaining_seconds: (res as { remaining_seconds?: number }).remaining_seconds ?? 1500,
+        requires_confirmation: false,
+      });
+      _loadTasks();
     } catch (e) {
       console.error('Failed to start focus', e);
       alert('开始专注失败');
@@ -348,10 +367,39 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       await apiJson('/todo/focus/stop', {
         method: 'POST'
       });
-      setCurrentFocus(null);
-      _loadTasks();
+      setPomodoroCurrent({ status: 'normal', workflow_task_id: null, current_task_id: null, started_at: null, elapsed_seconds: 0, limit_seconds: null, remaining_seconds: null, requires_confirmation: false });
+      await Promise.all([_loadTasks(), _loadCurrentFocus(), _loadTodayFocus()]);
     } catch (e) {
       console.error('Failed to stop focus', e);
+    }
+  }
+
+  async function _stopBreak() {
+    try {
+      await apiJson('/todo/break/stop', {
+        method: 'POST'
+      });
+      setPomodoroCurrent({ status: 'normal', workflow_task_id: null, current_task_id: null, started_at: null, elapsed_seconds: 0, limit_seconds: null, remaining_seconds: null, requires_confirmation: false });
+      await _loadCurrentFocus();
+    } catch (e) {
+      console.error('Failed to stop break', e);
+      alert('结束休息失败');
+    }
+  }
+
+  async function _advancePomodoro() {
+    try {
+      const res = await apiJson('/todo/pomodoro/advance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      setPomodoroCurrent(res as PomodoroCurrent);
+      await Promise.all([_loadTasks(), _loadCurrentFocus(), _loadTodayFocus()]);
+    } catch (e) {
+      console.error('Failed to advance pomodoro', e);
+      const msg = e instanceof Error ? e.message : '推进番茄钟状态失败';
+      alert(msg);
     }
   }
 
@@ -610,39 +658,37 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   async function _handleFocusToggle(e: React.MouseEvent) {
     e.stopPropagation();
     
-    // 如果当前正在专注，则停止
-    if (currentFocus) {
+    const status = pomodoroCurrent?.status ?? 'normal';
+    if (status === 'focus') {
+      if (pomodoroCurrent?.requires_confirmation) {
+        if (confirm('本轮专注已达上限，是否进入休息？')) {
+          await _advancePomodoro();
+        }
+        return;
+      }
+      if (confirm('是否结束当前专注并回到普通状态？')) {
+        await _stopFocus();
+      }
+      return;
+    }
+
+    if (status === 'rest') {
+      if (pomodoroCurrent?.requires_confirmation) {
+        if (confirm('本轮休息已达上限，是否开始下一轮专注？')) {
+          await _advancePomodoro();
+        }
+      } else if (confirm('是否提前结束休息并回到普通状态？')) {
+        await _stopBreak();
+      }
+      return;
+    }
+
+    // 普通状态 -> 开始专注
+    if (status === 'normal') {
       // 简单的停止逻辑，或者根据需求：如果点击的是同一个任务则停止，不同任务则切换？
       // 这里的 UI 是全局的“专注状态”，所以点击意味着结束当前专注。
       // 但是根据用户需求 1: "检查...是否是即将要专注的特定任务...是则跳转第二步(开始专注?)...否则提示...然后跳转第二步"
       // 这意味着点击这个 div 总是倾向于 "开始专注目标任务"。
-      
-      const targetTask = _pickTodayFocusTask();
-      
-      // 如果没有目标任务，但当前有专注，点击应该是停止？
-      if (!targetTask) {
-        if (confirm('当前无今日待办任务，是否结束当前专注？')) {
-          await _stopFocus();
-        }
-        return;
-      }
-
-      // 如果当前专注的就是目标任务 -> 用户可能是想停止？
-      // 但用户需求说：
-      // "该 div 的悬停状态下显示的文字 由 开始专注 变成结束专注... 任务名称则变为正在专注的任务"
-      // 这意味着如果已经专注，UI 显示为“结束专注”，点击它应该执行“结束专注”的操作。
-      
-      if (currentFocus.task_id === targetTask.id) {
-         await _stopFocus();
-         return;
-      }
-
-      // 如果当前专注的不是目标任务 -> 切换
-      alert('正在专注其他任务，将为您切换到新任务');
-      await _stopFocus();
-      await _startFocus(targetTask.id);
-    } else {
-      // 当前无专注 -> 开始专注目标任务
       const targetTask = _pickTodayFocusTask();
       if (targetTask) {
         await _startFocus(targetTask.id);
@@ -661,7 +707,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   async function _handleCompleteAndStopFocus(e: React.MouseEvent) {
     e.stopPropagation();
     if (focusQuickActionBusy) return;
-    const targetTaskId = currentFocus?.task_id ?? _pickTodayFocusTask()?.id ?? null;
+    const targetTaskId = pomodoroCurrent?.current_task_id ?? _pickTodayFocusTask()?.id ?? null;
     if (!targetTaskId) {
       alert('没有可完成的即将专注任务');
       return;
@@ -673,9 +719,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'done' }),
       });
-      if (currentFocus?.task_id === targetTaskId) {
+      if (pomodoroCurrent?.status === 'focus' && pomodoroCurrent.current_task_id === targetTaskId) {
         await apiJson('/todo/focus/stop', { method: 'POST' });
-        setCurrentFocus(null);
+        setPomodoroCurrent({ status: 'normal', workflow_task_id: null, current_task_id: null, started_at: null, elapsed_seconds: 0, limit_seconds: null, remaining_seconds: null, requires_confirmation: false });
       }
       setFocusTargetTaskId((prev) => (prev === targetTaskId ? null : prev));
       await Promise.all([_loadTasks(), _loadCurrentFocus(), _loadTodayFocus()]);
@@ -807,11 +853,23 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   if (index === 0) {
     const targetTask = _pickTodayFocusTask();
-    const isFocusing = !!currentFocus;
-    // 如果正在专注，显示正在专注的任务名；否则显示即将专注的任务名
-    const displayTaskTitle = isFocusing 
-      ? tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务'
-      : targetTask?.title || '无计划';
+    const status = pomodoroCurrent?.status ?? 'normal';
+    const isFocusing = status === 'focus';
+    const isResting = status === 'rest';
+    const activeTaskId = pomodoroCurrent?.current_task_id ?? null;
+    const workflowTaskId = pomodoroCurrent?.workflow_task_id ?? null;
+    const displayTaskTitle = isFocusing
+      ? tasks.find(t => t.id === activeTaskId)?.title || '未知任务'
+      : isResting
+        ? tasks.find(t => t.id === workflowTaskId)?.title || '休息中'
+        : targetTask?.title || '无计划';
+    const hoverActionText = isFocusing
+      ? (pomodoroCurrent?.requires_confirmation ? '进入休息' : '结束专注')
+      : isResting
+        ? (pomodoroCurrent?.requires_confirmation ? '开始下一轮专注' : '结束休息')
+        : '开始专注';
+    const hoverStatusLabel = isFocusing ? '正在专注于：' : isResting ? '休息中（任务）：' : '即将专注于：';
+    const showDuration = isFocusing || isResting;
 
     return (
       <>
@@ -819,7 +877,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           <div className="flex-[2] flex flex-col rounded overflow-hidden">
             <div 
               className={`group relative flex-[2] bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${
-                isFocusing ? 'bg-blue-500/10 border border-blue-500/20' : ''
+                isFocusing ? 'bg-blue-500/10 border border-blue-500/20' : isResting ? 'bg-emerald-500/10 border border-emerald-500/20' : ''
               }`}
               onClick={_handleFocusToggle}
             >
@@ -850,16 +908,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               </button>
 
               <span className={`text-4xl font-bold group-hover:opacity-0 transition-opacity duration-300 ${
-                isFocusing ? 'text-blue-400' : ''
+                isFocusing ? 'text-blue-400' : isResting ? 'text-emerald-300' : ''
               }`}>
-                {isFocusing ? focusDurationStr : `${todayFocusMinutes}min`}
+                {showDuration ? focusDurationStr : `${todayFocusMinutes}min`}
               </span>
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <span className="text-2xl font-bold">
-                  {isFocusing ? '结束专注' : '开始专注'}
+                  {hoverActionText}
                 </span>
                 <span className="text-sm text-white/60 mt-1">
-                  {isFocusing ? '正在专注于：' : '即将专注于：'}
+                  {hoverStatusLabel}
                   {displayTaskTitle}
                 </span>
               </div>

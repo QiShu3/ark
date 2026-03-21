@@ -14,6 +14,10 @@ router = APIRouter(prefix="/todo", tags=["todo"])
 
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
+PomodoroStatus = Literal["normal", "focus", "rest"]
+
+FOCUS_MAX_SECONDS = 25 * 60
+REST_MAX_SECONDS = 5 * 60
 
 
 class TaskCreateRequest(BaseModel):
@@ -106,6 +110,25 @@ class FocusLogOut(BaseModel):
     start_time: datetime
     end_at: datetime | None
     created_at: datetime
+    pomodoro_status: PomodoroStatus = "focus"
+    limit_seconds: int | None = None
+    remaining_seconds: int | None = None
+    requires_confirmation: bool = False
+
+
+class PomodoroCurrentOut(BaseModel):
+    status: PomodoroStatus
+    workflow_task_id: UUID | None = None
+    current_task_id: UUID | None = None
+    started_at: datetime | None = None
+    elapsed_seconds: int = 0
+    limit_seconds: int | None = None
+    remaining_seconds: int | None = None
+    requires_confirmation: bool = False
+
+
+class PomodoroAdvanceRequest(BaseModel):
+    task_id: UUID | None = None
 
 
 class FocusTodayOut(BaseModel):
@@ -226,6 +249,31 @@ async def init_todo(app: Any) -> None:
             );
             """
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rest_logs (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              duration INTEGER NOT NULL,
+              start_time TIMESTAMPTZ NOT NULL,
+              end_at TIMESTAMPTZ NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_rest_logs_duration CHECK (duration >= 0),
+              CONSTRAINT chk_rest_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time)
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pomodoro_state (
+              user_id BIGINT PRIMARY KEY REFERENCES auth_users(id) ON DELETE CASCADE,
+              current_status VARCHAR(20) NOT NULL DEFAULT 'normal',
+              workflow_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL,
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_pomodoro_current_status CHECK (current_status IN ('normal', 'focus', 'rest'))
+            );
+            """
+        )
 
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_tasks_user_deleted_status ON tasks(user_id, is_deleted, status);"
@@ -245,6 +293,12 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_open_per_user ON focus_logs(user_id) WHERE end_at IS NULL;"
         )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_rest_logs_user_start ON rest_logs(user_id, start_time DESC);"
+        )
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_rest_open_per_user ON rest_logs(user_id) WHERE end_at IS NULL;"
+        )
         # 迁移：允许 end_at 为空、放宽 duration 校验并更新时间一致性约束
         await conn.execute("ALTER TABLE focus_logs ALTER COLUMN end_at DROP NOT NULL;")
         await conn.execute("ALTER TABLE focus_logs DROP CONSTRAINT IF EXISTS chk_focus_logs_duration;")
@@ -252,6 +306,13 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_duration CHECK (duration >= 0);")
         await conn.execute(
             "ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time);"
+        )
+        await conn.execute("ALTER TABLE rest_logs ALTER COLUMN end_at DROP NOT NULL;")
+        await conn.execute("ALTER TABLE rest_logs DROP CONSTRAINT IF EXISTS chk_rest_logs_duration;")
+        await conn.execute("ALTER TABLE rest_logs DROP CONSTRAINT IF EXISTS chk_rest_logs_end_at;")
+        await conn.execute("ALTER TABLE rest_logs ADD CONSTRAINT chk_rest_logs_duration CHECK (duration >= 0);")
+        await conn.execute(
+            "ALTER TABLE rest_logs ADD CONSTRAINT chk_rest_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time);"
         )
         await conn.execute(
             """
@@ -314,12 +375,27 @@ def _row_to_event(row: asyncpg.Record) -> EventOut:
     )
 
 
-def _row_to_focus_log(row: asyncpg.Record) -> FocusLogOut:
+def _row_to_focus_log(
+    row: asyncpg.Record,
+    *,
+    limit_seconds: int | None = None,
+    pomodoro_status: PomodoroStatus = "focus",
+) -> FocusLogOut:
     """将 asyncpg.Record 转为 FocusLogOut。"""
     # 当 end_at 为空表示进行中的专注，动态计算到当前的持续时长
     _dynamic_duration = (
         int((datetime.now(UTC) - row["start_time"]).total_seconds()) if row["end_at"] is None else int(row["duration"])
     )
+    if _dynamic_duration < 0:
+        _dynamic_duration = 0
+    remaining_seconds: int | None = None
+    requires_confirmation = False
+    if limit_seconds is not None:
+        if _dynamic_duration > limit_seconds:
+            _dynamic_duration = limit_seconds
+        if row["end_at"] is None:
+            remaining_seconds = max(limit_seconds - _dynamic_duration, 0)
+            requires_confirmation = _dynamic_duration >= limit_seconds
     return FocusLogOut(
         id=row["id"],
         user_id=int(row["user_id"]),
@@ -328,6 +404,32 @@ def _row_to_focus_log(row: asyncpg.Record) -> FocusLogOut:
         start_time=row["start_time"],
         end_at=row["end_at"],
         created_at=row["created_at"],
+        pomodoro_status=pomodoro_status,
+        limit_seconds=limit_seconds,
+        remaining_seconds=remaining_seconds,
+        requires_confirmation=requires_confirmation,
+    )
+
+
+async def _upsert_pomodoro_state(
+    conn: asyncpg.Connection,
+    user_id: int,
+    *,
+    status_: PomodoroStatus,
+    workflow_task_id: UUID | None,
+) -> None:
+    await conn.execute(
+        """
+        INSERT INTO pomodoro_state(user_id, current_status, workflow_task_id, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id)
+        DO UPDATE SET current_status = EXCLUDED.current_status,
+                      workflow_task_id = EXCLUDED.workflow_task_id,
+                      updated_at = NOW()
+        """,
+        int(user_id),
+        status_,
+        workflow_task_id,
     )
 
 
@@ -806,6 +908,16 @@ async def start_focus(
             )
             if task_row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+            open_rest = await conn.fetchrow(
+                """
+                SELECT id
+                FROM rest_logs
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                int(user.id),
+            )
+            if open_rest is not None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有进行中的休息")
             try:
                 row = await conn.fetchrow(
                     """
@@ -818,9 +930,10 @@ async def start_focus(
                 )
             except asyncpg.UniqueViolationError:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有进行中的专注")
+            await _upsert_pomodoro_state(conn, int(user.id), status_="focus", workflow_task_id=task_id)
     if row is None:
         raise HTTPException(status_code=500, detail="开始专注失败")
-    return _row_to_focus_log(row)
+    return _row_to_focus_log(row, limit_seconds=FOCUS_MAX_SECONDS, pomodoro_status="focus")
 
 
 @router.post("/focus/stop", response_model=FocusLogOut)
@@ -845,8 +958,9 @@ async def stop_focus(
             now = datetime.now(UTC)
             start = open_row["start_time"]
             dur = int((now - start).total_seconds())
-            if dur < 0:
-                dur = 0
+            dur = max(dur, 0)
+            if dur > FOCUS_MAX_SECONDS:
+                dur = FOCUS_MAX_SECONDS
             row = await conn.fetchrow(
                 """
                 UPDATE focus_logs
@@ -867,9 +981,176 @@ async def stop_focus(
                 row["task_id"],
                 int(user.id),
             )
+            await _upsert_pomodoro_state(conn, int(user.id), status_="normal", workflow_task_id=None)
     if row is None:
         raise HTTPException(status_code=500, detail="结束专注失败")
-    return _row_to_focus_log(row)
+    return _row_to_focus_log(row, limit_seconds=FOCUS_MAX_SECONDS, pomodoro_status="focus")
+
+
+@router.post("/break/stop", response_model=PomodoroCurrentOut)
+async def stop_break(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> PomodoroCurrentOut:
+    """结束休息并回到普通状态。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            rest_row = await conn.fetchrow(
+                """
+                SELECT id, start_time
+                FROM rest_logs
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                int(user.id),
+            )
+            if rest_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的休息")
+            dur = int((datetime.now(UTC) - rest_row["start_time"]).total_seconds())
+            dur = max(dur, 0)
+            if dur > REST_MAX_SECONDS:
+                dur = REST_MAX_SECONDS
+            await conn.execute(
+                """
+                UPDATE rest_logs
+                SET end_at = NOW(), duration = $1
+                WHERE id = $2
+                """,
+                dur,
+                rest_row["id"],
+            )
+            await _upsert_pomodoro_state(conn, int(user.id), status_="normal", workflow_task_id=None)
+    return PomodoroCurrentOut(status="normal")
+
+
+@router.post("/pomodoro/advance", response_model=PomodoroCurrentOut)
+async def advance_pomodoro(
+    request: Request,
+    body: PomodoroAdvanceRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> PomodoroCurrentOut:
+    """在达到时长上限后推进番茄钟状态：专注->休息 或 休息->专注。"""
+    pool = _pool_from_request(request)
+    uid = int(user.id)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            focus_row = await conn.fetchrow(
+                """
+                SELECT id, task_id, start_time
+                FROM focus_logs
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                uid,
+            )
+            if focus_row is not None:
+                focus_elapsed = int((datetime.now(UTC) - focus_row["start_time"]).total_seconds())
+                focus_elapsed = max(focus_elapsed, 0)
+                if focus_elapsed < FOCUS_MAX_SECONDS:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注尚未达到上限")
+                await conn.execute(
+                    """
+                    UPDATE focus_logs
+                    SET end_at = NOW(), duration = $1
+                    WHERE id = $2
+                    """,
+                    FOCUS_MAX_SECONDS,
+                    focus_row["id"],
+                )
+                await conn.execute(
+                    """
+                    UPDATE tasks
+                    SET actual_duration = actual_duration + $1, updated_at = NOW()
+                    WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                    """,
+                    FOCUS_MAX_SECONDS,
+                    focus_row["task_id"],
+                    uid,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO rest_logs(user_id, duration, start_time, end_at)
+                    VALUES ($1, 0, NOW(), NULL)
+                    """,
+                    uid,
+                )
+                await _upsert_pomodoro_state(conn, uid, status_="rest", workflow_task_id=focus_row["task_id"])
+                return PomodoroCurrentOut(
+                    status="rest",
+                    workflow_task_id=focus_row["task_id"],
+                    started_at=datetime.now(UTC),
+                    elapsed_seconds=0,
+                    limit_seconds=REST_MAX_SECONDS,
+                    remaining_seconds=REST_MAX_SECONDS,
+                    requires_confirmation=False,
+                )
+
+            rest_row = await conn.fetchrow(
+                """
+                SELECT id, start_time
+                FROM rest_logs
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                uid,
+            )
+            if rest_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前不在可推进的番茄钟状态")
+            rest_elapsed = int((datetime.now(UTC) - rest_row["start_time"]).total_seconds())
+            rest_elapsed = max(rest_elapsed, 0)
+            if rest_elapsed < REST_MAX_SECONDS:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前休息尚未达到上限")
+            state_row = await conn.fetchrow(
+                """
+                SELECT workflow_task_id
+                FROM pomodoro_state
+                WHERE user_id = $1
+                """,
+                uid,
+            )
+            next_task_id = body.task_id or ((state_row or {}).get("workflow_task_id"))
+            if next_task_id is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="缺少下一轮专注任务")
+            task_row = await conn.fetchrow(
+                """
+                SELECT id
+                FROM tasks
+                WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE AND status <> 'done'
+                """,
+                next_task_id,
+                uid,
+            )
+            if task_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="下一轮专注任务不存在")
+            await conn.execute(
+                """
+                UPDATE rest_logs
+                SET end_at = NOW(), duration = $1
+                WHERE id = $2
+                """,
+                REST_MAX_SECONDS,
+                rest_row["id"],
+            )
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO focus_logs(user_id, task_id, duration, start_time, end_at)
+                    VALUES ($1, $2, 0, NOW(), NULL)
+                    """,
+                    uid,
+                    next_task_id,
+                )
+            except asyncpg.UniqueViolationError:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有进行中的专注")
+            await _upsert_pomodoro_state(conn, uid, status_="focus", workflow_task_id=next_task_id)
+            return PomodoroCurrentOut(
+                status="focus",
+                workflow_task_id=next_task_id,
+                current_task_id=next_task_id,
+                started_at=datetime.now(UTC),
+                elapsed_seconds=0,
+                limit_seconds=FOCUS_MAX_SECONDS,
+                remaining_seconds=FOCUS_MAX_SECONDS,
+                requires_confirmation=False,
+            )
 
 
 @router.get("/focus/current", response_model=FocusLogOut)
@@ -890,7 +1171,72 @@ async def get_current_focus(
         )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的专注")
-    return _row_to_focus_log(row)
+    return _row_to_focus_log(row, limit_seconds=FOCUS_MAX_SECONDS, pomodoro_status="focus")
+
+
+@router.get("/pomodoro/current", response_model=PomodoroCurrentOut)
+async def get_current_pomodoro(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> PomodoroCurrentOut:
+    """查询当前番茄钟状态（普通/专注/休息）。"""
+    uid = int(user.id)
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        focus_row = await conn.fetchrow(
+            """
+            SELECT task_id, start_time
+            FROM focus_logs
+            WHERE user_id = $1 AND end_at IS NULL
+            """,
+            uid,
+        )
+        if focus_row is not None:
+            elapsed = int((datetime.now(UTC) - focus_row["start_time"]).total_seconds())
+            elapsed = max(elapsed, 0)
+            elapsed = min(elapsed, FOCUS_MAX_SECONDS)
+            return PomodoroCurrentOut(
+                status="focus",
+                workflow_task_id=focus_row["task_id"],
+                current_task_id=focus_row["task_id"],
+                started_at=focus_row["start_time"],
+                elapsed_seconds=elapsed,
+                limit_seconds=FOCUS_MAX_SECONDS,
+                remaining_seconds=max(FOCUS_MAX_SECONDS - elapsed, 0),
+                requires_confirmation=elapsed >= FOCUS_MAX_SECONDS,
+            )
+
+        rest_row = await conn.fetchrow(
+            """
+            SELECT start_time
+            FROM rest_logs
+            WHERE user_id = $1 AND end_at IS NULL
+            """,
+            uid,
+        )
+        state_row = await conn.fetchrow(
+            """
+            SELECT workflow_task_id
+            FROM pomodoro_state
+            WHERE user_id = $1
+            """,
+            uid,
+        )
+        workflow_task_id = (state_row or {}).get("workflow_task_id")
+        if rest_row is not None:
+            elapsed = int((datetime.now(UTC) - rest_row["start_time"]).total_seconds())
+            elapsed = max(elapsed, 0)
+            elapsed = min(elapsed, REST_MAX_SECONDS)
+            return PomodoroCurrentOut(
+                status="rest",
+                workflow_task_id=workflow_task_id,
+                started_at=rest_row["start_time"],
+                elapsed_seconds=elapsed,
+                limit_seconds=REST_MAX_SECONDS,
+                remaining_seconds=max(REST_MAX_SECONDS - elapsed, 0),
+                requires_confirmation=elapsed >= REST_MAX_SECONDS,
+            )
+        return PomodoroCurrentOut(status="normal", workflow_task_id=workflow_task_id)
 
 
 @router.get("/focus/today", response_model=FocusTodayOut)
@@ -914,7 +1260,7 @@ async def get_today_focus_duration(
                     0,
                     EXTRACT(
                       epoch FROM (
-                        LEAST(COALESCE(fl.end_at, NOW()), b.day_end)
+                        LEAST(COALESCE(fl.end_at, NOW()), b.day_end, fl.start_time + ($2 * INTERVAL '1 second'))
                         - GREATEST(fl.start_time, b.day_start)
                       )
                     )
@@ -929,6 +1275,7 @@ async def get_today_focus_duration(
               AND COALESCE(fl.end_at, NOW()) > b.day_start
             """,
             int(user.id),
+            FOCUS_MAX_SECONDS,
         )
     seconds = int((row or {}).get("seconds") or 0)
     if seconds < 0:
@@ -969,7 +1316,11 @@ async def get_focus_stats(
                         0,
                         EXTRACT(
                             epoch FROM (
-                                LEAST(COALESCE(fl.end_at, NOW()), b.range_end)
+                                LEAST(
+                                    COALESCE(fl.end_at, NOW()),
+                                    b.range_end,
+                                    fl.start_time + ($3 * INTERVAL '1 second')
+                                )
                                 - GREATEST(fl.start_time, b.range_start)
                             )
                         )
@@ -992,6 +1343,7 @@ async def get_focus_stats(
             """,
             int(user.id),
             range_start,
+            FOCUS_MAX_SECONDS,
         )
 
     tasks_stats = [

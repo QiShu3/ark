@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from typing import Any
 
+FOCUS_MAX_SECONDS = 25 * 60
+
 
 async def get_today_tasks(pool: Any, user_id: int) -> list[dict[str, Any]]:
     async with pool.acquire() as conn:
@@ -93,6 +95,8 @@ async def get_focus_current(pool: Any, user_id: int) -> dict[str, Any]:
         dur = int((datetime.now(UTC) - row["start_time"]).total_seconds())
         if dur < 0:
             dur = 0
+        if dur > FOCUS_MAX_SECONDS:
+            dur = FOCUS_MAX_SECONDS
         task_row = await conn.fetchrow(
             """
             SELECT id, title, status

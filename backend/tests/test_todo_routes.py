@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -34,6 +34,9 @@ class _FakeTodoConn:
     def __init__(self) -> None:
         self.stats_rows: list[dict[str, Any]] = []
         self.events: list[dict[str, Any]] = []
+        self.open_focus_row: dict[str, Any] | None = None
+        self.open_rest_row: dict[str, Any] | None = None
+        self.pomodoro_state_row: dict[str, Any] | None = None
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -48,6 +51,12 @@ class _FakeTodoConn:
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
+        if "FROM focus_logs" in sql and "end_at IS NULL" in sql:
+            return self.open_focus_row
+        if "FROM rest_logs" in sql and "end_at IS NULL" in sql:
+            return self.open_rest_row
+        if "FROM pomodoro_state" in sql:
+            return self.pomodoro_state_row
         if "INSERT INTO events" in sql:
             event_id = uuid4()
             now = datetime.now(UTC)
@@ -188,6 +197,53 @@ def test_get_focus_stats_invalid_range(monkeypatch) -> None:
 
     resp = client.get("/todo/focus/stats?range=year")
     assert resp.status_code == 422
+
+
+def test_get_current_focus_caps_duration(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    conn.open_focus_row = {
+        "id": uuid4(),
+        "user_id": 7,
+        "task_id": uuid4(),
+        "duration": 0,
+        "start_time": now - timedelta(minutes=40),
+        "end_at": None,
+        "created_at": now,
+    }
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/focus/current")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["duration"] == 1500
+    assert data["limit_seconds"] == 1500
+    assert data["remaining_seconds"] == 0
+    assert data["requires_confirmation"] is True
+
+
+def test_get_current_pomodoro_rest_requires_confirmation(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    task_id = uuid4()
+    conn.open_rest_row = {"start_time": datetime.now(UTC) - timedelta(minutes=8)}
+    conn.pomodoro_state_row = {"workflow_task_id": task_id}
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/pomodoro/current")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "rest"
+    assert data["workflow_task_id"] == str(task_id)
+    assert data["requires_confirmation"] is True
+    assert data["remaining_seconds"] == 0
 
 
 def test_create_event_can_be_primary(monkeypatch) -> None:
