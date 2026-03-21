@@ -933,8 +933,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     e.stopPropagation();
     
     if (focusWorkflow && focusWorkflow.state !== 'normal') {
-      if (confirm('当前正在工作流中，是否结束整个工作流？')) {
-        await _stopFocus();
+      if (focusWorkflow.pending_confirmation) {
+        await _confirmFocusWorkflowPhase();
+      } else {
+        try {
+          await apiJson('/todo/focus/workflow/skip_phase', { method: 'POST' });
+          await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
+        } catch (err) {
+          console.error('Failed to skip phase', err);
+        }
       }
       return;
     }
@@ -1163,6 +1170,25 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               }`}
               onClick={_handleFocusToggle}
             >
+              {/* 左上角结束工作流按钮 */}
+              {isWorkflowActive && (
+                <button
+                  className="absolute top-2 left-2 px-2 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100 z-10 w-10 flex items-center justify-center"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (confirm('当前正在工作流中，是否结束整个工作流？')) {
+                      await _stopFocus();
+                    }
+                  }}
+                  title="结束工作流"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              )}
+
               {/* 右上角切换按钮 */}
               <button 
                 className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-white/80 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center"
@@ -1204,7 +1230,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <span className="text-2xl font-bold">
-                  {isWorkflowActive ? '结束工作流' : (isFocusing ? '结束专注' : '开始专注')}
+                  {isWorkflowActive ? (hasPendingTransition ? '确认流转' : '跳过阶段') : (isFocusing ? '结束专注' : '开始专注')}
                 </span>
                 <span className="text-sm text-white/60 mt-1">
                   {isWorkflowActive && isBreakPhase ? '' : (isFocusing || isWorkflowActive ? '正在专注于：' : '即将专注于：')}
@@ -2026,13 +2052,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }
 
   if (split > 1) {
-    const mergePlaceholders = index === 2 && split === 2;
+    const mergePlaceholders = index === 1 && split === 2;
     const subCardCount = mergePlaceholders ? 1 : split;
     const showWorkflowProgress = mergePlaceholders && focusWorkflow?.state !== 'normal';
     return (
       <div className="flex-1 flex gap-2">
         {Array.from({ length: subCardCount }).map((_, subIndex) => (
-          index === 1 && subIndex === 0 ? (
+          index === 2 && subIndex === 0 ? (
             <React.Fragment key={subIndex}>{_renderCalendarView()}</React.Fragment>
           ) : (
             <div
