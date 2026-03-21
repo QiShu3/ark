@@ -1789,11 +1789,11 @@ async def confirm_focus_workflow_transition(
     return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]) if task_row else None)
 
 
-@router.post("/focus/stop", response_model=FocusLogOut)
+@router.post("/focus/stop", response_model=FocusLogOut | dict[str, Any])
 async def stop_focus(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
-) -> FocusLogOut:
+) -> Any:
     """结束当前专注并终止活动工作流。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
@@ -1820,6 +1820,7 @@ async def stop_focus(
                         """,
                         workflow_row["id"],
                     )
+                    return {"msg": "Workflow stopped", "stopped": True}
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的专注")
             now = datetime.now(UTC)
             start = open_row["start_time"]
