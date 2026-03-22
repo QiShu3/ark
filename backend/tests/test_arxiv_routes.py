@@ -8,14 +8,12 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import routes.arxiv_routes as arxiv_routes
+import routes.arxiv_service as arxiv_service
 from routes.arxiv_routes import (
-    ArxivPaperOut,
     ArxivSearchRequest,
-    _build_query_candidates,
-    _parse_daily_time,
     router,
 )
+from routes.arxiv_service import _build_query_candidates, parse_daily_time
 from routes.auth_routes import get_current_user
 
 
@@ -32,7 +30,6 @@ class _FakeConn:
         if "INSERT INTO papers" in sql:
             user_id = int(args[0])
             arxiv_id = str(args[1])
-            # args[2] is title, ignoring it for mock state
             row = {
                 "user_id": user_id,
                 "arxiv_id": arxiv_id,
@@ -97,6 +94,15 @@ def _build_app() -> FastAPI:
     return app
 
 
+def _build_query_candidates_wrapper(payload: ArxivSearchRequest) -> list[str]:
+    return _build_query_candidates(
+        keywords=payload.keywords,
+        category=payload.category,
+        author=payload.author,
+        search_field=payload.search_field,
+    )
+
+
 def test_build_query_candidates_for_single_keyword() -> None:
     payload = ArxivSearchRequest(
         keywords="llm",
@@ -107,7 +113,7 @@ def test_build_query_candidates_for_single_keyword() -> None:
         sort_order="descending",
         search_field="all",
     )
-    assert _build_query_candidates(payload) == ["all:llm AND cat:cs.CL AND au:tom"]
+    assert _build_query_candidates_wrapper(payload) == ["all:llm AND cat:cs.CL AND au:tom"]
 
 
 def test_build_query_candidates_for_title_default() -> None:
@@ -118,9 +124,8 @@ def test_build_query_candidates_for_title_default() -> None:
         limit=5,
         sort_by="submitted_date",
         sort_order="descending",
-        # search_field default is "title"
     )
-    assert _build_query_candidates(payload) == ["ti:llm AND cat:cs.CL AND au:tom"]
+    assert _build_query_candidates_wrapper(payload) == ["ti:llm AND cat:cs.CL AND au:tom"]
 
 
 def test_build_query_candidates_for_phrase_keyword() -> None:
@@ -133,7 +138,7 @@ def test_build_query_candidates_for_phrase_keyword() -> None:
         sort_order="descending",
         search_field="all",
     )
-    assert _build_query_candidates(payload) == [
+    assert _build_query_candidates_wrapper(payload) == [
         'ti:"Attention Is All You Need" AND cat:cs.CL',
         'all:"Attention Is All You Need" AND cat:cs.CL',
         "all:Attention Is All You Need AND cat:cs.CL",
@@ -147,7 +152,7 @@ def test_build_query_candidates_for_summary() -> None:
         limit=5,
         search_field="summary",
     )
-    assert _build_query_candidates(payload) == ["abs:diffusion AND cat:cs.CV"]
+    assert _build_query_candidates_wrapper(payload) == ["abs:diffusion AND cat:cs.CV"]
 
 
 def test_build_query_candidates_for_title_phrase() -> None:
@@ -155,25 +160,25 @@ def test_build_query_candidates_for_title_phrase() -> None:
         keywords="foo bar",
         search_field="title",
     )
-    assert _build_query_candidates(payload) == [
+    assert _build_query_candidates_wrapper(payload) == [
         'ti:"foo bar"',
         "ti:foo bar",
     ]
 
 
 def test_search_endpoint_returns_mapped_results(monkeypatch) -> None:
-    async def _fake_search(_: ArxivSearchRequest) -> list[ArxivPaperOut]:
+    async def _fake_search(**kwargs) -> list[dict[str, Any]]:
         return [
-            ArxivPaperOut(
-                arxiv_id="2501.00001",
-                title="Paper A",
-                authors=["Alice", "Bob"],
-                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
-                summary="Summary",
-            )
+            {
+                "arxiv_id": "2501.00001",
+                "title": "Paper A",
+                "authors": ["Alice", "Bob"],
+                "published": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
+                "summary": "Summary",
+            }
         ]
 
-    monkeypatch.setattr("routes.arxiv_routes._search_arxiv", _fake_search)
+    monkeypatch.setattr("routes.arxiv_routes.search_arxiv_papers", _fake_search)
     app = _build_app()
     client = TestClient(app)
     resp = client.post(
@@ -236,25 +241,33 @@ def test_search_uses_stale_cache_when_429(monkeypatch) -> None:
         sort_by="submitted_date",
         sort_order="descending",
     )
-    key = arxiv_routes._search_cache_key(payload)
-    arxiv_routes._SEARCH_CACHE.clear()
-    arxiv_routes._cache_set(
+    key = arxiv_service._search_cache_key(
+        keywords=payload.keywords,
+        category=payload.category,
+        author=payload.author,
+        limit=payload.limit,
+        offset=payload.offset,
+        sort_by=payload.sort_by,
+        sort_order=payload.sort_order,
+    )
+    arxiv_service._SEARCH_CACHE.clear()
+    arxiv_service._cache_set(
         key,
         [
-            ArxivPaperOut(
-                arxiv_id="2501.00001",
-                title="Cached",
-                authors=["Alice"],
-                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
-                summary="cached summary",
-            )
+            {
+                "arxiv_id": "2501.00001",
+                "title": "Cached",
+                "authors": ["Alice"],
+                "published": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
+                "summary": "cached summary",
+            }
         ],
     )
 
-    def _raise_429(_: ArxivSearchRequest) -> list[ArxivPaperOut]:
+    def _raise_429(**kwargs) -> list[dict[str, Any]]:
         raise RuntimeError("Page request resulted in HTTP 429")
 
-    monkeypatch.setattr("routes.arxiv_routes._search_sync", _raise_429)
+    monkeypatch.setattr("routes.arxiv_service._search_sync", _raise_429)
     result = TestClient(_build_app()).post(
         "/api/arxiv/search",
         json={
@@ -288,25 +301,25 @@ def test_refresh_daily_candidates_filters_skipped(monkeypatch) -> None:
                 self.inserted_ids.append(str(args[2]))
             return "OK"
 
-    async def _fake_search(_: ArxivSearchRequest) -> list[ArxivPaperOut]:
+    async def _fake_search(**kwargs) -> list[dict[str, Any]]:
         return [
-            ArxivPaperOut(
-                arxiv_id="2501.00001",
-                title="A",
-                authors=["Alice"],
-                published=datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
-                summary="s1",
-            ),
-            ArxivPaperOut(
-                arxiv_id="2501.00002",
-                title="B",
-                authors=["Bob"],
-                published=datetime(2026, 1, 2, tzinfo=UTC).isoformat(),
-                summary="s2",
-            ),
+            {
+                "arxiv_id": "2501.00001",
+                "title": "A",
+                "authors": ["Alice"],
+                "published": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
+                "summary": "s1",
+            },
+            {
+                "arxiv_id": "2501.00002",
+                "title": "B",
+                "authors": ["Bob"],
+                "published": datetime(2026, 1, 2, tzinfo=UTC).isoformat(),
+                "summary": "s2",
+            },
         ]
 
-    monkeypatch.setattr("routes.arxiv_routes._search_arxiv", _fake_search)
+    monkeypatch.setattr("routes.arxiv_service.search_arxiv_papers", _fake_search)
     conn = _RefreshConn()
     config_row = {
         "keywords": "llm",
@@ -318,7 +331,7 @@ def test_refresh_daily_candidates_filters_skipped(monkeypatch) -> None:
         "search_field": "title",
     }
     result = asyncio.run(
-        arxiv_routes._refresh_daily_candidates_for_user(
+        arxiv_service.refresh_daily_candidates_for_user(
             conn,
             user_id=7,
             candidate_day=date(2026, 3, 13),
@@ -326,17 +339,19 @@ def test_refresh_daily_candidates_filters_skipped(monkeypatch) -> None:
         )
     )
     assert len(result) == 1
-    assert result[0].arxiv_id == "2501.00001"
+    assert result[0]["arxiv_id"] == "2501.00001"
     assert conn.inserted_ids == ["2501.00001"]
 
 
 def test_search_429_without_cache_returns_429(monkeypatch) -> None:
-    arxiv_routes._SEARCH_CACHE.clear()
+    arxiv_service._SEARCH_CACHE.clear()
 
-    def _raise_429(_: ArxivSearchRequest) -> list[ArxivPaperOut]:
-        raise RuntimeError("Page request resulted in HTTP 429")
+    async def _raise_429(**kwargs) -> list[dict[str, Any]]:
+        from fastapi import HTTPException
 
-    monkeypatch.setattr("routes.arxiv_routes._search_sync", _raise_429)
+        raise HTTPException(status_code=429, detail="ArXiv 当前限流，请 30-60 秒后重试")
+
+    monkeypatch.setattr("routes.arxiv_routes.search_arxiv_papers", _raise_429)
     resp = TestClient(_build_app()).post(
         "/api/arxiv/search",
         json={
@@ -351,7 +366,7 @@ def test_search_429_without_cache_returns_429(monkeypatch) -> None:
 
 
 def test_parse_daily_time_success() -> None:
-    parsed = _parse_daily_time("09:30")
+    parsed = parse_daily_time("09:30")
     assert parsed.hour == 9
     assert parsed.minute == 30
 
