@@ -1,9 +1,7 @@
-name: Auto Deploy to Cloud Server
+name: Legacy Deploy to Cloud Server (Manual)
 
-# 触发条件：推送到 main 分支时执行（PR 合并后触发）
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   deploy:

@@ -60,6 +60,14 @@ _DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+def _load_cors_origins() -> list[str]:
+    """加载 CORS 白名单，支持通过环境变量 CORS_ALLOW_ORIGINS 配置。"""
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+    if not raw:
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     await _mcp_registry.start()
@@ -78,7 +86,7 @@ app = FastAPI(lifespan=_lifespan, title="Ark Backend", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_load_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
