@@ -7,7 +7,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from routes.arxiv_repository import (
+from routes.arxiv.repository import (
     create_paper_tag,
     delete_paper_tag,
     get_daily_config,
@@ -17,7 +17,7 @@ from routes.arxiv_repository import (
     upsert_daily_config,
     upsert_paper_state,
 )
-from routes.arxiv_service import (
+from routes.arxiv.service import (
     batch_create_daily_tasks,
     close_arxiv_scheduler,
     fetch_daily_candidates,

@@ -16,12 +16,14 @@ import arxiv
 import asyncpg
 from fastapi import HTTPException
 
-from routes.arxiv_repository import (
+from routes.arxiv.repository import (
+    create_task_and_link,
     delete_daily_candidates,
     fetch_daily_candidates,
     fetch_daily_candidates_for_tasks,
     fetch_daily_configs_for_scheduler,
     fetch_filtered_arxiv_ids,
+    get_daily_config,
     insert_daily_candidate,
     update_daily_config_last_run,
 )
@@ -370,7 +372,7 @@ def row_to_daily_config(row: asyncpg.Record) -> dict[str, Any]:
 
 
 def row_to_paper_state(row: asyncpg.Record) -> dict[str, Any]:
-    from routes.arxiv_repository import parse_jsonb_int_list
+    from routes.arxiv.repository import parse_jsonb_int_list
 
     tag_ids = parse_jsonb_int_list(row.get("tag_ids_json", []))
     return {
@@ -423,8 +425,6 @@ async def get_daily_candidates_with_auto_refresh(
     user_id: int,
     run_day: date,
 ) -> list[dict[str, Any]]:
-    from routes.arxiv_repository import get_daily_config
-
     candidates = await fetch_daily_candidates(conn, user_id=user_id, candidate_date=run_day)
     if candidates:
         return [row_to_daily_candidate(row) for row in candidates]
@@ -454,8 +454,6 @@ async def batch_create_daily_tasks(
     run_day: date,
     arxiv_ids: list[str],
 ) -> tuple[int, int, list[str]]:
-    from routes.arxiv_repository import create_task_and_link
-
     rows = await fetch_daily_candidates_for_tasks(conn, user_id=user_id, candidate_date=run_day, arxiv_ids=arxiv_ids)
     by_id = {str(r["arxiv_id"]): r for r in rows}
     created_ids: list[str] = []

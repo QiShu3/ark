@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import routes.arxiv_routes as arxiv_routes
+import routes.arxiv.routes as arxiv_routes
 from main import app
-from routes.arxiv_routes import ArxivPaperOut
+from routes.arxiv import ArxivPaperOut
 
 
 class _FakeConn:

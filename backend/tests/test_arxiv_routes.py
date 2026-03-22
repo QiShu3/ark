@@ -8,12 +8,9 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import routes.arxiv_service as arxiv_service
-from routes.arxiv_routes import (
-    ArxivSearchRequest,
-    router,
-)
-from routes.arxiv_service import _build_query_candidates, parse_daily_time
+import routes.arxiv.service as arxiv_service
+from routes.arxiv import ArxivSearchRequest, router
+from routes.arxiv.service import _build_query_candidates, parse_daily_time
 from routes.auth_routes import get_current_user
 
 
@@ -178,7 +175,7 @@ def test_search_endpoint_returns_mapped_results(monkeypatch) -> None:
             }
         ]
 
-    monkeypatch.setattr("routes.arxiv_routes.search_arxiv_papers", _fake_search)
+    monkeypatch.setattr("routes.arxiv.routes.search_arxiv_papers", _fake_search)
     app = _build_app()
     client = TestClient(app)
     resp = client.post(
@@ -199,7 +196,7 @@ def test_search_endpoint_returns_mapped_results(monkeypatch) -> None:
 def test_state_upsert_and_list_flow(monkeypatch) -> None:
     conn = _FakeConn()
     pool = _FakePool(conn)
-    monkeypatch.setattr("routes.arxiv_routes._pool_from_request", lambda _: pool)
+    monkeypatch.setattr("routes.arxiv.routes._pool_from_request", lambda _: pool)
     app = _build_app()
     client = TestClient(app)
 
@@ -267,7 +264,7 @@ def test_search_uses_stale_cache_when_429(monkeypatch) -> None:
     def _raise_429(**kwargs) -> list[dict[str, Any]]:
         raise RuntimeError("Page request resulted in HTTP 429")
 
-    monkeypatch.setattr("routes.arxiv_service._search_sync", _raise_429)
+    monkeypatch.setattr("routes.arxiv.service._search_sync", _raise_429)
     result = TestClient(_build_app()).post(
         "/api/arxiv/search",
         json={
@@ -319,7 +316,7 @@ def test_refresh_daily_candidates_filters_skipped(monkeypatch) -> None:
             },
         ]
 
-    monkeypatch.setattr("routes.arxiv_service.search_arxiv_papers", _fake_search)
+    monkeypatch.setattr("routes.arxiv.service.search_arxiv_papers", _fake_search)
     conn = _RefreshConn()
     config_row = {
         "keywords": "llm",
@@ -351,7 +348,7 @@ def test_search_429_without_cache_returns_429(monkeypatch) -> None:
 
         raise HTTPException(status_code=429, detail="ArXiv 当前限流，请 30-60 秒后重试")
 
-    monkeypatch.setattr("routes.arxiv_routes.search_arxiv_papers", _raise_429)
+    monkeypatch.setattr("routes.arxiv.routes.search_arxiv_papers", _raise_429)
     resp = TestClient(_build_app()).post(
         "/api/arxiv/search",
         json={
