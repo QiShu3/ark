@@ -1,5 +1,18 @@
 import { useAuthStore } from './auth';
 
+const _apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
+
+/**
+ * 统一拼接请求地址，支持通过 VITE_API_BASE_URL 指向独立后端域名。
+ */
+function _resolveApiUrl(path: string): string {
+  if (!path || /^https?:\/\//i.test(path)) return path;
+  if (!_apiBaseUrl) return path;
+  const base = _apiBaseUrl.replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+}
+
 async function _parseErrorDetail(res: Response): Promise<string | null> {
   const data: unknown = await res.json().catch(() => null);
   if (!data || typeof data !== 'object') return null;
@@ -28,7 +41,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const token = useAuthStore.getState().token;
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(path, { ...init, headers });
+  return fetch(_resolveApiUrl(path), { ...init, headers });
 }
 
 export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -58,7 +71,7 @@ export async function apiSSE(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(path, {
+  const res = await fetch(_resolveApiUrl(path), {
     method: 'POST',
     headers,
     body: JSON.stringify(body),

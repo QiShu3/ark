@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const proxyTarget = env.VITE_PROXY_TARGET || 'http://localhost:8000';
 
   return {
-    base: mode === 'production' ? '/ark/' : '/',
+    base: '/',
     build: {
       sourcemap: 'hidden',
     },
