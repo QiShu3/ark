@@ -24,6 +24,8 @@ from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
+from routes.checkin_routes import init_checkin
+from routes.checkin_routes import router as checkin_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
 
@@ -64,6 +66,7 @@ _DEFAULT_SYSTEM_PROMPT = (
 async def _lifespan(app: FastAPI):
     await _mcp_registry.start()
     await init_auth(app)
+    await init_checkin(app)
     await init_todo(app)
     await init_arxiv(app)
     try:
@@ -85,6 +88,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(checkin_router)
 app.include_router(todo_router)
 app.include_router(arxiv_router)
 

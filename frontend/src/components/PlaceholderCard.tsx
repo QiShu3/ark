@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiJson } from '../lib/api';
+import { apiJson, getCheckInStatus } from '../lib/api';
 import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
 
@@ -128,6 +128,22 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
   const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
   const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
+
+  // Check-in dates for Calendar
+  const [checkedDates, setCheckedDates] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (index === 3) {
+      const load = () => {
+        getCheckInStatus()
+          .then(res => setCheckedDates(new Set(res.checked_dates)))
+          .catch(console.error);
+      };
+      load();
+      window.addEventListener('ark:reload-checkin', load);
+      return () => window.removeEventListener('ark:reload-checkin', load);
+    }
+  }, [index]);
 
   const [createTaskSubmitting, setCreateTaskSubmitting] = useState(false);
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
@@ -1143,20 +1159,31 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1 flex-1">
-          {cells.map((cell, idx) => (
-            <div
-              key={`${cell.day}-${idx}`}
-              className={`h-6 rounded flex items-center justify-center text-[11px] ${
-                cell.isToday
-                  ? 'bg-blue-500/70 text-white font-semibold'
-                  : cell.inCurrentMonth
-                    ? 'text-white/80 bg-white/[0.03]'
-                    : 'text-white/25'
-              }`}
-            >
-              {cell.day}
-            </div>
-          ))}
+          {cells.map((cell, idx) => {
+            let dateStr = '';
+            if (cell.inCurrentMonth) {
+              dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
+            }
+            const isChecked = cell.inCurrentMonth && checkedDates.has(dateStr);
+            
+            return (
+              <div
+                key={`${cell.day}-${idx}`}
+                className={`h-6 rounded flex items-center justify-center text-[11px] relative ${
+                  cell.isToday
+                    ? 'bg-blue-500/70 text-white font-semibold'
+                    : cell.inCurrentMonth
+                      ? 'text-white/80 bg-white/[0.03]'
+                      : 'text-white/25'
+                }`}
+              >
+                {cell.day}
+                {isChecked && (
+                  <span className="absolute -bottom-1 -right-1 text-[8px]">✅</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     );
