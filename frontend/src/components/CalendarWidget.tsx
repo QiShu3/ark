@@ -88,8 +88,8 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
             >
               {cell.day}
               {isChecked && (
-                <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center ${cell.isToday ? 'bg-blue-500 shadow-sm border border-[#1a1a1a]' : 'bg-transparent'}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke={cell.isToday ? 'white' : '#3b82f6'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2">
+                <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${cell.isToday ? 'bg-blue-500 shadow-sm border border-[#1a1a1a]' : 'bg-transparent'}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke={cell.isToday ? 'white' : '#3b82f6'} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </div>
