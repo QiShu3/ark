@@ -1,6 +1,7 @@
 import React from 'react';
 import Navigation from '../components/Navigation';
 import { useNavigate } from 'react-router-dom';
+import { CheckinCard } from '../components/CheckinCard';
 
 const AppCenter: React.FC = () => {
   const navigate = useNavigate();
@@ -33,7 +34,12 @@ const AppCenter: React.FC = () => {
 
       {/* 主体内容区域 */}
       <div className="relative z-10 w-full h-full pt-20 px-8 overflow-y-auto">
-        <h1 className="text-3xl font-bold mb-8 text-center">应用中心</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">应用中心</h1>
+        
+        {/* 打卡卡片 */}
+        <div className="mb-10">
+          <CheckinCard />
+        </div>
         
         {/* 应用卡片网格 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto pb-10">
