@@ -43,7 +43,7 @@ async def create_checkin(
     """记录今日打卡。如果已打卡则忽略（幂等）。"""
     pool = _pool_from_request(request)
     today = datetime.now(UTC).date()
-    
+
     async with pool.acquire() as conn:
         try:
             await conn.execute(
@@ -57,7 +57,7 @@ async def create_checkin(
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-            
+
     return {"ok": True}
 
 
@@ -69,7 +69,7 @@ async def get_checkin_status(
     """获取打卡状态。"""
     pool = _pool_from_request(request)
     today = datetime.now(UTC).date()
-    
+
     async with pool.acquire() as conn:
         # 1. 检查今日是否已打卡
         row = await conn.fetchrow(
@@ -81,7 +81,7 @@ async def get_checkin_status(
             today,
         )
         is_checked_in_today = row is not None
-        
+
         # 2. 获取累计打卡天数
         row = await conn.fetchrow(
             """
@@ -91,7 +91,7 @@ async def get_checkin_status(
             user.id,
         )
         total_days = row["total"] if row else 0
-        
+
         # 3. 获取所有打卡日期并计算连续打卡（streak）
         rows = await conn.fetch(
             """
@@ -101,9 +101,9 @@ async def get_checkin_status(
             """,
             user.id,
         )
-        
+
         checked_dates = [r["checkin_date"].isoformat() for r in rows]
-        
+
         current_streak = 0
         if rows:
             first_date = rows[0]["checkin_date"]

@@ -85,15 +85,15 @@ def test_create_checkin(monkeypatch) -> None:
     conn = _FakeCheckinConn()
     pool = _FakePool(conn)
     monkeypatch.setattr("routes.checkin_routes._pool_from_request", lambda _: pool)
-    
+
     app = _build_app()
     client = TestClient(app)
-    
+
     resp = client.post("/api/checkin")
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     assert len(conn.rows) == 1
-    
+
     # Second time should be idempotent
     resp = client.post("/api/checkin")
     assert resp.status_code == 200
@@ -104,10 +104,10 @@ def test_get_checkin_status_empty(monkeypatch) -> None:
     conn = _FakeCheckinConn()
     pool = _FakePool(conn)
     monkeypatch.setattr("routes.checkin_routes._pool_from_request", lambda _: pool)
-    
+
     app = _build_app()
     client = TestClient(app)
-    
+
     resp = client.get("/api/checkin/status")
     assert resp.status_code == 200
     data = resp.json()
@@ -121,22 +121,22 @@ def test_get_checkin_status_with_streak(monkeypatch) -> None:
     conn = _FakeCheckinConn()
     pool = _FakePool(conn)
     monkeypatch.setattr("routes.checkin_routes._pool_from_request", lambda _: pool)
-    
+
     today = datetime.now(UTC).date()
     yesterday = datetime.fromordinal(today.toordinal() - 1).date()
     two_days_ago = datetime.fromordinal(yesterday.toordinal() - 1).date()
     four_days_ago = datetime.fromordinal(two_days_ago.toordinal() - 2).date()
-    
+
     conn.rows = [
         {"user_id": 7, "checkin_date": today, "created_at": datetime.now(UTC)},
         {"user_id": 7, "checkin_date": yesterday, "created_at": datetime.now(UTC)},
         {"user_id": 7, "checkin_date": two_days_ago, "created_at": datetime.now(UTC)},
         {"user_id": 7, "checkin_date": four_days_ago, "created_at": datetime.now(UTC)},
     ]
-    
+
     app = _build_app()
     client = TestClient(app)
-    
+
     resp = client.get("/api/checkin/status")
     assert resp.status_code == 200
     data = resp.json()
@@ -150,19 +150,19 @@ def test_get_checkin_status_missing_today_but_checked_yesterday(monkeypatch) -> 
     conn = _FakeCheckinConn()
     pool = _FakePool(conn)
     monkeypatch.setattr("routes.checkin_routes._pool_from_request", lambda _: pool)
-    
+
     today = datetime.now(UTC).date()
     yesterday = datetime.fromordinal(today.toordinal() - 1).date()
     two_days_ago = datetime.fromordinal(yesterday.toordinal() - 1).date()
-    
+
     conn.rows = [
         {"user_id": 7, "checkin_date": yesterday, "created_at": datetime.now(UTC)},
         {"user_id": 7, "checkin_date": two_days_ago, "created_at": datetime.now(UTC)},
     ]
-    
+
     app = _build_app()
     client = TestClient(app)
-    
+
     resp = client.get("/api/checkin/status")
     assert resp.status_code == 200
     data = resp.json()
