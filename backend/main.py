@@ -20,8 +20,8 @@ from MCP.assistant_runner import (
     get_tools_overview as mcp_get_tools_overview,
 )
 from MCP.mcp_registry import MCPRegistry
-from routes.arxiv_routes import close_arxiv, init_arxiv
-from routes.arxiv_routes import router as arxiv_router
+from routes.arxiv import close_arxiv, init_arxiv
+from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
 from routes.todo_routes import init_todo
