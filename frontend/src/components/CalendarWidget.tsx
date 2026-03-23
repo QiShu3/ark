@@ -78,18 +78,18 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
               key={`${cell.day}-${idx}`}
               className={`h-6 rounded flex items-center justify-center text-[11px] relative ${
                 cell.isToday
-                  ? 'bg-blue-500/70 text-white font-semibold'
+                  ? 'bg-[#B5D2E8]/90 text-black/80 font-bold shadow-sm'
                   : cell.inCurrentMonth
                     ? isChecked 
-                      ? 'bg-red-500/60 text-white font-medium' 
+                      ? 'bg-[#E5989B]/90 text-white font-bold shadow-sm' 
                       : 'text-white/80 bg-white/[0.03]'
                     : 'text-white/25'
               }`}
             >
               {cell.day}
               {isChecked && (
-                <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center ${cell.isToday ? 'bg-blue-500 shadow-sm border border-[#1a1a1a]' : 'bg-transparent'}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke={cell.isToday ? 'white' : '#60a5fa'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2">
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center bg-black/20 shadow-sm border border-[#1a1a1a]">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </div>
