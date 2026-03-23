@@ -133,7 +133,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [checkedDates, setCheckedDates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (index === 3) {
+    if (index === 2) {
       const load = () => {
         getCheckInStatus()
           .then(res => setCheckedDates(new Set(res.checked_dates)))
