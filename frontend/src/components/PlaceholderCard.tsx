@@ -1179,7 +1179,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               >
                 {cell.day}
                 {isChecked && (
-                  <span className="absolute -bottom-1 -right-1 text-[8px]">✅</span>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center shadow-sm border border-[#1a1a1a]">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  </div>
                 )}
               </div>
             );
