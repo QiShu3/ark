@@ -104,3 +104,18 @@ export async function apiSSE(
     }
   }
 }
+
+export interface CheckInStatus {
+  is_checked_in_today: boolean;
+  current_streak: number;
+  total_days: number;
+  checked_dates: string[];
+}
+
+export async function checkIn(): Promise<void> {
+  await apiJson('/api/checkin', { method: 'POST' });
+}
+
+export async function getCheckInStatus(): Promise<CheckInStatus> {
+  return apiJson<CheckInStatus>('/api/checkin/status');
+}
