@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiJson, getCheckInStatus } from '../lib/api';
+import { apiJson } from '../lib/api';
 import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
+import CalendarWidget from './CalendarWidget';
 
 interface Task {
   id: string;
@@ -128,22 +129,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
   const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
   const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
-
-  // Check-in dates for Calendar
-  const [checkedDates, setCheckedDates] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (index === 3) {
-      const load = () => {
-        getCheckInStatus()
-          .then(res => setCheckedDates(new Set(res.checked_dates)))
-          .catch(console.error);
-      };
-      load();
-      window.addEventListener('ark:reload-checkin', load);
-      return () => window.removeEventListener('ark:reload-checkin', load);
-    }
-  }, [index]);
 
   const [createTaskSubmitting, setCreateTaskSubmitting] = useState(false);
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
@@ -1112,83 +1097,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     }
   }
 
-  function _renderCalendarView() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const today = now.getDate();
-    const monthLabel = `${year}年${month + 1}月`;
-    const firstWeekday = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrevMonth = new Date(year, month, 0).getDate();
-    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-    const cells = Array.from({ length: 42 }, (_, i) => {
-      const offset = i - firstWeekday + 1;
-      if (offset < 1) {
-        return {
-          day: daysInPrevMonth + offset,
-          inCurrentMonth: false,
-          isToday: false,
-        };
-      }
-      if (offset > daysInMonth) {
-        return {
-          day: offset - daysInMonth,
-          inCurrentMonth: false,
-          isToday: false,
-        };
-      }
-      return {
-        day: offset,
-        inCurrentMonth: true,
-        isToday: offset === today,
-      };
-    });
-
-    return (
-      <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-3 flex flex-col">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-white/85 text-sm font-semibold">日历</span>
-          <span className="text-white/60 text-xs">{monthLabel}</span>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-[10px] text-white/45 mb-1">
-          {weekdays.map((day) => (
-            <div key={day} className="h-5 flex items-center justify-center">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1 flex-1">
-          {cells.map((cell, idx) => {
-            let dateStr = '';
-            if (cell.inCurrentMonth) {
-              dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
-            }
-            const isChecked = cell.inCurrentMonth && checkedDates.has(dateStr);
-            
-            return (
-              <div
-                key={`${cell.day}-${idx}`}
-                className={`h-6 rounded flex items-center justify-center text-[11px] relative ${
-                  cell.isToday
-                    ? 'bg-blue-500/70 text-white font-semibold'
-                    : cell.inCurrentMonth
-                      ? 'text-white/80 bg-white/[0.03]'
-                      : 'text-white/25'
-                }`}
-              >
-                {cell.day}
-                {isChecked && (
-                  <span className="absolute -bottom-1 -right-1 text-[8px]">✅</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   if (index === 0) {
     const targetTask = _pickTodayFocusTask();
     const isFocusing = !!currentFocus;
@@ -2107,7 +2015,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       <div className="flex-1 flex gap-2">
         {Array.from({ length: subCardCount }).map((_, subIndex) => (
           index === 2 && subIndex === 0 ? (
-            <React.Fragment key={subIndex}>{_renderCalendarView()}</React.Fragment>
+            <React.Fragment key={subIndex}><CalendarWidget className="flex-1" /></React.Fragment>
           ) : (
             <div
               key={subIndex}

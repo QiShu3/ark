@@ -4,6 +4,7 @@ import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
 import { Calendar } from 'lucide-react';
+import CalendarWidget from './CalendarWidget';
 
 /**
  * 顶部导航栏组件
@@ -17,6 +18,7 @@ const Navigation: React.FC = () => {
 
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
 
   useEffect(() => {
     if (token && !user) {
@@ -89,9 +91,10 @@ const Navigation: React.FC = () => {
           <div 
             className="relative flex items-center justify-center text-gray-300 hover:text-white transition-colors cursor-pointer"
             title={checkInState.is_checked_in_today ? `已打卡 / 连续 ${checkInState.current_streak} 天` : "今日未打卡"}
+            onClick={() => setShowCalendarModal(true)}
           >
-            <Calendar size={24} />
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold mt-[2px]">
+            <Calendar size={28} />
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold mt-[6px]">
               {checkInState.current_streak}
             </span>
           </div>
@@ -127,6 +130,21 @@ const Navigation: React.FC = () => {
           <span className="text-lg font-bold text-green-400">✅ 今日已打卡</span>
           <div className="w-px h-4 bg-white/20"></div>
           <span className="text-lg font-bold text-orange-400">🔥 连续打卡 {checkInState.current_streak} 天</span>
+        </div>
+      </div>
+    )}
+
+    {/* Calendar Modal */}
+    {showCalendarModal && (
+      <div 
+        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={() => setShowCalendarModal(false)}
+      >
+        <div 
+          className="w-[340px] shadow-2xl animate-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <CalendarWidget />
         </div>
       </div>
     )}
