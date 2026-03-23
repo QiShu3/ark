@@ -93,8 +93,8 @@ const Navigation: React.FC = () => {
             title={checkInState.is_checked_in_today ? `已打卡 / 连续 ${checkInState.current_streak} 天` : "今日未打卡"}
             onClick={() => setShowCalendarModal(true)}
           >
-            <Calendar size={24} />
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold mt-[6px]">
+            <Calendar size={28} />
+            <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold mt-[6px]">
               {checkInState.current_streak}
             </span>
           </div>
