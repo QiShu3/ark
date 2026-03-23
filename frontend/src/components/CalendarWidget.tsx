@@ -80,7 +80,9 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
                 cell.isToday
                   ? 'bg-blue-500/70 text-white font-semibold'
                   : cell.inCurrentMonth
-                    ? 'text-white/80 bg-white/[0.03]'
+                    ? isChecked 
+                      ? 'bg-red-500/60 text-white font-medium' 
+                      : 'text-white/80 bg-white/[0.03]'
                     : 'text-white/25'
               }`}
             >
