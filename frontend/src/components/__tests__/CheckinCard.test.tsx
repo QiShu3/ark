@@ -37,8 +37,8 @@ describe('CheckinCard', () => {
 
   it('displays loading state initially', async () => {
     // Return a promise that doesn't resolve immediately
-    let resolveApi: (value: any) => void;
-    (api.apiJson as any).mockImplementation(
+    let resolveApi: (value: unknown) => void;
+    vi.mocked(api.apiJson).mockImplementation(
       () => new Promise((resolve) => { resolveApi = resolve; })
     );
 
@@ -55,7 +55,7 @@ describe('CheckinCard', () => {
   });
 
   it('renders "立即打卡" when not checked in', async () => {
-    (api.apiJson as any).mockResolvedValue(mockNotCheckedIn);
+    vi.mocked(api.apiJson).mockResolvedValue(mockNotCheckedIn);
 
     render(<CheckinCard />);
 
@@ -69,7 +69,7 @@ describe('CheckinCard', () => {
   });
 
   it('renders "今日已打卡" when already checked in', async () => {
-    (api.apiJson as any).mockResolvedValue(mockCheckedIn);
+    vi.mocked(api.apiJson).mockResolvedValue(mockCheckedIn);
 
     render(<CheckinCard />);
 
@@ -87,11 +87,11 @@ describe('CheckinCard', () => {
   });
 
   it('calls /api/checkin when button is clicked and triggers confetti', async () => {
-    (api.apiJson as any)
+    vi.mocked(api.apiJson)
       .mockResolvedValueOnce(mockNotCheckedIn) // Initial fetch
       .mockResolvedValueOnce(mockCheckedIn);   // Fetch after checkin
 
-    (api.apiFetch as any).mockResolvedValue({ ok: true });
+    vi.mocked(api.apiFetch).mockResolvedValue({ ok: true });
 
     render(<CheckinCard />);
 
@@ -121,7 +121,7 @@ describe('CheckinCard', () => {
   it('handles fetch errors gracefully without crashing', async () => {
     // First, let fetchStatus fail to log error
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    (api.apiJson as any).mockRejectedValue(new Error('Network error'));
+    vi.mocked(api.apiJson).mockRejectedValue(new Error('Network error'));
 
     render(<CheckinCard />);
 
@@ -133,11 +133,11 @@ describe('CheckinCard', () => {
   });
 
   it('handles checkin errors gracefully without crashing', async () => {
-    (api.apiJson as any).mockResolvedValue(mockNotCheckedIn);
+    vi.mocked(api.apiJson).mockResolvedValue(mockNotCheckedIn);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
     // apiFetch fails
-    (api.apiFetch as any).mockRejectedValue(new Error('Checkin failed'));
+    vi.mocked(api.apiFetch).mockRejectedValue(new Error('Checkin failed'));
 
     render(<CheckinCard />);
 

@@ -1,10 +1,9 @@
 import os
-from datetime import UTC, datetime
 from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from routes.auth_routes import _AuthUser, get_current_user
@@ -86,7 +85,7 @@ async def perform_checkin(
             )
         except asyncpg.UniqueViolationError:
             raise HTTPException(status_code=409, detail="今日已打卡")
-            
+
     return CheckinResponse(ok=True, message="打卡成功")
 
 @router.get("/status", response_model=CheckinStatusResponse)
