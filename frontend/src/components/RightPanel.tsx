@@ -19,7 +19,7 @@ const RightPanel: React.FC = () => {
   ];
 
   return (
-    <div className="w-[35%] h-full p-4 pt-20 flex flex-col gap-4">
+    <div className="w-[35%] mt-16 h-[calc(100%-4rem)] p-4 flex flex-col gap-4">
       {configs.map((config, i) => (
         <PlaceholderCard key={i} index={i} split={config.split} />
       ))}

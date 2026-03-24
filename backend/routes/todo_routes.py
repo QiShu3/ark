@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -12,10 +12,12 @@ from pydantic import BaseModel, Field
 from routes.auth_routes import get_current_user
 
 router = APIRouter(prefix="/todo", tags=["todo"])
+UTC = getattr(timezone, "utc")
 
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
 TaskType = Literal["focus", "checkin"]
+PhaseType = Literal["focus", "break"]
 
 
 class TaskCreateRequest(BaseModel):
@@ -432,7 +434,7 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         cycle_every_days=row["cycle_every_days"],
         event=str(row["event"] or ""),
         event_ids=list(row["event_ids"] or []),
-        task_type=str(row["task_type"] or "focus"),
+        task_type=_normalize_task_type(row["task_type"]),
         tags=[str(x) for x in (row["tags"] or [])],
         actual_duration=int(row["actual_duration"]),
         start_date=row["start_date"],
@@ -495,6 +497,22 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_task_type(value: Any) -> TaskType:
+    text = str(value or "focus")
+    if text == "checkin":
+        return "checkin"
+    return "focus"
+
+
+def _normalize_phase_type(value: Any) -> PhaseType | None:
+    text = str(value or "").strip()
+    if text == "focus":
+        return "focus"
+    if text == "break":
+        return "break"
+    return None
 
 
 def _to_jsonb_param(value: Any) -> str:
@@ -573,12 +591,9 @@ def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
     if isinstance(raw, list):
         for phase in raw:
             if isinstance(phase, dict):
-                phase_type = str(phase.get("phase_type") or "")
-                try:
-                    duration = int(phase.get("duration"))
-                except (TypeError, ValueError):
-                    duration = 0
-                if phase_type in {"focus", "break"} and duration >= 60:
+                phase_type = _normalize_phase_type(phase.get("phase_type"))
+                duration = _safe_int(phase.get("duration"), 0)
+                if phase_type is not None and duration >= 60:
                     phases.append(FocusWorkflowPhase(phase_type=phase_type, duration=duration))
     return phases
 
@@ -648,7 +663,7 @@ def _row_to_focus_workflow_preset(row: asyncpg.Record) -> FocusWorkflowPresetOut
 
 
 async def _get_default_focus_workflow_preset(
-    conn: asyncpg.Connection, user_id: int
+    conn: Any, user_id: int
 ) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
@@ -661,7 +676,7 @@ async def _get_default_focus_workflow_preset(
     )
 
 
-async def _sync_active_focus_workflow(conn: asyncpg.Connection, user_id: int) -> asyncpg.Record | None:
+async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record | None:
     """同步活动工作流：阶段到时后置为待确认，并在 focus 阶段自动封账当前专注记录。"""
     row = await conn.fetchrow(
         """
@@ -1230,7 +1245,7 @@ async def list_focus_logs(
     return [_row_to_focus_log(r) for r in rows]
 
 
-async def _stop_active_focus(conn: asyncpg.Connection, user_id: int) -> None:
+async def _stop_active_focus(conn: Any, user_id: int) -> None:
     """结束当前用户的活动专注及工作流。"""
     workflow_row = await conn.fetchrow(
         "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
@@ -1294,7 +1309,7 @@ async def _stop_active_focus(conn: asyncpg.Connection, user_id: int) -> None:
 
 
 async def _create_workflow_with_focus_phase(
-    conn: asyncpg.Connection,
+    conn: Any,
     *,
     user_id: int,
     task_id: UUID,
@@ -1837,7 +1852,7 @@ async def confirm_focus_workflow_transition(
     return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]) if task_row else None)
 
 
-@router.post("/focus/stop", response_model=FocusLogOut | dict[str, Any])
+@router.post("/focus/stop", response_model=Any)
 async def stop_focus(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
