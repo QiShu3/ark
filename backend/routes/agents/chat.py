@@ -9,8 +9,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from routes.agents.executor import execute_action_with_context, pool_from_request
-from routes.agents.models import AgentActionResponse, ChatRequest, ChatResponse
-from routes.agents.policy import resolve_agent_context
+from routes.agents.models import AgentActionResponse, AgentProfileOut, ChatRequest, ChatResponse
+from routes.agents.profiles import build_profile_context, get_default_profile, get_profile_by_id
 from routes.agents.skills import list_agent_skills_registry, skill_action_map
 from routes.auth_routes import get_current_user
 
@@ -32,25 +32,24 @@ def chat_api_key() -> str:
     return value
 
 
-def max_tool_loops() -> int:
+def max_tool_loops(default_value: int = 4) -> int:
     raw = os.getenv("CHAT_MAX_TOOL_LOOPS", "4").strip() or "4"
     try:
         value = int(raw)
     except Exception:
-        value = 4
+        value = default_value
     return max(1, min(value, 8))
 
 
-def _allowed_skill_names(body: ChatRequest) -> list[str]:
+def _allowed_skill_names(body: ChatRequest, profile: AgentProfileOut) -> list[str]:
     registry = {skill.name for skill in list_agent_skills_registry()}
-    if body.allowed_skills is None:
-        return [skill.name for skill in list_agent_skills_registry()]
-    selected = [name.strip() for name in body.allowed_skills if isinstance(name, str) and name.strip() in registry]
+    base = profile.allowed_skills if profile.allowed_skills else [skill.name for skill in list_agent_skills_registry()]
+    selected = [name.strip() for name in base if isinstance(name, str) and name.strip() in registry]
     return list(dict.fromkeys(selected))
 
 
-def build_system_prompt(allowed_skills: list[str]) -> str:
-    base = (
+def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str]) -> str:
+    system_base = (
         "你是 Ark 的 dashboard agent，对话对象是产品用户。"
         "你可以调用 skills 来查看任务、更新任务、发起敏感操作审批，以及获取 arXiv 当日候选、搜索论文、批量获取论文详情、准备 arXiv 每日任务。"
         "规则：1. 优先使用工具获取事实，不要编造任务数据。"
@@ -58,7 +57,13 @@ def build_system_prompt(allowed_skills: list[str]) -> str:
         "3. 不要声称已经完成需要确认的敏感操作，除非 commit 工具已经成功执行。"
         "4. 回答使用简体中文，简洁、自然、像产品里的助手。"
     )
-    return base + f" 5. 当前会话仅允许调用这些 skills：{', '.join(allowed_skills) or '无'}。不要调用未被允许的 skill。"
+    persona = profile.persona_prompt.strip() or "你保持专业、清晰、友好的表达风格。"
+    constraints = (
+        f"当前 Agent 名称：{profile.name}。"
+        f"当前 Agent 类型：{profile.agent_type}。"
+        f"当前会话仅允许调用这些 skills：{', '.join(allowed_skills) or '无'}。不要调用未被允许的 skill。"
+    )
+    return "\n".join([system_base, persona, constraints])
 
 
 def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, Any]]:
@@ -95,21 +100,26 @@ def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, 
     return tools
 
 
-def messages_for_model(body: ChatRequest) -> list[dict[str, Any]]:
-    allowed_skills = _allowed_skill_names(body)
-    messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt(allowed_skills)}]
+def messages_for_model(body: ChatRequest, profile: AgentProfileOut) -> list[dict[str, Any]]:
+    allowed_skills = _allowed_skill_names(body, profile)
+    messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt(profile, allowed_skills)}]
     for item in body.history[-12:]:
         messages.append({"role": item.role, "content": item.content})
     messages.append({"role": "user", "content": body.message})
     return messages
 
 
-async def deepseek_chat_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+async def deepseek_chat_completion(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    *,
+    temperature: float = 0.2,
+) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=45) as client:
         resp = await client.post(
             f"{chat_base_url()}/chat/completions",
             headers={"Authorization": f"Bearer {chat_api_key()}", "Content-Type": "application/json"},
-            json={"model": chat_model(), "messages": messages, "tools": tools, "tool_choice": "auto", "temperature": 0.2},
+            json={"model": chat_model(), "messages": messages, "tools": tools, "tool_choice": "auto", "temperature": temperature},
         )
     if resp.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"DeepSeek 调用失败：{resp.text[:500]}")
@@ -186,14 +196,20 @@ async def chat_with_agent(
     body: ChatRequest,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> ChatResponse:
-    ctx = resolve_agent_context(request, int(user.id))
     pool = pool_from_request(request)
-    allowed_skills = _allowed_skill_names(body)
+    session_id = (request.headers.get("X-Ark-Session-Id") or "").strip() or None
+    async with pool.acquire() as conn:
+        if body.profile_id:
+            profile = await get_profile_by_id(conn, user_id=int(user.id), profile_id=body.profile_id)
+        else:
+            profile = await get_default_profile(conn, user_id=int(user.id))
+    ctx = build_profile_context(profile, user_id=int(user.id), session_id=session_id)
+    allowed_skills = _allowed_skill_names(body, profile)
     tools = tool_definitions(allowed_skills)
-    messages = messages_for_model(body)
+    messages = messages_for_model(body, profile)
     latest_approval: AgentActionResponse | None = None
-    for _ in range(max_tool_loops()):
-        model_message = await deepseek_chat_completion(messages, tools)
+    for _ in range(max_tool_loops(profile.max_tool_loops)):
+        model_message = await deepseek_chat_completion(messages, tools, temperature=profile.temperature)
         assistant_entry: dict[str, Any] = {"role": "assistant", "content": extract_text_content(model_message)}
         tool_calls = tool_calls_from_message(model_message)
         if tool_calls:

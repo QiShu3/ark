@@ -12,6 +12,7 @@ from fastapi import HTTPException, Request
 
 from routes.agents.models import ActionDefinition, AgentActionResponse, AgentContext
 from routes.agents.policy import evaluate_policy, forbidden
+from routes.agents.profiles import init_agent_profiles
 from routes.arxiv.service import (
     batch_create_daily_tasks,
     fetch_paper_details,
@@ -35,6 +36,7 @@ async def init_agent(app: Any) -> None:
     if pool is None:
         raise RuntimeError("auth_pool 未初始化，无法创建审批表")
     async with pool.acquire() as conn:
+        await init_agent_profiles(conn)
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS agent_approvals (

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routes.agents.chat import router
-from routes.agents.models import AgentActionResponse
+from routes.agents.models import AgentActionResponse, AgentProfileOut
 from routes.auth_routes import get_current_user
 
 
@@ -17,8 +17,22 @@ class _DummyUser:
 
 
 class _FakePool:
-    def acquire(self) -> None:
-        raise AssertionError("This test monkeypatches action execution and should not touch the DB pool directly")
+    class _Acquire:
+        async def __aenter__(self) -> _FakeConn:
+            return _FakeConn()
+
+        async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+            _ = exc_type
+            _ = exc
+            _ = tb
+            return False
+
+    def acquire(self) -> _FakePool._Acquire:
+        return self._Acquire()
+
+
+class _FakeConn:
+    pass
 
 
 def _build_app() -> FastAPI:
@@ -28,14 +42,45 @@ def _build_app() -> FastAPI:
     return app
 
 
+def _profile(profile_id: str = "apf_default", *, temperature: float = 0.2, loops: int = 4) -> AgentProfileOut:
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    return AgentProfileOut(
+        id=profile_id,
+        user_id=7,
+        name="Ark Agent",
+        description="Default profile",
+        agent_type="dashboard_agent",
+        app_id=None,
+        persona_prompt="你像一个冷静的任务助手。",
+        allowed_skills=["task_list", "delete_task"],
+        temperature=temperature,
+        max_tool_loops=loops,
+        is_default=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+async def _fake_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
+    _ = conn
+    assert user_id == 7
+    return _profile()
+
+
 def test_chat_returns_plain_reply(monkeypatch) -> None:
-    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _fake_completion(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ) -> dict[str, Any]:
+        assert temperature == 0.2
         assert tools
         assert messages[-1]["content"] == "你好"
         return {"role": "assistant", "content": "你好，我在。"}
 
     monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
     monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"message": "你好", "history": []})
     assert resp.status_code == 200
@@ -47,7 +92,10 @@ def test_chat_returns_plain_reply(monkeypatch) -> None:
 def test_chat_surfaces_approval(monkeypatch) -> None:
     calls = {"count": 0}
 
-    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _fake_completion(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ) -> dict[str, Any]:
+        assert temperature == 0.2
         calls["count"] += 1
         if calls["count"] == 1:
             return {
@@ -80,6 +128,7 @@ def test_chat_surfaces_approval(monkeypatch) -> None:
     monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
     monkeypatch.setattr("routes.agents.chat.execute_action_with_context", _fake_execute_action)
     monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"message": "删掉任务", "history": []})
     assert resp.status_code == 200
@@ -110,16 +159,52 @@ def test_chat_tool_definitions_can_be_filtered() -> None:
 def test_chat_passes_allowed_skills_to_model(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
-    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _fake_completion(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ) -> dict[str, Any]:
         captured["system"] = messages[0]["content"]
         captured["tools"] = [tool["function"]["name"] for tool in tools]
+        captured["temperature"] = temperature
         return {"role": "assistant", "content": "好的"}
 
     monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
     monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"message": "查论文", "history": [], "allowed_skills": ["arxiv_search"]})
     assert resp.status_code == 200
-    assert captured["tools"] == ["arxiv_search", "approval_commit"]
-    assert "arxiv_search" in captured["system"]
-    assert "task_update" not in captured["system"]
+    assert captured["tools"] == ["task_list", "delete_task", "approval_commit"]
+    assert "task_list" in captured["system"]
+    assert "arxiv_search" not in captured["system"]
+    assert captured["temperature"] == 0.2
+
+
+def test_chat_uses_selected_profile(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2) -> dict[str, Any]:
+        captured["system"] = messages[0]["content"]
+        captured["tools"] = [tool["function"]["name"] for tool in tools]
+        captured["temperature"] = temperature
+        return {"role": "assistant", "content": "切换成功"}
+
+    async def _fake_get_profile(conn: Any, *, user_id: int, profile_id: str) -> AgentProfileOut:
+        assert user_id == 7
+        assert profile_id == "apf_custom"
+        return _profile("apf_custom", temperature=0.7, loops=6).model_copy(
+            update={
+                "name": "Research Agent",
+                "persona_prompt": "你像一位学术研究助理。",
+                "allowed_skills": ["delete_task"],
+            }
+        )
+
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_profile_by_id", _fake_get_profile)
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat", json={"profile_id": "apf_custom", "message": "你好", "history": []})
+    assert resp.status_code == 200
+    assert captured["tools"] == ["delete_task", "approval_commit"]
+    assert "Research Agent" in captured["system"]
+    assert captured["temperature"] == 0.7

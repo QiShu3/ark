@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -42,8 +43,71 @@ class _FakeAgentConn:
         self.task_id = str(uuid4())
         self.task_title = "Write tests"
         self.deleted = False
+        now = datetime.now(UTC)
+        self.profiles: list[dict[str, Any]] = [
+            {
+                "id": "apf_default",
+                "user_id": 7,
+                "name": "Ark Agent",
+                "description": "Default profile",
+                "agent_type": "dashboard_agent",
+                "app_id": None,
+                "persona_prompt": "Default persona",
+                "allowed_skills_json": ["task_list", "delete_task"],
+                "temperature": 0.2,
+                "max_tool_loops": 4,
+                "is_default": True,
+                "created_at": now,
+                "updated_at": now,
+            }
+        ]
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
+        if "INSERT INTO agent_profiles" in sql:
+            now = datetime.now(UTC)
+            row = {
+                "id": str(args[0]),
+                "user_id": int(args[1]),
+                "name": str(args[2]),
+                "description": str(args[3]),
+                "agent_type": str(args[4]),
+                "app_id": args[5],
+                "persona_prompt": str(args[6]),
+                "allowed_skills_json": ["task_list"],
+                "temperature": float(args[8]),
+                "max_tool_loops": int(args[9]),
+                "is_default": bool(args[10]),
+                "created_at": now,
+                "updated_at": now,
+            }
+            try:
+                parsed = json.loads(str(args[7]))
+                row["allowed_skills_json"] = parsed
+            except Exception:
+                pass
+            self.profiles.append(row)
+            return row
+        if "UPDATE agent_profiles" in sql and "RETURNING id, user_id, name" in sql:
+            profile_id = str(args[-2])
+            user_id = int(args[-1])
+            row = next((item for item in self.profiles if item["id"] == profile_id and item["user_id"] == user_id), None)
+            if row is None:
+                return None
+            row.update(
+                {
+                    "name": str(args[0]),
+                    "description": str(args[1]),
+                    "agent_type": str(args[2]),
+                    "app_id": args[3],
+                    "persona_prompt": str(args[4]),
+                    "allowed_skills_json": json.loads(str(args[5])),
+                    "temperature": float(args[6]),
+                    "max_tool_loops": int(args[7]),
+                    "is_default": bool(args[8]),
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            return row
         if "FROM tasks" in sql:
             task_id, user_id = str(args[0]), int(args[1])
             include_deleted = bool(args[2]) if len(args) > 2 else False
@@ -80,9 +144,34 @@ class _FakeAgentConn:
             if row is None or int(row["user_id"]) != user_id:
                 return None
             return row
+        if "FROM agent_profiles" in sql:
+            user_id = int(args[0])
+            if "WHERE user_id = $1 AND id = $2" in sql:
+                profile_id = str(args[1])
+                return next((row for row in self.profiles if row["user_id"] == user_id and row["id"] == profile_id), None)
+            rows = [row for row in self.profiles if row["user_id"] == user_id]
+            if "is_default = TRUE" in sql:
+                return next((row for row in rows if row["is_default"]), None)
+            rows.sort(key=lambda row: (not row["is_default"], -row["updated_at"].timestamp()))
+            return rows[0] if rows else None
         return None
 
+    async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
+        if "FROM agent_profiles" in sql:
+            user_id = int(args[0])
+            rows = [row for row in self.profiles if row["user_id"] == user_id]
+            return sorted(rows, key=lambda row: (not row["is_default"], -row["updated_at"].timestamp()))
+        return []
+
     async def execute(self, sql: str, *args: Any) -> str:
+        if "UPDATE agent_profiles SET is_default = FALSE" in sql:
+            user_id = int(args[0])
+            exclude_id = str(args[1]) if len(args) > 1 else None
+            for row in self.profiles:
+                if row["user_id"] == user_id and row["is_default"] and row["id"] != exclude_id:
+                    row["is_default"] = False
+                    row["updated_at"] = datetime.now(UTC)
+            return "UPDATE 1"
         if "INSERT INTO agent_approvals" in sql:
             approval_id = str(args[0])
             self.approvals[approval_id] = {
@@ -115,7 +204,24 @@ class _FakeAgentConn:
                 self.deleted = True
                 return "UPDATE 1"
             return "UPDATE 0"
+        if "DELETE FROM agent_profiles" in sql:
+            profile_id = str(args[0])
+            user_id = int(args[1])
+            self.profiles = [row for row in self.profiles if not (row["id"] == profile_id and row["user_id"] == user_id)]
+            return "DELETE 1"
+        if "UPDATE agent_profiles SET is_default = TRUE" in sql:
+            profile_id = str(args[0])
+            for row in self.profiles:
+                if row["id"] == profile_id:
+                    row["is_default"] = True
+                    row["updated_at"] = datetime.now(UTC)
+            return "UPDATE 1"
         return "OK"
+
+    async def fetchval(self, sql: str, *args: Any) -> Any:
+        _ = sql
+        _ = args
+        return None
 
     def transaction(self) -> _TxCtx:
         return _TxCtx()
@@ -127,6 +233,25 @@ class _FakePool:
 
     def acquire(self) -> _AcquireCtx:
         return _AcquireCtx(self._conn)
+
+
+def client_profile(profile_id: str, *, is_default: bool) -> dict[str, Any]:
+    now = datetime.now(UTC)
+    return {
+        "id": profile_id,
+        "user_id": 7,
+        "name": "Second Profile",
+        "description": "Another profile",
+        "agent_type": "dashboard_agent",
+        "app_id": None,
+        "persona_prompt": "Another persona",
+        "allowed_skills_json": ["task_list"],
+        "temperature": 0.3,
+        "max_tool_loops": 4,
+        "is_default": is_default,
+        "created_at": now,
+        "updated_at": now,
+    }
 
 
 def _build_app() -> FastAPI:
@@ -148,6 +273,76 @@ def test_list_agent_skills_smoke(monkeypatch) -> None:
     assert "arxiv_paper_details" in names
     assert "delete_task" in names
     assert "task_update" in names
+
+
+def test_list_profiles_returns_default_profile(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    client = TestClient(_build_app())
+    resp = client.get("/api/agent/profiles")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["is_default"] is True
+    assert body[0]["name"] == "Ark Agent"
+
+
+def test_create_profile_rejects_invalid_skill(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/profiles",
+        json={
+            "name": "Bad Profile",
+            "allowed_skills": ["not_real_skill"],
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_create_profile_for_arxiv_agent_normalizes_app_scope(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/profiles",
+        json={
+            "name": "Researcher",
+            "agent_type": "app_agent:arxiv",
+            "app_id": "custom",
+            "allowed_skills": ["arxiv_search", "arxiv_paper_details"],
+            "temperature": 0.6,
+            "max_tool_loops": 5,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["agent_type"] == "app_agent:arxiv"
+    assert body["app_id"] == "arxiv"
+
+
+def test_delete_default_profile_falls_back_to_remaining(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    extra = client_profile("apf_second", is_default=False)
+    conn.profiles.append(extra)
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    client = TestClient(_build_app())
+    resp = client.delete("/api/agent/profiles/apf_default")
+    assert resp.status_code == 200
+    assert any(profile["id"] == "apf_second" and profile["is_default"] for profile in conn.profiles)
+
+
+def test_set_default_profile_updates_flag(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    conn.profiles.append(client_profile("apf_second", is_default=False))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    client = TestClient(_build_app())
+    resp = client.post("/api/agent/profiles/apf_second/default")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == "apf_second"
+    assert body["is_default"] is True
 
 
 def test_dashboard_agent_can_search_arxiv(monkeypatch) -> None:

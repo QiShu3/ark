@@ -1,8 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CheckCircle2, ChevronRight, LoaderCircle, ShieldAlert, Sparkles } from 'lucide-react';
+import { Bot, CheckCircle2, LoaderCircle, Plus, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 
 import Navigation from '../components/Navigation';
-import { AgentActionResponse, AgentRequestContext, executeAgentAction } from '../lib/agent';
+import {
+  AgentActionResponse,
+  AgentProfile,
+  AgentProfilePayload,
+  AgentType,
+  createAgentProfile,
+  deleteAgentProfile,
+  executeAgentAction,
+  listAgentProfiles,
+  setDefaultAgentProfile,
+  updateAgentProfile,
+} from '../lib/agent';
 import { apiJson } from '../lib/api';
 
 type Skill = {
@@ -23,91 +34,270 @@ type ChatResponse = {
   approval: AgentActionResponse | null;
 };
 
+type ProfileDraft = AgentProfilePayload;
+
 const sideEffectStyles: Record<Skill['side_effect'], string> = {
   read: 'bg-emerald-500/15 text-emerald-100 border border-emerald-300/20',
   write: 'bg-blue-500/15 text-blue-100 border border-blue-300/20',
   destructive: 'bg-red-500/15 text-red-100 border border-red-300/20',
 };
 
-const AGENT_CTX: AgentRequestContext = {
-  agentType: 'dashboard_agent',
+const AGENT_LABELS: Record<AgentType, string> = {
+  dashboard_agent: 'Dashboard Agent',
+  'app_agent:arxiv': 'ArXiv Agent',
+  'app_agent:vocab': 'Vocab Agent',
 };
+
+function filterSkillsForAgent(agentType: AgentType, names: string[]): string[] {
+  if (agentType === 'app_agent:arxiv') return names.filter((name) => name.startsWith('arxiv_'));
+  if (agentType === 'app_agent:vocab') return names.filter((name) => !name.startsWith('arxiv_'));
+  return names;
+}
+
+function draftFromProfile(profile: AgentProfile): ProfileDraft {
+  return {
+    name: profile.name,
+    description: profile.description,
+    agent_type: profile.agent_type,
+    app_id: profile.app_id,
+    persona_prompt: profile.persona_prompt,
+    allowed_skills: profile.allowed_skills,
+    temperature: profile.temperature,
+    max_tool_loops: profile.max_tool_loops,
+    is_default: profile.is_default,
+  };
+}
+
+function createNewDraft(skills: Skill[]): ProfileDraft {
+  return {
+    name: 'New Agent',
+    description: '',
+    agent_type: 'dashboard_agent',
+    app_id: null,
+    persona_prompt: '',
+    allowed_skills: skills.map((skill) => skill.name),
+    temperature: 0.2,
+    max_tool_loops: 4,
+    is_default: false,
+  };
+}
 
 const AgentDesk: React.FC = () => {
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: 'assistant',
-      content: '我是 Ark 的 dashboard agent。我可以查看和更新任务，也能获取 arXiv 当日候选、搜索论文、批量查看论文详情，并为敏感操作发起审批。',
-    },
-  ]);
-  const [draft, setDraft] = useState('');
-  const [loadingSkills, setLoadingSkills] = useState(true);
+  const [profiles, setProfiles] = useState<AgentProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [draftProfileId, setDraftProfileId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>({
+    name: 'Ark Agent',
+    description: '',
+    agent_type: 'dashboard_agent',
+    app_id: null,
+    persona_prompt: '',
+    allowed_skills: [],
+    temperature: 0.2,
+    max_tool_loops: 4,
+    is_default: false,
+  });
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draftMessage, setDraftMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [approval, setApproval] = useState<AgentActionResponse | null>(null);
   const [approving, setApproving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const listEndRef = useRef<HTMLDivElement | null>(null);
 
-  async function loadSkills(signal?: AbortSignal) {
-    setLoadingSkills(true);
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === selectedProfileId) || null,
+    [profiles, selectedProfileId],
+  );
+  const selectedSkillSet = useMemo(() => new Set(draft.allowed_skills), [draft.allowed_skills]);
+
+  async function loadInitialData(signal?: AbortSignal) {
+    setLoading(true);
     setError(null);
     try {
-      const items = await apiJson<Skill[]>('/api/agent/skills', {
-        signal,
-        headers: {
-          'X-Ark-Agent-Type': AGENT_CTX.agentType,
-          'X-Ark-Session-Id': sessionIdRef.current,
-        },
-      });
-      setSkills(items);
-      setSelectedSkills((prev) => {
-        if (prev.length === 0) return items.map((item) => item.name);
-        const next = prev.filter((name) => items.some((item) => item.name === name));
-        return next.length > 0 ? next : items.map((item) => item.name);
-      });
+      const [skillItems, profileItems] = await Promise.all([
+        apiJson<Skill[]>('/api/agent/skills', {
+          signal,
+          headers: {
+            'X-Ark-Agent-Type': 'dashboard_agent',
+            'X-Ark-Session-Id': sessionIdRef.current,
+          },
+        }),
+        listAgentProfiles(),
+      ]);
+      if (signal?.aborted) return;
+      setSkills(skillItems);
+      setProfiles(profileItems);
+      const current = profileItems.find((item) => item.is_default) || profileItems[0] || null;
+      setSelectedProfileId(current?.id || null);
+      if (current) {
+        setDraftProfileId(current.id);
+        setDraft(draftFromProfile(current));
+        setMessages([
+          {
+            role: 'assistant',
+            content: `我是 ${current.name}。${current.description || '我会按当前 profile 的风格与技能集来帮助你。'}`,
+          },
+        ]);
+      } else {
+        setDraft(createNewDraft(skillItems));
+        setMessages([
+          { role: 'assistant', content: '当前还没有可用的 Agent Profile，请先创建一个。' },
+        ]);
+      }
     } catch (err) {
       if (signal?.aborted) return;
-      setSkills([]);
-      setSelectedSkills([]);
-      setError(err instanceof Error ? err.message : '加载技能失败');
+      setError(err instanceof Error ? err.message : '加载 Agent 数据失败');
     } finally {
-      if (!signal?.aborted) setLoadingSkills(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadSkills(controller.signal);
-    return () => {
-      controller.abort();
-    };
+    void loadInitialData(controller.signal);
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, approval]);
 
-  const skillCountText = useMemo(() => {
-    if (loadingSkills) return '加载中...';
-    if (error) return '加载失败';
-    return `${selectedSkills.length} / ${skills.length} 个已启用功能`;
-  }, [error, loadingSkills, selectedSkills.length, skills.length]);
+  function selectExistingProfile(profile: AgentProfile) {
+    setSelectedProfileId(profile.id);
+    setDraftProfileId(profile.id);
+    setDraft(draftFromProfile(profile));
+    setIsCreatingNew(false);
+    setApproval(null);
+    setMessages([
+      {
+        role: 'assistant',
+        content: `已切换到 ${profile.name}。${profile.description || '这个 Agent 已准备好开始工作。'}`,
+      },
+    ]);
+  }
 
-  const selectedSkillSet = useMemo(() => new Set(selectedSkills), [selectedSkills]);
+  function startCreateProfile() {
+    setDraft(createNewDraft(skills));
+    setDraftProfileId(null);
+    setIsCreatingNew(true);
+    setApproval(null);
+    setMessages([{ role: 'assistant', content: '新 Agent 草稿已创建。你可以先配置风格、技能和模型参数。' }]);
+  }
 
   function toggleSkill(name: string) {
-    setSelectedSkills((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
+    setDraft((prev) => ({
+      ...prev,
+      allowed_skills: prev.allowed_skills.includes(name)
+        ? prev.allowed_skills.filter((item) => item !== name)
+        : [...prev.allowed_skills, name],
+    }));
+  }
+
+  function updateDraft<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function reloadProfiles(nextSelectedId?: string | null) {
+    const profileItems = await listAgentProfiles();
+    setProfiles(profileItems);
+    const current =
+      (nextSelectedId ? profileItems.find((item) => item.id === nextSelectedId) : null)
+      || profileItems.find((item) => item.is_default)
+      || profileItems[0]
+      || null;
+    setSelectedProfileId(current?.id || null);
+    if (current) {
+      setDraftProfileId(current.id);
+      setDraft(draftFromProfile(current));
+      setIsCreatingNew(false);
+    }
+    return current;
+  }
+
+  async function saveProfile() {
+    if (savingProfile) return;
+    setSavingProfile(true);
+    setError(null);
+    try {
+      const payload: AgentProfilePayload = {
+        ...draft,
+        app_id: draft.agent_type === 'dashboard_agent' ? null : draft.app_id,
+        max_tool_loops: draft.max_tool_loops ?? 4,
+      };
+      const saved = isCreatingNew || !draftProfileId
+        ? await createAgentProfile(payload)
+        : await updateAgentProfile(draftProfileId, payload);
+      const current = await reloadProfiles(saved.id);
+      if (current) {
+        setMessages([
+          {
+            role: 'assistant',
+            content: `${current.name} 已保存。之后的聊天会按这个 profile 的风格和技能配置运行。`,
+          },
+        ]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存 Profile 失败');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handleDeleteProfile() {
+    if (!selectedProfile || savingProfile) return;
+    if (!window.confirm(`确定删除 Agent「${selectedProfile.name}」吗？`)) return;
+    setSavingProfile(true);
+    setError(null);
+    try {
+      await deleteAgentProfile(selectedProfile.id);
+      const current = await reloadProfiles(null);
+      setMessages([
+        {
+          role: 'assistant',
+          content: current
+            ? `已删除原 Profile，当前切换到 ${current.name}。`
+            : '已删除 Profile。',
+        },
+      ]);
+      setApproval(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除 Profile 失败');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handleSetDefault() {
+    if (!selectedProfile || savingProfile) return;
+    setSavingProfile(true);
+    setError(null);
+    try {
+      const saved = await setDefaultAgentProfile(selectedProfile.id);
+      await reloadProfiles(saved.id);
+      setMessages([
+        {
+          role: 'assistant',
+          content: `${saved.name} 已设置为默认 Agent。`,
+        },
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '设置默认 Profile 失败');
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   async function handleSend() {
-    const content = draft.trim();
-    if (!content || sending) return;
-    const nextMessages = [...messages, { role: 'user' as const, content }];
-    setMessages(nextMessages);
-    setDraft('');
+    const content = draftMessage.trim();
+    if (!content || sending || !selectedProfileId) return;
+    setMessages((prev) => [...prev, { role: 'user', content }]);
+    setDraftMessage('');
     setSending(true);
     setError(null);
     try {
@@ -115,14 +305,13 @@ const AgentDesk: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Ark-Agent-Type': AGENT_CTX.agentType,
           'X-Ark-Session-Id': sessionIdRef.current,
         },
         body: JSON.stringify({
+          profile_id: selectedProfileId,
           message: content,
           history: messages,
-          scope: 'dashboard',
-          allowed_skills: selectedSkills,
+          scope: selectedProfile?.agent_type || 'dashboard_agent',
         }),
       });
       setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
@@ -137,22 +326,23 @@ const AgentDesk: React.FC = () => {
   }
 
   async function handleCommitApproval() {
-    if (!approval?.approval_id || !approval.commit_action || approving) return;
+    if (!approval?.approval_id || !approval.commit_action || approving || !selectedProfile) return;
     setApproving(true);
     setError(null);
     try {
       const result = await executeAgentAction(
         approval.commit_action,
         { approval_id: approval.approval_id },
-        { ...AGENT_CTX, sessionId: sessionIdRef.current },
+        {
+          agentType: selectedProfile.agent_type,
+          appId: selectedProfile.app_id || undefined,
+          sessionId: sessionIdRef.current,
+        },
       );
       if (result.type === 'forbidden') {
         throw new Error(result.reason || '审批票据无效');
       }
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: '确认已收到，敏感操作已经执行完成。' },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: '确认已收到，敏感操作已经执行完成。' }]);
       setApproval(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '确认失败');
@@ -174,181 +364,301 @@ const AgentDesk: React.FC = () => {
 
       <Navigation />
 
-      <div className="relative z-10 flex min-h-screen gap-6 px-5 pb-6 pt-20 md:px-8">
-        <aside className="hidden w-[340px] shrink-0 flex-col rounded-[28px] border border-white/10 bg-[#0c1726]/80 p-5 backdrop-blur-xl lg:flex">
+      <div className="relative z-10 flex min-h-screen gap-4 px-4 pb-6 pt-20 xl:px-8">
+        <aside className="hidden w-[280px] shrink-0 rounded-[28px] border border-white/10 bg-[#0c1726]/80 p-4 backdrop-blur-xl xl:block">
           <div className="flex items-start gap-3">
             <div className="rounded-2xl bg-cyan-400/15 p-3 text-cyan-200">
               <Sparkles size={22} />
             </div>
             <div>
-              <div className="text-lg font-semibold">Agent Console</div>
-              <div className="mt-1 text-sm text-white/55">Dashboard agent 视角，所有敏感操作都会转成审批请求。</div>
+              <div className="text-lg font-semibold">Agents</div>
+              <div className="mt-1 text-sm text-white/55">创建、切换并管理不同风格与能力组合的 Agent。</div>
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
-            <div className="text-xs uppercase tracking-[0.28em] text-white/35">Skills</div>
-            <div className="mt-2 text-base font-medium">{skillCountText}</div>
-            {error ? (
-              <div className="mt-3 rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-100">
-                技能请求失败：{error}
-              </div>
-            ) : null}
-            {!loadingSkills && !error && skills.length === 0 ? (
-              <div className="mt-3 rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-xs leading-5 text-white/55">
-                后端返回了空技能列表。
-              </div>
-            ) : null}
-            <button
-              onClick={() => void loadSkills()}
-              disabled={loadingSkills}
-              className="mt-3 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-xs text-white/72 transition hover:bg-white/10 disabled:opacity-60"
-            >
-              {loadingSkills ? '刷新中...' : '重新加载技能'}
-            </button>
-            {!loadingSkills && !error && skills.length > 0 ? (
-              <div className="mt-3 text-xs leading-5 text-white/45">只会把已勾选的 skills 暴露给 agent。</div>
-            ) : null}
-          </div>
+          <button
+            onClick={startCreateProfile}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15"
+          >
+            <Plus size={16} />
+            新建 Agent
+          </button>
 
-          <div className="mt-5 flex-1 space-y-3 overflow-y-auto pr-1">
-            {skills.map((skill) => (
-              <label key={skill.name} className="block cursor-pointer rounded-2xl border border-white/8 bg-black/20 px-4 py-4">
+          <div className="mt-5 space-y-3">
+            {profiles.map((profile) => (
+              <button
+                key={profile.id}
+                onClick={() => selectExistingProfile(profile)}
+                className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                  selectedProfileId === profile.id
+                    ? 'border-cyan-300/30 bg-cyan-400/12'
+                    : 'border-white/8 bg-black/20 hover:bg-white/8'
+                }`}
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedSkillSet.has(skill.name)}
-                      onChange={() => toggleSkill(skill.name)}
-                      className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
-                    />
-                    <div className="font-medium text-white">{skill.name}</div>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
-                    {skill.side_effect}
-                  </span>
+                  <div className="font-medium text-white">{profile.name}</div>
+                  {profile.is_default ? (
+                    <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">默认</span>
+                  ) : null}
                 </div>
-                <div className="mt-2 text-sm leading-6 text-white/62">{skill.description}</div>
-                <div className="mt-3 flex items-center gap-2 text-xs text-white/38">
-                  <ChevronRight size={14} />
-                  <span>{skill.intent_scope}</span>
-                </div>
-              </label>
+                <div className="mt-1 text-xs text-white/45">{AGENT_LABELS[profile.agent_type]}</div>
+                <div className="mt-2 line-clamp-2 text-sm leading-6 text-white/58">{profile.description || '未填写简介'}</div>
+              </button>
             ))}
           </div>
         </aside>
 
-        <main className="flex min-h-[calc(100vh-6rem)] flex-1 flex-col rounded-[30px] border border-white/10 bg-[#09111d]/78 backdrop-blur-2xl">
-          <div className="flex items-center justify-between border-b border-white/8 px-6 py-5">
+        <section className="flex w-full min-h-[calc(100vh-6rem)] gap-4">
+          <div className="w-full rounded-[30px] border border-white/10 bg-[#09111d]/78 p-5 backdrop-blur-2xl xl:w-[430px]">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-white/8 p-3 text-white/90">
-                <Bot size={22} />
+                <Bot size={20} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold">Ark Agent</h1>
-                <p className="text-sm text-white/50">任务调度、arXiv 检索与敏感操作审批助手</p>
+                <div className="text-xl font-semibold">Profile Config</div>
+                <div className="text-sm text-white/50">保存后，聊天会立刻切换到新的 Agent 配置。</div>
               </div>
             </div>
-            <div className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
-              session {sessionIdRef.current.slice(0, 8)}
-            </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-              {messages.map((message, index) => (
-                <div
-                  key={`${message.role}-${index}`}
-                  className={`max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-7 shadow-lg ${
-                    message.role === 'user'
-                      ? 'ml-auto bg-cyan-500/20 text-cyan-50 border border-cyan-300/20'
-                      : 'bg-white/8 text-white/85 border border-white/8'
-                  }`}
-                >
-                  {message.content}
-                </div>
-              ))}
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div>
+            ) : null}
 
-              {approval ? (
-                <div className="rounded-3xl border border-amber-300/15 bg-amber-500/10 p-4 shadow-lg">
-                  <div className="flex items-center gap-2 text-amber-100">
-                    <ShieldAlert size={18} />
-                    <span className="font-medium">{approval.title || '需要前端确认'}</span>
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-amber-50/80">
-                    {approval.message || '敏感操作已进入审批流程。'}
-                  </div>
-                  {approval.impact?.count ? (
-                    <div className="mt-3 text-xs text-amber-50/65">预计影响对象数：{approval.impact.count}</div>
-                  ) : null}
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={handleCommitApproval}
-                      disabled={approving}
-                      className="rounded-full bg-amber-300 px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-amber-200 disabled:opacity-60"
-                    >
-                      {approving ? '确认中...' : '我已确认，执行操作'}
-                    </button>
-                    <button
-                      onClick={() => setApproval(null)}
-                      disabled={approving}
-                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white/75 transition hover:bg-white/10"
-                    >
-                      暂不执行
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {sending ? (
-                <div className="flex max-w-[85%] items-center gap-3 rounded-3xl border border-white/8 bg-white/8 px-4 py-3 text-sm text-white/70">
-                  <LoaderCircle size={18} className="animate-spin" />
-                  Ark Agent 正在思考并决定是否调用工具
-                </div>
-              ) : null}
-              <div ref={listEndRef} />
-            </div>
-          </div>
-
-          <div className="border-t border-white/8 px-5 py-5 md:px-6">
-            <div className="mx-auto max-w-4xl">
-              {error ? (
-                <div className="mb-3 flex items-center gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                  <ShieldAlert size={16} />
-                  <span>{error}</span>
-                </div>
-              ) : null}
-
-              <div className="rounded-[26px] border border-white/10 bg-black/25 p-3 shadow-inner">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void handleSend();
-                    }
-                  }}
-                  placeholder="比如：帮我看一下今天还有哪些未完成任务；把优先级最高的任务标成 done；删除某个任务"
-                  className="min-h-[112px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-7 text-white outline-none placeholder:text-white/28"
+            <div className="mt-5 space-y-4">
+              <div>
+                <div className="mb-2 text-sm text-white/60">名称</div>
+                <input
+                  value={draft.name}
+                  onChange={(e) => updateDraft('name', e.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                 />
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-white/35">
-                    <CheckCircle2 size={14} />
-                    <span>敏感操作会自动转换为审批请求</span>
-                  </div>
-                  <button
-                    onClick={() => void handleSend()}
-                    disabled={sending || !draft.trim()}
-                    className="rounded-full bg-cyan-300 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
-                  >
-                    {sending ? '发送中...' : '发送给 Agent'}
-                  </button>
+              </div>
+              <div>
+                <div className="mb-2 text-sm text-white/60">简介</div>
+                <textarea
+                  value={draft.description}
+                  onChange={(e) => updateDraft('description', e.target.value)}
+                  className="min-h-[76px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                />
+              </div>
+              <div>
+                <div className="mb-2 text-sm text-white/60">Agent 类型</div>
+                <select
+                  value={draft.agent_type}
+                  onChange={(e) => {
+                    const nextType = e.target.value as AgentType;
+                    setDraft((prev) => ({
+                      ...prev,
+                      agent_type: nextType,
+                      app_id: nextType === 'dashboard_agent' ? null : nextType === 'app_agent:arxiv' ? 'arxiv' : 'vocab',
+                      allowed_skills: filterSkillsForAgent(nextType, prev.allowed_skills),
+                    }));
+                  }}
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                >
+                  {Object.entries(AGENT_LABELS).map(([key, label]) => (
+                    <option key={key} value={key} className="bg-slate-900">
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="mb-2 text-sm text-white/60">Persona Prompt</div>
+                <textarea
+                  value={draft.persona_prompt}
+                  onChange={(e) => updateDraft('persona_prompt', e.target.value)}
+                  className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                  placeholder="定义这个 Agent 的说话风格、行为偏好和身份设定。"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="mb-2 text-sm text-white/60">Temperature</div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1.2"
+                    step="0.1"
+                    value={draft.temperature}
+                    onChange={(e) => updateDraft('temperature', Number(e.target.value))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                  />
                 </div>
+                <div>
+                  <div className="mb-2 text-sm text-white/60">Tool Loops</div>
+                  <input
+                    type="number"
+                    min="1"
+                    max="8"
+                    value={draft.max_tool_loops ?? 4}
+                    onChange={(e) => updateDraft('max_tool_loops', Number(e.target.value))}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-sm text-white/60">启用 Skills</div>
+                  <div className="text-xs text-white/40">{draft.allowed_skills.length} / {skills.length}</div>
+                </div>
+                <div className="max-h-[260px] space-y-3 overflow-y-auto pr-1">
+                  {skills.map((skill) => (
+                    <label key={skill.name} className="block rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedSkillSet.has(skill.name)}
+                            onChange={() => toggleSkill(skill.name)}
+                            className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
+                          />
+                          <div className="font-medium text-white">{skill.name}</div>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
+                          {skill.side_effect}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-white/58">{skill.description}</div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button
+                  onClick={() => void saveProfile()}
+                  disabled={savingProfile || loading}
+                  className="flex items-center gap-2 rounded-full bg-cyan-300 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+                >
+                  <Save size={15} />
+                  {savingProfile ? '保存中...' : '保存 Profile'}
+                </button>
+                {selectedProfile ? (
+                  <button
+                    onClick={() => void handleSetDefault()}
+                    disabled={savingProfile || selectedProfile.is_default}
+                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:opacity-60"
+                  >
+                    设为默认
+                  </button>
+                ) : null}
+                {selectedProfile ? (
+                  <button
+                    onClick={() => void handleDeleteProfile()}
+                    disabled={savingProfile}
+                    className="flex items-center gap-2 rounded-full border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm text-red-100 transition hover:bg-red-500/20 disabled:opacity-60"
+                  >
+                    <Trash2 size={15} />
+                    删除
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
-        </main>
+
+          <main className="flex min-h-[calc(100vh-6rem)] flex-1 flex-col rounded-[30px] border border-white/10 bg-[#09111d]/78 backdrop-blur-2xl">
+            <div className="flex items-center justify-between border-b border-white/8 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-white/8 p-3 text-white/90">
+                  <Bot size={22} />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold">{selectedProfile?.name || 'Ark Agent'}</h1>
+                  <p className="text-sm text-white/50">{selectedProfile?.description || '选择或创建一个 Agent Profile 后开始对话。'}</p>
+                </div>
+              </div>
+              <div className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
+                {selectedProfile ? AGENT_LABELS[selectedProfile.agent_type] : 'No Profile'}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+                {messages.map((message, index) => (
+                  <div
+                    key={`${message.role}-${index}`}
+                    className={`max-w-[85%] rounded-3xl px-4 py-3 text-sm leading-7 shadow-lg ${
+                      message.role === 'user'
+                        ? 'ml-auto border border-cyan-300/20 bg-cyan-500/20 text-cyan-50'
+                        : 'border border-white/8 bg-white/8 text-white/85'
+                    }`}
+                  >
+                    {message.content}
+                  </div>
+                ))}
+
+                {approval ? (
+                  <div className="rounded-3xl border border-amber-300/15 bg-amber-500/10 p-4 shadow-lg">
+                    <div className="flex items-center gap-2 text-amber-100">
+                      <ShieldAlert size={18} />
+                      <span className="font-medium">{approval.title || '需要前端确认'}</span>
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-amber-50/80">{approval.message || '敏感操作已进入审批流程。'}</div>
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        onClick={() => void handleCommitApproval()}
+                        disabled={approving}
+                        className="rounded-full bg-amber-300 px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-amber-200 disabled:opacity-60"
+                      >
+                        {approving ? '确认中...' : '我已确认，执行操作'}
+                      </button>
+                      <button
+                        onClick={() => setApproval(null)}
+                        disabled={approving}
+                        className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white/75 transition hover:bg-white/10"
+                      >
+                        暂不执行
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {sending ? (
+                  <div className="flex max-w-[85%] items-center gap-3 rounded-3xl border border-white/8 bg-white/8 px-4 py-3 text-sm text-white/70">
+                    <LoaderCircle size={18} className="animate-spin" />
+                    Agent 正在按当前 profile 思考与调用工具
+                  </div>
+                ) : null}
+                <div ref={listEndRef} />
+              </div>
+            </div>
+
+            <div className="border-t border-white/8 px-5 py-5 md:px-6">
+              <div className="mx-auto max-w-4xl">
+                <div className="mb-3 flex items-center gap-2 text-xs text-white/40">
+                  <CheckCircle2 size={14} />
+                  <span>聊天会绑定当前 Profile；切换 Profile 会重置会话上下文。</span>
+                </div>
+                <div className="rounded-[26px] border border-white/10 bg-black/25 p-3 shadow-inner">
+                  <textarea
+                    value={draftMessage}
+                    onChange={(e) => setDraftMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                    placeholder={selectedProfile ? `向 ${selectedProfile.name} 发送消息...` : '请先选择或创建一个 Agent Profile'}
+                    disabled={!selectedProfileId}
+                    className="min-h-[112px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-7 text-white outline-none placeholder:text-white/28 disabled:opacity-50"
+                  />
+                  <div className="mt-3 flex items-center justify-end">
+                    <button
+                      onClick={() => void handleSend()}
+                      disabled={sending || !draftMessage.trim() || !selectedProfileId}
+                      className="rounded-full bg-cyan-300 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+                    >
+                      {sending ? '发送中...' : '发送给 Agent'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </section>
       </div>
     </div>
   );
