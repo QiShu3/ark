@@ -14,7 +14,7 @@ import {
   setDefaultAgentProfile,
   updateAgentProfile,
 } from '../lib/agent';
-import { apiJson } from '../lib/api';
+import { apiJson, apiSSE } from '../lib/api';
 
 type Skill = {
   name: string;
@@ -29,10 +29,13 @@ type ChatMessage = {
   content: string;
 };
 
-type ChatResponse = {
-  reply: string;
-  approval: AgentActionResponse | null;
-};
+type ChatStreamEvent =
+  | { type: 'profile'; profile?: { id?: string; name?: string; agent_type?: string } }
+  | { type: 'message_delta'; delta?: string }
+  | { type: 'tool_call'; name?: string | null }
+  | { type: 'approval_required'; approval?: AgentActionResponse | null }
+  | { type: 'done'; reply?: string; approval?: AgentActionResponse | null }
+  | { type: 'error'; message?: string };
 
 type ProfileDraft = AgentProfilePayload;
 
@@ -106,6 +109,7 @@ const AgentDesk: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [approval, setApproval] = useState<AgentActionResponse | null>(null);
   const [approving, setApproving] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const listEndRef = useRef<HTMLDivElement | null>(null);
@@ -169,6 +173,7 @@ const AgentDesk: React.FC = () => {
   }, [messages, approval]);
 
   function selectExistingProfile(profile: AgentProfile) {
+    sessionIdRef.current = crypto.randomUUID();
     setSelectedProfileId(profile.id);
     setDraftProfileId(profile.id);
     setDraft(draftFromProfile(profile));
@@ -183,6 +188,7 @@ const AgentDesk: React.FC = () => {
   }
 
   function startCreateProfile() {
+    sessionIdRef.current = crypto.randomUUID();
     setDraft(createNewDraft(skills));
     setDraftProfileId(null);
     setIsCreatingNew(true);
@@ -296,31 +302,84 @@ const AgentDesk: React.FC = () => {
   async function handleSend() {
     const content = draftMessage.trim();
     if (!content || sending || !selectedProfileId) return;
-    setMessages((prev) => [...prev, { role: 'user', content }]);
+    const assistantPlaceholderIndex = messages.length + 1;
+    setMessages((prev) => [...prev, { role: 'user', content }, { role: 'assistant', content: '' }]);
     setDraftMessage('');
     setSending(true);
     setError(null);
+    setApproval(null);
+    setStreamStatus('Agent 正在思考...');
     try {
-      const res = await apiJson<ChatResponse>('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Ark-Session-Id': sessionIdRef.current,
-        },
-        body: JSON.stringify({
+      await apiSSE(
+        '/api/chat/stream',
+        {
           profile_id: selectedProfileId,
           message: content,
           history: messages,
           scope: selectedProfile?.agent_type || 'dashboard_agent',
-        }),
-      });
-      setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
-      setApproval(res.approval);
+        },
+        (event) => {
+          const item = event as ChatStreamEvent;
+          if (item.type === 'message_delta' && typeof item.delta === 'string') {
+            setMessages((prev) =>
+              prev.map((message, index) =>
+                index === assistantPlaceholderIndex && message.role === 'assistant'
+                  ? { ...message, content: `${message.content}${item.delta}` }
+                  : message,
+              ),
+            );
+            setStreamStatus('Agent 正在回复...');
+            return;
+          }
+          if (item.type === 'tool_call') {
+            setStreamStatus(item.name ? `正在调用 ${item.name}` : '正在调用工具...');
+            return;
+          }
+          if (item.type === 'approval_required') {
+            setApproval(item.approval || null);
+            setStreamStatus('敏感操作需要你确认');
+            return;
+          }
+          if (item.type === 'done') {
+            if (item.reply) {
+              setMessages((prev) =>
+                prev.map((message, index) =>
+                  index === assistantPlaceholderIndex && message.role === 'assistant' && !message.content.trim()
+                    ? { ...message, content: item.reply || '' }
+                    : message,
+                ),
+              );
+            }
+            setApproval(item.approval || null);
+            setStreamStatus(null);
+            return;
+          }
+          if (item.type === 'error') {
+            const msg = item.message || '发送失败';
+            setError(msg);
+            setMessages((prev) =>
+              prev.map((message, index) =>
+                index === assistantPlaceholderIndex && message.role === 'assistant' && !message.content.trim()
+                  ? { ...message, content: `我这次没能处理成功：${msg}` }
+                  : message,
+              ),
+            );
+            setStreamStatus(null);
+          }
+        },
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : '发送失败';
       setError(msg);
-      setMessages((prev) => [...prev, { role: 'assistant', content: `我这次没能处理成功：${msg}` }]);
+      setMessages((prev) =>
+        prev.map((message, index) =>
+          index === assistantPlaceholderIndex && message.role === 'assistant'
+            ? { ...message, content: message.content || `我这次没能处理成功：${msg}` }
+            : message,
+        ),
+      );
     } finally {
+      setStreamStatus(null);
       setSending(false);
     }
   }
@@ -618,7 +677,7 @@ const AgentDesk: React.FC = () => {
                 {sending ? (
                   <div className="flex max-w-[85%] items-center gap-3 rounded-3xl border border-white/8 bg-white/8 px-4 py-3 text-sm text-white/70">
                     <LoaderCircle size={18} className="animate-spin" />
-                    Agent 正在按当前 profile 思考与调用工具
+                    {streamStatus || 'Agent 正在按当前 profile 思考与调用工具'}
                   </div>
                 ) : null}
                 <div ref={listEndRef} />

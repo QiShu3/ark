@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -208,3 +209,89 @@ def test_chat_uses_selected_profile(monkeypatch) -> None:
     assert captured["tools"] == ["delete_task", "approval_commit"]
     assert "Research Agent" in captured["system"]
     assert captured["temperature"] == 0.7
+
+
+def test_chat_stream_emits_text_events(monkeypatch) -> None:
+    async def _fake_stream(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ):
+        _ = messages
+        _ = tools
+        assert temperature == 0.2
+        for item in [{"content": "你好"}, {"content": "，我是流式助手。"}]:
+            yield item
+
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion_stream", _fake_stream)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat/stream", json={"message": "你好", "history": []})
+    assert resp.status_code == 200
+    events = [
+        json.loads(line[5:].strip())
+        for line in resp.text.splitlines()
+        if line.startswith("data:")
+    ]
+    assert events[0]["type"] == "profile"
+    assert events[1] == {"type": "message_delta", "delta": "你好"}
+    assert events[2] == {"type": "message_delta", "delta": "，我是流式助手。"}
+    assert events[-1]["type"] == "done"
+    assert events[-1]["reply"] == "你好，我是流式助手。"
+
+
+def test_chat_stream_emits_approval_events(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    async def _fake_stream(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ):
+        _ = messages
+        _ = tools
+        assert temperature == 0.2
+        calls["count"] += 1
+        if calls["count"] == 1:
+            yield {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "delete_task", "arguments": '{"task_id":"task_1"}'},
+                    }
+                ]
+            }
+            return
+        yield {"content": "请先在前端确认删除。"}
+
+    async def _fake_execute_action(pool: Any, *, action_name: str, ctx: Any, payload: dict[str, Any]) -> Any:
+        _ = pool
+        _ = ctx
+        assert action_name == "task.delete.prepare"
+        assert payload == {"task_id": "task_1"}
+        return AgentActionResponse(
+            type="approval_required",
+            action_id="task.delete.prepare",
+            approval_id="appr_stream_1",
+            title="删除任务",
+            message="需要确认",
+            commit_action="task.delete.commit",
+        )
+
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion_stream", _fake_stream)
+    monkeypatch.setattr("routes.agents.chat.execute_action_with_context", _fake_execute_action)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat/stream", json={"message": "删掉任务", "history": []})
+    assert resp.status_code == 200
+    events = [
+        json.loads(line[5:].strip())
+        for line in resp.text.splitlines()
+        if line.startswith("data:")
+    ]
+    assert any(item == {"type": "tool_call", "name": "delete_task"} for item in events)
+    approval_events = [item for item in events if item.get("type") == "approval_required"]
+    assert approval_events
+    assert approval_events[0]["approval"]["approval_id"] == "appr_stream_1"
+    assert events[-1]["type"] == "done"
+    assert events[-1]["approval"]["approval_id"] == "appr_stream_1"

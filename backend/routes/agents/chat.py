@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 import asyncpg
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from routes.agents.executor import execute_action_with_context, pool_from_request
 from routes.agents.models import AgentActionResponse, AgentProfileOut, ChatRequest, ChatResponse
@@ -163,6 +165,105 @@ def parse_tool_arguments(raw: Any) -> dict[str, Any]:
     return {}
 
 
+def _stream_delta_text(delta: dict[str, Any]) -> str:
+    content = delta.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            item["text"]
+            for item in content
+            if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str)
+        ]
+        return "".join(parts)
+    return ""
+
+
+def _merge_stream_tool_calls(existing: list[dict[str, Any]], raw_calls: Any) -> None:
+    if not isinstance(raw_calls, list):
+        return
+    for raw_item in raw_calls:
+        if not isinstance(raw_item, dict):
+            continue
+        index = raw_item.get("index")
+        if not isinstance(index, int) or index < 0:
+            index = len(existing)
+        while len(existing) <= index:
+            existing.append({"id": None, "type": "function", "function": {"name": "", "arguments": ""}})
+        target = existing[index]
+        item_id = raw_item.get("id")
+        if isinstance(item_id, str) and item_id:
+            target["id"] = item_id
+        item_type = raw_item.get("type")
+        if isinstance(item_type, str) and item_type:
+            target["type"] = item_type
+        raw_function = raw_item.get("function")
+        if not isinstance(raw_function, dict):
+            continue
+        target_function = target.setdefault("function", {})
+        if not isinstance(target_function, dict):
+            target_function = {}
+            target["function"] = target_function
+        name = raw_function.get("name")
+        if isinstance(name, str) and name:
+            target_function["name"] = f"{target_function.get('name', '')}{name}"
+        arguments = raw_function.get("arguments")
+        if isinstance(arguments, str) and arguments:
+            target_function["arguments"] = f"{target_function.get('arguments', '')}{arguments}"
+
+
+async def _resolve_profile(pool: asyncpg.Pool, *, body: ChatRequest, user_id: int) -> AgentProfileOut:
+    async with pool.acquire() as conn:
+        if body.profile_id:
+            return await get_profile_by_id(conn, user_id=user_id, profile_id=body.profile_id)
+        return await get_default_profile(conn, user_id=user_id)
+
+
+async def deepseek_chat_completion_stream(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    *,
+    temperature: float = 0.2,
+) -> AsyncIterator[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=45) as client:
+        async with client.stream(
+            "POST",
+            f"{chat_base_url()}/chat/completions",
+            headers={"Authorization": f"Bearer {chat_api_key()}", "Content-Type": "application/json"},
+            json={
+                "model": chat_model(),
+                "messages": messages,
+                "tools": tools,
+                "tool_choice": "auto",
+                "temperature": temperature,
+                "stream": True,
+            },
+        ) as resp:
+            if resp.status_code >= 400:
+                raise HTTPException(status_code=502, detail=f"DeepSeek 调用失败：{(await resp.aread()).decode('utf-8', 'ignore')[:500]}")
+            async for line in resp.aiter_lines():
+                trimmed = line.strip()
+                if not trimmed or not trimmed.startswith("data:"):
+                    continue
+                payload = trimmed[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    data = json.loads(payload)
+                except Exception:
+                    continue
+                choices = data.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                if isinstance(delta, dict):
+                    yield delta
+
+
+def _sse_event(payload: dict[str, Any]) -> bytes:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
+
+
 async def execute_tool_call(
     pool: asyncpg.Pool, *, ctx: Any, call: dict[str, Any], allowed_skills: set[str]
 ) -> tuple[dict[str, Any], AgentActionResponse | None]:
@@ -190,20 +291,15 @@ async def execute_tool_call(
     return tool_message, result if result.type == "approval_required" else None
 
 
-@router.post("", response_model=ChatResponse)
-async def chat_with_agent(
-    request: Request,
+async def _run_chat_turn(
+    *,
+    pool: asyncpg.Pool,
     body: ChatRequest,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> ChatResponse:
-    pool = pool_from_request(request)
-    session_id = (request.headers.get("X-Ark-Session-Id") or "").strip() or None
-    async with pool.acquire() as conn:
-        if body.profile_id:
-            profile = await get_profile_by_id(conn, user_id=int(user.id), profile_id=body.profile_id)
-        else:
-            profile = await get_default_profile(conn, user_id=int(user.id))
-    ctx = build_profile_context(profile, user_id=int(user.id), session_id=session_id)
+    user_id: int,
+    session_id: str | None,
+) -> tuple[str, AgentActionResponse | None]:
+    profile = await _resolve_profile(pool, body=body, user_id=user_id)
+    ctx = build_profile_context(profile, user_id=user_id, session_id=session_id)
     allowed_skills = _allowed_skill_names(body, profile)
     tools = tool_definitions(allowed_skills)
     messages = messages_for_model(body, profile)
@@ -216,10 +312,103 @@ async def chat_with_agent(
             assistant_entry["tool_calls"] = tool_calls
         messages.append(assistant_entry)
         if not tool_calls:
-            return ChatResponse(reply=assistant_entry["content"] or "我已经处理好了。", approval=latest_approval)
+            return assistant_entry["content"] or "我已经处理好了。", latest_approval
         for call in tool_calls:
             tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
             if approval is not None:
                 latest_approval = approval
             messages.append(tool_message)
     raise HTTPException(status_code=502, detail="工具调用轮数超过限制")
+
+
+async def _stream_chat_turn(
+    *,
+    pool: asyncpg.Pool,
+    body: ChatRequest,
+    user_id: int,
+    session_id: str | None,
+) -> AsyncIterator[bytes]:
+    try:
+        profile = await _resolve_profile(pool, body=body, user_id=user_id)
+        ctx = build_profile_context(profile, user_id=user_id, session_id=session_id)
+        allowed_skills = _allowed_skill_names(body, profile)
+        tools = tool_definitions(allowed_skills)
+        messages = messages_for_model(body, profile)
+        latest_approval: AgentActionResponse | None = None
+        yield _sse_event(
+            {
+                "type": "profile",
+                "profile": {
+                    "id": profile.id,
+                    "name": profile.name,
+                    "agent_type": profile.agent_type,
+                },
+            }
+        )
+        for _ in range(max_tool_loops(profile.max_tool_loops)):
+            assistant_text = ""
+            assistant_tool_calls: list[dict[str, Any]] = []
+            async for delta in deepseek_chat_completion_stream(messages, tools, temperature=profile.temperature):
+                text_delta = _stream_delta_text(delta)
+                if text_delta:
+                    assistant_text += text_delta
+                    yield _sse_event({"type": "message_delta", "delta": text_delta})
+                _merge_stream_tool_calls(assistant_tool_calls, delta.get("tool_calls"))
+            assistant_entry: dict[str, Any] = {"role": "assistant", "content": assistant_text.strip()}
+            if assistant_tool_calls:
+                assistant_entry["tool_calls"] = assistant_tool_calls
+            messages.append(assistant_entry)
+            if not assistant_tool_calls:
+                yield _sse_event(
+                    {
+                        "type": "done",
+                        "reply": assistant_entry["content"] or "我已经处理好了。",
+                        "approval": latest_approval.model_dump(mode="json") if latest_approval else None,
+                    }
+                )
+                return
+            for call in assistant_tool_calls:
+                function = call.get("function") if isinstance(call, dict) else None
+                yield _sse_event(
+                    {
+                        "type": "tool_call",
+                        "name": function.get("name") if isinstance(function, dict) else None,
+                    }
+                )
+                tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
+                if approval is not None:
+                    latest_approval = approval
+                    yield _sse_event({"type": "approval_required", "approval": approval.model_dump(mode="json")})
+                messages.append(tool_message)
+        raise HTTPException(status_code=502, detail="工具调用轮数超过限制")
+    except HTTPException as exc:
+        yield _sse_event({"type": "error", "message": exc.detail if isinstance(exc.detail, str) else "请求失败"})
+    except Exception as exc:  # pragma: no cover
+        yield _sse_event({"type": "error", "message": str(exc) or "请求失败"})
+
+
+@router.post("", response_model=ChatResponse)
+async def chat_with_agent(
+    request: Request,
+    body: ChatRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> ChatResponse:
+    pool = pool_from_request(request)
+    session_id = (request.headers.get("X-Ark-Session-Id") or "").strip() or None
+    reply, approval = await _run_chat_turn(pool=pool, body=body, user_id=int(user.id), session_id=session_id)
+    return ChatResponse(reply=reply, approval=approval)
+
+
+@router.post("/stream")
+async def chat_with_agent_stream(
+    request: Request,
+    body: ChatRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> StreamingResponse:
+    pool = pool_from_request(request)
+    session_id = (request.headers.get("X-Ark-Session-Id") or "").strip() or None
+    return StreamingResponse(
+        _stream_chat_turn(pool=pool, body=body, user_id=int(user.id), session_id=session_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
