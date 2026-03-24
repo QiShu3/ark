@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from routes.agent_routes import router
+from routes.agents.routes import router
 from routes.auth_routes import get_current_user
 
 
@@ -138,7 +138,7 @@ def _build_app() -> FastAPI:
 
 def test_list_agent_skills_smoke(monkeypatch) -> None:
     conn = _FakeAgentConn()
-    monkeypatch.setattr("routes.agent_routes._pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
     client = TestClient(_build_app())
     resp = client.get("/api/agent/skills")
     assert resp.status_code == 200
@@ -149,7 +149,7 @@ def test_list_agent_skills_smoke(monkeypatch) -> None:
 
 def test_task_delete_prepare_forbidden_for_app_agent(monkeypatch) -> None:
     conn = _FakeAgentConn()
-    monkeypatch.setattr("routes.agent_routes._pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.delete.prepare",
@@ -163,7 +163,7 @@ def test_task_delete_prepare_forbidden_for_app_agent(monkeypatch) -> None:
 
 def test_task_list_summary_requires_capability(monkeypatch) -> None:
     conn = _FakeAgentConn()
-    monkeypatch.setattr("routes.agent_routes._pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.list",
@@ -177,7 +177,7 @@ def test_task_list_summary_requires_capability(monkeypatch) -> None:
 
 def test_task_list_summary_with_capability(monkeypatch) -> None:
     conn = _FakeAgentConn()
-    monkeypatch.setattr("routes.agent_routes._pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
 
     async def _fake_list_tasks(conn: Any, *, user_id: int, payload: dict[str, Any], summary_only: bool) -> dict[str, Any]:
         assert user_id == 7
@@ -187,7 +187,7 @@ def test_task_list_summary_with_capability(monkeypatch) -> None:
             "view": "summary",
         }
 
-    monkeypatch.setattr("routes.agent_routes._list_tasks_action", _fake_list_tasks)
+    monkeypatch.setattr("routes.agents.executor.list_tasks_action", _fake_list_tasks)
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.list",
@@ -206,7 +206,7 @@ def test_task_list_summary_with_capability(monkeypatch) -> None:
 
 def test_task_delete_prepare_and_commit(monkeypatch) -> None:
     conn = _FakeAgentConn()
-    monkeypatch.setattr("routes.agent_routes._pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
     client = TestClient(_build_app())
 
     prepare = client.post(
@@ -254,7 +254,7 @@ def test_task_delete_commit_rejects_expired_approval(monkeypatch) -> None:
         "status": "pending",
         "expires_at": datetime.now(UTC) - timedelta(minutes=1),
     }
-    monkeypatch.setattr("routes.agent_routes._pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.delete.commit",

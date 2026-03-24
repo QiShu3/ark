@@ -5,13 +5,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes.agent_routes import init_agent
-from routes.agent_routes import router as agent_router
+from routes.agents import chat_router, init_agent
+from routes.agents import router as agent_router
 from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
-from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
 from routes.todo_routes import init_todo

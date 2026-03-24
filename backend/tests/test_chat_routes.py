@@ -6,9 +6,9 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from routes.agent_routes import AgentActionResponse
+from routes.agents.chat import router
+from routes.agents.models import AgentActionResponse
 from routes.auth_routes import get_current_user
-from routes.chat_routes import router
 
 
 @dataclass
@@ -34,8 +34,8 @@ def test_chat_returns_plain_reply(monkeypatch) -> None:
         assert messages[-1]["content"] == "你好"
         return {"role": "assistant", "content": "你好，我在。"}
 
-    monkeypatch.setattr("routes.chat_routes._deepseek_chat_completion", _fake_completion)
-    monkeypatch.setattr("routes.chat_routes._pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"message": "你好", "history": []})
     assert resp.status_code == 200
@@ -77,9 +77,9 @@ def test_chat_surfaces_approval(monkeypatch) -> None:
             commit_action="task.delete.commit",
         )
 
-    monkeypatch.setattr("routes.chat_routes._deepseek_chat_completion", _fake_completion)
-    monkeypatch.setattr("routes.chat_routes.execute_action_with_context", _fake_execute_action)
-    monkeypatch.setattr("routes.chat_routes._pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.agents.chat.execute_action_with_context", _fake_execute_action)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"message": "删掉任务", "history": []})
     assert resp.status_code == 200
