@@ -15,6 +15,7 @@ router = APIRouter(prefix="/todo", tags=["todo"])
 
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
+TaskType = Literal["focus", "checkin"]
 
 
 class TaskCreateRequest(BaseModel):
@@ -28,6 +29,8 @@ class TaskCreateRequest(BaseModel):
     cycle_period: TaskCyclePeriod = "daily"
     cycle_every_days: int | None = Field(default=None, ge=1)
     event: str = ""
+    event_ids: list[UUID] = Field(default_factory=list)
+    task_type: TaskType = "focus"
     tags: list[str] = Field(default_factory=list)
     start_date: datetime | None = None
     due_date: datetime | None = None
@@ -44,6 +47,8 @@ class TaskUpdateRequest(BaseModel):
     cycle_period: TaskCyclePeriod | None = None
     cycle_every_days: int | None = Field(default=None, ge=1)
     event: str | None = None
+    event_ids: list[UUID] | None = None
+    task_type: TaskType | None = None
     tags: list[str] | None = None
     start_date: datetime | None = None
     due_date: datetime | None = None
@@ -62,6 +67,8 @@ class TaskOut(BaseModel):
     cycle_period: TaskCyclePeriod
     cycle_every_days: int | None
     event: str
+    event_ids: list[UUID]
+    task_type: TaskType
     tags: list[str]
     actual_duration: int
     start_date: datetime | None
@@ -211,6 +218,8 @@ async def init_todo(app: Any) -> None:
               cycle_period VARCHAR(20) NOT NULL DEFAULT 'daily',
               cycle_every_days INTEGER NULL,
               event TEXT NOT NULL DEFAULT '',
+              event_ids UUID[] NOT NULL DEFAULT '{}',
+              task_type VARCHAR(20) NOT NULL DEFAULT 'focus',
               tags TEXT[] NOT NULL DEFAULT '{}',
               actual_duration INTEGER NOT NULL DEFAULT 0,
               start_date TIMESTAMPTZ NULL,
@@ -219,6 +228,7 @@ async def init_todo(app: Any) -> None:
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_tasks_status CHECK (status IN ('todo', 'done')),
+              CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin')),
               CONSTRAINT chk_tasks_priority CHECK (priority BETWEEN 0 AND 3),
               CONSTRAINT chk_tasks_target_duration CHECK (target_duration >= 0),
               CONSTRAINT chk_tasks_current_cycle_count CHECK (current_cycle_count >= 0),
@@ -241,6 +251,10 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cycle_every_days INTEGER NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS event TEXT NOT NULL DEFAULT '';")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS event_ids UUID[] NOT NULL DEFAULT '{}';")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
+        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin'));")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';")
         await conn.execute("ALTER TABLE tasks DROP COLUMN IF EXISTS category;")
         await conn.execute("UPDATE tasks SET status = 'todo' WHERE status = 'doing';")
@@ -417,6 +431,8 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         cycle_period=row["cycle_period"],
         cycle_every_days=row["cycle_every_days"],
         event=str(row["event"] or ""),
+        event_ids=list(row["event_ids"] or []),
+        task_type=str(row["task_type"] or "focus"),
         tags=[str(x) for x in (row["tags"] or [])],
         actual_duration=int(row["actual_duration"]),
         start_date=row["start_date"],
@@ -737,12 +753,12 @@ async def create_task(
             """
             INSERT INTO tasks(
                 user_id, title, content, status, priority, target_duration,
-                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, tags,
+                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
                 start_date, due_date
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id, user_id, title, content, status, priority, target_duration,
-                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, tags,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             int(user.id),
@@ -756,6 +772,8 @@ async def create_task(
             body.cycle_period,
             body.cycle_every_days,
             body.event,
+            body.event_ids,
+            body.task_type,
             body.tags,
             body.start_date,
             body.due_date,
@@ -798,7 +816,7 @@ async def list_tasks(
     where_sql = " AND ".join(clauses)
     sql = f"""
         SELECT id, user_id, title, content, status, priority, target_duration,
-               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, tags,
+               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
                actual_duration, start_date, due_date, is_deleted, created_at, updated_at
         FROM tasks
         WHERE {where_sql}
@@ -824,7 +842,7 @@ async def get_task(
         row = await conn.fetchrow(
             """
             SELECT id, user_id, title, content, status, priority, target_duration,
-                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, tags,
+                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
                    actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             FROM tasks
             WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
@@ -861,6 +879,8 @@ async def update_task(
         "cycle_period": "cycle_period",
         "cycle_every_days": "cycle_every_days",
         "event": "event",
+        "event_ids": "event_ids",
+        "task_type": "task_type",
         "tags": "tags",
         "start_date": "start_date",
         "due_date": "due_date",
@@ -888,13 +908,41 @@ async def update_task(
         SET {", ".join(sets)}, updated_at = NOW()
         WHERE id = ${task_i} AND user_id = ${user_i} AND is_deleted = FALSE
         RETURNING id, user_id, title, content, status, priority, target_duration,
-                  current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, tags,
+                  current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at
     """
 
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(sql, *args)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    return _row_to_task(row)
+
+
+@router.patch("/tasks/{task_id}/move-to-today", response_model=TaskOut)
+async def move_task_to_today(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """将任务移动到今天（修改 due_date）。"""
+    pool = _pool_from_request(request)
+    now = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE tasks
+            SET due_date = $1, start_date = CASE WHEN start_date > $1 THEN $1 ELSE start_date END, updated_at = NOW()
+            WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            now,
+            task_id,
+            int(user.id),
+        )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
     return _row_to_task(row)
