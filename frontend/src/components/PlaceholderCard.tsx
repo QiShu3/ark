@@ -155,6 +155,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [editTaskSubmitting, setEditTaskSubmitting] = useState(false);
   const [editTaskError, setEditTaskError] = useState<string | null>(null);
   const [editTaskForm, setEditTaskForm] = useState<{
+    id: string;
     title: string;
     content: string;
     priority: 0 | 1 | 2 | 3;
@@ -170,6 +171,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     startDate: string;
     dueDate: string;
   }>({
+    id: '',
     title: '',
     content: '',
     priority: 0,
@@ -711,6 +713,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   function _openEditTask(task: Task) {
     setSelectedTask(task);
     setEditTaskForm({
+      id: task.id,
       title: task.title,
       content: task.content || '',
       priority: task.priority as 0 | 1 | 2 | 3,
@@ -1709,7 +1712,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   <button
                     onClick={(e) => {
                       if (window.confirm('确定要彻底删除该任务吗？')) {
-                        const taskId = (editTaskForm as any).id;
+                        const taskId = editTaskForm.id;
                         const taskToDel = tasks.find(t => t.id === taskId);
                         if (taskToDel) {
                           _handleDeleteTask(e, taskToDel);
@@ -2218,7 +2221,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   {defaultWorkflowName}
                 </button>
               ) : (
-                <span>Placeholder {index + 1}-{subIndex + 1}</span>
+                <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : index === 3 && subIndex === 1 ? '快捷入口' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
               )}
             </div>
           )
@@ -2228,8 +2231,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }
 
   return (
-    <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors">
-      <span>Placeholder {index + 1}</span>
+    <div
+      onClick={index === 0 ? () => setShowTaskModal(true) : undefined}
+      className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${index === 0 ? 'cursor-pointer' : ''}`}
+    >
+      <span className="font-medium text-lg text-white/80">{index === 0 ? '今日任务' : `占位区 ${index + 1}`}</span>
     </div>
   );
 };
