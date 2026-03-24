@@ -118,17 +118,21 @@ Covered behavior includes:
 
 ## Recommended Next Steps
 
-### 1. Replace hardcoded executor branching with action registration
+### 1. Action registry is now in place
 
-Current executor still uses explicit `if action_name == ...`.
+The executor now uses an action registry instead of explicit `if action_name == ...` branching.
 
-Recommended next refactor:
+Current shape:
 
-- define an action registry object
-- register action metadata and handler functions in one place
-- resolve handlers dynamically
+- each action is described by an `ActionDefinition`
+- each definition contains:
+  - `action_id`
+  - `policy_action_id`
+  - `handler`
+  - optional approval metadata
+- executor resolves definitions dynamically before policy checks and execution
 
-This will make adding new actions safer and reduce branching complexity.
+This makes adding new actions safer and keeps execution flow more uniform.
 
 ### 2. Separate skills from action exposure more explicitly
 

@@ -10,7 +10,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, Request
 
-from routes.agents.models import AgentActionResponse, AgentContext
+from routes.agents.models import ActionDefinition, AgentActionResponse, AgentContext
 from routes.agents.policy import evaluate_policy, forbidden
 from routes.arxiv.service import batch_create_daily_tasks
 from routes.todo_routes import TaskOut, TaskUpdateRequest, _row_to_task
@@ -319,63 +319,132 @@ async def commit_arxiv_daily_tasks_action(conn: Any, *, user_id: int, payload: d
     return {"created_count": created_count, "skipped_count": skipped_count, "task_ids": task_ids}
 
 
+async def _handle_task_list(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = approval_payload
+    return await list_tasks_action(conn, user_id=ctx.user_id, payload=payload, summary_only=resource_scope == "cross_app_summary")
+
+
+async def _handle_task_update(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = resource_scope
+    _ = approval_payload
+    return await update_task_action(conn, user_id=ctx.user_id, payload=payload)
+
+
+async def _handle_task_delete_prepare(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> AgentActionResponse:
+    _ = approval_payload
+    return await prepare_task_delete_action(conn, ctx=ctx, resource_scope=resource_scope, payload=payload)
+
+
+async def _handle_task_delete_commit(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = payload
+    _ = resource_scope
+    if approval_payload is None:
+        raise HTTPException(status_code=422, detail="缺少审批负载")
+    return await commit_task_delete_action(conn, user_id=ctx.user_id, payload=approval_payload)
+
+
+async def _handle_arxiv_daily_tasks_prepare(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> AgentActionResponse:
+    _ = approval_payload
+    return await prepare_arxiv_daily_tasks_action(conn, ctx=ctx, resource_scope=resource_scope, payload=payload)
+
+
+async def _handle_arxiv_daily_tasks_commit(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = payload
+    _ = resource_scope
+    if approval_payload is None:
+        raise HTTPException(status_code=422, detail="缺少审批负载")
+    return await commit_arxiv_daily_tasks_action(conn, user_id=ctx.user_id, payload=approval_payload)
+
+
+ACTION_REGISTRY: dict[str, ActionDefinition] = {
+    "task.list": ActionDefinition(
+        action_id="task.list",
+        policy_action_id="task.list",
+        handler=_handle_task_list,
+    ),
+    "task.update": ActionDefinition(
+        action_id="task.update",
+        policy_action_id="task.update",
+        handler=_handle_task_update,
+    ),
+    "task.delete.prepare": ActionDefinition(
+        action_id="task.delete.prepare",
+        policy_action_id="task.delete",
+        handler=_handle_task_delete_prepare,
+    ),
+    "task.delete.commit": ActionDefinition(
+        action_id="task.delete.commit",
+        policy_action_id="task.delete",
+        handler=_handle_task_delete_commit,
+        uses_approval=True,
+        approval_action_id="task.delete",
+    ),
+    "arxiv.daily_tasks.prepare": ActionDefinition(
+        action_id="arxiv.daily_tasks.prepare",
+        policy_action_id="arxiv.daily_tasks",
+        handler=_handle_arxiv_daily_tasks_prepare,
+    ),
+    "arxiv.daily_tasks.commit": ActionDefinition(
+        action_id="arxiv.daily_tasks.commit",
+        policy_action_id="arxiv.daily_tasks",
+        handler=_handle_arxiv_daily_tasks_commit,
+        uses_approval=True,
+        approval_action_id="arxiv.daily_tasks",
+    ),
+}
+
+
+def get_action_definition(action_name: str) -> ActionDefinition | None:
+    return ACTION_REGISTRY.get(action_name)
+
+
 async def execute_action_with_context(
     pool: asyncpg.Pool, *, action_name: str, ctx: AgentContext, payload: dict[str, Any]
 ) -> AgentActionResponse:
-    if action_name == "task.list":
-        rule, scope_or_reason = evaluate_policy("task.list", ctx)
-        if rule is None or scope_or_reason is None:
-            return forbidden(action_name, scope_or_reason or "策略拒绝")
-        async with pool.acquire() as conn:
-            data = await list_tasks_action(conn, user_id=ctx.user_id, payload=payload, summary_only=scope_or_reason == "cross_app_summary")
-        return AgentActionResponse(type="result", action_id=action_name, data=data)
-    if action_name == "task.update":
-        rule, scope_or_reason = evaluate_policy("task.update", ctx)
-        if rule is None or scope_or_reason is None:
-            return forbidden(action_name, scope_or_reason or "策略拒绝")
-        async with pool.acquire() as conn:
-            data = await update_task_action(conn, user_id=ctx.user_id, payload=payload)
-        return AgentActionResponse(type="result", action_id=action_name, data=data)
-    if action_name == "task.delete.prepare":
-        rule, scope_or_reason = evaluate_policy("task.delete", ctx)
-        if rule is None or scope_or_reason is None:
-            return forbidden(action_name, scope_or_reason or "策略拒绝")
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                return await prepare_task_delete_action(conn, ctx=ctx, resource_scope=scope_or_reason, payload=payload)
-    if action_name == "task.delete.commit":
-        rule, scope_or_reason = evaluate_policy("task.delete", ctx)
-        if rule is None or scope_or_reason is None:
-            return forbidden(action_name, scope_or_reason or "策略拒绝")
-        approval_id = payload.get("approval_id")
-        if not isinstance(approval_id, str) or not approval_id.strip():
-            raise HTTPException(status_code=422, detail="缺少 approval_id")
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                stored_payload = await consume_approval(conn, ctx=ctx, approval_id=approval_id.strip(), action_id="task.delete")
-                if stored_payload is None:
+    definition = get_action_definition(action_name)
+    if definition is None:
+        raise HTTPException(status_code=404, detail="未知动作")
+
+    rule, scope_or_reason = evaluate_policy(definition.policy_action_id, ctx)
+    if rule is None or scope_or_reason is None:
+        return forbidden(action_name, scope_or_reason or "策略拒绝")
+
+    approval_payload: dict[str, Any] | None = None
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if definition.uses_approval:
+                approval_id = payload.get("approval_id")
+                if not isinstance(approval_id, str) or not approval_id.strip():
+                    raise HTTPException(status_code=422, detail="缺少 approval_id")
+                approval_payload = await consume_approval(
+                    conn,
+                    ctx=ctx,
+                    approval_id=approval_id.strip(),
+                    action_id=definition.approval_action_id or definition.policy_action_id,
+                )
+                if approval_payload is None:
                     return forbidden(action_name, "审批票据无效、已过期或已使用")
-                data = await commit_task_delete_action(conn, user_id=ctx.user_id, payload=stored_payload)
-        return AgentActionResponse(type="result", action_id=action_name, data=data)
-    if action_name == "arxiv.daily_tasks.prepare":
-        rule, scope_or_reason = evaluate_policy("arxiv.daily_tasks", ctx)
-        if rule is None or scope_or_reason is None:
-            return forbidden(action_name, scope_or_reason or "策略拒绝")
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                return await prepare_arxiv_daily_tasks_action(conn, ctx=ctx, resource_scope=scope_or_reason, payload=payload)
-    if action_name == "arxiv.daily_tasks.commit":
-        rule, scope_or_reason = evaluate_policy("arxiv.daily_tasks", ctx)
-        if rule is None or scope_or_reason is None:
-            return forbidden(action_name, scope_or_reason or "策略拒绝")
-        approval_id = payload.get("approval_id")
-        if not isinstance(approval_id, str) or not approval_id.strip():
-            raise HTTPException(status_code=422, detail="缺少 approval_id")
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                stored_payload = await consume_approval(conn, ctx=ctx, approval_id=approval_id.strip(), action_id="arxiv.daily_tasks")
-                if stored_payload is None:
-                    return forbidden(action_name, "审批票据无效、已过期或已使用")
-                data = await commit_arxiv_daily_tasks_action(conn, user_id=ctx.user_id, payload=stored_payload)
-        return AgentActionResponse(type="result", action_id=action_name, data=data)
-    raise HTTPException(status_code=404, detail="未知动作")
+
+            result = await definition.handler(
+                conn,
+                ctx=ctx,
+                payload=payload,
+                resource_scope=scope_or_reason,
+                approval_payload=approval_payload,
+            )
+
+    if isinstance(result, AgentActionResponse):
+        return result
+    return AgentActionResponse(type="result", action_id=action_name, data=result)

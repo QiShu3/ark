@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -70,3 +71,14 @@ class PolicyRule:
     required_capabilities: tuple[str, ...] = ()
     requires_confirmation: bool = False
     effect: ActionEffect = "read"
+
+ActionHandler = Callable[..., Awaitable[dict[str, Any] | AgentActionResponse]]
+
+
+@dataclass(frozen=True)
+class ActionDefinition:
+    action_id: str
+    policy_action_id: str
+    handler: ActionHandler
+    uses_approval: bool = False
+    approval_action_id: str | None = None
