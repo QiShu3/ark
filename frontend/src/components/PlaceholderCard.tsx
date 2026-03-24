@@ -18,6 +18,8 @@ interface Task {
   cycle_period: 'daily' | 'weekly' | 'monthly' | 'custom';
   cycle_every_days: number | null;
   event: string;
+  event_ids: string[];
+  task_type: 'focus' | 'checkin';
   tags: string[];
   actual_duration: number;
   start_date: string | null;
@@ -76,6 +78,8 @@ type CreateTaskForm = {
   cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
   customCycleDays: number;
   event: string;
+  eventIds: string[];
+  taskType: 'focus' | 'checkin';
   tagsText: string;
   startDate: string;
   dueDate: string;
@@ -90,6 +94,8 @@ const CREATE_TASK_FORM_DEFAULTS: CreateTaskForm = {
   cyclePeriod: 'daily',
   customCycleDays: 1,
   event: '',
+  eventIds: [],
+  taskType: 'focus',
   tagsText: '',
   startDate: '',
   dueDate: '',
@@ -114,6 +120,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [focusWorkflow, setFocusWorkflow] = useState<FocusWorkflow | null>(null);
   const [confirmingFocusPhase, setConfirmingFocusPhase] = useState(false);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [showCompletedToday, setShowCompletedToday] = useState(false);
+  const [showCompletedAll, setShowCompletedAll] = useState(false);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>([]);
   const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
@@ -156,6 +164,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
     customCycleDays: number;
     event: string;
+    eventIds: string[];
+    taskType: 'focus' | 'checkin';
     tagsText: string;
     startDate: string;
     dueDate: string;
@@ -169,6 +179,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     cyclePeriod: 'daily',
     customCycleDays: 1,
     event: '',
+    eventIds: [],
+    taskType: 'focus',
     tagsText: '',
     startDate: '',
     dueDate: '',
@@ -361,7 +373,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     if (typeof value !== 'string' || !value.trim()) return '';
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return '';
-    return parsed.toISOString().slice(0, 16);
+    return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }
 
   function _parseJsonObject(candidate: string): Record<string, unknown> | null {
@@ -409,6 +421,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     const targetCycleCountRaw = Number(draft.targetCycleCount);
     const customCycleDaysRaw = Number(draft.customCycleDays);
     const cyclePeriodRaw = typeof draft.cyclePeriod === 'string' ? draft.cyclePeriod : '';
+    const taskTypeRaw = typeof draft.taskType === 'string' ? draft.taskType : (typeof draft.task_type === 'string' ? draft.task_type : 'focus');
     const tagsValue = Array.isArray(draft.tags)
       ? draft.tags.filter((x): x is string => typeof x === 'string').join(', ')
       : (typeof draft.tagsText === 'string' ? draft.tagsText : '');
@@ -423,6 +436,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         : 'daily',
       customCycleDays: Number.isFinite(customCycleDaysRaw) && customCycleDaysRaw >= 1 ? Math.round(customCycleDaysRaw) : 1,
       event: typeof draft.event === 'string' ? draft.event : '',
+      eventIds: [],
+      taskType: (taskTypeRaw === 'checkin' ? 'checkin' : 'focus') as 'focus' | 'checkin',
       tagsText: tagsValue,
       startDate: _toDateTimeLocal(draft.startDate),
       dueDate: _toDateTimeLocal(draft.dueDate),
@@ -705,9 +720,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       cyclePeriod: task.cycle_period,
       customCycleDays: task.cycle_every_days ?? 1,
       event: task.event || '',
+      eventIds: task.event_ids || [],
+      taskType: task.task_type || 'focus',
       tagsText: task.tags.join(', '),
-      startDate: task.start_date ? new Date(task.start_date).toISOString().slice(0, 16) : '',
-      dueDate: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : '',
+      startDate: task.start_date ? new Date(new Date(task.start_date).getTime() - new Date(task.start_date).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '',
+      dueDate: task.due_date ? new Date(new Date(task.due_date).getTime() - new Date(task.due_date).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '',
     });
     setShowEditTaskModal(true);
   }
@@ -737,6 +754,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           cycle_period: editTaskForm.cyclePeriod,
           cycle_every_days: cycleEveryDays,
           event: editTaskForm.event.trim(),
+          event_ids: editTaskForm.eventIds,
+          task_type: editTaskForm.taskType,
           tags,
           start_date: startDate,
           due_date: dueDate,
@@ -767,6 +786,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   async function _handleCompleteTask(e: React.MouseEvent, task: Task) {
     e.stopPropagation();
     try {
+      setTasks(tasks.map(t => t.id === task.id ? { ...t, status: 'done' } : t));
       await apiJson(`/todo/tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -776,137 +796,147 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to complete task', e);
+      _loadTasks();
     }
   }
 
-  function _renderAllTasksPane() {
+  async function _handleUndoCompleteTask(e: React.MouseEvent, task: Task) {
+    e.stopPropagation();
+    try {
+      setTasks(tasks.map(t => t.id === task.id ? { ...t, status: 'todo' } : t));
+      await apiJson(`/todo/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'todo' })
+      });
+      _loadTasks();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (e) {
+      console.error('Failed to undo complete task', e);
+      _loadTasks();
+    }
+  }
+
+  function _renderSmallTaskCard(task: Task, draggable: boolean) {
+    return (
+      <div
+        key={task.id}
+        draggable={draggable}
+        onDragStart={(e) => {
+          if (draggable) {
+            e.dataTransfer.setData('text/plain', task.id);
+          }
+        }}
+        onClick={() => _openEditTask(task)}
+        className="group flex flex-col gap-1.5 p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all cursor-pointer relative"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1">
+            <div className={`w-1.5 h-1.5 shrink-0 rounded-full ${
+              task.status === 'done' ? 'bg-green-500/50' : (task.task_type === 'checkin' ? 'bg-emerald-500/70' : 'bg-blue-400/50')
+            }`} />
+            <span className={`font-medium text-sm line-clamp-1 ${task.status === 'done' ? 'text-white/40 line-through decoration-white/30' : 'text-white/90'}`}>
+              {task.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {task.priority > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                task.priority === 3 ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                task.priority === 2 ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' :
+                'bg-white/5 border-white/10 text-white/40'
+              }`}>
+                P{task.priority}
+              </span>
+            )}
+            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+              {task.status !== 'done' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
+                  className="p-1 rounded hover:bg-green-500/20 text-white/40 hover:text-green-400"
+                  title="完成"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </button>
+              )}
+              {task.status === 'done' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); _handleUndoCompleteTask(e, task); }}
+                  className="p-1 rounded hover:bg-blue-500/20 text-white/40 hover:text-blue-400"
+                  title="撤销完成"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 14 4 9 9 4"></polyline>
+                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); _handleDeleteTask(e, task); }}
+                className="p-1 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400"
+                title="删除"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function _renderFilteredTasksPane() {
     if (tasksLoading && tasks.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-white/30 animate-pulse">
-          <span className="text-lg">加载中...</span>
+          <span className="text-sm">加载中...</span>
         </div>
       );
     }
-    if (tasks.length === 0) {
+    
+    let filtered = tasks;
+    if (activeTab === 'daily') filtered = tasks.filter(t => t.cycle_period === 'daily');
+    else if (activeTab === 'weekly') filtered = tasks.filter(t => t.cycle_period === 'weekly');
+    else if (activeTab === 'periodic') filtered = tasks.filter(t => t.cycle_period === 'monthly');
+    else if (activeTab === 'custom') filtered = tasks.filter(t => t.cycle_period === 'custom');
+
+    const activeTasks = filtered.filter(t => t.status !== 'done');
+    const completedTasks = filtered.filter(t => t.status === 'done');
+
+    if (filtered.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-white/30">
-          <span className="text-lg">暂无任务</span>
+          <span className="text-sm">暂无任务</span>
         </div>
       );
     }
-
-    const activeTasks = tasks.filter(t => t.status !== 'done');
-    const completedTasks = tasks.filter(t => t.status === 'done');
 
     return (
       <div className="flex flex-col gap-6 pb-4">
-        {/* 进行中任务列表 */}
-        <div className="flex flex-col gap-3">
-          {activeTasks.length > 0 ? (
-            activeTasks.map((task) => (
-              <div
-                key={task.id}
-                onClick={() => _openEditTask(task)}
-                className="group flex flex-col gap-2 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all cursor-pointer relative"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className={`w-2 h-2 rounded-full ${
-                      task.status === 'done' ? 'bg-green-500/50' : 'bg-white/30'
-                    }`} />
-                    <span className="font-medium text-white/90 line-clamp-1">
-                      {task.title}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-md border ${
-                      task.priority === 3 ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-                      task.priority === 2 ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' :
-                      'bg-white/5 border-white/10 text-white/40'
-                    }`}>
-                      P{task.priority}
-                    </span>
-                    
-                    {/* 操作按钮 - 仅在悬停时显示 */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => _handleCompleteTask(e, task)}
-                        className="p-1.5 rounded-md hover:bg-green-500/20 text-white/40 hover:text-green-400 transition-colors"
-                        title="完成任务"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </button>
-                      <button
-                        onClick={(e) => _handleDeleteTask(e, task)}
-                        className="p-1.5 rounded-md hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-                        title="删除任务"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                {(task.content || task.due_date) && (
-                  <div className="flex items-center gap-4 text-xs text-white/40 pl-4">
-                    {task.due_date && (
-                      <span className={new Date(task.due_date) < new Date() ? 'text-red-400' : ''}>
-                        {new Date(task.due_date).toLocaleDateString()} 截止
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-white/20 text-sm">
-              暂无待办任务
-            </div>
-          )}
-        </div>
-
-        {/* 已完成任务区域 */}
+        {activeTasks.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {activeTasks.map(t => _renderSmallTaskCard(t, true))}
+          </div>
+        )}
         {completedTasks.length > 0 && (
-          <div className="flex flex-col gap-3 pt-4 border-t border-white/5">
-            <h4 className="text-xs font-bold text-white/30 uppercase tracking-wider px-1">
-              已完成 ({completedTasks.length})
-            </h4>
-            {completedTasks.map((task) => (
-              <div
-                key={task.id}
-                onClick={() => _openEditTask(task)}
-                className="group flex flex-col gap-2 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-all cursor-pointer opacity-60 hover:opacity-100"
+          <div className="flex flex-col gap-2 pt-4 border-t border-white/5 opacity-60">
+            <div className="flex justify-between items-center px-1">
+              <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-wider">
+                已完成 ({completedTasks.length})
+              </h4>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowCompletedAll(!showCompletedAll); }}
+                className="text-[10px] text-blue-400/80 hover:text-blue-300"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="w-2 h-2 rounded-full bg-green-500/50" />
-                    <span className="font-medium text-white/70 line-clamp-1 line-through decoration-white/30">
-                      {task.title}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {/* 已完成任务只显示删除按钮 */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => _handleDeleteTask(e, task)}
-                        className="p-1.5 rounded-md hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-                        title="删除任务"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                {showCompletedAll ? '收起' : '展开'}
+              </button>
+            </div>
+            {showCompletedAll && completedTasks.map(t => _renderSmallTaskCard(t, false))}
           </div>
         )}
       </div>
@@ -1081,6 +1111,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           cycle_period: createTaskForm.cyclePeriod,
           cycle_every_days: cycleEveryDays,
           event: createTaskForm.event.trim(),
+          event_ids: createTaskForm.eventIds,
+          task_type: createTaskForm.taskType,
           tags,
           start_date: startDate,
           due_date: dueDate,
@@ -1521,8 +1553,20 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   />
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">优先级</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">任务类型</label>
+                    <select
+                      value={editTaskForm.taskType}
+                      onChange={(e) => setEditTaskForm((s) => ({ ...s, taskType: e.target.value as 'focus' | 'checkin' }))}
+                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    >
+                      <option value="focus">专注任务</option>
+                      <option value="checkin">快速打卡</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm text-white/70">优先级</label>
                   <select
                     value={editTaskForm.priority}
                     onChange={(e) => setEditTaskForm((s) => ({ ...s, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
@@ -1533,6 +1577,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     <option value={2}>2</option>
                     <option value={3}>3 高</option>
                   </select>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -1690,63 +1735,166 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 </button>
               </div>
 
-              {/* 切换顶栏 */}
-              <div className="h-12 border-b border-white/10 flex items-center px-6 gap-8 bg-white/[0.02]">
-                {[
-                  { id: 'today', label: '今日任务' },
-                  { id: 'daily', label: '每日任务' },
-                  { id: 'weekly', label: '每周任务' },
-                  { id: 'periodic', label: '周期任务' },
-                  { id: 'custom', label: '自定义任务' },
-                  { id: 'all', label: '全部任务' },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as 'today' | 'daily' | 'weekly' | 'periodic' | 'custom' | 'all')}
-                    className={`h-full relative px-2 text-sm transition-colors ${
-                      activeTab === tab.id ? 'text-white font-bold' : 'text-white/40 hover:text-white/60'
-                    }`}
-                  >
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                    )}
-                  </button>
-                ))}
-              </div>
-              
-              {/* 内容区域 */}
-              <div className="flex-1 p-6 overflow-y-auto">
-                {activeTab === 'today' && (
-                  <div className="flex flex-col items-center justify-center h-full text-white/30 animate-in fade-in slide-in-from-left-4 duration-300">
-                    <span className="text-lg">今日任务列表内容占位</span>
+              {/* 内容区域，双栏布局 */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* 左栏：今日任务栏 */}
+                <div 
+                  className="w-[360px] min-w-[360px] border-r border-white/10 bg-black/20 flex flex-col transition-colors z-10"
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; }}
+                  onDragLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.backgroundColor = '';
+                    const taskId = e.dataTransfer.getData('text/plain');
+                    if (!taskId) return;
+                    
+                    const taskToMove = tasks.find(t => t.id === taskId);
+                    if (taskToMove && taskToMove.start_date) {
+                      const start = new Date(taskToMove.start_date);
+                      const now = new Date();
+                      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                      const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+                      
+                      if (start >= tomorrowStart) {
+                        const diffTime = start.getTime() - todayStart.getTime();
+                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        if (!window.confirm(`该任务原定于 ${diffDays} 天后开始，你确定要提前将其安排到今日吗？`)) {
+                          return;
+                        }
+                      }
+                    }
+
+                    try {
+                      // 乐观更新
+                      setTasks(tasks.map(t => {
+                        if (t.id === taskId) {
+                          const nowIso = new Date().toISOString();
+                          return {
+                            ...t,
+                            due_date: nowIso,
+                            start_date: t.start_date && new Date(t.start_date) > new Date() ? nowIso : t.start_date
+                          };
+                        }
+                        return t;
+                      }));
+                      await apiJson(`/todo/tasks/${taskId}/move-to-today`, { method: 'PATCH' });
+                      _loadTasks();
+                      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+                    } catch (err) {
+                      console.error('Move to today failed', err);
+                      _loadTasks();
+                    }
+                  }}
+                >
+                  <div className="h-12 border-b border-white/5 flex items-center px-5 shrink-0 bg-white/[0.01]">
+                    <span className="font-bold text-white tracking-wide">今日焦点</span>
                   </div>
-                )}
-                {activeTab === 'daily' && (
-                  <div className="flex flex-col items-center justify-center h-full text-white/30 animate-in fade-in slide-in-from-left-4 duration-300">
-                    <span className="text-lg">每日任务列表内容占位</span>
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+                    {(() => {
+                      const todayTasks = tasks.filter(t => {
+                        const now = new Date();
+                        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                        const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+                        const start = t.start_date ? new Date(t.start_date) : null;
+                        const end = t.due_date ? new Date(t.due_date) : null;
+                        const okStart = start ? start < tomorrowStart : true;
+                        const okEnd = end ? end >= todayStart : true;
+                        return okStart && okEnd;
+                      });
+                      
+                      const urgent = todayTasks.filter(t => t.status !== 'done' && t.event);
+                      const focuses = todayTasks.filter(t => t.status !== 'done' && !t.event && t.task_type === 'focus');
+                      const checkins = todayTasks.filter(t => t.status !== 'done' && !t.event && t.task_type === 'checkin');
+                      const dones = todayTasks.filter(t => t.status === 'done');
+                      
+                      return (
+                        <>
+                          {(urgent.length > 0 || focuses.length > 0 || checkins.length > 0) ? (
+                            <div className="flex flex-col gap-5">
+                              {urgent.length > 0 && (
+                                <div className="flex flex-col gap-2">
+                                  <h4 className="text-[10px] font-bold text-red-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                    紧迫事件
+                                  </h4>
+                                  {urgent.map(t => _renderSmallTaskCard(t, false))}
+                                </div>
+                              )}
+                              {focuses.length > 0 && (
+                                <div className="flex flex-col gap-2">
+                                  <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    专注任务
+                                  </h4>
+                                  {focuses.map(t => _renderSmallTaskCard(t, false))}
+                                </div>
+                              )}
+                              {checkins.length > 0 && (
+                                <div className="flex flex-col gap-2">
+                                  <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    快速打卡
+                                  </h4>
+                                  {checkins.map(t => _renderSmallTaskCard(t, false))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-10 opacity-30 text-sm">
+                              今日无待办，从右侧拖拽任务安排
+                            </div>
+                          )}
+                          
+                          {dones.length > 0 && (
+                            <div className="flex flex-col gap-2 pt-4 border-t border-white/5 opacity-60">
+                              <div className="flex justify-between items-center px-1">
+                                <h4 className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
+                                  已完成 ({dones.length})
+                                </h4>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setShowCompletedToday(!showCompletedToday); }}
+                                  className="text-[10px] text-blue-400/80 hover:text-blue-300"
+                                >
+                                  {showCompletedToday ? '收起' : '展开'}
+                                </button>
+                              </div>
+                              {showCompletedToday && dones.map(t => _renderSmallTaskCard(t, false))}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
-                )}
-                {activeTab === 'weekly' && (
-                  <div className="flex flex-col items-center justify-center h-full text-white/30 animate-in fade-in slide-in-from-left-4 duration-300">
-                    <span className="text-lg">每周任务列表内容占位</span>
+                </div>
+
+                {/* 右栏：任务仓库 */}
+                <div className="flex-1 flex flex-col bg-transparent relative">
+                  <div className="h-12 border-b border-white/10 flex items-center px-6 gap-6 shrink-0 bg-white/[0.01]">
+                    {[
+                      { id: 'all', label: '全部' },
+                      { id: 'daily', label: '每日' },
+                      { id: 'weekly', label: '每周' },
+                      { id: 'periodic', label: '周期' },
+                      { id: 'custom', label: '自定义' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as 'all' | 'daily' | 'weekly' | 'periodic' | 'custom')}
+                        className={`h-full relative px-1 text-sm transition-colors ${
+                          activeTab === tab.id ? 'text-white font-bold' : 'text-white/40 hover:text-white/60'
+                        }`}
+                      >
+                        {tab.label}
+                        {activeTab === tab.id && (
+                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                        )}
+                      </button>
+                    ))}
                   </div>
-                )}
-                {activeTab === 'periodic' && (
-                  <div className="flex flex-col items-center justify-center h-full text-white/30 animate-in fade-in slide-in-from-left-4 duration-300">
-                    <span className="text-lg">周期任务列表内容占位</span>
+                  <div className="flex-1 p-6 overflow-y-auto w-full max-w-[500px] xl:max-w-none">
+                    {_renderFilteredTasksPane()}
                   </div>
-                )}
-                {activeTab === 'custom' && (
-                  <div className="flex flex-col items-center justify-center h-full text-white/30 animate-in fade-in slide-in-from-left-4 duration-300">
-                    <span className="text-lg">自定义任务列表内容占位</span>
-                  </div>
-                )}
-                {activeTab === 'all' && (
-                  <div className="h-full animate-in fade-in slide-in-from-left-4 duration-300">
-                    {_renderAllTasksPane()}
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </div>
@@ -1827,6 +1975,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {showCreateTaskMoreFields && (
                   <>
                     <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">任务类型</label>
+                        <select
+                          value={createTaskForm.taskType}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, taskType: e.target.value as 'focus' | 'checkin' }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                          <option value="focus">专注任务</option>
+                          <option value="checkin">快速打卡</option>
+                        </select>
+                      </div>
                       <div className="flex flex-col gap-2">
                         <label className="text-sm text-white/70">优先级</label>
                         <select
