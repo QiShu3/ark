@@ -493,7 +493,8 @@ def _build_builtin_tools_payload(
     payload: list[dict[str, Any]] = []
     executors: dict[str, Any] = {}
     if include_todo:
-        allowed_set = set(allow.get("todo")) if allow is not None and allow.get("todo") else set()
+        todo_allow = allow.get("todo") if allow is not None else None
+        allowed_set = set(todo_allow) if todo_allow is not None else set()
 
         def add_tool(name: str, desc: str, exec_key: str):
             payload.append(
@@ -652,7 +653,8 @@ async def chat_with_tools(
                 if not isinstance(tc, dict):
                     continue
                 tc_id = tc.get("id")
-                fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+                fn_obj = tc.get("function")
+                fn = fn_obj if isinstance(fn_obj, dict) else {}
                 fn_name = fn.get("name")
                 fn_args = fn.get("arguments")
                 if not isinstance(fn_name, str) or not isinstance(tc_id, str):
@@ -767,7 +769,8 @@ async def chat_with_tools_stream(
                 if not isinstance(tc, dict):
                     continue
                 tc_id = tc.get("id")
-                fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+                fn_obj = tc.get("function")
+                fn = fn_obj if isinstance(fn_obj, dict) else {}
                 fn_name = fn.get("name")
                 fn_args = fn.get("arguments")
                 if not isinstance(fn_name, str) or not isinstance(tc_id, str):
