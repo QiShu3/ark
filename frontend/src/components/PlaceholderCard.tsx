@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AgentActionResponse, executeAgentAction } from '../lib/agent';
 import { apiJson } from '../lib/api';
 import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
@@ -154,6 +155,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editTaskSubmitting, setEditTaskSubmitting] = useState(false);
   const [editTaskError, setEditTaskError] = useState<string | null>(null);
+  const [taskDeleteAction, setTaskDeleteAction] = useState<AgentActionResponse | null>(null);
+  const [taskDeleteBusy, setTaskDeleteBusy] = useState(false);
+  const [taskDeleteError, setTaskDeleteError] = useState<string | null>(null);
   const [editTaskForm, setEditTaskForm] = useState<{
     id: string;
     title: string;
@@ -776,13 +780,42 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   async function _handleDeleteTask(e: React.MouseEvent, task: Task) {
     e.stopPropagation();
-    if (!window.confirm('确定要删除这个任务吗？')) return;
     try {
-      await apiJson(`/todo/tasks/${task.id}`, { method: 'DELETE' });
-      _loadTasks();
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      setTaskDeleteError(null);
+      const action = await executeAgentAction('task.delete.prepare', { task_id: task.id }, {
+        agentType: 'dashboard_agent',
+      });
+      if (action.type === 'forbidden') {
+        throw new Error(action.reason || '当前 agent 无权删除任务');
+      }
+      setTaskDeleteAction(action);
     } catch (e) {
-      console.error('Failed to delete task', e);
+      setTaskDeleteError(e instanceof Error ? e.message : '删除任务失败');
+    }
+  }
+
+  async function _commitDeleteTask() {
+    if (!taskDeleteAction?.approval_id || !taskDeleteAction.commit_action || taskDeleteBusy) return;
+    setTaskDeleteBusy(true);
+    setTaskDeleteError(null);
+    try {
+      const result = await executeAgentAction(taskDeleteAction.commit_action, { approval_id: taskDeleteAction.approval_id }, {
+        agentType: 'dashboard_agent',
+      });
+      if (result.type === 'forbidden') {
+        throw new Error(result.reason || '审批票据无效');
+      }
+      setTaskDeleteAction(null);
+      await _loadTasks();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      if (showEditTaskModal) {
+        setShowEditTaskModal(false);
+      }
+    } catch (e) {
+      setTaskDeleteError(e instanceof Error ? e.message : '删除任务失败');
+      setTaskDeleteAction(null);
+    } finally {
+      setTaskDeleteBusy(false);
     }
   }
 
@@ -2183,6 +2216,41 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             </div>
           </div>
         )}
+        {taskDeleteAction ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="w-[92%] max-w-md rounded-2xl border border-white/10 bg-zinc-950/95 p-5 shadow-2xl">
+              <div className="text-lg font-semibold text-white">{taskDeleteAction.title || '需要确认'}</div>
+              <div className="mt-3 text-sm leading-6 text-white/70">
+                {taskDeleteAction.message || '即将执行敏感操作，是否确认？'}
+              </div>
+              {taskDeleteAction.impact?.count ? (
+                <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+                  将影响 {taskDeleteAction.impact.count} 个对象
+                </div>
+              ) : null}
+              {taskDeleteError ? <div className="mt-3 text-sm text-red-300">{taskDeleteError}</div> : null}
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setTaskDeleteAction(null);
+                    setTaskDeleteError(null);
+                  }}
+                  disabled={taskDeleteBusy}
+                  className="px-4 py-2 rounded-lg bg-white/10 text-white/80 hover:bg-white/15 disabled:opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={_commitDeleteTask}
+                  disabled={taskDeleteBusy}
+                  className="px-4 py-2 rounded-lg bg-red-500/85 text-white hover:bg-red-500 disabled:opacity-60"
+                >
+                  {taskDeleteBusy ? '删除中...' : '确认删除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </>
     );
   }

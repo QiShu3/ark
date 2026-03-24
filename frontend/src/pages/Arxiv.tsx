@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowDown, History, ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
 import Navigation from '../components/Navigation';
+import { AgentActionResponse, executeAgentAction } from '../lib/agent';
 import { apiJson } from '../lib/api';
 
 type SortBy = 'relevance' | 'submitted_date' | 'last_updated_date';
@@ -58,16 +59,6 @@ type DailyCandidate = {
   is_read: boolean;
   linked_task_id: string | null;
   linked_task_status: string | null;
-};
-
-type ConfirmAction = {
-  title?: string;
-  message?: string;
-  request?: {
-    method?: string;
-    url?: string;
-    body?: unknown;
-  };
 };
 
 type PaperCollectionMode = 'all' | 'favorites' | 'read' | 'skipped';
@@ -230,7 +221,7 @@ const Arxiv: React.FC = () => {
   const [dailyCandidates, setDailyCandidates] = useState<DailyCandidate[]>([]);
   const [dailyBusy, setDailyBusy] = useState(false);
   const [dailyError, setDailyError] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [confirmAction, setConfirmAction] = useState<AgentActionResponse | null>(null);
   const [isExecutingAction, setIsExecutingAction] = useState(false);
   const [currentDailyIndex, setCurrentDailyIndex] = useState(0);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
@@ -275,9 +266,6 @@ const Arxiv: React.FC = () => {
 
   const canSearch = keywords.trim().length > 0;
   const resultCountText = useMemo(() => `结果 ${papers.length} 条`, [papers.length]);
-  const dailyAssistantInitialMessage = useMemo(() => {
-    return '我是每日秘书。可总结今日论文，并在你确认后批量创建任务。';
-  }, []);
 
   const loadPaperStates = useCallback(async () => {
     const rows = await apiJson<PaperState[]>('/api/arxiv/papers?limit=200');
@@ -592,11 +580,13 @@ const Arxiv: React.FC = () => {
     setDailyError(null);
     try {
       const ids = dailyCandidates.map((x) => x.arxiv_id);
-      const action = await apiJson<ConfirmAction>('/api/arxiv/daily/tasks/prepare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ arxiv_ids: ids }),
+      const action = await executeAgentAction('arxiv.daily_tasks.prepare', { arxiv_ids: ids }, {
+        agentType: 'app_agent:arxiv',
+        appId: 'arxiv',
       });
+      if (action.type === 'forbidden') {
+        throw new Error(action.reason || '当前 agent 无权执行该操作');
+      }
       setConfirmAction(action);
     } catch (e) {
       setDailyError(e instanceof Error ? e.message : '生成确认请求失败');
@@ -609,16 +599,16 @@ const Arxiv: React.FC = () => {
   };
 
   const commitConfirmAction = useCallback(async () => {
-    if (!confirmAction?.request?.url) return;
+    if (!confirmAction?.approval_id || !confirmAction.commit_action) return;
     setIsExecutingAction(true);
     try {
-      const method = (confirmAction.request.method || 'POST').toUpperCase();
-      const body = confirmAction.request.body;
-      await apiJson(confirmAction.request.url, {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
+      const result = await executeAgentAction(confirmAction.commit_action, { approval_id: confirmAction.approval_id }, {
+        agentType: 'app_agent:arxiv',
+        appId: 'arxiv',
       });
+      if (result.type === 'forbidden') {
+        throw new Error(result.reason || '审批票据无效');
+      }
       setConfirmAction(null);
       await loadDailyViewData(true);
     } catch (e) {

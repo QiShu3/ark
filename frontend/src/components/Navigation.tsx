@@ -83,6 +83,12 @@ const Navigation: React.FC = () => {
           >
             Apps
           </button>
+          <button
+            className="hover:text-blue-400 transition-colors"
+            onClick={() => navigate('/agent')}
+          >
+            Agent
+          </button>
           <button className="hover:text-gray-300 cursor-not-allowed opacity-70">About</button>
         </div>
 

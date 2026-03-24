@@ -5,10 +5,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from routes.agent_routes import init_agent
+from routes.agent_routes import router as agent_router
 from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
+from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
 from routes.todo_routes import init_todo
@@ -24,6 +27,7 @@ async def _lifespan(app: FastAPI):
     await init_checkin(app)
     await init_todo(app)
     await init_arxiv(app)
+    await init_agent(app)
     try:
         yield
     finally:
@@ -43,8 +47,10 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(checkin_router)
+app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(arxiv_router)
+app.include_router(agent_router)
 
 
 @app.get("/health")

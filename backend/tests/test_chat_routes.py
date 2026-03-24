@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from routes.agent_routes import AgentActionResponse
+from routes.auth_routes import get_current_user
+from routes.chat_routes import router
+
+
+@dataclass
+class _DummyUser:
+    id: int = 7
+
+
+class _FakePool:
+    def acquire(self) -> None:
+        raise AssertionError("This test monkeypatches action execution and should not touch the DB pool directly")
+
+
+def _build_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: _DummyUser()
+    return app
+
+
+def test_chat_returns_plain_reply(monkeypatch) -> None:
+    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+        assert tools
+        assert messages[-1]["content"] == "你好"
+        return {"role": "assistant", "content": "你好，我在。"}
+
+    monkeypatch.setattr("routes.chat_routes._deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.chat_routes._pool_from_request", lambda _: _FakePool())
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat", json={"message": "你好", "history": []})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reply"] == "你好，我在。"
+    assert body["approval"] is None
+
+
+def test_chat_surfaces_approval(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "delete_task", "arguments": '{"task_id":"task_1"}'},
+                    }
+                ],
+            }
+        return {"role": "assistant", "content": "我已经发起删除审批，请在界面确认。"}
+
+    async def _fake_execute_action(pool: Any, *, action_name: str, ctx: Any, payload: dict[str, Any]) -> Any:
+        _ = pool
+        _ = ctx
+        assert action_name == "task.delete.prepare"
+        assert payload == {"task_id": "task_1"}
+        return AgentActionResponse(
+            type="approval_required",
+            action_id="task.delete.prepare",
+            approval_id="appr_1",
+            title="删除任务",
+            message="需要确认",
+            commit_action="task.delete.commit",
+        )
+
+    monkeypatch.setattr("routes.chat_routes._deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.chat_routes.execute_action_with_context", _fake_execute_action)
+    monkeypatch.setattr("routes.chat_routes._pool_from_request", lambda _: _FakePool())
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat", json={"message": "删掉任务", "history": []})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "审批" in body["reply"]
+    assert body["approval"]["approval_id"] == "appr_1"
