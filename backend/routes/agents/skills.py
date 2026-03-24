@@ -4,6 +4,52 @@ from routes.agents.models import AgentSkillOut
 
 SKILLS: tuple[AgentSkillOut, ...] = (
     AgentSkillOut(
+        name="arxiv_daily_candidates",
+        description="获取今天的 arXiv 候选论文列表；如果当天数据还没生成，会按现有每日配置自动刷新。",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+        intent_scope="arxiv",
+        side_effect="read",
+    ),
+    AgentSkillOut(
+        name="arxiv_search",
+        description="搜索 arXiv 论文，支持关键词、分类、作者、搜索字段、排序和分页。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "keywords": {"type": "string"},
+                "category": {"type": ["string", "null"]},
+                "author": {"type": ["string", "null"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                "offset": {"type": "integer", "minimum": 0},
+                "sort_by": {
+                    "type": "string",
+                    "enum": ["relevance", "submitted_date", "last_updated_date"],
+                },
+                "sort_order": {"type": "string", "enum": ["ascending", "descending"]},
+                "search_field": {"type": "string", "enum": ["title", "summary", "all"]},
+            },
+            "required": ["keywords"],
+        },
+        intent_scope="arxiv",
+        side_effect="read",
+    ),
+    AgentSkillOut(
+        name="arxiv_paper_details",
+        description="根据 arXiv id 批量获取论文详情。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "arxiv_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 100}
+            },
+            "required": ["arxiv_ids"],
+        },
+        intent_scope="arxiv",
+        side_effect="read",
+    ),
+    AgentSkillOut(
         name="task_list",
         description="列出任务。应用 agent 若只具备跨应用摘要权限，工具只会返回摘要视图。",
         parameters={
@@ -59,6 +105,9 @@ SKILLS: tuple[AgentSkillOut, ...] = (
 )
 
 SKILL_TO_ACTION: dict[str, str] = {
+    "arxiv_daily_candidates": "arxiv.daily_candidates",
+    "arxiv_search": "arxiv.search",
+    "arxiv_paper_details": "arxiv.paper_details",
     "task_list": "task.list",
     "task_update": "task.update",
     "delete_task": "task.delete.prepare",

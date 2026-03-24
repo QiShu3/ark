@@ -143,8 +143,104 @@ def test_list_agent_skills_smoke(monkeypatch) -> None:
     resp = client.get("/api/agent/skills")
     assert resp.status_code == 200
     names = [item["name"] for item in resp.json()]
+    assert "arxiv_daily_candidates" in names
+    assert "arxiv_search" in names
+    assert "arxiv_paper_details" in names
     assert "delete_task" in names
     assert "task_update" in names
+
+
+def test_dashboard_agent_can_search_arxiv(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+
+    async def _fake_search(**kwargs: Any) -> list[dict[str, Any]]:
+        assert kwargs["keywords"] == "transformer"
+        assert kwargs["limit"] == 5
+        return [
+            {
+                "arxiv_id": "2401.00001",
+                "title": "A Paper",
+                "authors": ["Alice"],
+                "published": "2024-01-01T00:00:00",
+                "summary": "Summary",
+            }
+        ]
+
+    monkeypatch.setattr("routes.agents.executor.search_arxiv_papers", _fake_search)
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/actions/arxiv.search",
+        headers={"X-Ark-Agent-Type": "dashboard_agent"},
+        json={"payload": {"keywords": "transformer", "limit": 5}},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["type"] == "result"
+    assert body["data"]["count"] == 1
+    assert body["data"]["items"][0]["arxiv_id"] == "2401.00001"
+
+
+def test_app_agent_can_get_daily_candidates(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+
+    async def _fake_daily_candidates(conn: Any, *, user_id: int, run_day: Any) -> list[dict[str, Any]]:
+        assert user_id == 7
+        return [
+            {
+                "arxiv_id": "2401.00002",
+                "title": "Daily Paper",
+                "authors": ["Bob"],
+                "published": "2024-01-02T00:00:00",
+                "summary": "Daily summary",
+                "is_read": False,
+                "linked_task_id": None,
+                "linked_task_status": None,
+            }
+        ]
+
+    monkeypatch.setattr("routes.agents.executor.get_daily_candidates_with_auto_refresh", _fake_daily_candidates)
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/actions/arxiv.daily_candidates",
+        headers={"X-Ark-Agent-Type": "app_agent:arxiv", "X-Ark-App-Id": "arxiv"},
+        json={"payload": {}},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["type"] == "result"
+    assert body["data"]["items"][0]["arxiv_id"] == "2401.00002"
+
+
+def test_app_agent_can_get_paper_details(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+
+    async def _fake_details(arxiv_ids: list[str]) -> list[dict[str, Any]]:
+        assert arxiv_ids == ["2401.00003", "2401.00004"]
+        return [
+            {
+                "arxiv_id": "2401.00003",
+                "title": "Detail Paper",
+                "authors": ["Carol"],
+                "published": "2024-01-03T00:00:00",
+                "summary": "Detail summary",
+            }
+        ]
+
+    monkeypatch.setattr("routes.agents.executor.fetch_paper_details", _fake_details)
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/actions/arxiv.paper_details",
+        headers={"X-Ark-Agent-Type": "app_agent:arxiv", "X-Ark-App-Id": "arxiv"},
+        json={"payload": {"arxiv_ids": ["2401.00003", "2401.00004"]}},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["type"] == "result"
+    assert body["data"]["count"] == 1
+    assert body["data"]["items"][0]["title"] == "Detail Paper"
 
 
 def test_task_delete_prepare_forbidden_for_app_agent(monkeypatch) -> None:

@@ -35,10 +35,11 @@ const AGENT_CTX: AgentRequestContext = {
 
 const AgentDesk: React.FC = () => {
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: '我是 Ark 的 dashboard agent。我可以查看任务、更新任务，以及为敏感操作发起审批。',
+      content: '我是 Ark 的 dashboard agent。我可以查看和更新任务，也能获取 arXiv 当日候选、搜索论文、批量查看论文详情，并为敏感操作发起审批。',
     },
   ]);
   const [draft, setDraft] = useState('');
@@ -62,9 +63,15 @@ const AgentDesk: React.FC = () => {
         },
       });
       setSkills(items);
+      setSelectedSkills((prev) => {
+        if (prev.length === 0) return items.map((item) => item.name);
+        const next = prev.filter((name) => items.some((item) => item.name === name));
+        return next.length > 0 ? next : items.map((item) => item.name);
+      });
     } catch (err) {
       if (signal?.aborted) return;
       setSkills([]);
+      setSelectedSkills([]);
       setError(err instanceof Error ? err.message : '加载技能失败');
     } finally {
       if (!signal?.aborted) setLoadingSkills(false);
@@ -86,8 +93,14 @@ const AgentDesk: React.FC = () => {
   const skillCountText = useMemo(() => {
     if (loadingSkills) return '加载中...';
     if (error) return '加载失败';
-    return `${skills.length} 个可调用功能`;
-  }, [error, loadingSkills, skills.length]);
+    return `${selectedSkills.length} / ${skills.length} 个已启用功能`;
+  }, [error, loadingSkills, selectedSkills.length, skills.length]);
+
+  const selectedSkillSet = useMemo(() => new Set(selectedSkills), [selectedSkills]);
+
+  function toggleSkill(name: string) {
+    setSelectedSkills((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
+  }
 
   async function handleSend() {
     const content = draft.trim();
@@ -109,6 +122,7 @@ const AgentDesk: React.FC = () => {
           message: content,
           history: messages,
           scope: 'dashboard',
+          allowed_skills: selectedSkills,
         }),
       });
       setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
@@ -192,13 +206,24 @@ const AgentDesk: React.FC = () => {
             >
               {loadingSkills ? '刷新中...' : '重新加载技能'}
             </button>
+            {!loadingSkills && !error && skills.length > 0 ? (
+              <div className="mt-3 text-xs leading-5 text-white/45">只会把已勾选的 skills 暴露给 agent。</div>
+            ) : null}
           </div>
 
           <div className="mt-5 flex-1 space-y-3 overflow-y-auto pr-1">
             {skills.map((skill) => (
-              <div key={skill.name} className="rounded-2xl border border-white/8 bg-black/20 px-4 py-4">
+              <label key={skill.name} className="block cursor-pointer rounded-2xl border border-white/8 bg-black/20 px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium text-white">{skill.name}</div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedSkillSet.has(skill.name)}
+                      onChange={() => toggleSkill(skill.name)}
+                      className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
+                    />
+                    <div className="font-medium text-white">{skill.name}</div>
+                  </div>
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
                     {skill.side_effect}
                   </span>
@@ -208,7 +233,7 @@ const AgentDesk: React.FC = () => {
                   <ChevronRight size={14} />
                   <span>{skill.intent_scope}</span>
                 </div>
-              </div>
+              </label>
             ))}
           </div>
         </aside>
@@ -221,7 +246,7 @@ const AgentDesk: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-semibold">Ark Agent</h1>
-                <p className="text-sm text-white/50">任务调度、任务编辑与敏感操作审批助手</p>
+                <p className="text-sm text-white/50">任务调度、arXiv 检索与敏感操作审批助手</p>
               </div>
             </div>
             <div className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">

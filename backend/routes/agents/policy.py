@@ -5,6 +5,24 @@ from fastapi import Request
 from routes.agents.models import AgentContext, AgentType, PolicyRule
 
 POLICIES: dict[str, PolicyRule] = {
+    "arxiv.daily_candidates": PolicyRule(
+        action_id="arxiv.daily_candidates",
+        allowed_subjects=("dashboard_agent", "app_agent:arxiv"),
+        allowed_scopes=("app:arxiv",),
+        effect="read",
+    ),
+    "arxiv.search": PolicyRule(
+        action_id="arxiv.search",
+        allowed_subjects=("dashboard_agent", "app_agent:arxiv"),
+        allowed_scopes=("app:arxiv",),
+        effect="read",
+    ),
+    "arxiv.paper_details": PolicyRule(
+        action_id="arxiv.paper_details",
+        allowed_subjects=("dashboard_agent", "app_agent:arxiv"),
+        allowed_scopes=("app:arxiv",),
+        effect="read",
+    ),
     "task.list": PolicyRule(
         action_id="task.list",
         allowed_subjects=("dashboard_agent", "app_agent:arxiv", "app_agent:vocab"),
@@ -68,6 +86,12 @@ def resolve_agent_context(request: Request, user_id: int) -> AgentContext:
 
 
 def _scope_for_action(ctx: AgentContext, rule: PolicyRule) -> str | None:
+    if rule.action_id in {"arxiv.daily_candidates", "arxiv.search", "arxiv.paper_details"}:
+        if ctx.agent_type == "dashboard_agent":
+            return "app:arxiv"
+        if ctx.agent_type == "app_agent:arxiv" and (ctx.app_id is None or ctx.app_id == "arxiv"):
+            return "app:arxiv"
+        return None
     if rule.action_id == "task.list":
         if ctx.agent_type == "dashboard_agent":
             return "global_tasks"

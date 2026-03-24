@@ -47,6 +47,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     history: list[ChatMessage] = Field(default_factory=list)
     scope: str | None = Field(default=None, max_length=64)
+    allowed_skills: list[str] | None = Field(default=None, max_length=64)
 
 
 class ChatResponse(BaseModel):

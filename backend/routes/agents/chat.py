@@ -41,18 +41,28 @@ def max_tool_loops() -> int:
     return max(1, min(value, 8))
 
 
-def build_system_prompt() -> str:
-    return (
+def _allowed_skill_names(body: ChatRequest) -> list[str]:
+    registry = {skill.name for skill in list_agent_skills_registry()}
+    if body.allowed_skills is None:
+        return [skill.name for skill in list_agent_skills_registry()]
+    selected = [name.strip() for name in body.allowed_skills if isinstance(name, str) and name.strip() in registry]
+    return list(dict.fromkeys(selected))
+
+
+def build_system_prompt(allowed_skills: list[str]) -> str:
+    base = (
         "你是 Ark 的 dashboard agent，对话对象是产品用户。"
-        "你可以调用 skills 来查看任务、更新任务、发起敏感操作审批，以及准备 arXiv 每日任务。"
+        "你可以调用 skills 来查看任务、更新任务、发起敏感操作审批，以及获取 arXiv 当日候选、搜索论文、批量获取论文详情、准备 arXiv 每日任务。"
         "规则：1. 优先使用工具获取事实，不要编造任务数据。"
         "2. 如果工具返回 approval_required，向用户简洁解释将发生什么，并明确需要在前端确认。"
         "3. 不要声称已经完成需要确认的敏感操作，除非 commit 工具已经成功执行。"
         "4. 回答使用简体中文，简洁、自然、像产品里的助手。"
     )
+    return base + f" 5. 当前会话仅允许调用这些 skills：{', '.join(allowed_skills) or '无'}。不要调用未被允许的 skill。"
 
 
-def tool_definitions() -> list[dict[str, Any]]:
+def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, Any]]:
+    allowed = set(allowed_skills or [])
     tools = [
         {
             "type": "function",
@@ -63,6 +73,7 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         }
         for skill in list_agent_skills_registry()
+        if not allowed or skill.name in allowed
     ]
     tools.append(
         {
@@ -85,7 +96,8 @@ def tool_definitions() -> list[dict[str, Any]]:
 
 
 def messages_for_model(body: ChatRequest) -> list[dict[str, Any]]:
-    messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt()}]
+    allowed_skills = _allowed_skill_names(body)
+    messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt(allowed_skills)}]
     for item in body.history[-12:]:
         messages.append({"role": item.role, "content": item.content})
     messages.append({"role": "user", "content": body.message})
@@ -142,7 +154,7 @@ def parse_tool_arguments(raw: Any) -> dict[str, Any]:
 
 
 async def execute_tool_call(
-    pool: asyncpg.Pool, *, ctx: Any, call: dict[str, Any]
+    pool: asyncpg.Pool, *, ctx: Any, call: dict[str, Any], allowed_skills: set[str]
 ) -> tuple[dict[str, Any], AgentActionResponse | None]:
     function = call.get("function")
     if not isinstance(function, dict):
@@ -158,6 +170,8 @@ async def execute_tool_call(
             raise HTTPException(status_code=422, detail="approval_commit 参数无效")
         result = await execute_action_with_context(pool, action_name=commit_action, ctx=ctx, payload={"approval_id": approval_id})
     else:
+        if name not in allowed_skills:
+            raise HTTPException(status_code=403, detail=f"skill 未被当前会话允许：{name}")
         action_name = skill_action_map().get(name)
         if action_name is None:
             raise HTTPException(status_code=422, detail=f"未知 skill：{name}")
@@ -174,7 +188,8 @@ async def chat_with_agent(
 ) -> ChatResponse:
     ctx = resolve_agent_context(request, int(user.id))
     pool = pool_from_request(request)
-    tools = tool_definitions()
+    allowed_skills = _allowed_skill_names(body)
+    tools = tool_definitions(allowed_skills)
     messages = messages_for_model(body)
     latest_approval: AgentActionResponse | None = None
     for _ in range(max_tool_loops()):
@@ -187,7 +202,7 @@ async def chat_with_agent(
         if not tool_calls:
             return ChatResponse(reply=assistant_entry["content"] or "我已经处理好了。", approval=latest_approval)
         for call in tool_calls:
-            tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call)
+            tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
             if approval is not None:
                 latest_approval = approval
             messages.append(tool_message)

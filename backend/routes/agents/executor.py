@@ -12,7 +12,12 @@ from fastapi import HTTPException, Request
 
 from routes.agents.models import ActionDefinition, AgentActionResponse, AgentContext
 from routes.agents.policy import evaluate_policy, forbidden
-from routes.arxiv.service import batch_create_daily_tasks
+from routes.arxiv.service import (
+    batch_create_daily_tasks,
+    fetch_paper_details,
+    get_daily_candidates_with_auto_refresh,
+    search_arxiv_papers,
+)
 from routes.todo_routes import TaskOut, TaskUpdateRequest, _row_to_task
 
 APPROVAL_TTL = timedelta(minutes=10)
@@ -319,6 +324,68 @@ async def commit_arxiv_daily_tasks_action(conn: Any, *, user_id: int, payload: d
     return {"created_count": created_count, "skipped_count": skipped_count, "task_ids": task_ids}
 
 
+async def arxiv_daily_candidates_action(conn: Any, *, user_id: int) -> dict[str, Any]:
+    run_day = datetime.now(UTC).date()
+    items = await get_daily_candidates_with_auto_refresh(conn, user_id=user_id, run_day=run_day)
+    return {"items": items, "date": run_day.isoformat()}
+
+
+async def arxiv_search_action(payload: dict[str, Any]) -> dict[str, Any]:
+    keywords = payload.get("keywords")
+    if not isinstance(keywords, str) or not keywords.strip():
+        raise HTTPException(status_code=422, detail="缺少 keywords")
+
+    category = payload.get("category")
+    author = payload.get("author")
+    limit_raw = payload.get("limit", 20)
+    offset_raw = payload.get("offset", 0)
+    sort_by = payload.get("sort_by", "submitted_date")
+    sort_order = payload.get("sort_order", "descending")
+    search_field = payload.get("search_field", "title")
+
+    try:
+        limit = int(limit_raw)
+        offset = int(offset_raw)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="limit 或 offset 格式错误") from exc
+
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=422, detail="limit 必须在 1 到 100 之间")
+    if offset < 0:
+        raise HTTPException(status_code=422, detail="offset 不能小于 0")
+    if sort_by not in {"relevance", "submitted_date", "last_updated_date"}:
+        raise HTTPException(status_code=422, detail="sort_by 非法")
+    if sort_order not in {"ascending", "descending"}:
+        raise HTTPException(status_code=422, detail="sort_order 非法")
+    if search_field not in {"title", "summary", "all"}:
+        raise HTTPException(status_code=422, detail="search_field 非法")
+    if category is not None and not isinstance(category, str):
+        raise HTTPException(status_code=422, detail="category 格式错误")
+    if author is not None and not isinstance(author, str):
+        raise HTTPException(status_code=422, detail="author 格式错误")
+
+    items = await search_arxiv_papers(
+        keywords=keywords.strip(),
+        category=category.strip() if isinstance(category, str) and category.strip() else None,
+        author=author.strip() if isinstance(author, str) and author.strip() else None,
+        search_field=search_field,
+        limit=limit,
+        offset=offset,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return {"items": items, "count": len(items)}
+
+
+async def arxiv_paper_details_action(payload: dict[str, Any]) -> dict[str, Any]:
+    raw_ids = payload.get("arxiv_ids")
+    ids = [str(x).strip() for x in raw_ids if isinstance(x, str) and str(x).strip()] if isinstance(raw_ids, list) else []
+    if not ids:
+        raise HTTPException(status_code=422, detail="缺少 arxiv_ids")
+    items = await fetch_paper_details(ids)
+    return {"items": items, "count": len(items)}
+
+
 async def _handle_task_list(
     conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -358,6 +425,36 @@ async def _handle_arxiv_daily_tasks_prepare(
     return await prepare_arxiv_daily_tasks_action(conn, ctx=ctx, resource_scope=resource_scope, payload=payload)
 
 
+async def _handle_arxiv_daily_candidates(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = ctx
+    _ = payload
+    _ = resource_scope
+    _ = approval_payload
+    return await arxiv_daily_candidates_action(conn, user_id=ctx.user_id)
+
+
+async def _handle_arxiv_search(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = conn
+    _ = ctx
+    _ = resource_scope
+    _ = approval_payload
+    return await arxiv_search_action(payload)
+
+
+async def _handle_arxiv_paper_details(
+    conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
+) -> dict[str, Any]:
+    _ = conn
+    _ = ctx
+    _ = resource_scope
+    _ = approval_payload
+    return await arxiv_paper_details_action(payload)
+
+
 async def _handle_arxiv_daily_tasks_commit(
     conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -369,6 +466,21 @@ async def _handle_arxiv_daily_tasks_commit(
 
 
 ACTION_REGISTRY: dict[str, ActionDefinition] = {
+    "arxiv.daily_candidates": ActionDefinition(
+        action_id="arxiv.daily_candidates",
+        policy_action_id="arxiv.daily_candidates",
+        handler=_handle_arxiv_daily_candidates,
+    ),
+    "arxiv.search": ActionDefinition(
+        action_id="arxiv.search",
+        policy_action_id="arxiv.search",
+        handler=_handle_arxiv_search,
+    ),
+    "arxiv.paper_details": ActionDefinition(
+        action_id="arxiv.paper_details",
+        policy_action_id="arxiv.paper_details",
+        handler=_handle_arxiv_paper_details,
+    ),
     "task.list": ActionDefinition(
         action_id="task.list",
         policy_action_id="task.list",
