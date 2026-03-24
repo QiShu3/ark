@@ -1,8 +1,0 @@
-protocol_version = "2025-03-26"
-
-[deepseek]
-allow_tools = { time = ["get_current_time"], todo = ["list_today", "event_primary", "events_list", "focus_current", "focus_today", "focus_start", "focus_stop", "focus_workflow_current", "focus_workflow_ai_create"] }
-
-[[servers]]
-name = "time"
-command = ["python", "-u", "MCP/servers/mcp_time_server.py"]

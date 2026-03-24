@@ -1,12 +1,10 @@
 import React from 'react';
 import CharacterDisplay from './CharacterDisplay';
-import ChatBox from './ChatBox';
-import AIAssistantShell from './AIAssistantShell';
 import EventCountdownCard from './EventCountdownCard';
 
 /**
  * 左侧面板组件
- * 包含人物展示和聊天框
+ * 包含人物展示
  */
 const LeftPanel: React.FC = () => {
   return (
@@ -17,10 +15,6 @@ const LeftPanel: React.FC = () => {
       <div className="w-full h-full absolute top-0 left-0 pt-16 z-0 flex items-center justify-center">
         <CharacterDisplay />
       </div>
-      
-      <AIAssistantShell className="absolute bottom-6 left-6 right-6 h-[30%]">
-        <ChatBox />
-      </AIAssistantShell>
     </div>
   );
 };

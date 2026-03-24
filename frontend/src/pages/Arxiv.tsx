@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowDown, History, ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
 import Navigation from '../components/Navigation';
-import ChatBox from '../components/ChatBox';
-import AIAssistantShell from '../components/AIAssistantShell';
 import { apiJson } from '../lib/api';
 
 type SortBy = 'relevance' | 'submitted_date' | 'last_updated_date';
@@ -1177,21 +1175,6 @@ const Arxiv: React.FC = () => {
                   <div className="text-center text-white/50 py-10">暂无当日候选论文</div>
                 )}
               </div>
-
-              <AIAssistantShell className="h-[360px]">
-                <ChatBox
-                  apiPath="/api/chat"
-                  scope="daily"
-                  placeholder="例如：总结今日论文并建议阅读顺序"
-                  sendLabel="发送"
-                  quickReplies={[
-                    '请总结今日候选论文',
-                    '按优先级给我阅读顺序',
-                    '把今日论文加入任务（需确认）',
-                  ]}
-                  initialAssistantMessage={dailyAssistantInitialMessage}
-                />
-              </AIAssistantShell>
 
             </div>
           )}
