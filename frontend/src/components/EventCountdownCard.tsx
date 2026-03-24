@@ -48,6 +48,18 @@ function getCountdownDisplay(dueAt: string, nowMs: number): string {
   const dueMs = new Date(dueAt).getTime();
   if (Number.isNaN(dueMs)) return '--';
   const diff = Math.abs(dueMs - nowMs);
+  if (diff <= 60 * 60 * 1000) {
+    const totalSeconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  }
+  if (diff <= 24 * 60 * 60 * 1000) {
+    const totalMinutes = Math.floor(diff / (60 * 1000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  }
   const totalHours = Math.floor(diff / (60 * 60 * 1000));
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;
@@ -81,7 +93,7 @@ const EventCountdownCard: React.FC = () => {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setNowMs(Date.now());
-    }, 30 * 1000);
+    }, 1000);
     return () => window.clearInterval(timer);
   }, []);
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -40,6 +39,54 @@ describe('EventCountdownCard', () => {
 
     expect(await screen.findByText('论文投稿')).toBeInTheDocument();
     expect(screen.getByText('2d 03h')).toBeInTheDocument();
+  });
+
+  it('shows hour and minute when remaining time is within 24 hours', async () => {
+    const dueAt = new Date(Date.now() + (5 * 60 * 60 + 7 * 60 + 10) * 1000).toISOString();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') {
+        return {
+          id: 'event-1',
+          user_id: 7,
+          name: '论文投稿',
+          due_at: dueAt,
+          is_primary: true,
+          created_at: '2026-03-18T00:00:00Z',
+          updated_at: '2026-03-18T00:00:00Z',
+        };
+      }
+      if (url === '/todo/events') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    expect(await screen.findByText('论文投稿')).toBeInTheDocument();
+    expect(screen.getByText('5h 07m')).toBeInTheDocument();
+  });
+
+  it('shows minute and second when remaining time is within 1 hour', async () => {
+    const dueAt = new Date(Date.now() + (42 * 60 + 9) * 1000).toISOString();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') {
+        return {
+          id: 'event-1',
+          user_id: 7,
+          name: '论文投稿',
+          due_at: dueAt,
+          is_primary: true,
+          created_at: '2026-03-18T00:00:00Z',
+          updated_at: '2026-03-18T00:00:00Z',
+        };
+      }
+      if (url === '/todo/events') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    expect(await screen.findByText('论文投稿')).toBeInTheDocument();
+    expect(screen.getByText(/^42m 0[89]s$/)).toBeInTheDocument();
   });
 
   it('shows empty state when no primary event exists', async () => {
