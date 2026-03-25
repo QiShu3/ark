@@ -1,7 +1,6 @@
 import { apiFetch, apiJson } from './api';
 
 export type AgentActionType = 'result' | 'approval_required' | 'forbidden';
-export type AgentType = 'dashboard_agent' | 'app_agent:arxiv' | 'app_agent:vocab';
 
 export type AgentActionResponse<T = unknown> = {
   type: AgentActionType;
@@ -21,10 +20,20 @@ export type AgentActionResponse<T = unknown> = {
 };
 
 export type AgentRequestContext = {
-  agentType: AgentType;
-  appId?: string;
+  primaryAppId: string;
   sessionId?: string;
   capabilities?: string[];
+};
+
+export type AgentApp = {
+  app_id: string;
+  display_name: string;
+  description: string;
+  default_profile_name: string;
+  default_profile_description: string;
+  default_context_prompt: string;
+  default_skills: string[];
+  allowed_skill_apps: string[];
 };
 
 export type AgentProfile = {
@@ -32,10 +41,9 @@ export type AgentProfile = {
   user_id: number;
   name: string;
   description: string;
-  agent_type: AgentType;
-  app_id: string | null;
+  primary_app_id: string;
   avatar_url: string | null;
-  persona_prompt: string;
+  context_prompt: string;
   allowed_skills: string[];
   temperature: number;
   max_tool_loops: number;
@@ -47,9 +55,8 @@ export type AgentProfile = {
 export type AgentProfilePayload = {
   name: string;
   description: string;
-  agent_type: AgentType;
-  app_id: string | null;
-  persona_prompt: string;
+  primary_app_id: string;
+  context_prompt: string;
   allowed_skills: string[];
   temperature: number;
   max_tool_loops: number | null;
@@ -59,9 +66,8 @@ export type AgentProfilePayload = {
 function _headers(ctx: AgentRequestContext): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'X-Ark-Agent-Type': ctx.agentType,
+    'X-Ark-Primary-App-Id': ctx.primaryAppId,
   };
-  if (ctx.appId) headers['X-Ark-App-Id'] = ctx.appId;
   if (ctx.sessionId) headers['X-Ark-Session-Id'] = ctx.sessionId;
   if (ctx.capabilities?.length) headers['X-Ark-Capabilities'] = ctx.capabilities.join(',');
   return headers;
@@ -77,6 +83,10 @@ export async function executeAgentAction<T = unknown>(
     headers: _headers(ctx),
     body: JSON.stringify({ payload }),
   });
+}
+
+export async function listAgentApps(): Promise<AgentApp[]> {
+  return apiJson<AgentApp[]>('/api/agent/apps');
 }
 
 export async function listAgentProfiles(): Promise<AgentProfile[]> {

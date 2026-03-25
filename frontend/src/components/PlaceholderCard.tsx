@@ -783,7 +783,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     try {
       setTaskDeleteError(null);
       const action = await executeAgentAction('task.delete.prepare', { task_id: task.id }, {
-        agentType: 'dashboard_agent',
+        primaryAppId: 'dashboard',
       });
       if (action.type === 'forbidden') {
         throw new Error(action.reason || '当前 agent 无权删除任务');
@@ -800,7 +800,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     setTaskDeleteError(null);
     try {
       const result = await executeAgentAction(taskDeleteAction.commit_action, { approval_id: taskDeleteAction.approval_id }, {
-        agentType: 'dashboard_agent',
+        primaryAppId: 'dashboard',
       });
       if (result.type === 'forbidden') {
         throw new Error(result.reason || '审批票据无效');

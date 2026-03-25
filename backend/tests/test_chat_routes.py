@@ -52,10 +52,9 @@ def _profile(profile_id: str = "apf_default", *, temperature: float = 0.2, loops
         user_id=7,
         name="Ark Agent",
         description="Default profile",
-        agent_type="dashboard_agent",
-        app_id=None,
+        primary_app_id="dashboard",
         avatar_url=None,
-        persona_prompt="你像一个冷静的任务助手。",
+        context_prompt="你像一个冷静的任务助手。",
         allowed_skills=["task_list", "delete_task"],
         temperature=temperature,
         max_tool_loops=loops,
@@ -184,7 +183,9 @@ def test_chat_passes_allowed_skills_to_model(monkeypatch) -> None:
 def test_chat_uses_selected_profile(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
-    async def _fake_completion(messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2) -> dict[str, Any]:
+    async def _fake_completion(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ) -> dict[str, Any]:
         captured["system"] = messages[0]["content"]
         captured["tools"] = [tool["function"]["name"] for tool in tools]
         captured["temperature"] = temperature
@@ -196,7 +197,8 @@ def test_chat_uses_selected_profile(monkeypatch) -> None:
         return _profile("apf_custom", temperature=0.7, loops=6).model_copy(
             update={
                 "name": "Research Agent",
-                "persona_prompt": "你像一位学术研究助理。",
+                "primary_app_id": "arxiv",
+                "context_prompt": "你像一位学术研究助理。",
                 "allowed_skills": ["delete_task"],
             }
         )
@@ -209,6 +211,7 @@ def test_chat_uses_selected_profile(monkeypatch) -> None:
     assert resp.status_code == 200
     assert captured["tools"] == ["delete_task", "approval_commit"]
     assert "Research Agent" in captured["system"]
+    assert "当前主应用：ArXiv" in captured["system"]
     assert captured["temperature"] == 0.7
 
 

@@ -581,8 +581,7 @@ const Arxiv: React.FC = () => {
     try {
       const ids = dailyCandidates.map((x) => x.arxiv_id);
       const action = await executeAgentAction('arxiv.daily_tasks.prepare', { arxiv_ids: ids }, {
-        agentType: 'app_agent:arxiv',
-        appId: 'arxiv',
+        primaryAppId: 'arxiv',
       });
       if (action.type === 'forbidden') {
         throw new Error(action.reason || '当前 agent 无权执行该操作');
@@ -603,8 +602,7 @@ const Arxiv: React.FC = () => {
     setIsExecutingAction(true);
     try {
       const result = await executeAgentAction(confirmAction.commit_action, { approval_id: confirmAction.approval_id }, {
-        agentType: 'app_agent:arxiv',
-        appId: 'arxiv',
+        primaryAppId: 'arxiv',
       });
       if (result.type === 'forbidden') {
         throw new Error(result.reason || '审批票据无效');

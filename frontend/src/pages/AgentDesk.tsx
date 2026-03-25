@@ -4,12 +4,13 @@ import { Bot, Camera, CheckCircle2, LoaderCircle, Plus, Save, ShieldAlert, Spark
 import Navigation from '../components/Navigation';
 import {
   AgentActionResponse,
+  AgentApp,
   AgentProfile,
   AgentProfilePayload,
-  AgentType,
   createAgentProfile,
   deleteAgentProfile,
   executeAgentAction,
+  listAgentApps,
   listAgentProfiles,
   removeAgentProfileAvatar,
   setDefaultAgentProfile,
@@ -20,6 +21,7 @@ import { apiJson, apiSSE } from '../lib/api';
 
 type Skill = {
   name: string;
+  app_id: string;
   description: string;
   parameters: Record<string, unknown>;
   intent_scope: string;
@@ -38,7 +40,7 @@ type ToolTimelineItem = {
 };
 
 type ChatStreamEvent =
-  | { type: 'profile'; profile?: { id?: string; name?: string; agent_type?: string } }
+  | { type: 'profile'; profile?: { id?: string; name?: string; primary_app_id?: string } }
   | { type: 'message_delta'; delta?: string }
   | { type: 'tool_call'; name?: string | null }
   | { type: 'approval_required'; approval?: AgentActionResponse | null }
@@ -52,46 +54,6 @@ const sideEffectStyles: Record<Skill['side_effect'], string> = {
   write: 'bg-blue-500/15 text-blue-100 border border-blue-300/20',
   destructive: 'bg-red-500/15 text-red-100 border border-red-300/20',
 };
-
-const AGENT_LABELS: Record<AgentType, string> = {
-  dashboard_agent: 'Dashboard Agent',
-  'app_agent:arxiv': 'ArXiv Agent',
-  'app_agent:vocab': 'Vocab Agent',
-};
-
-function filterSkillsForAgent(agentType: AgentType, names: string[]): string[] {
-  if (agentType === 'app_agent:arxiv') return names.filter((name) => name.startsWith('arxiv_'));
-  if (agentType === 'app_agent:vocab') return names.filter((name) => !name.startsWith('arxiv_'));
-  return names;
-}
-
-function draftFromProfile(profile: AgentProfile): ProfileDraft {
-  return {
-    name: profile.name,
-    description: profile.description,
-    agent_type: profile.agent_type,
-    app_id: profile.app_id,
-    persona_prompt: profile.persona_prompt,
-    allowed_skills: profile.allowed_skills,
-    temperature: profile.temperature,
-    max_tool_loops: profile.max_tool_loops,
-    is_default: profile.is_default,
-  };
-}
-
-function createNewDraft(skills: Skill[]): ProfileDraft {
-  return {
-    name: 'New Agent',
-    description: '',
-    agent_type: 'dashboard_agent',
-    app_id: null,
-    persona_prompt: '',
-    allowed_skills: skills.map((skill) => skill.name),
-    temperature: 0.2,
-    max_tool_loops: 4,
-    is_default: false,
-  };
-}
 
 function profileAvatarSrc(profile: Pick<AgentProfile, 'avatar_url'> | null): string | null {
   return profile?.avatar_url || null;
@@ -117,7 +79,51 @@ function ProfileAvatar({
   );
 }
 
+function draftFromProfile(profile: AgentProfile): ProfileDraft {
+  return {
+    name: profile.name,
+    description: profile.description,
+    primary_app_id: profile.primary_app_id,
+    context_prompt: profile.context_prompt,
+    allowed_skills: profile.allowed_skills,
+    temperature: profile.temperature,
+    max_tool_loops: profile.max_tool_loops,
+    is_default: profile.is_default,
+  };
+}
+
+function getAppById(apps: AgentApp[], appId: string | null | undefined): AgentApp | null {
+  return apps.find((app) => app.app_id === appId) || null;
+}
+
+function createNewDraft(apps: AgentApp[]): ProfileDraft {
+  const fallbackApp = getAppById(apps, 'dashboard') || apps[0] || null;
+  return {
+    name: fallbackApp?.default_profile_name || 'New Agent',
+    description: fallbackApp?.default_profile_description || '',
+    primary_app_id: fallbackApp?.app_id || 'dashboard',
+    context_prompt: fallbackApp?.default_context_prompt || '',
+    allowed_skills: fallbackApp?.default_skills || [],
+    temperature: 0.2,
+    max_tool_loops: 4,
+    is_default: false,
+  };
+}
+
+function normalizeSkillsForApp(apps: AgentApp[], skills: Skill[], appId: string, selected: string[]): string[] {
+  const app = getAppById(apps, appId);
+  if (!app) return selected;
+  const allowedSkillApps = new Set(app.allowed_skill_apps);
+  const skillMap = new Map(skills.map((skill) => [skill.name, skill]));
+  const filtered = selected.filter((name) => {
+    const skill = skillMap.get(name);
+    return skill ? allowedSkillApps.has(skill.app_id) : false;
+  });
+  return filtered.length ? filtered : [...app.default_skills];
+}
+
 const AgentDesk: React.FC = () => {
+  const [apps, setApps] = useState<AgentApp[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [profiles, setProfiles] = useState<AgentProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -125,9 +131,8 @@ const AgentDesk: React.FC = () => {
   const [draft, setDraft] = useState<ProfileDraft>({
     name: 'Ark Agent',
     description: '',
-    agent_type: 'dashboard_agent',
-    app_id: null,
-    persona_prompt: '',
+    primary_app_id: 'dashboard',
+    context_prompt: '',
     allowed_skills: [],
     temperature: 0.2,
     max_tool_loops: 4,
@@ -155,22 +160,36 @@ const AgentDesk: React.FC = () => {
     [profiles, selectedProfileId],
   );
   const selectedSkillSet = useMemo(() => new Set(draft.allowed_skills), [draft.allowed_skills]);
+  const appsById = useMemo(() => new Map(apps.map((app) => [app.app_id, app])), [apps]);
+  const visibleSkillGroups = useMemo(() => {
+    const app = appsById.get(draft.primary_app_id);
+    const allowedApps = new Set(app?.allowed_skill_apps || []);
+    const groups = new Map<string, Skill[]>();
+    for (const skill of skills) {
+      if (allowedApps.size && !allowedApps.has(skill.app_id)) continue;
+      const list = groups.get(skill.app_id) || [];
+      list.push(skill);
+      groups.set(skill.app_id, list);
+    }
+    const primary = draft.primary_app_id;
+    return [...groups.entries()].sort(([a], [b]) => {
+      if (a === primary) return -1;
+      if (b === primary) return 1;
+      return a.localeCompare(b);
+    });
+  }, [appsById, draft.primary_app_id, skills]);
 
   async function loadInitialData(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
     try {
-      const [skillItems, profileItems] = await Promise.all([
-        apiJson<Skill[]>('/api/agent/skills', {
-          signal,
-          headers: {
-            'X-Ark-Agent-Type': 'dashboard_agent',
-            'X-Ark-Session-Id': sessionIdRef.current,
-          },
-        }),
+      const [appItems, skillItems, profileItems] = await Promise.all([
+        listAgentApps(),
+        apiJson<Skill[]>('/api/agent/skills', { signal }),
         listAgentProfiles(),
       ]);
       if (signal?.aborted) return;
+      setApps(appItems);
       setSkills(skillItems);
       setProfiles(profileItems);
       const current = profileItems.find((item) => item.is_default) || profileItems[0] || null;
@@ -178,17 +197,11 @@ const AgentDesk: React.FC = () => {
       if (current) {
         setDraftProfileId(current.id);
         setDraft(draftFromProfile(current));
-        setMessages([
-          {
-            role: 'assistant',
-            content: `我是 ${current.name}。${current.description || '我会按当前 profile 的风格与技能集来帮助你。'}`,
-          },
-        ]);
+        setMessages([{ role: 'assistant', content: `我是 ${current.name}。${current.description || '我会按当前配置来帮助你。'}` }]);
       } else {
-        setDraft(createNewDraft(skillItems));
-        setMessages([
-          { role: 'assistant', content: '当前还没有可用的 Agent Profile，请先创建一个。' },
-        ]);
+        const nextDraft = createNewDraft(appItems);
+        setDraft(nextDraft);
+        setMessages([{ role: 'assistant', content: '当前还没有可用的 Agent Profile，请先创建一个。' }]);
       }
     } catch (err) {
       if (signal?.aborted) return;
@@ -218,24 +231,20 @@ const AgentDesk: React.FC = () => {
     setApproval(null);
     setToolTimeline([]);
     setStreamStatus(null);
-    setMessages([
-      {
-        role: 'assistant',
-        content: `已切换到 ${profile.name}。${profile.description || '这个 Agent 已准备好开始工作。'}`,
-      },
-    ]);
+    setMessages([{ role: 'assistant', content: `已切换到 ${profile.name}。${profile.description || '这个 Agent 已准备好开始工作。'}` }]);
   }
 
   function startCreateProfile() {
     streamAbortRef.current?.abort();
     sessionIdRef.current = crypto.randomUUID();
-    setDraft(createNewDraft(skills));
+    const nextDraft = createNewDraft(apps);
+    setDraft(nextDraft);
     setDraftProfileId(null);
     setIsCreatingNew(true);
     setApproval(null);
     setToolTimeline([]);
     setStreamStatus(null);
-    setMessages([{ role: 'assistant', content: '新 Agent 草稿已创建。你可以先配置风格、技能和模型参数。' }]);
+    setMessages([{ role: 'assistant', content: '新 Agent 草稿已创建。你可以先配置主应用、上下文和技能。' }]);
   }
 
   function toggleSkill(name: string) {
@@ -249,6 +258,16 @@ const AgentDesk: React.FC = () => {
 
   function updateDraft<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updatePrimaryApp(appId: string) {
+    const app = appsById.get(appId);
+    setDraft((prev) => ({
+      ...prev,
+      primary_app_id: appId,
+      context_prompt: prev.context_prompt.trim() ? prev.context_prompt : app?.default_context_prompt || '',
+      allowed_skills: normalizeSkillsForApp(apps, skills, appId, prev.allowed_skills),
+    }));
   }
 
   async function reloadProfiles(nextSelectedId?: string | null) {
@@ -275,7 +294,7 @@ const AgentDesk: React.FC = () => {
     try {
       const payload: AgentProfilePayload = {
         ...draft,
-        app_id: draft.agent_type === 'dashboard_agent' ? null : draft.app_id,
+        allowed_skills: normalizeSkillsForApp(apps, skills, draft.primary_app_id, draft.allowed_skills),
         max_tool_loops: draft.max_tool_loops ?? 4,
       };
       const saved = isCreatingNew || !draftProfileId
@@ -283,12 +302,7 @@ const AgentDesk: React.FC = () => {
         : await updateAgentProfile(draftProfileId, payload);
       const current = await reloadProfiles(saved.id);
       if (current) {
-        setMessages([
-          {
-            role: 'assistant',
-            content: `${current.name} 已保存。之后的聊天会按这个 profile 的风格和技能配置运行。`,
-          },
-        ]);
+        setMessages([{ role: 'assistant', content: `${current.name} 已保存。之后的聊天会按这个配置运行。` }]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存 Profile 失败');
@@ -305,14 +319,7 @@ const AgentDesk: React.FC = () => {
     try {
       await deleteAgentProfile(selectedProfile.id);
       const current = await reloadProfiles(null);
-      setMessages([
-        {
-          role: 'assistant',
-          content: current
-            ? `已删除原 Profile，当前切换到 ${current.name}。`
-            : '已删除 Profile。',
-        },
-      ]);
+      setMessages([{ role: 'assistant', content: current ? `已删除原 Profile，当前切换到 ${current.name}。` : '已删除 Profile。' }]);
       setApproval(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除 Profile 失败');
@@ -328,12 +335,7 @@ const AgentDesk: React.FC = () => {
     try {
       const saved = await setDefaultAgentProfile(selectedProfile.id);
       await reloadProfiles(saved.id);
-      setMessages([
-        {
-          role: 'assistant',
-          content: `${saved.name} 已设置为默认 Agent。`,
-        },
-      ]);
+      setMessages([{ role: 'assistant', content: `${saved.name} 已设置为默认 Agent。` }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : '设置默认 Profile 失败');
     } finally {
@@ -396,7 +398,7 @@ const AgentDesk: React.FC = () => {
           profile_id: selectedProfileId,
           message: content,
           history: messages,
-          scope: selectedProfile?.agent_type || 'dashboard_agent',
+          scope: selectedProfile?.primary_app_id || 'dashboard',
         },
         (event) => {
           const item = event as ChatStreamEvent;
@@ -420,27 +422,13 @@ const AgentDesk: React.FC = () => {
           }
           if (item.type === 'tool_call') {
             setStreamStatus(item.name ? `正在调用 ${item.name}` : '正在调用工具...');
-            setToolTimeline((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                label: item.name ? `调用技能 ${item.name}` : '调用工具',
-                kind: 'tool',
-              },
-            ]);
+            setToolTimeline((prev) => [...prev, { id: crypto.randomUUID(), label: item.name ? `调用技能 ${item.name}` : '调用工具', kind: 'tool' }]);
             return;
           }
           if (item.type === 'approval_required') {
             setApproval(item.approval || null);
             setStreamStatus('敏感操作需要你确认');
-            setToolTimeline((prev) => [
-              ...prev,
-              {
-                id: crypto.randomUUID(),
-                label: item.approval?.title || '触发敏感操作确认',
-                kind: 'approval',
-              },
-            ]);
+            setToolTimeline((prev) => [...prev, { id: crypto.randomUUID(), label: item.approval?.title || '触发敏感操作确认', kind: 'approval' }]);
             return;
           }
           if (item.type === 'done') {
@@ -515,8 +503,7 @@ const AgentDesk: React.FC = () => {
         approval.commit_action,
         { approval_id: approval.approval_id },
         {
-          agentType: selectedProfile.agent_type,
-          appId: selectedProfile.app_id || undefined,
+          primaryAppId: selectedProfile.primary_app_id,
           sessionId: sessionIdRef.current,
         },
       );
@@ -553,7 +540,7 @@ const AgentDesk: React.FC = () => {
             </div>
             <div>
               <div className="text-lg font-semibold">Agents</div>
-              <div className="mt-1 text-sm text-white/55">创建、切换并管理不同风格与能力组合的 Agent。</div>
+              <div className="mt-1 text-sm text-white/55">创建、切换并管理不同工作区与能力组合的 Agent。</div>
             </div>
           </div>
 
@@ -566,31 +553,34 @@ const AgentDesk: React.FC = () => {
           </button>
 
           <div className="mt-5 space-y-3">
-            {profiles.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => selectExistingProfile(profile)}
-                className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
-                  selectedProfileId === profile.id
-                    ? 'border-cyan-300/30 bg-cyan-400/12'
-                    : 'border-white/8 bg-black/20 hover:bg-white/8'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <ProfileAvatar profile={profile} sizeClass="h-11 w-11" />
-                    <div>
-                      <div className="font-medium text-white">{profile.name}</div>
-                      <div className="mt-1 text-xs text-white/45">{AGENT_LABELS[profile.agent_type]}</div>
+            {profiles.map((profile) => {
+              const profileApp = appsById.get(profile.primary_app_id);
+              return (
+                <button
+                  key={profile.id}
+                  onClick={() => selectExistingProfile(profile)}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                    selectedProfileId === profile.id
+                      ? 'border-cyan-300/30 bg-cyan-400/12'
+                      : 'border-white/8 bg-black/20 hover:bg-white/8'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <ProfileAvatar profile={profile} sizeClass="h-11 w-11" />
+                      <div>
+                        <div className="font-medium text-white">{profile.name}</div>
+                        <div className="mt-1 text-xs text-white/45">{profileApp?.display_name || profile.primary_app_id}</div>
+                      </div>
                     </div>
+                    {profile.is_default ? (
+                      <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">默认</span>
+                    ) : null}
                   </div>
-                  {profile.is_default ? (
-                    <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">默认</span>
-                  ) : null}
-                </div>
-                <div className="mt-2 line-clamp-2 text-sm leading-6 text-white/58">{profile.description || '未填写简介'}</div>
-              </button>
-            ))}
+                  <div className="mt-2 line-clamp-2 text-sm leading-6 text-white/58">{profile.description || '未填写简介'}</div>
+                </button>
+              );
+            })}
           </div>
         </aside>
 
@@ -641,6 +631,7 @@ const AgentDesk: React.FC = () => {
                   </div>
                 </div>
               </div>
+
               <div>
                 <div className="mb-2 text-sm text-white/60">名称</div>
                 <input
@@ -649,6 +640,7 @@ const AgentDesk: React.FC = () => {
                   className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                 />
               </div>
+
               <div>
                 <div className="mb-2 text-sm text-white/60">简介</div>
                 <textarea
@@ -657,37 +649,32 @@ const AgentDesk: React.FC = () => {
                   className="min-h-[76px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                 />
               </div>
+
               <div>
-                <div className="mb-2 text-sm text-white/60">Agent 类型</div>
+                <div className="mb-2 text-sm text-white/60">主应用 / 工作区</div>
                 <select
-                  value={draft.agent_type}
-                  onChange={(e) => {
-                    const nextType = e.target.value as AgentType;
-                    setDraft((prev) => ({
-                      ...prev,
-                      agent_type: nextType,
-                      app_id: nextType === 'dashboard_agent' ? null : nextType === 'app_agent:arxiv' ? 'arxiv' : 'vocab',
-                      allowed_skills: filterSkillsForAgent(nextType, prev.allowed_skills),
-                    }));
-                  }}
+                  value={draft.primary_app_id}
+                  onChange={(e) => updatePrimaryApp(e.target.value)}
                   className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                 >
-                  {Object.entries(AGENT_LABELS).map(([key, label]) => (
-                    <option key={key} value={key} className="bg-slate-900">
-                      {label}
+                  {apps.map((app) => (
+                    <option key={app.app_id} value={app.app_id} className="bg-slate-900">
+                      {app.display_name}
                     </option>
                   ))}
                 </select>
               </div>
+
               <div>
-                <div className="mb-2 text-sm text-white/60">Persona Prompt</div>
+                <div className="mb-2 text-sm text-white/60">上下文描述</div>
                 <textarea
-                  value={draft.persona_prompt}
-                  onChange={(e) => updateDraft('persona_prompt', e.target.value)}
+                  value={draft.context_prompt}
+                  onChange={(e) => updateDraft('context_prompt', e.target.value)}
                   className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
-                  placeholder="定义这个 Agent 的说话风格、行为偏好和身份设定。"
+                  placeholder="描述这个 agent 的职责、服务对象、工作场景和行为风格。"
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="mb-2 text-sm text-white/60">Temperature</div>
@@ -719,26 +706,45 @@ const AgentDesk: React.FC = () => {
                   <div className="text-sm text-white/60">启用 Skills</div>
                   <div className="text-xs text-white/40">{draft.allowed_skills.length} / {skills.length}</div>
                 </div>
-                <div className="max-h-[260px] space-y-3 overflow-y-auto pr-1">
-                  {skills.map((skill) => (
-                    <label key={skill.name} className="block rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedSkillSet.has(skill.name)}
-                            onChange={() => toggleSkill(skill.name)}
-                            className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
-                          />
-                          <div className="font-medium text-white">{skill.name}</div>
+                <div className="max-h-[320px] space-y-4 overflow-y-auto pr-1">
+                  {visibleSkillGroups.map(([appId, items]) => {
+                    const app = appsById.get(appId);
+                    const isPrimary = appId === draft.primary_app_id;
+                    return (
+                      <div key={appId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-medium text-white">{app?.display_name || appId}</div>
+                            <div className="text-xs text-white/45">{isPrimary ? '主应用技能组' : '跨应用技能组'}</div>
+                          </div>
+                          {isPrimary ? (
+                            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-100">Primary</span>
+                          ) : null}
                         </div>
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
-                          {skill.side_effect}
-                        </span>
+                        <div className="space-y-3">
+                          {items.map((skill) => (
+                            <label key={skill.name} className="block rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedSkillSet.has(skill.name)}
+                                    onChange={() => toggleSkill(skill.name)}
+                                    className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
+                                  />
+                                  <div className="font-medium text-white">{skill.name}</div>
+                                </div>
+                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
+                                  {skill.side_effect}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-sm leading-6 text-white/58">{skill.description}</div>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                      <div className="mt-2 text-sm leading-6 text-white/58">{skill.description}</div>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -784,7 +790,7 @@ const AgentDesk: React.FC = () => {
                 </div>
               </div>
               <div className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
-                {selectedProfile ? AGENT_LABELS[selectedProfile.agent_type] : 'No Profile'}
+                {selectedProfile ? appsById.get(selectedProfile.primary_app_id)?.display_name || selectedProfile.primary_app_id : 'No Profile'}
               </div>
             </div>
 
@@ -860,7 +866,7 @@ const AgentDesk: React.FC = () => {
                 {sending ? (
                   <div className="flex max-w-[85%] items-center gap-3 rounded-3xl border border-white/8 bg-white/8 px-4 py-3 text-sm text-white/70">
                     <LoaderCircle size={18} className="animate-spin" />
-                    {streamStatus || 'Agent 正在按当前 profile 思考与调用工具'}
+                    {streamStatus || 'Agent 正在按当前配置思考与调用工具'}
                   </div>
                 ) : null}
                 <div ref={listEndRef} />

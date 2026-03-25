@@ -1,3 +1,4 @@
+from routes.agents.apps import AppDefinition, get_app_definition, list_agent_apps_registry
 from routes.agents.chat import router as chat_router
 from routes.agents.executor import (
     commit_arxiv_daily_tasks_action,
@@ -16,6 +17,7 @@ from routes.agents.executor import (
 from routes.agents.models import (
     AgentActionRequest,
     AgentActionResponse,
+    AgentAppOut,
     AgentContext,
     AgentProfileCreateRequest,
     AgentProfileOut,
@@ -48,7 +50,9 @@ from routes.agents.skills import list_agent_skills_registry, skill_action_map
 __all__ = [
     "AgentActionRequest",
     "AgentActionResponse",
+    "AgentAppOut",
     "AgentContext",
+    "AppDefinition",
     "AgentProfileCreateRequest",
     "AgentProfileOut",
     "AgentProfileUpdateRequest",
@@ -69,10 +73,12 @@ __all__ = [
     "execute_action_with_context",
     "fetch_task_row",
     "forbidden",
+    "get_app_definition",
     "get_default_profile",
     "get_profile_by_id",
     "init_agent",
     "init_agent_profiles",
+    "list_agent_apps_registry",
     "list_agent_skills_registry",
     "list_profiles",
     "list_tasks_action",

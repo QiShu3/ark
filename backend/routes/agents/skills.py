@@ -5,6 +5,7 @@ from routes.agents.models import AgentSkillOut
 SKILLS: tuple[AgentSkillOut, ...] = (
     AgentSkillOut(
         name="arxiv_daily_candidates",
+        app_id="arxiv",
         description="获取今天的 arXiv 候选论文列表；如果当天数据还没生成，会按现有每日配置自动刷新。",
         parameters={
             "type": "object",
@@ -15,6 +16,7 @@ SKILLS: tuple[AgentSkillOut, ...] = (
     ),
     AgentSkillOut(
         name="arxiv_search",
+        app_id="arxiv",
         description="搜索 arXiv 论文，支持关键词、分类、作者、搜索字段、排序和分页。",
         parameters={
             "type": "object",
@@ -38,6 +40,7 @@ SKILLS: tuple[AgentSkillOut, ...] = (
     ),
     AgentSkillOut(
         name="arxiv_paper_details",
+        app_id="arxiv",
         description="根据 arXiv id 批量获取论文详情。",
         parameters={
             "type": "object",
@@ -51,6 +54,7 @@ SKILLS: tuple[AgentSkillOut, ...] = (
     ),
     AgentSkillOut(
         name="task_list",
+        app_id="todo",
         description="列出任务。应用 agent 若只具备跨应用摘要权限，工具只会返回摘要视图。",
         parameters={
             "type": "object",
@@ -66,6 +70,7 @@ SKILLS: tuple[AgentSkillOut, ...] = (
     ),
     AgentSkillOut(
         name="task_update",
+        app_id="todo",
         description="更新任务字段，如状态、标题、优先级或时间。",
         parameters={
             "type": "object",
@@ -80,6 +85,7 @@ SKILLS: tuple[AgentSkillOut, ...] = (
     ),
     AgentSkillOut(
         name="delete_task",
+        app_id="todo",
         description="删除指定任务。若属于敏感操作，工具会先返回审批请求。",
         parameters={
             "type": "object",
@@ -91,6 +97,7 @@ SKILLS: tuple[AgentSkillOut, ...] = (
     ),
     AgentSkillOut(
         name="arxiv_daily_tasks_prepare",
+        app_id="arxiv",
         description="将今日论文候选转为任务。工具会返回审批请求。",
         parameters={
             "type": "object",
@@ -121,3 +128,10 @@ def list_agent_skills_registry() -> list[AgentSkillOut]:
 
 def skill_action_map() -> dict[str, str]:
     return dict(SKILL_TO_ACTION)
+
+
+def skills_by_app() -> dict[str, list[AgentSkillOut]]:
+    grouped: dict[str, list[AgentSkillOut]] = {}
+    for skill in SKILLS:
+        grouped.setdefault(skill.app_id, []).append(skill)
+    return grouped

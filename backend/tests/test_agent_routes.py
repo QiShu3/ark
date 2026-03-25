@@ -51,7 +51,7 @@ class _FakeAgentConn:
                 "user_id": 7,
                 "name": "Ark Agent",
                 "description": "Default profile",
-                "agent_type": "dashboard_agent",
+                "agent_type": "dashboard",
                 "app_id": None,
                 "avatar_url": None,
                 "persona_prompt": "Default persona",
@@ -68,7 +68,7 @@ class _FakeAgentConn:
         if "INSERT INTO agent_profiles" in sql:
             now = datetime.now(UTC)
             if len(args) == 6:
-                agent_type = "dashboard_agent"
+                agent_type = "dashboard"
                 app_id = None
                 avatar_url = None
                 persona_prompt = str(args[4])
@@ -78,13 +78,13 @@ class _FakeAgentConn:
                 is_default = True
             else:
                 agent_type = str(args[4])
-                app_id = args[5]
+                app_id = None
                 avatar_url = None
-                persona_prompt = str(args[6])
-                allowed_skills_json = json.loads(str(args[7]))
-                temperature = float(args[8])
-                max_tool_loops = int(args[9])
-                is_default = bool(args[10])
+                persona_prompt = str(args[5])
+                allowed_skills_json = json.loads(str(args[6]))
+                temperature = float(args[7])
+                max_tool_loops = int(args[8])
+                is_default = bool(args[9])
             row = {
                 "id": str(args[0]),
                 "user_id": int(args[1]),
@@ -132,13 +132,13 @@ class _FakeAgentConn:
                     "name": str(args[0]),
                     "description": str(args[1]),
                     "agent_type": str(args[2]),
-                    "app_id": args[3],
-                    "avatar_url": args[4],
-                    "persona_prompt": str(args[5]),
-                    "allowed_skills_json": json.loads(str(args[6])),
-                    "temperature": float(args[7]),
-                    "max_tool_loops": int(args[8]),
-                    "is_default": bool(args[9]),
+                    "app_id": None,
+                    "avatar_url": args[3],
+                    "persona_prompt": str(args[4]),
+                    "allowed_skills_json": json.loads(str(args[5])),
+                    "temperature": float(args[6]),
+                    "max_tool_loops": int(args[7]),
+                    "is_default": bool(args[8]),
                     "updated_at": datetime.now(UTC),
                 }
             )
@@ -213,7 +213,7 @@ class _FakeAgentConn:
                 "id": approval_id,
                 "user_id": int(args[1]),
                 "agent_type": str(args[2]),
-                "app_id": args[3],
+                "primary_app_id": args[3],
                 "session_id": args[4],
                 "action_id": str(args[5]),
                 "payload_json": {"task_id": self.task_id},
@@ -277,10 +277,10 @@ def client_profile(profile_id: str, *, is_default: bool) -> dict[str, Any]:
         "user_id": 7,
         "name": "Second Profile",
         "description": "Another profile",
-        "agent_type": "dashboard_agent",
+        "agent_type": "dashboard",
         "app_id": None,
         "avatar_url": None,
-        "persona_prompt": "Another persona",
+        "persona_prompt": "Another context",
         "allowed_skills_json": ["task_list"],
         "temperature": 0.3,
         "max_tool_loops": 4,
@@ -309,6 +309,20 @@ def test_list_agent_skills_smoke(monkeypatch) -> None:
     assert "arxiv_paper_details" in names
     assert "delete_task" in names
     assert "task_update" in names
+
+
+def test_list_agent_apps_smoke(monkeypatch) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    client = TestClient(_build_app())
+    resp = client.get("/api/agent/apps")
+    assert resp.status_code == 200
+    body = resp.json()
+    app_ids = [item["app_id"] for item in body]
+    assert "dashboard" in app_ids
+    assert "arxiv" in app_ids
+    assert "vocab" in app_ids
+    assert "todo" in app_ids
 
 
 def test_list_profiles_returns_default_profile(monkeypatch) -> None:
@@ -345,8 +359,8 @@ def test_create_profile_for_arxiv_agent_normalizes_app_scope(monkeypatch) -> Non
         "/api/agent/profiles",
         json={
             "name": "Researcher",
-            "agent_type": "app_agent:arxiv",
-            "app_id": "custom",
+            "primary_app_id": "arxiv",
+            "context_prompt": "你是一个专注论文阅读和任务整理的研究助手。",
             "allowed_skills": ["arxiv_search", "arxiv_paper_details"],
             "temperature": 0.6,
             "max_tool_loops": 5,
@@ -354,8 +368,9 @@ def test_create_profile_for_arxiv_agent_normalizes_app_scope(monkeypatch) -> Non
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["agent_type"] == "app_agent:arxiv"
-    assert body["app_id"] == "arxiv"
+    assert body["primary_app_id"] == "arxiv"
+    assert body["context_prompt"] == "你是一个专注论文阅读和任务整理的研究助手。"
+    assert body["allowed_skills"] == ["arxiv_search", "arxiv_paper_details"]
 
 
 def test_delete_default_profile_falls_back_to_remaining(monkeypatch) -> None:
@@ -457,7 +472,7 @@ def test_dashboard_agent_can_search_arxiv(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/arxiv.search",
-        headers={"X-Ark-Agent-Type": "dashboard_agent"},
+        headers={"X-Ark-Primary-App-Id": "dashboard"},
         json={"payload": {"keywords": "transformer", "limit": 5}},
     )
     assert resp.status_code == 200
@@ -490,7 +505,7 @@ def test_app_agent_can_get_daily_candidates(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/arxiv.daily_candidates",
-        headers={"X-Ark-Agent-Type": "app_agent:arxiv", "X-Ark-App-Id": "arxiv"},
+        headers={"X-Ark-Primary-App-Id": "arxiv"},
         json={"payload": {}},
     )
     assert resp.status_code == 200
@@ -519,7 +534,7 @@ def test_app_agent_can_get_paper_details(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/arxiv.paper_details",
-        headers={"X-Ark-Agent-Type": "app_agent:arxiv", "X-Ark-App-Id": "arxiv"},
+        headers={"X-Ark-Primary-App-Id": "arxiv"},
         json={"payload": {"arxiv_ids": ["2401.00003", "2401.00004"]}},
     )
     assert resp.status_code == 200
@@ -535,7 +550,7 @@ def test_task_delete_prepare_forbidden_for_app_agent(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.delete.prepare",
-        headers={"X-Ark-Agent-Type": "app_agent:arxiv", "X-Ark-App-Id": "arxiv"},
+        headers={"X-Ark-Primary-App-Id": "arxiv"},
         json={"payload": {"task_id": conn.task_id}},
     )
     assert resp.status_code == 200
@@ -549,7 +564,7 @@ def test_task_list_summary_requires_capability(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.list",
-        headers={"X-Ark-Agent-Type": "app_agent:arxiv", "X-Ark-App-Id": "arxiv"},
+        headers={"X-Ark-Primary-App-Id": "arxiv"},
         json={"payload": {}},
     )
     assert resp.status_code == 200
@@ -574,8 +589,7 @@ def test_task_list_summary_with_capability(monkeypatch) -> None:
     resp = client.post(
         "/api/agent/actions/task.list",
         headers={
-            "X-Ark-Agent-Type": "app_agent:arxiv",
-            "X-Ark-App-Id": "arxiv",
+            "X-Ark-Primary-App-Id": "arxiv",
             "X-Ark-Capabilities": "cross_app.read.summary",
         },
         json={"payload": {}},
@@ -593,7 +607,7 @@ def test_task_delete_prepare_and_commit(monkeypatch) -> None:
 
     prepare = client.post(
         "/api/agent/actions/task.delete.prepare",
-        headers={"X-Ark-Agent-Type": "dashboard_agent"},
+        headers={"X-Ark-Primary-App-Id": "dashboard"},
         json={"payload": {"task_id": conn.task_id}},
     )
     assert prepare.status_code == 200
@@ -604,7 +618,7 @@ def test_task_delete_prepare_and_commit(monkeypatch) -> None:
 
     commit = client.post(
         "/api/agent/actions/task.delete.commit",
-        headers={"X-Ark-Agent-Type": "dashboard_agent"},
+        headers={"X-Ark-Primary-App-Id": "dashboard"},
         json={"payload": {"approval_id": approval_id}},
     )
     assert commit.status_code == 200
@@ -615,7 +629,7 @@ def test_task_delete_prepare_and_commit(monkeypatch) -> None:
 
     second_commit = client.post(
         "/api/agent/actions/task.delete.commit",
-        headers={"X-Ark-Agent-Type": "dashboard_agent"},
+        headers={"X-Ark-Primary-App-Id": "dashboard"},
         json={"payload": {"approval_id": approval_id}},
     )
     assert second_commit.status_code == 200
@@ -628,8 +642,8 @@ def test_task_delete_commit_rejects_expired_approval(monkeypatch) -> None:
     conn.approvals[expired_id] = {
         "id": expired_id,
         "user_id": 7,
-        "agent_type": "dashboard_agent",
-        "app_id": None,
+        "agent_type": "dashboard",
+        "primary_app_id": "dashboard",
         "session_id": None,
         "action_id": "task.delete",
         "payload_json": {"task_id": conn.task_id},
@@ -640,7 +654,7 @@ def test_task_delete_commit_rejects_expired_approval(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.delete.commit",
-        headers={"X-Ark-Agent-Type": "dashboard_agent"},
+        headers={"X-Ark-Primary-App-Id": "dashboard"},
         json={"payload": {"approval_id": expired_id}},
     )
     assert resp.status_code == 200

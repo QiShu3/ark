@@ -42,8 +42,8 @@ async def init_agent(app: Any) -> None:
             CREATE TABLE IF NOT EXISTS agent_approvals (
               id TEXT PRIMARY KEY,
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              agent_type TEXT NOT NULL,
-              app_id TEXT NULL,
+              agent_type TEXT NULL,
+              primary_app_id TEXT NULL,
               session_id TEXT NULL,
               action_id TEXT NOT NULL,
               payload_json JSONB NOT NULL,
@@ -57,6 +57,7 @@ async def init_agent(app: Any) -> None:
             );
             """
         )
+        await conn.execute("ALTER TABLE agent_approvals ADD COLUMN IF NOT EXISTS primary_app_id TEXT NULL;")
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_agent_approvals_user_status ON agent_approvals(user_id, status, expires_at);"
         )
@@ -83,15 +84,15 @@ async def create_approval(
     await conn.execute(
         """
         INSERT INTO agent_approvals(
-            id, user_id, agent_type, app_id, session_id, action_id,
+            id, user_id, agent_type, primary_app_id, session_id, action_id,
             payload_json, payload_hash, resource_scope, status, expires_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, 'pending', $10)
         """,
         approval_id,
         ctx.user_id,
-        ctx.agent_type,
-        ctx.app_id,
+        ctx.primary_app_id,
+        ctx.primary_app_id,
         ctx.session_id,
         action_id,
         canonical_json(payload),
@@ -111,18 +112,23 @@ async def consume_approval(
 ) -> dict[str, Any] | None:
     row = await conn.fetchrow(
         """
-        SELECT id, payload_json, status, expires_at, action_id, agent_type, app_id, session_id
+        SELECT id, payload_json, status, expires_at, action_id, agent_type, primary_app_id, session_id
         FROM agent_approvals
         WHERE id = $1 AND user_id = $2
         """,
         approval_id,
         ctx.user_id,
     )
-    if row is None or str(row["action_id"]) != action_id or str(row["agent_type"]) != ctx.agent_type:
+    approval_primary_app_id = None
+    if row is not None:
+        if "primary_app_id" in row and row["primary_app_id"] is not None:
+            approval_primary_app_id = str(row["primary_app_id"])
+        elif row["agent_type"] is not None:
+            approval_primary_app_id = str(row["agent_type"])
+    if row is None or str(row["action_id"]) != action_id or approval_primary_app_id != ctx.primary_app_id:
         return None
-    row_app_id = str(row["app_id"]) if row["app_id"] is not None else None
     row_session_id = str(row["session_id"]) if row["session_id"] is not None else None
-    if row_app_id != ctx.app_id or row_session_id != ctx.session_id or str(row["status"]) != "pending":
+    if row_session_id != ctx.session_id or str(row["status"]) != "pending":
         return None
     expires_at = row["expires_at"]
     if expires_at is None or expires_at <= datetime.now(UTC):

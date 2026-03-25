@@ -4,18 +4,12 @@ import json
 import os
 import secrets
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from fastapi import HTTPException
 
-from routes.agents.models import (
-    AgentContext,
-    AgentProfileCreateRequest,
-    AgentProfileOut,
-    AgentProfileUpdateRequest,
-    AgentType,
-)
-from routes.agents.policy import DEFAULT_CAPABILITIES
+from routes.agents.apps import get_app_definition
+from routes.agents.models import AgentContext, AgentProfileCreateRequest, AgentProfileOut, AgentProfileUpdateRequest
 from routes.agents.skills import list_agent_skills_registry
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -29,65 +23,64 @@ ALLOWED_AVATAR_TYPES = {
 }
 
 
-def _default_profile_values(agent_type: str) -> tuple[str, str, str | None]:
-    if agent_type == "app_agent:arxiv":
-        return (
-            "ArXiv Researcher",
-            "关注论文检索、每日候选与阅读任务安排。",
-            "你像一位认真、清晰、偏研究助理风格的 AI 助手，优先帮助用户快速筛选论文、组织阅读任务。",
-        )
-    if agent_type == "app_agent:vocab":
-        return (
-            "Vocab Coach",
-            "关注背词节奏、复习反馈与学习鼓励。",
-            "你像一位有耐心、鼓励式的英语教练，语气轻快，但回答要具体。",
-        )
-    return (
-        "Ark Agent",
-        "通用任务调度与信息整理助手。",
-        "你像一位冷静、清晰、执行力强的任务助手，回答简洁，优先给出可执行信息。",
-    )
+def _default_profile_values(primary_app_id: str) -> tuple[str, str, str]:
+    app = get_app_definition(primary_app_id)
+    return app.default_profile_name, app.default_profile_description, app.default_context_prompt
 
 
-def _skill_names() -> set[str]:
-    return {skill.name for skill in list_agent_skills_registry()}
+def _skills_by_name() -> dict[str, Any]:
+    return {skill.name: skill for skill in list_agent_skills_registry()}
 
 
-def normalize_allowed_skills(value: list[str] | None, *, agent_type: str) -> list[str]:
-    available = _skill_names()
+def normalize_primary_app_id(value: str | None) -> str:
+    raw = (value or "dashboard").strip() or "dashboard"
+    legacy = {
+        "dashboard_agent": "dashboard",
+        "app_agent:arxiv": "arxiv",
+        "app_agent:vocab": "vocab",
+    }
+    raw = legacy.get(raw, raw)
+    return get_app_definition(raw).app_id
+
+
+def normalize_allowed_skills(value: list[str] | None, *, primary_app_id: str) -> list[str]:
+    app = get_app_definition(primary_app_id)
+    available = _skills_by_name()
     selected = [name.strip() for name in (value or []) if isinstance(name, str) and name.strip()]
     if not selected:
-        selected = sorted(available)
+        selected = list(app.default_skills)
     deduped = list(dict.fromkeys(selected))
     invalid = [name for name in deduped if name not in available]
     if invalid:
         raise HTTPException(status_code=422, detail=f"非法 skills: {', '.join(invalid)}")
-    if agent_type == "app_agent:arxiv":
-        disallowed = [name for name in deduped if not name.startswith("arxiv_")]
-        if disallowed:
-            raise HTTPException(status_code=422, detail="app_agent:arxiv 只能绑定 arXiv 相关 skills")
-    if agent_type == "app_agent:vocab":
-        disallowed = [name for name in deduped if name.startswith("arxiv_")]
-        if disallowed:
-            raise HTTPException(status_code=422, detail="app_agent:vocab 不能绑定 arXiv skills")
+    disallowed = sorted(
+        {
+            available[name].app_id
+            for name in deduped
+            if available[name].app_id not in set(app.allowed_skill_apps)
+        }
+    )
+    if disallowed:
+        raise HTTPException(status_code=422, detail=f"{app.display_name} 不能绑定这些应用的 skills: {', '.join(disallowed)}")
     return deduped
 
 
-def normalize_app_id(agent_type: str, app_id: str | None) -> str | None:
-    if agent_type == "app_agent:arxiv":
-        return "arxiv"
-    if agent_type == "app_agent:vocab":
-        return "vocab"
-    return app_id.strip() if isinstance(app_id, str) and app_id.strip() else None
+def resolve_profile_capabilities(primary_app_id: str, allowed_skills: list[str]) -> frozenset[str]:
+    app = get_app_definition(primary_app_id)
+    available = _skills_by_name()
+    capabilities = set(app.default_capabilities)
+    selected_apps = {available[name].app_id for name in allowed_skills if name in available}
+    if primary_app_id in {"arxiv", "vocab"} and "todo" in selected_apps:
+        capabilities.add("cross_app.read.summary")
+    return frozenset(capabilities)
 
 
 def build_profile_context(profile: AgentProfileOut, *, user_id: int, session_id: str | None) -> AgentContext:
     return AgentContext(
         user_id=user_id,
-        agent_type=profile.agent_type,
-        app_id=profile.app_id,
+        primary_app_id=profile.primary_app_id,
         session_id=session_id,
-        capabilities=DEFAULT_CAPABILITIES[profile.agent_type],
+        capabilities=resolve_profile_capabilities(profile.primary_app_id, profile.allowed_skills),
     )
 
 
@@ -120,15 +113,15 @@ def row_to_profile(row: Any) -> AgentProfileOut:
         allowed_skills = json.loads(raw_skills)
     else:
         allowed_skills = list(raw_skills or [])
+    primary_app_id = normalize_primary_app_id(str(row["agent_type"]))
     return AgentProfileOut(
         id=str(row["id"]),
         user_id=int(row["user_id"]),
         name=str(row["name"]),
         description=str(row["description"] or ""),
-        agent_type=cast(AgentType, str(row["agent_type"])),
-        app_id=str(row["app_id"]) if row["app_id"] is not None else None,
+        primary_app_id=primary_app_id,
         avatar_url=str(row["avatar_url"]) if "avatar_url" in row and row["avatar_url"] is not None else None,
-        persona_prompt=str(row["persona_prompt"] or ""),
+        context_prompt=str(row["persona_prompt"] or ""),
         allowed_skills=[str(item) for item in allowed_skills],
         temperature=float(row["temperature"]),
         max_tool_loops=int(row["max_tool_loops"]),
@@ -156,13 +149,25 @@ async def init_agent_profiles(conn: Any) -> None:
           is_default BOOLEAN NOT NULL DEFAULT FALSE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          CONSTRAINT chk_agent_profiles_agent_type CHECK (agent_type IN ('dashboard_agent', 'app_agent:arxiv', 'app_agent:vocab')),
           CONSTRAINT chk_agent_profiles_temperature CHECK (temperature >= 0 AND temperature <= 1.2),
           CONSTRAINT chk_agent_profiles_max_tool_loops CHECK (max_tool_loops >= 1 AND max_tool_loops <= 8)
         );
         """
     )
+    await conn.execute("ALTER TABLE agent_profiles DROP CONSTRAINT IF EXISTS chk_agent_profiles_agent_type;")
     await conn.execute("ALTER TABLE agent_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;")
+    await conn.execute(
+        """
+        UPDATE agent_profiles
+        SET agent_type = CASE
+            WHEN agent_type = 'dashboard_agent' THEN 'dashboard'
+            WHEN agent_type = 'app_agent:arxiv' THEN 'arxiv'
+            WHEN agent_type = 'app_agent:vocab' THEN 'vocab'
+            ELSE agent_type
+        END
+        WHERE agent_type IN ('dashboard_agent', 'app_agent:arxiv', 'app_agent:vocab')
+        """
+    )
     await conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_profiles_default_per_user ON agent_profiles(user_id) WHERE is_default = TRUE;"
     )
@@ -185,7 +190,7 @@ async def _clear_default_for_user(conn: Any, *, user_id: int, exclude_id: str | 
 async def ensure_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1
@@ -197,8 +202,9 @@ async def ensure_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
     if row is not None:
         return row_to_profile(row)
 
-    name, description, persona_prompt = _default_profile_values("dashboard_agent")
-    default_skills = normalize_allowed_skills([], agent_type="dashboard_agent")
+    primary_app_id = "dashboard"
+    name, description, context_prompt = _default_profile_values(primary_app_id)
+    default_skills = normalize_allowed_skills([], primary_app_id=primary_app_id)
     profile_id = "apf_" + secrets.token_urlsafe(12)
     inserted = await conn.fetchrow(
         """
@@ -206,15 +212,16 @@ async def ensure_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
             id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt,
             allowed_skills_json, temperature, max_tool_loops, is_default
         )
-        VALUES ($1, $2, $3, $4, 'dashboard_agent', NULL, NULL, $5, $6::jsonb, 0.2, 4, TRUE)
-        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, $7::jsonb, 0.2, 4, TRUE)
+        RETURNING id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         profile_id,
         user_id,
         name,
         description,
-        persona_prompt,
+        primary_app_id,
+        context_prompt,
         json.dumps(default_skills, ensure_ascii=False),
     )
     if inserted is None:
@@ -226,7 +233,7 @@ async def list_profiles(conn: Any, *, user_id: int) -> list[AgentProfileOut]:
     _ = await ensure_default_profile(conn, user_id=user_id)
     rows = await conn.fetch(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1
@@ -240,7 +247,7 @@ async def list_profiles(conn: Any, *, user_id: int) -> list[AgentProfileOut]:
 async def get_profile_by_id(conn: Any, *, user_id: int, profile_id: str) -> AgentProfileOut:
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1 AND id = $2
@@ -259,7 +266,7 @@ async def get_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
         return profile
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1 AND is_default = TRUE
@@ -271,15 +278,13 @@ async def get_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
         return row_to_profile(row)
     await _clear_default_for_user(conn, user_id=user_id)
     await conn.execute("UPDATE agent_profiles SET is_default = TRUE, updated_at = NOW() WHERE id = $1", profile.id)
-    updated = await get_profile_by_id(conn, user_id=user_id, profile_id=profile.id)
-    return updated
+    return await get_profile_by_id(conn, user_id=user_id, profile_id=profile.id)
 
 
 async def create_profile(conn: Any, *, user_id: int, payload: AgentProfileCreateRequest) -> AgentProfileOut:
-    agent_type = payload.agent_type
-    default_name, default_description, default_persona = _default_profile_values(agent_type)
-    allowed_skills = normalize_allowed_skills(payload.allowed_skills, agent_type=agent_type)
-    app_id = normalize_app_id(agent_type, payload.app_id)
+    primary_app_id = normalize_primary_app_id(payload.primary_app_id)
+    default_name, default_description, default_context_prompt = _default_profile_values(primary_app_id)
+    allowed_skills = normalize_allowed_skills(payload.allowed_skills, primary_app_id=primary_app_id)
     if payload.is_default:
         await _clear_default_for_user(conn, user_id=user_id)
     else:
@@ -290,17 +295,16 @@ async def create_profile(conn: Any, *, user_id: int, payload: AgentProfileCreate
             id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt,
             allowed_skills_json, temperature, max_tool_loops, is_default
         )
-        VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8::jsonb, $9, $10, $11)
-        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, $7::jsonb, $8, $9, $10)
+        RETURNING id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         "apf_" + secrets.token_urlsafe(12),
         user_id,
         payload.name.strip() or default_name,
         payload.description.strip() if payload.description.strip() else default_description,
-        agent_type,
-        app_id,
-        payload.persona_prompt.strip() if payload.persona_prompt.strip() else default_persona,
+        primary_app_id,
+        payload.context_prompt.strip() if payload.context_prompt.strip() else default_context_prompt,
         json.dumps(allowed_skills, ensure_ascii=False),
         payload.temperature,
         payload.max_tool_loops or 4,
@@ -313,16 +317,19 @@ async def create_profile(conn: Any, *, user_id: int, payload: AgentProfileCreate
 
 async def update_profile(conn: Any, *, user_id: int, profile_id: str, payload: AgentProfileUpdateRequest) -> AgentProfileOut:
     current = await get_profile_by_id(conn, user_id=user_id, profile_id=profile_id)
-    agent_type = payload.agent_type or current.agent_type
-    default_name, default_description, default_persona = _default_profile_values(agent_type)
+    primary_app_id = normalize_primary_app_id(payload.primary_app_id or current.primary_app_id)
+    default_name, default_description, default_context_prompt = _default_profile_values(primary_app_id)
     allowed_skills = normalize_allowed_skills(
         payload.allowed_skills if payload.allowed_skills is not None else current.allowed_skills,
-        agent_type=agent_type,
+        primary_app_id=primary_app_id,
     )
-    app_id = normalize_app_id(agent_type, payload.app_id if payload.app_id is not None else current.app_id)
     name = payload.name.strip() if isinstance(payload.name, str) and payload.name.strip() else current.name or default_name
     description = payload.description.strip() if isinstance(payload.description, str) else current.description or default_description
-    persona_prompt = payload.persona_prompt.strip() if isinstance(payload.persona_prompt, str) and payload.persona_prompt.strip() else current.persona_prompt or default_persona
+    context_prompt = (
+        payload.context_prompt.strip()
+        if isinstance(payload.context_prompt, str) and payload.context_prompt.strip()
+        else current.context_prompt or default_context_prompt
+    )
     temperature = payload.temperature if payload.temperature is not None else current.temperature
     max_tool_loops = payload.max_tool_loops if payload.max_tool_loops is not None else current.max_tool_loops
     next_default = payload.is_default if payload.is_default is not None else current.is_default
@@ -334,24 +341,23 @@ async def update_profile(conn: Any, *, user_id: int, profile_id: str, payload: A
         SET name = $1,
             description = $2,
             agent_type = $3,
-            app_id = $4,
-            avatar_url = $5,
-            persona_prompt = $6,
-            allowed_skills_json = $7::jsonb,
-            temperature = $8,
-            max_tool_loops = $9,
-            is_default = $10,
+            app_id = NULL,
+            avatar_url = $4,
+            persona_prompt = $5,
+            allowed_skills_json = $6::jsonb,
+            temperature = $7,
+            max_tool_loops = $8,
+            is_default = $9,
             updated_at = NOW()
-        WHERE id = $11 AND user_id = $12
-        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        WHERE id = $10 AND user_id = $11
+        RETURNING id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         name,
         description,
-        agent_type,
-        app_id,
+        primary_app_id,
         current.avatar_url,
-        persona_prompt,
+        context_prompt,
         json.dumps(allowed_skills, ensure_ascii=False),
         temperature,
         max_tool_loops,
@@ -420,7 +426,7 @@ async def upload_profile_avatar(
             SET avatar_url = $1,
                 updated_at = NOW()
             WHERE id = $2 AND user_id = $3
-            RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+            RETURNING id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                       temperature, max_tool_loops, is_default, created_at, updated_at
             """,
             avatar_url,
@@ -445,7 +451,7 @@ async def remove_profile_avatar(conn: Any, *, user_id: int, profile_id: str) -> 
         SET avatar_url = NULL,
             updated_at = NOW()
         WHERE id = $1 AND user_id = $2
-        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+        RETURNING id, user_id, name, description, agent_type, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         profile_id,

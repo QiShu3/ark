@@ -10,6 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from routes.agents.apps import get_app_definition
 from routes.agents.executor import execute_action_with_context, pool_from_request
 from routes.agents.models import AgentActionResponse, AgentProfileOut, ChatRequest, ChatResponse
 from routes.agents.profiles import build_profile_context, get_default_profile, get_profile_by_id
@@ -51,21 +52,22 @@ def _allowed_skill_names(body: ChatRequest, profile: AgentProfileOut) -> list[st
 
 
 def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str]) -> str:
+    app = get_app_definition(profile.primary_app_id)
     system_base = (
-        "你是 Ark 的 dashboard agent，对话对象是产品用户。"
-        "你可以调用 skills 来查看任务、更新任务、发起敏感操作审批，以及获取 arXiv 当日候选、搜索论文、批量获取论文详情、准备 arXiv 每日任务。"
+        "你是 Ark 的 AI Agent，对话对象是产品用户。"
+        "你可以调用 skills 来查看任务、更新任务、发起敏感操作审批，以及访问当前主应用或受控跨应用的信息。"
         "规则：1. 优先使用工具获取事实，不要编造任务数据。"
         "2. 如果工具返回 approval_required，向用户简洁解释将发生什么，并明确需要在前端确认。"
         "3. 不要声称已经完成需要确认的敏感操作，除非 commit 工具已经成功执行。"
         "4. 回答使用简体中文，简洁、自然、像产品里的助手。"
     )
-    persona = profile.persona_prompt.strip() or "你保持专业、清晰、友好的表达风格。"
+    context = profile.context_prompt.strip() or app.default_context_prompt
     constraints = (
         f"当前 Agent 名称：{profile.name}。"
-        f"当前 Agent 类型：{profile.agent_type}。"
+        f"当前主应用：{app.display_name}。"
         f"当前会话仅允许调用这些 skills：{', '.join(allowed_skills) or '无'}。不要调用未被允许的 skill。"
     )
-    return "\n".join([system_base, persona, constraints])
+    return "\n".join([system_base, context, constraints])
 
 
 def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, Any]]:
@@ -336,15 +338,15 @@ async def _stream_chat_turn(
         messages = messages_for_model(body, profile)
         latest_approval: AgentActionResponse | None = None
         yield _sse_event(
-            {
-                "type": "profile",
-                "profile": {
-                    "id": profile.id,
-                    "name": profile.name,
-                    "agent_type": profile.agent_type,
-                },
-            }
-        )
+                    {
+                        "type": "profile",
+                        "profile": {
+                            "id": profile.id,
+                            "name": profile.name,
+                            "primary_app_id": profile.primary_app_id,
+                        },
+                    }
+                )
         for _ in range(max_tool_loops(profile.max_tool_loops)):
             assistant_text = ""
             assistant_tool_calls: list[dict[str, Any]] = []

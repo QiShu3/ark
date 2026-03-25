@@ -28,10 +28,20 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-AgentType = Literal["dashboard_agent", "app_agent:arxiv", "app_agent:vocab"]
 ActionEffect = Literal["read", "write", "destructive"]
 ResponseType = Literal["result", "approval_required", "forbidden"]
 MessageRole = Literal["system", "user", "assistant", "tool"]
+
+
+class AgentAppOut(BaseModel):
+    app_id: str
+    display_name: str
+    description: str
+    default_profile_name: str
+    default_profile_description: str
+    default_context_prompt: str
+    default_skills: list[str]
+    allowed_skill_apps: list[str]
 
 
 class AgentActionRequest(BaseModel):
@@ -65,6 +75,7 @@ class AgentSkillOut(BaseModel):
             - "destructive": 破坏性操作，如删除，通常需要审批
     """
     name: str
+    app_id: str
     description: str
     parameters: dict[str, Any]
     intent_scope: str
@@ -198,13 +209,9 @@ class AgentProfileOut(BaseModel):
         user_id: 所属用户 ID。
         name: Profile 显示名称。
         description: Profile 描述。
-        agent_type: Agent 类型，决定默认能力和权限范围。
-            - "dashboard_agent": 仪表盘 Agent，拥有全局任务管理权限
-            - "app_agent:arxiv": ArXiv 应用 Agent，专注于论文相关操作
-            - "app_agent:vocab": 词汇应用 Agent，专注于学习相关操作
-        app_id: 关联的应用 ID（仅 app_agent 类型使用）。
+        primary_app_id: 主应用/主工作区标识，由 app registry 定义。
         avatar_url: 头像图片 URL。
-        persona_prompt: 人设提示词，用于定制 AI 的回复风格和行为。
+        context_prompt: 自然语言上下文，用于描述 Agent 的职责、服务对象与工作方式。
         allowed_skills: 允许使用的 Skill 列表，限制 Agent 可调用的工具。
         temperature: LLM 温度参数，控制回复的随机性（0.0-1.2）。
         max_tool_loops: 最大工具调用循环次数，防止无限循环（1-8）。
@@ -216,10 +223,9 @@ class AgentProfileOut(BaseModel):
     user_id: int
     name: str
     description: str
-    agent_type: AgentType
-    app_id: str | None
+    primary_app_id: str
     avatar_url: str | None
-    persona_prompt: str
+    context_prompt: str
     allowed_skills: list[str]
     temperature: float
     max_tool_loops: int
@@ -237,9 +243,8 @@ class AgentProfileCreateRequest(BaseModel):
     Attributes:
         name: Profile 名称，1-60 字符。
         description: Profile 描述，最多 300 字符。
-        agent_type: Agent 类型，默认为 "dashboard_agent"。
-        app_id: 关联应用 ID，最多 64 字符。
-        persona_prompt: 人设提示词，最多 4000 字符。
+        primary_app_id: 主应用/工作区，默认为 "dashboard"。
+        context_prompt: 自然语言上下文，最多 4000 字符。
         allowed_skills: 允许的 Skill 列表，为空则使用所有可用 Skill。
         temperature: 温度参数，默认 0.2，范围 0.0-1.2。
         max_tool_loops: 最大工具循环次数，默认 4，范围 1-8。
@@ -247,9 +252,8 @@ class AgentProfileCreateRequest(BaseModel):
     """
     name: str = Field(min_length=1, max_length=60)
     description: str = Field(default="", max_length=300)
-    agent_type: AgentType = "dashboard_agent"
-    app_id: str | None = Field(default=None, max_length=64)
-    persona_prompt: str = Field(default="", max_length=4000)
+    primary_app_id: str = Field(default="dashboard", max_length=64)
+    context_prompt: str = Field(default="", max_length=4000)
     allowed_skills: list[str] = Field(default_factory=list)
     temperature: float = Field(default=0.2, ge=0.0, le=1.2)
     max_tool_loops: int | None = Field(default=None, ge=1, le=8)
@@ -265,9 +269,8 @@ class AgentProfileUpdateRequest(BaseModel):
     Attributes:
         name: 新的 Profile 名称。
         description: 新的描述。
-        agent_type: 新的 Agent 类型。
-        app_id: 新的关联应用 ID。
-        persona_prompt: 新的人设提示词。
+        primary_app_id: 新的主应用。
+        context_prompt: 新的自然语言上下文。
         allowed_skills: 新的允许 Skill 列表。
         temperature: 新的温度参数。
         max_tool_loops: 新的最大工具循环次数。
@@ -275,9 +278,8 @@ class AgentProfileUpdateRequest(BaseModel):
     """
     name: str | None = Field(default=None, min_length=1, max_length=60)
     description: str | None = Field(default=None, max_length=300)
-    agent_type: AgentType | None = None
-    app_id: str | None = Field(default=None, max_length=64)
-    persona_prompt: str | None = Field(default=None, max_length=4000)
+    primary_app_id: str | None = Field(default=None, max_length=64)
+    context_prompt: str | None = Field(default=None, max_length=4000)
     allowed_skills: list[str] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=1.2)
     max_tool_loops: int | None = Field(default=None, ge=1, le=8)
@@ -294,8 +296,7 @@ class AgentContext:
 
     Attributes:
         user_id: 当前用户 ID。
-        agent_type: 当前 Agent 类型，影响权限策略判断。
-        app_id: 关联应用 ID，用于 app_agent 类型的作用域判断。
+        primary_app_id: 当前 Agent 的主应用/工作区。
         session_id: 会话 ID，用于审批票据的会话绑定。
         capabilities: 当前 Agent 具备的能力集合，来自 Profile 默认能力和请求头扩展。
 
@@ -305,8 +306,7 @@ class AgentContext:
         3. 创建不可变的 AgentContext 实例
     """
     user_id: int
-    agent_type: AgentType
-    app_id: str | None
+    primary_app_id: str
     session_id: str | None
     capabilities: frozenset[str]
 
@@ -320,7 +320,7 @@ class PolicyRule:
 
     Attributes:
         action_id: 规则对应的 Action ID（如 "task.delete"、"arxiv.search"）。
-        allowed_subjects: 允许执行该 Action 的 Agent 类型列表。
+        allowed_apps: 允许执行该 Action 的主应用列表。
         allowed_scopes: 允许执行的作用域列表（如 "global_tasks"、"app:arxiv"）。
         required_capabilities: 执行该 Action 需要的能力列表，Agent 必须具备所有能力。
         requires_confirmation: 是否需要用户确认（用于敏感操作）。
@@ -332,7 +332,7 @@ class PolicyRule:
     示例:
         PolicyRule(
             action_id="task.delete",
-            allowed_subjects=("dashboard_agent",),
+            allowed_apps=("dashboard",),
             allowed_scopes=("global_tasks",),
             required_capabilities=("task.delete",),
             requires_confirmation=True,
@@ -340,12 +340,12 @@ class PolicyRule:
         )
 
     校验流程:
-        1. 检查 ctx.agent_type 是否在 allowed_subjects 中
+        1. 检查 ctx.primary_app_id 是否在 allowed_apps 中
         2. 检查 ctx.capabilities 是否包含所有 required_capabilities
         3. 计算作用域并检查是否在 allowed_scopes 中
     """
     action_id: str
-    allowed_subjects: tuple[AgentType, ...]
+    allowed_apps: tuple[str, ...]
     allowed_scopes: tuple[str, ...]
     required_capabilities: tuple[str, ...] = ()
     requires_confirmation: bool = False
