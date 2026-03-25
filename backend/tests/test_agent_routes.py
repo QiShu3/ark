@@ -468,7 +468,7 @@ def test_dashboard_agent_can_search_arxiv(monkeypatch) -> None:
             }
         ]
 
-    monkeypatch.setattr("routes.agents.executor.search_arxiv_papers", _fake_search)
+    monkeypatch.setattr("routes.agents.actions.arxiv_actions.search_arxiv_papers", _fake_search)
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/arxiv.search",
@@ -501,7 +501,7 @@ def test_app_agent_can_get_daily_candidates(monkeypatch) -> None:
             }
         ]
 
-    monkeypatch.setattr("routes.agents.executor.get_daily_candidates_with_auto_refresh", _fake_daily_candidates)
+    monkeypatch.setattr("routes.agents.actions.arxiv_actions.get_daily_candidates_with_auto_refresh", _fake_daily_candidates)
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/arxiv.daily_candidates",
@@ -530,7 +530,7 @@ def test_app_agent_can_get_paper_details(monkeypatch) -> None:
             }
         ]
 
-    monkeypatch.setattr("routes.agents.executor.fetch_paper_details", _fake_details)
+    monkeypatch.setattr("routes.agents.actions.arxiv_actions.fetch_paper_details", _fake_details)
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/arxiv.paper_details",
@@ -584,7 +584,7 @@ def test_task_list_summary_with_capability(monkeypatch) -> None:
             "view": "summary",
         }
 
-    monkeypatch.setattr("routes.agents.executor.list_tasks_action", _fake_list_tasks)
+    monkeypatch.setattr("routes.agents.actions.task_actions.list_tasks_action", _fake_list_tasks)
     client = TestClient(_build_app())
     resp = client.post(
         "/api/agent/actions/task.list",
