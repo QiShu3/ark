@@ -1,3 +1,24 @@
+"""
+Agent 模块数据模型定义
+
+本模块定义了 Agent 系统的核心数据结构，包括：
+- 类型别名定义（AgentType、ActionEffect 等）
+- API 请求/响应模型
+- Agent 配置（Profile）相关模型
+- 权限策略相关数据结构
+- Action 执行相关数据结构
+
+架构概述：
+┌─────────────────────────────────────────────────────────────────┐
+│  用户请求 → ChatRequest → AgentProfile → Skills → Actions       │
+│                              ↓                                   │
+│                         PolicyRule 校验                          │
+│                              ↓                                   │
+│                       AgentContext 执行上下文                    │
+│                              ↓                                   │
+│                       AgentActionResponse 响应                   │
+└─────────────────────────────────────────────────────────────────┘
+"""
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -14,10 +35,35 @@ MessageRole = Literal["system", "user", "assistant", "tool"]
 
 
 class AgentActionRequest(BaseModel):
+    """
+    Agent Action 执行请求模型。
+
+    用于直接调用 Agent Action 的 API 端点（POST /api/agent/actions/{action_name}）。
+
+    Attributes:
+        payload: Action 执行所需的参数，具体结构由各 Action 定义决定。
+                 例如：task_list 的 payload 可包含 status、q、limit、offset 等。
+    """
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentSkillOut(BaseModel):
+    """
+    Agent Skill 输出模型。
+
+    描述一个可供 LLM 调用的技能（工具）。这些信息会被转换为 OpenAI/DeepSeek
+    兼容的 function calling 格式，供 LLM 决策使用。
+
+    Attributes:
+        name: Skill 名称，用于 LLM 调用时的标识符（如 "arxiv_search"、"task_list"）。
+        description: Skill 描述，LLM 根据此描述判断何时调用该 Skill。
+        parameters: JSON Schema 格式的参数定义，描述 Skill 接受的参数结构。
+        intent_scope: 意图范围标识（如 "arxiv"、"task"），用于权限校验。
+        side_effect: 操作副作用类型，影响权限策略和审批流程。
+            - "read": 只读操作，无副作用
+            - "write": 写入操作，会修改数据
+            - "destructive": 破坏性操作，如删除，通常需要审批
+    """
     name: str
     description: str
     parameters: dict[str, Any]
@@ -26,6 +72,46 @@ class AgentSkillOut(BaseModel):
 
 
 class AgentActionResponse(BaseModel):
+    """
+    Agent Action 执行响应模型。
+
+    统一的 Action 执行结果格式，支持三种响应类型：
+    1. result: 正常执行结果
+    2. approval_required: 需要用户审批（敏感操作）
+    3. forbidden: 权限拒绝
+
+    Attributes:
+        type: 响应类型，决定前端如何处理该响应。
+        action_id: Action 标识符，用于追踪和日志。
+        data: 正常执行结果数据（type="result" 时使用）。
+        approval_id: 审批票据 ID（type="approval_required" 时使用），
+                     用户确认后需携带此 ID 调用 commit_action。
+        title: 审批弹窗标题（type="approval_required" 时使用）。
+        message: 审批弹窗提示信息（type="approval_required" 时使用）。
+        impact: 操作影响描述，包含资源类型、ID 列表、数量等。
+        commit_action: 确认后需要执行的 commit action 名称。
+        expires_at: 审批票据过期时间，默认 10 分钟。
+        reason: 拒绝原因（type="forbidden" 时使用）。
+
+    示例 - 正常结果:
+        {
+            "type": "result",
+            "action_id": "task.list",
+            "data": {"items": [...], "view": "full"}
+        }
+
+    示例 - 需要审批:
+        {
+            "type": "approval_required",
+            "action_id": "task.delete.prepare",
+            "approval_id": "appr_xxx",
+            "title": "删除任务",
+            "message": "该操作将删除任务《XXX》。确认后不可自动恢复。",
+            "impact": {"resource_type": "task", "resource_ids": ["uuid"], "count": 1},
+            "commit_action": "task.delete.commit",
+            "expires_at": "2024-01-01T12:10:00Z"
+        }
+    """
     type: ResponseType
     action_id: str
     data: dict[str, Any] | None = None
@@ -39,11 +125,46 @@ class AgentActionResponse(BaseModel):
 
 
 class ChatMessage(BaseModel):
+    """
+    聊天消息模型。
+
+    用于构建对话历史，遵循 OpenAI Chat API 格式。
+
+    Attributes:
+        role: 消息角色
+            - "system": 系统提示词（通常由后端构建，不来自前端）
+            - "user": 用户消息
+            - "assistant": AI 助手回复
+            - "tool": 工具调用结果
+        content: 消息文本内容。
+    """
     role: MessageRole
     content: str = ""
 
 
 class ChatRequest(BaseModel):
+    """
+    聊天请求模型。
+
+    用户发起对话时的请求数据，包含当前消息和历史对话。
+
+    Attributes:
+        message: 用户当前输入的消息，长度限制 1-8000 字符。
+        history: 对话历史，最多保留最近 12 条（在 chat.py 中截断）。
+        scope: 可选的作用域标识，用于限定 Agent 的操作范围。
+        profile_id: 指定使用的 Agent Profile ID，不指定则使用默认 Profile。
+        allowed_skills: 可选的 Skill 白名单，覆盖 Profile 中的配置。
+
+    示例:
+        {
+            "message": "帮我查看今天的待办任务",
+            "history": [
+                {"role": "user", "content": "你好"},
+                {"role": "assistant", "content": "你好！有什么可以帮你的？"}
+            ],
+            "profile_id": "apf_xxx"
+        }
+    """
     message: str = Field(min_length=1, max_length=8000)
     history: list[ChatMessage] = Field(default_factory=list)
     scope: str | None = Field(default=None, max_length=64)
@@ -52,11 +173,45 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    """
+    聊天响应模型。
+
+    对话处理完成后的响应数据。
+
+    Attributes:
+        reply: AI 助手的文本回复。
+        approval: 如果执行了需要审批的操作，返回审批信息供前端展示确认弹窗。
+                  用户确认后，前端需调用 approval_commit skill 完成操作。
+    """
     reply: str
     approval: AgentActionResponse | None = None
 
 
 class AgentProfileOut(BaseModel):
+    """
+    Agent Profile 输出模型。
+
+    完整的 Agent 配置信息，用于 API 响应和运行时配置加载。
+
+    Attributes:
+        id: Profile 唯一标识符，格式为 "apf_" + 随机字符串。
+        user_id: 所属用户 ID。
+        name: Profile 显示名称。
+        description: Profile 描述。
+        agent_type: Agent 类型，决定默认能力和权限范围。
+            - "dashboard_agent": 仪表盘 Agent，拥有全局任务管理权限
+            - "app_agent:arxiv": ArXiv 应用 Agent，专注于论文相关操作
+            - "app_agent:vocab": 词汇应用 Agent，专注于学习相关操作
+        app_id: 关联的应用 ID（仅 app_agent 类型使用）。
+        avatar_url: 头像图片 URL。
+        persona_prompt: 人设提示词，用于定制 AI 的回复风格和行为。
+        allowed_skills: 允许使用的 Skill 列表，限制 Agent 可调用的工具。
+        temperature: LLM 温度参数，控制回复的随机性（0.0-1.2）。
+        max_tool_loops: 最大工具调用循环次数，防止无限循环（1-8）。
+        is_default: 是否为用户的默认 Profile。
+        created_at: 创建时间。
+        updated_at: 最后更新时间。
+    """
     id: str
     user_id: int
     name: str
@@ -74,6 +229,22 @@ class AgentProfileOut(BaseModel):
 
 
 class AgentProfileCreateRequest(BaseModel):
+    """
+    Agent Profile 创建请求模型。
+
+    用于创建新的 Agent Profile 配置。
+
+    Attributes:
+        name: Profile 名称，1-60 字符。
+        description: Profile 描述，最多 300 字符。
+        agent_type: Agent 类型，默认为 "dashboard_agent"。
+        app_id: 关联应用 ID，最多 64 字符。
+        persona_prompt: 人设提示词，最多 4000 字符。
+        allowed_skills: 允许的 Skill 列表，为空则使用所有可用 Skill。
+        temperature: 温度参数，默认 0.2，范围 0.0-1.2。
+        max_tool_loops: 最大工具循环次数，默认 4，范围 1-8。
+        is_default: 是否设为默认 Profile，默认 False。
+    """
     name: str = Field(min_length=1, max_length=60)
     description: str = Field(default="", max_length=300)
     agent_type: AgentType = "dashboard_agent"
@@ -86,6 +257,22 @@ class AgentProfileCreateRequest(BaseModel):
 
 
 class AgentProfileUpdateRequest(BaseModel):
+    """
+    Agent Profile 更新请求模型。
+
+    用于更新现有的 Agent Profile 配置。所有字段均为可选，只更新提供的字段。
+
+    Attributes:
+        name: 新的 Profile 名称。
+        description: 新的描述。
+        agent_type: 新的 Agent 类型。
+        app_id: 新的关联应用 ID。
+        persona_prompt: 新的人设提示词。
+        allowed_skills: 新的允许 Skill 列表。
+        temperature: 新的温度参数。
+        max_tool_loops: 新的最大工具循环次数。
+        is_default: 是否设为默认 Profile。
+    """
     name: str | None = Field(default=None, min_length=1, max_length=60)
     description: str | None = Field(default=None, max_length=300)
     agent_type: AgentType | None = None
@@ -99,6 +286,24 @@ class AgentProfileUpdateRequest(BaseModel):
 
 @dataclass(frozen=True)
 class AgentContext:
+    """
+    Agent 运行时上下文。
+
+    在 Action 执行过程中传递的上下文信息，包含用户身份、Agent 类型和权限能力。
+    该对象是不可变的（frozen=True），确保执行过程中上下文不被篡改。
+
+    Attributes:
+        user_id: 当前用户 ID。
+        agent_type: 当前 Agent 类型，影响权限策略判断。
+        app_id: 关联应用 ID，用于 app_agent 类型的作用域判断。
+        session_id: 会话 ID，用于审批票据的会话绑定。
+        capabilities: 当前 Agent 具备的能力集合，来自 Profile 默认能力和请求头扩展。
+
+    构建流程:
+        1. 从请求头获取 X-Ark-Agent-Type、X-Ark-App-Id、X-Ark-Session-Id
+        2. 合并默认能力和请求头中的 X-Ark-Capabilities
+        3. 创建不可变的 AgentContext 实例
+    """
     user_id: int
     agent_type: AgentType
     app_id: str | None
@@ -108,6 +313,37 @@ class AgentContext:
 
 @dataclass(frozen=True)
 class PolicyRule:
+    """
+    权限策略规则。
+
+    定义一个 Action 的访问控制规则，用于在执行前进行权限校验。
+
+    Attributes:
+        action_id: 规则对应的 Action ID（如 "task.delete"、"arxiv.search"）。
+        allowed_subjects: 允许执行该 Action 的 Agent 类型列表。
+        allowed_scopes: 允许执行的作用域列表（如 "global_tasks"、"app:arxiv"）。
+        required_capabilities: 执行该 Action 需要的能力列表，Agent 必须具备所有能力。
+        requires_confirmation: 是否需要用户确认（用于敏感操作）。
+        effect: 操作影响类型，用于审计和日志记录。
+            - "read": 只读
+            - "write": 写入
+            - "destructive": 破坏性操作
+
+    示例:
+        PolicyRule(
+            action_id="task.delete",
+            allowed_subjects=("dashboard_agent",),
+            allowed_scopes=("global_tasks",),
+            required_capabilities=("task.delete",),
+            requires_confirmation=True,
+            effect="destructive",
+        )
+
+    校验流程:
+        1. 检查 ctx.agent_type 是否在 allowed_subjects 中
+        2. 检查 ctx.capabilities 是否包含所有 required_capabilities
+        3. 计算作用域并检查是否在 allowed_scopes 中
+    """
     action_id: str
     allowed_subjects: tuple[AgentType, ...]
     allowed_scopes: tuple[str, ...]
@@ -115,11 +351,62 @@ class PolicyRule:
     requires_confirmation: bool = False
     effect: ActionEffect = "read"
 
+
 ActionHandler = Callable[..., Awaitable[dict[str, Any] | AgentActionResponse]]
+"""
+Action 处理函数类型别名。
+
+定义了 Action Handler 的函数签名：
+- 接收参数：conn（数据库连接）、ctx（上下文）、payload（参数）、resource_scope（作用域）、
+           approval_payload（审批负载，仅 commit action 使用）
+- 返回：执行结果字典或 AgentActionResponse（用于返回审批请求）
+
+示例:
+    async def _handle_task_list(
+        conn: Any,
+        *,
+        ctx: AgentContext,
+        payload: dict[str, Any],
+        resource_scope: str,
+        approval_payload: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        return await list_tasks_action(conn, user_id=ctx.user_id, payload=payload)
+"""
 
 
 @dataclass(frozen=True)
 class ActionDefinition:
+    """
+    Action 定义。
+
+    描述一个可执行的 Action，包括其标识符、权限策略映射和处理函数。
+
+    Attributes:
+        action_id: Action 唯一标识符（如 "task.list"、"task.delete.commit"）。
+        policy_action_id: 对应的策略规则 ID，用于权限校验。
+            有些 Action 可能共用同一个策略（如 prepare 和 commit）。
+        handler: Action 处理函数，执行实际的业务逻辑。
+        uses_approval: 是否需要消费审批票据。
+            为 True 时，执行前会从 payload 中获取 approval_id 并验证。
+        approval_action_id: 审批票据对应的 action_id。
+            用于在 consume_approval 时验证票据是否匹配。
+
+    示例 - 普通操作:
+        ActionDefinition(
+            action_id="task.list",
+            policy_action_id="task.list",
+            handler=_handle_task_list,
+        )
+
+    示例 - 需要审批的 commit 操作:
+        ActionDefinition(
+            action_id="task.delete.commit",
+            policy_action_id="task.delete",
+            handler=_handle_task_delete_commit,
+            uses_approval=True,
+            approval_action_id="task.delete",
+        )
+    """
     action_id: str
     policy_action_id: str
     handler: ActionHandler

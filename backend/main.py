@@ -47,7 +47,7 @@ app.add_middleware(
 )
 
 avatar_upload_dir().mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=avatar_upload_dir().parent), name="uploads")
+app.mount("/uploads/agent-avatars", StaticFiles(directory=avatar_upload_dir()), name="agent-avatars")
 
 app.include_router(auth_router)
 app.include_router(checkin_router)

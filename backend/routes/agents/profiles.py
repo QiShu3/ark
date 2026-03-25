@@ -4,7 +4,7 @@ import json
 import os
 import secrets
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
 
@@ -13,6 +13,7 @@ from routes.agents.models import (
     AgentProfileCreateRequest,
     AgentProfileOut,
     AgentProfileUpdateRequest,
+    AgentType,
 )
 from routes.agents.policy import DEFAULT_CAPABILITIES
 from routes.agents.skills import list_agent_skills_registry
@@ -124,7 +125,7 @@ def row_to_profile(row: Any) -> AgentProfileOut:
         user_id=int(row["user_id"]),
         name=str(row["name"]),
         description=str(row["description"] or ""),
-        agent_type=str(row["agent_type"]),
+        agent_type=cast(AgentType, str(row["agent_type"])),
         app_id=str(row["app_id"]) if row["app_id"] is not None else None,
         avatar_url=str(row["avatar_url"]) if "avatar_url" in row and row["avatar_url"] is not None else None,
         persona_prompt=str(row["persona_prompt"] or ""),
