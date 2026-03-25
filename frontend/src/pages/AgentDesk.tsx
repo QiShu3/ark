@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CheckCircle2, LoaderCircle, Plus, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Camera, CheckCircle2, LoaderCircle, Plus, Save, ShieldAlert, Sparkles, Square, Trash2, Wrench } from 'lucide-react';
 
 import Navigation from '../components/Navigation';
 import {
@@ -11,7 +11,9 @@ import {
   deleteAgentProfile,
   executeAgentAction,
   listAgentProfiles,
+  removeAgentProfileAvatar,
   setDefaultAgentProfile,
+  uploadAgentProfileAvatar,
   updateAgentProfile,
 } from '../lib/agent';
 import { apiJson, apiSSE } from '../lib/api';
@@ -27,6 +29,12 @@ type Skill = {
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+};
+
+type ToolTimelineItem = {
+  id: string;
+  label: string;
+  kind: 'tool' | 'approval' | 'status';
 };
 
 type ChatStreamEvent =
@@ -85,6 +93,30 @@ function createNewDraft(skills: Skill[]): ProfileDraft {
   };
 }
 
+function profileAvatarSrc(profile: Pick<AgentProfile, 'avatar_url'> | null): string | null {
+  return profile?.avatar_url || null;
+}
+
+function ProfileAvatar({
+  profile,
+  sizeClass,
+  textClass = 'text-white/75',
+}: {
+  profile: Pick<AgentProfile, 'avatar_url' | 'name'> | null;
+  sizeClass: string;
+  textClass?: string;
+}) {
+  const src = profileAvatarSrc(profile);
+  if (src) {
+    return <img src={src} alt={profile?.name || 'Agent avatar'} className={`${sizeClass} rounded-2xl object-cover`} />;
+  }
+  return (
+    <div className={`${sizeClass} rounded-2xl bg-white/8 flex items-center justify-center ${textClass}`}>
+      <Bot size={20} />
+    </div>
+  );
+}
+
 const AgentDesk: React.FC = () => {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [profiles, setProfiles] = useState<AgentProfile[]>([]);
@@ -109,10 +141,14 @@ const AgentDesk: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [approval, setApproval] = useState<AgentActionResponse | null>(null);
   const [approving, setApproving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [streamStatus, setStreamStatus] = useState<string | null>(null);
+  const [toolTimeline, setToolTimeline] = useState<ToolTimelineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const listEndRef = useRef<HTMLDivElement | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) || null,
@@ -173,12 +209,15 @@ const AgentDesk: React.FC = () => {
   }, [messages, approval]);
 
   function selectExistingProfile(profile: AgentProfile) {
+    streamAbortRef.current?.abort();
     sessionIdRef.current = crypto.randomUUID();
     setSelectedProfileId(profile.id);
     setDraftProfileId(profile.id);
     setDraft(draftFromProfile(profile));
     setIsCreatingNew(false);
     setApproval(null);
+    setToolTimeline([]);
+    setStreamStatus(null);
     setMessages([
       {
         role: 'assistant',
@@ -188,11 +227,14 @@ const AgentDesk: React.FC = () => {
   }
 
   function startCreateProfile() {
+    streamAbortRef.current?.abort();
     sessionIdRef.current = crypto.randomUUID();
     setDraft(createNewDraft(skills));
     setDraftProfileId(null);
     setIsCreatingNew(true);
     setApproval(null);
+    setToolTimeline([]);
+    setStreamStatus(null);
     setMessages([{ role: 'assistant', content: '新 Agent 草稿已创建。你可以先配置风格、技能和模型参数。' }]);
   }
 
@@ -299,16 +341,54 @@ const AgentDesk: React.FC = () => {
     }
   }
 
+  async function handleAvatarSelected(file: File | null) {
+    if (!file || !selectedProfile) return;
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      const saved = await uploadAgentProfileAvatar(selectedProfile.id, file);
+      const current = await reloadProfiles(saved.id);
+      if (current) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: `${current.name} 的头像已更新。` }]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '上传头像失败');
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    if (!selectedProfile || uploadingAvatar) return;
+    setUploadingAvatar(true);
+    setError(null);
+    try {
+      const saved = await removeAgentProfileAvatar(selectedProfile.id);
+      const current = await reloadProfiles(saved.id);
+      if (current) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: `${current.name} 已恢复默认头像。` }]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除头像失败');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
   async function handleSend() {
     const content = draftMessage.trim();
     if (!content || sending || !selectedProfileId) return;
     const assistantPlaceholderIndex = messages.length + 1;
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
     setMessages((prev) => [...prev, { role: 'user', content }, { role: 'assistant', content: '' }]);
     setDraftMessage('');
     setSending(true);
     setError(null);
     setApproval(null);
     setStreamStatus('Agent 正在思考...');
+    setToolTimeline([{ id: crypto.randomUUID(), label: '开始分析请求', kind: 'status' }]);
     try {
       await apiSSE(
         '/api/chat/stream',
@@ -320,6 +400,13 @@ const AgentDesk: React.FC = () => {
         },
         (event) => {
           const item = event as ChatStreamEvent;
+          if (item.type === 'profile') {
+            const profileName = item.profile?.name;
+            if (profileName) {
+              setToolTimeline((prev) => [...prev, { id: crypto.randomUUID(), label: `当前 Agent：${profileName}`, kind: 'status' }]);
+            }
+            return;
+          }
           if (item.type === 'message_delta' && typeof item.delta === 'string') {
             setMessages((prev) =>
               prev.map((message, index) =>
@@ -333,11 +420,27 @@ const AgentDesk: React.FC = () => {
           }
           if (item.type === 'tool_call') {
             setStreamStatus(item.name ? `正在调用 ${item.name}` : '正在调用工具...');
+            setToolTimeline((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                label: item.name ? `调用技能 ${item.name}` : '调用工具',
+                kind: 'tool',
+              },
+            ]);
             return;
           }
           if (item.type === 'approval_required') {
             setApproval(item.approval || null);
             setStreamStatus('敏感操作需要你确认');
+            setToolTimeline((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                label: item.approval?.title || '触发敏感操作确认',
+                kind: 'approval',
+              },
+            ]);
             return;
           }
           if (item.type === 'done') {
@@ -351,12 +454,14 @@ const AgentDesk: React.FC = () => {
               );
             }
             setApproval(item.approval || null);
+            setToolTimeline((prev) => [...prev, { id: crypto.randomUUID(), label: '本轮响应完成', kind: 'status' }]);
             setStreamStatus(null);
             return;
           }
           if (item.type === 'error') {
             const msg = item.message || '发送失败';
             setError(msg);
+            setToolTimeline((prev) => [...prev, { id: crypto.randomUUID(), label: `发生错误：${msg}`, kind: 'status' }]);
             setMessages((prev) =>
               prev.map((message, index) =>
                 index === assistantPlaceholderIndex && message.role === 'assistant' && !message.content.trim()
@@ -367,21 +472,38 @@ const AgentDesk: React.FC = () => {
             setStreamStatus(null);
           }
         },
+        controller.signal,
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '发送失败';
-      setError(msg);
-      setMessages((prev) =>
-        prev.map((message, index) =>
-          index === assistantPlaceholderIndex && message.role === 'assistant'
-            ? { ...message, content: message.content || `我这次没能处理成功：${msg}` }
-            : message,
-        ),
-      );
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setToolTimeline((prev) => [...prev, { id: crypto.randomUUID(), label: '已手动停止本轮生成', kind: 'status' }]);
+        setMessages((prev) =>
+          prev.map((message, index) =>
+            index === assistantPlaceholderIndex && message.role === 'assistant' && !message.content.trim()
+              ? { ...message, content: '这轮生成已停止。' }
+              : message,
+          ),
+        );
+      } else {
+        const msg = err instanceof Error ? err.message : '发送失败';
+        setError(msg);
+        setMessages((prev) =>
+          prev.map((message, index) =>
+            index === assistantPlaceholderIndex && message.role === 'assistant'
+              ? { ...message, content: message.content || `我这次没能处理成功：${msg}` }
+              : message,
+          ),
+        );
+      }
     } finally {
+      streamAbortRef.current = null;
       setStreamStatus(null);
       setSending(false);
     }
+  }
+
+  function handleStopStreaming() {
+    streamAbortRef.current?.abort();
   }
 
   async function handleCommitApproval() {
@@ -454,13 +576,18 @@ const AgentDesk: React.FC = () => {
                     : 'border-white/8 bg-black/20 hover:bg-white/8'
                 }`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium text-white">{profile.name}</div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <ProfileAvatar profile={profile} sizeClass="h-11 w-11" />
+                    <div>
+                      <div className="font-medium text-white">{profile.name}</div>
+                      <div className="mt-1 text-xs text-white/45">{AGENT_LABELS[profile.agent_type]}</div>
+                    </div>
+                  </div>
                   {profile.is_default ? (
                     <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-100">默认</span>
                   ) : null}
                 </div>
-                <div className="mt-1 text-xs text-white/45">{AGENT_LABELS[profile.agent_type]}</div>
                 <div className="mt-2 line-clamp-2 text-sm leading-6 text-white/58">{profile.description || '未填写简介'}</div>
               </button>
             ))}
@@ -470,9 +597,7 @@ const AgentDesk: React.FC = () => {
         <section className="flex w-full min-h-[calc(100vh-6rem)] gap-4">
           <div className="w-full rounded-[30px] border border-white/10 bg-[#09111d]/78 p-5 backdrop-blur-2xl xl:w-[430px]">
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-white/8 p-3 text-white/90">
-                <Bot size={20} />
-              </div>
+              <ProfileAvatar profile={selectedProfile} sizeClass="h-12 w-12" />
               <div>
                 <div className="text-xl font-semibold">Profile Config</div>
                 <div className="text-sm text-white/50">保存后，聊天会立刻切换到新的 Agent 配置。</div>
@@ -484,6 +609,38 @@ const AgentDesk: React.FC = () => {
             ) : null}
 
             <div className="mt-5 space-y-4">
+              <div>
+                <div className="mb-3 text-sm text-white/60">头像</div>
+                <div className="flex items-center gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
+                  <ProfileAvatar profile={selectedProfile} sizeClass="h-20 w-20" textClass="text-white/65" />
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => void handleAvatarSelected(e.target.files?.[0] || null)}
+                      disabled={!selectedProfile || uploadingAvatar}
+                    />
+                    <button
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={!selectedProfile || uploadingAvatar}
+                      className="flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:opacity-60"
+                    >
+                      {uploadingAvatar ? <LoaderCircle size={15} className="animate-spin" /> : <Camera size={15} />}
+                      {uploadingAvatar ? '上传中...' : '上传头像'}
+                    </button>
+                    <button
+                      onClick={() => void handleRemoveAvatar()}
+                      disabled={!selectedProfile?.avatar_url || uploadingAvatar}
+                      className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:opacity-60"
+                    >
+                      <Trash2 size={15} />
+                      移除头像
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div>
                 <div className="mb-2 text-sm text-white/60">名称</div>
                 <input
@@ -620,9 +777,7 @@ const AgentDesk: React.FC = () => {
           <main className="flex min-h-[calc(100vh-6rem)] flex-1 flex-col rounded-[30px] border border-white/10 bg-[#09111d]/78 backdrop-blur-2xl">
             <div className="flex items-center justify-between border-b border-white/8 px-6 py-5">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-white/8 p-3 text-white/90">
-                  <Bot size={22} />
-                </div>
+                <ProfileAvatar profile={selectedProfile} sizeClass="h-14 w-14" />
                 <div>
                   <h1 className="text-xl font-semibold">{selectedProfile?.name || 'Ark Agent'}</h1>
                   <p className="text-sm text-white/50">{selectedProfile?.description || '选择或创建一个 Agent Profile 后开始对话。'}</p>
@@ -635,6 +790,31 @@ const AgentDesk: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
               <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+                {toolTimeline.length ? (
+                  <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white/78">
+                      <Wrench size={16} />
+                      执行轨迹
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {toolTimeline.map((item) => (
+                        <div key={item.id} className="flex items-center gap-3 text-sm text-white/62">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              item.kind === 'approval'
+                                ? 'bg-amber-300'
+                                : item.kind === 'tool'
+                                  ? 'bg-cyan-300'
+                                  : 'bg-white/40'
+                            }`}
+                          />
+                          <span>{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {messages.map((message, index) => (
                   <div
                     key={`${message.role}-${index}`}
@@ -645,6 +825,9 @@ const AgentDesk: React.FC = () => {
                     }`}
                   >
                     {message.content}
+                    {sending && message.role === 'assistant' && index === messages.length - 1 ? (
+                      <span className="ml-1 inline-block h-5 w-2 animate-pulse rounded-full bg-cyan-200/80 align-middle" />
+                    ) : null}
                   </div>
                 ))}
 
@@ -705,13 +888,24 @@ const AgentDesk: React.FC = () => {
                     className="min-h-[112px] w-full resize-none bg-transparent px-3 py-2 text-sm leading-7 text-white outline-none placeholder:text-white/28 disabled:opacity-50"
                   />
                   <div className="mt-3 flex items-center justify-end">
-                    <button
-                      onClick={() => void handleSend()}
-                      disabled={sending || !draftMessage.trim() || !selectedProfileId}
-                      className="rounded-full bg-cyan-300 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
-                    >
-                      {sending ? '发送中...' : '发送给 Agent'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {sending ? (
+                        <button
+                          onClick={handleStopStreaming}
+                          className="flex items-center gap-2 rounded-full border border-red-300/20 bg-red-500/12 px-4 py-2.5 text-sm font-medium text-red-100 transition hover:bg-red-500/20"
+                        >
+                          <Square size={14} />
+                          停止生成
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => void handleSend()}
+                        disabled={sending || !draftMessage.trim() || !selectedProfileId}
+                        className="rounded-full bg-cyan-300 px-5 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+                      >
+                        {sending ? '发送中...' : '发送给 Agent'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

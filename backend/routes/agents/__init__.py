@@ -27,6 +27,7 @@ from routes.agents.models import (
 )
 from routes.agents.policy import evaluate_policy, forbidden, resolve_agent_context
 from routes.agents.profiles import (
+    avatar_upload_dir,
     build_profile_context,
     create_profile,
     delete_profile,
@@ -35,9 +36,11 @@ from routes.agents.profiles import (
     init_agent_profiles,
     list_profiles,
     normalize_allowed_skills,
+    remove_profile_avatar,
     row_to_profile,
     set_default_profile,
     update_profile,
+    upload_profile_avatar,
 )
 from routes.agents.routes import router
 from routes.agents.skills import list_agent_skills_registry, skill_action_map
@@ -53,6 +56,7 @@ __all__ = [
     "ChatRequest",
     "ChatResponse",
     "PolicyRule",
+    "avatar_upload_dir",
     "build_profile_context",
     "chat_router",
     "commit_arxiv_daily_tasks_action",
@@ -76,11 +80,13 @@ __all__ = [
     "pool_from_request",
     "prepare_arxiv_daily_tasks_action",
     "prepare_task_delete_action",
+    "remove_profile_avatar",
     "resolve_agent_context",
     "row_to_profile",
     "router",
     "set_default_profile",
     "skill_action_map",
+    "upload_profile_avatar",
     "update_profile",
     "update_task_action",
 ]

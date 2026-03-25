@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -52,6 +53,7 @@ class _FakeAgentConn:
                 "description": "Default profile",
                 "agent_type": "dashboard_agent",
                 "app_id": None,
+                "avatar_url": None,
                 "persona_prompt": "Default persona",
                 "allowed_skills_json": ["task_list", "delete_task"],
                 "temperature": 0.2,
@@ -65,27 +67,59 @@ class _FakeAgentConn:
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
         if "INSERT INTO agent_profiles" in sql:
             now = datetime.now(UTC)
+            if len(args) == 6:
+                agent_type = "dashboard_agent"
+                app_id = None
+                avatar_url = None
+                persona_prompt = str(args[4])
+                allowed_skills_json = json.loads(str(args[5]))
+                temperature = 0.2
+                max_tool_loops = 4
+                is_default = True
+            else:
+                agent_type = str(args[4])
+                app_id = args[5]
+                avatar_url = None
+                persona_prompt = str(args[6])
+                allowed_skills_json = json.loads(str(args[7]))
+                temperature = float(args[8])
+                max_tool_loops = int(args[9])
+                is_default = bool(args[10])
             row = {
                 "id": str(args[0]),
                 "user_id": int(args[1]),
                 "name": str(args[2]),
                 "description": str(args[3]),
-                "agent_type": str(args[4]),
-                "app_id": args[5],
-                "persona_prompt": str(args[6]),
-                "allowed_skills_json": ["task_list"],
-                "temperature": float(args[8]),
-                "max_tool_loops": int(args[9]),
-                "is_default": bool(args[10]),
+                "agent_type": agent_type,
+                "app_id": app_id,
+                "avatar_url": avatar_url,
+                "persona_prompt": persona_prompt,
+                "allowed_skills_json": allowed_skills_json,
+                "temperature": temperature,
+                "max_tool_loops": max_tool_loops,
+                "is_default": is_default,
                 "created_at": now,
                 "updated_at": now,
             }
-            try:
-                parsed = json.loads(str(args[7]))
-                row["allowed_skills_json"] = parsed
-            except Exception:
-                pass
             self.profiles.append(row)
+            return row
+        if "UPDATE agent_profiles" in sql and "SET avatar_url = $1" in sql:
+            profile_id = str(args[1])
+            user_id = int(args[2])
+            row = next((item for item in self.profiles if item["id"] == profile_id and item["user_id"] == user_id), None)
+            if row is None:
+                return None
+            row["avatar_url"] = args[0]
+            row["updated_at"] = datetime.now(UTC)
+            return row
+        if "UPDATE agent_profiles" in sql and "SET avatar_url = NULL" in sql:
+            profile_id = str(args[0])
+            user_id = int(args[1])
+            row = next((item for item in self.profiles if item["id"] == profile_id and item["user_id"] == user_id), None)
+            if row is None:
+                return None
+            row["avatar_url"] = None
+            row["updated_at"] = datetime.now(UTC)
             return row
         if "UPDATE agent_profiles" in sql and "RETURNING id, user_id, name" in sql:
             profile_id = str(args[-2])
@@ -99,11 +133,12 @@ class _FakeAgentConn:
                     "description": str(args[1]),
                     "agent_type": str(args[2]),
                     "app_id": args[3],
-                    "persona_prompt": str(args[4]),
-                    "allowed_skills_json": json.loads(str(args[5])),
-                    "temperature": float(args[6]),
-                    "max_tool_loops": int(args[7]),
-                    "is_default": bool(args[8]),
+                    "avatar_url": args[4],
+                    "persona_prompt": str(args[5]),
+                    "allowed_skills_json": json.loads(str(args[6])),
+                    "temperature": float(args[7]),
+                    "max_tool_loops": int(args[8]),
+                    "is_default": bool(args[9]),
                     "updated_at": datetime.now(UTC),
                 }
             )
@@ -244,6 +279,7 @@ def client_profile(profile_id: str, *, is_default: bool) -> dict[str, Any]:
         "description": "Another profile",
         "agent_type": "dashboard_agent",
         "app_id": None,
+        "avatar_url": None,
         "persona_prompt": "Another persona",
         "allowed_skills_json": ["task_list"],
         "temperature": 0.3,
@@ -343,6 +379,61 @@ def test_set_default_profile_updates_flag(monkeypatch) -> None:
     body = resp.json()
     assert body["id"] == "apf_second"
     assert body["is_default"] is True
+
+
+def test_upload_profile_avatar_persists_file(monkeypatch, tmp_path: Path) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.profiles.AVATAR_UPLOAD_DIR", tmp_path)
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/profiles/apf_default/avatar",
+        files={"avatar": ("agent.png", b"fake-image-bytes", "image/png")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["avatar_url"].startswith("/uploads/agent-avatars/")
+    saved_file = tmp_path / body["avatar_url"].removeprefix("/uploads/agent-avatars/")
+    assert saved_file.exists()
+
+
+def test_upload_profile_avatar_rejects_invalid_type(monkeypatch, tmp_path: Path) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.profiles.AVATAR_UPLOAD_DIR", tmp_path)
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/profiles/apf_default/avatar",
+        files={"avatar": ("agent.gif", b"gif-bytes", "image/gif")},
+    )
+    assert resp.status_code == 422
+
+
+def test_upload_profile_avatar_rejects_oversized_file(monkeypatch, tmp_path: Path) -> None:
+    conn = _FakeAgentConn()
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.profiles.AVATAR_UPLOAD_DIR", tmp_path)
+    client = TestClient(_build_app())
+    resp = client.post(
+        "/api/agent/profiles/apf_default/avatar",
+        files={"avatar": ("large.png", b"x" * (2 * 1024 * 1024 + 1), "image/png")},
+    )
+    assert resp.status_code == 413
+
+
+def test_remove_profile_avatar_deletes_file(monkeypatch, tmp_path: Path) -> None:
+    conn = _FakeAgentConn()
+    avatar_path = tmp_path / "old.png"
+    avatar_path.write_bytes(b"old-image")
+    conn.profiles[0]["avatar_url"] = "/uploads/agent-avatars/old.png"
+    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
+    monkeypatch.setattr("routes.agents.profiles.AVATAR_UPLOAD_DIR", tmp_path)
+    client = TestClient(_build_app())
+    resp = client.delete("/api/agent/profiles/apf_default/avatar")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["avatar_url"] is None
+    assert not avatar_path.exists()
 
 
 def test_dashboard_agent_can_search_arxiv(monkeypatch) -> None:

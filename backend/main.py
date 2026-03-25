@@ -4,9 +4,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from routes.agents import chat_router, init_agent
 from routes.agents import router as agent_router
+from routes.agents.profiles import avatar_upload_dir
 from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
@@ -43,6 +45,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+avatar_upload_dir().mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=avatar_upload_dir().parent), name="uploads")
 
 app.include_router(auth_router)
 app.include_router(checkin_router)

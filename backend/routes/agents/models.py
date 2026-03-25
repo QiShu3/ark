@@ -63,6 +63,7 @@ class AgentProfileOut(BaseModel):
     description: str
     agent_type: AgentType
     app_id: str | None
+    avatar_url: str | None
     persona_prompt: str
     allowed_skills: list[str]
     temperature: float

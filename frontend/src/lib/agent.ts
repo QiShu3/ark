@@ -1,4 +1,4 @@
-import { apiJson } from './api';
+import { apiFetch, apiJson } from './api';
 
 export type AgentActionType = 'result' | 'approval_required' | 'forbidden';
 export type AgentType = 'dashboard_agent' | 'app_agent:arxiv' | 'app_agent:vocab';
@@ -34,6 +34,7 @@ export type AgentProfile = {
   description: string;
   agent_type: AgentType;
   app_id: string | null;
+  avatar_url: string | null;
   persona_prompt: string;
   allowed_skills: string[];
   temperature: number;
@@ -104,4 +105,30 @@ export async function deleteAgentProfile(id: string): Promise<{ ok: boolean }> {
 
 export async function setDefaultAgentProfile(id: string): Promise<AgentProfile> {
   return apiJson<AgentProfile>(`/api/agent/profiles/${id}/default`, { method: 'POST' });
+}
+
+export async function uploadAgentProfileAvatar(id: string, file: File): Promise<AgentProfile> {
+  const form = new FormData();
+  form.append('avatar', file);
+  const res = await apiFetch(`/api/agent/profiles/${id}/avatar`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data && typeof data === 'object' && typeof (data as { detail?: unknown }).detail === 'string') {
+        detail = (data as { detail: string }).detail;
+      }
+    } catch {
+      // noop
+    }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<AgentProfile>;
+}
+
+export async function removeAgentProfileAvatar(id: string): Promise<AgentProfile> {
+  return apiJson<AgentProfile>(`/api/agent/profiles/${id}/avatar`, { method: 'DELETE' });
 }

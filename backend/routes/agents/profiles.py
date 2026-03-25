@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
@@ -14,6 +16,16 @@ from routes.agents.models import (
 )
 from routes.agents.policy import DEFAULT_CAPABILITIES
 from routes.agents.skills import list_agent_skills_registry
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+AVATAR_UPLOAD_DIR = Path(os.getenv("ARK_AGENT_AVATAR_DIR", str(BACKEND_DIR / "uploads" / "agent-avatars")))
+AVATAR_URL_PREFIX = "/uploads/agent-avatars/"
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
+ALLOWED_AVATAR_TYPES = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
 
 
 def _default_profile_values(agent_type: str) -> tuple[str, str, str | None]:
@@ -78,6 +90,29 @@ def build_profile_context(profile: AgentProfileOut, *, user_id: int, session_id:
     )
 
 
+def avatar_upload_dir() -> Path:
+    return AVATAR_UPLOAD_DIR
+
+
+def avatar_url_for_filename(filename: str) -> str:
+    return f"{AVATAR_URL_PREFIX}{filename}"
+
+
+def avatar_path_from_url(url: str | None) -> Path | None:
+    if not isinstance(url, str) or not url.startswith(AVATAR_URL_PREFIX):
+        return None
+    filename = url.removeprefix(AVATAR_URL_PREFIX).strip()
+    if not filename:
+        return None
+    return avatar_upload_dir() / filename
+
+
+def delete_avatar_file(url: str | None) -> None:
+    path = avatar_path_from_url(url)
+    if path is not None and path.exists():
+        path.unlink()
+
+
 def row_to_profile(row: Any) -> AgentProfileOut:
     raw_skills = row["allowed_skills_json"]
     if isinstance(raw_skills, str):
@@ -91,6 +126,7 @@ def row_to_profile(row: Any) -> AgentProfileOut:
         description=str(row["description"] or ""),
         agent_type=str(row["agent_type"]),
         app_id=str(row["app_id"]) if row["app_id"] is not None else None,
+        avatar_url=str(row["avatar_url"]) if "avatar_url" in row and row["avatar_url"] is not None else None,
         persona_prompt=str(row["persona_prompt"] or ""),
         allowed_skills=[str(item) for item in allowed_skills],
         temperature=float(row["temperature"]),
@@ -111,6 +147,7 @@ async def init_agent_profiles(conn: Any) -> None:
           description TEXT NOT NULL DEFAULT '',
           agent_type TEXT NOT NULL,
           app_id TEXT NULL,
+          avatar_url TEXT NULL,
           persona_prompt TEXT NOT NULL DEFAULT '',
           allowed_skills_json JSONB NOT NULL DEFAULT '[]'::jsonb,
           temperature DOUBLE PRECISION NOT NULL DEFAULT 0.2,
@@ -124,6 +161,7 @@ async def init_agent_profiles(conn: Any) -> None:
         );
         """
     )
+    await conn.execute("ALTER TABLE agent_profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;")
     await conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_profiles_default_per_user ON agent_profiles(user_id) WHERE is_default = TRUE;"
     )
@@ -146,7 +184,7 @@ async def _clear_default_for_user(conn: Any, *, user_id: int, exclude_id: str | 
 async def ensure_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1
@@ -164,11 +202,11 @@ async def ensure_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
     inserted = await conn.fetchrow(
         """
         INSERT INTO agent_profiles(
-            id, user_id, name, description, agent_type, app_id, persona_prompt,
+            id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt,
             allowed_skills_json, temperature, max_tool_loops, is_default
         )
-        VALUES ($1, $2, $3, $4, 'dashboard_agent', NULL, $5, $6::jsonb, 0.2, 4, TRUE)
-        RETURNING id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        VALUES ($1, $2, $3, $4, 'dashboard_agent', NULL, NULL, $5, $6::jsonb, 0.2, 4, TRUE)
+        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         profile_id,
@@ -187,7 +225,7 @@ async def list_profiles(conn: Any, *, user_id: int) -> list[AgentProfileOut]:
     _ = await ensure_default_profile(conn, user_id=user_id)
     rows = await conn.fetch(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1
@@ -201,7 +239,7 @@ async def list_profiles(conn: Any, *, user_id: int) -> list[AgentProfileOut]:
 async def get_profile_by_id(conn: Any, *, user_id: int, profile_id: str) -> AgentProfileOut:
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1 AND id = $2
@@ -220,7 +258,7 @@ async def get_default_profile(conn: Any, *, user_id: int) -> AgentProfileOut:
         return profile
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        SELECT id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                temperature, max_tool_loops, is_default, created_at, updated_at
         FROM agent_profiles
         WHERE user_id = $1 AND is_default = TRUE
@@ -248,11 +286,11 @@ async def create_profile(conn: Any, *, user_id: int, payload: AgentProfileCreate
     row = await conn.fetchrow(
         """
         INSERT INTO agent_profiles(
-            id, user_id, name, description, agent_type, app_id, persona_prompt,
+            id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt,
             allowed_skills_json, temperature, max_tool_loops, is_default
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
-        RETURNING id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8::jsonb, $9, $10, $11)
+        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         "apf_" + secrets.token_urlsafe(12),
@@ -296,20 +334,22 @@ async def update_profile(conn: Any, *, user_id: int, profile_id: str, payload: A
             description = $2,
             agent_type = $3,
             app_id = $4,
-            persona_prompt = $5,
-            allowed_skills_json = $6::jsonb,
-            temperature = $7,
-            max_tool_loops = $8,
-            is_default = $9,
+            avatar_url = $5,
+            persona_prompt = $6,
+            allowed_skills_json = $7::jsonb,
+            temperature = $8,
+            max_tool_loops = $9,
+            is_default = $10,
             updated_at = NOW()
-        WHERE id = $10 AND user_id = $11
-        RETURNING id, user_id, name, description, agent_type, app_id, persona_prompt, allowed_skills_json,
+        WHERE id = $11 AND user_id = $12
+        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
                   temperature, max_tool_loops, is_default, created_at, updated_at
         """,
         name,
         description,
         agent_type,
         app_id,
+        current.avatar_url,
         persona_prompt,
         json.dumps(allowed_skills, ensure_ascii=False),
         temperature,
@@ -333,6 +373,7 @@ async def set_default_profile(conn: Any, *, user_id: int, profile_id: str) -> Ag
 async def delete_profile(conn: Any, *, user_id: int, profile_id: str) -> dict[str, bool]:
     profile = await get_profile_by_id(conn, user_id=user_id, profile_id=profile_id)
     await conn.execute("DELETE FROM agent_profiles WHERE id = $1 AND user_id = $2", profile_id, user_id)
+    delete_avatar_file(profile.avatar_url)
     if profile.is_default:
         next_row = await conn.fetchrow(
             """
@@ -347,3 +388,69 @@ async def delete_profile(conn: Any, *, user_id: int, profile_id: str) -> dict[st
         if next_row is not None:
             await conn.execute("UPDATE agent_profiles SET is_default = TRUE, updated_at = NOW() WHERE id = $1", str(next_row["id"]))
     return {"ok": True}
+
+
+async def upload_profile_avatar(
+    conn: Any,
+    *,
+    user_id: int,
+    profile_id: str,
+    content_type: str | None,
+    content: bytes,
+) -> AgentProfileOut:
+    profile = await get_profile_by_id(conn, user_id=user_id, profile_id=profile_id)
+    normalized_type = (content_type or "").strip().lower()
+    ext = ALLOWED_AVATAR_TYPES.get(normalized_type)
+    if ext is None:
+        raise HTTPException(status_code=422, detail="仅支持 PNG、JPEG 或 WebP 图片")
+    if not content:
+        raise HTTPException(status_code=422, detail="头像文件不能为空")
+    if len(content) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=413, detail="头像文件不能超过 2MB")
+    avatar_upload_dir().mkdir(parents=True, exist_ok=True)
+    filename = f"{user_id}_{profile_id}_{secrets.token_urlsafe(8)}.{ext}"
+    avatar_path = avatar_upload_dir() / filename
+    avatar_path.write_bytes(content)
+    avatar_url = avatar_url_for_filename(filename)
+    try:
+        row = await conn.fetchrow(
+            """
+            UPDATE agent_profiles
+            SET avatar_url = $1,
+                updated_at = NOW()
+            WHERE id = $2 AND user_id = $3
+            RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+                      temperature, max_tool_loops, is_default, created_at, updated_at
+            """,
+            avatar_url,
+            profile_id,
+            user_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="Agent Profile 不存在")
+    except Exception:
+        if avatar_path.exists():
+            avatar_path.unlink()
+        raise
+    delete_avatar_file(profile.avatar_url)
+    return row_to_profile(row)
+
+
+async def remove_profile_avatar(conn: Any, *, user_id: int, profile_id: str) -> AgentProfileOut:
+    profile = await get_profile_by_id(conn, user_id=user_id, profile_id=profile_id)
+    row = await conn.fetchrow(
+        """
+        UPDATE agent_profiles
+        SET avatar_url = NULL,
+            updated_at = NOW()
+        WHERE id = $1 AND user_id = $2
+        RETURNING id, user_id, name, description, agent_type, app_id, avatar_url, persona_prompt, allowed_skills_json,
+                  temperature, max_tool_loops, is_default, created_at, updated_at
+        """,
+        profile_id,
+        user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Agent Profile 不存在")
+    delete_avatar_file(profile.avatar_url)
+    return row_to_profile(row)

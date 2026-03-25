@@ -54,6 +54,7 @@ def _profile(profile_id: str = "apf_default", *, temperature: float = 0.2, loops
         description="Default profile",
         agent_type="dashboard_agent",
         app_id=None,
+        avatar_url=None,
         persona_prompt="你像一个冷静的任务助手。",
         allowed_skills=["task_list", "delete_task"],
         temperature=temperature,

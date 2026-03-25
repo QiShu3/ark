@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 
 from routes.agents.executor import execute_action_with_context, pool_from_request
 from routes.agents.models import (
@@ -18,8 +18,10 @@ from routes.agents.profiles import (
     create_profile,
     delete_profile,
     list_profiles,
+    remove_profile_avatar,
     set_default_profile,
     update_profile,
+    upload_profile_avatar,
 )
 from routes.agents.skills import list_agent_skills_registry
 from routes.auth_routes import get_current_user
@@ -105,3 +107,35 @@ async def set_agent_profile_default(
     async with pool.acquire() as conn:
         async with conn.transaction():
             return await set_default_profile(conn, user_id=int(user.id), profile_id=profile_id)
+
+
+@router.post("/profiles/{profile_id}/avatar", response_model=AgentProfileOut)
+async def upload_agent_profile_avatar(
+    profile_id: str,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    avatar: UploadFile = File(...),
+) -> AgentProfileOut:
+    pool = pool_from_request(request)
+    content = await avatar.read()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            return await upload_profile_avatar(
+                conn,
+                user_id=int(user.id),
+                profile_id=profile_id,
+                content_type=avatar.content_type,
+                content=content,
+            )
+
+
+@router.delete("/profiles/{profile_id}/avatar", response_model=AgentProfileOut)
+async def delete_agent_profile_avatar(
+    profile_id: str,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AgentProfileOut:
+    pool = pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            return await remove_profile_avatar(conn, user_id=int(user.id), profile_id=profile_id)
