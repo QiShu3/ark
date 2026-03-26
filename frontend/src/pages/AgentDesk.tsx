@@ -432,11 +432,11 @@ const AgentDesk: React.FC = () => {
             return;
           }
           if (item.type === 'done') {
-            if (item.reply) {
+            if (typeof item.reply === 'string') {
               setMessages((prev) =>
                 prev.map((message, index) =>
-                  index === assistantPlaceholderIndex && message.role === 'assistant' && !message.content.trim()
-                    ? { ...message, content: item.reply || '' }
+                  index === assistantPlaceholderIndex && message.role === 'assistant'
+                    ? { ...message, content: item.reply }
                     : message,
                 ),
               );

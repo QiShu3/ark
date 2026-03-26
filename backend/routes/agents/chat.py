@@ -164,6 +164,44 @@ def _stream_delta_text(delta: dict[str, Any]) -> str:
     return ""
 
 
+def _reply_claims_frontend_confirmation(reply: str) -> bool:
+    text = reply.strip()
+    if not text:
+        return False
+    frontend_confirm_pairs = [
+        ("前端", "确认"),
+        ("界面", "确认"),
+        ("确认按钮", ""),
+        ("点击确认", ""),
+        ("审批按钮", ""),
+    ]
+    for left, right in frontend_confirm_pairs:
+        if left in text and (not right or right in text):
+            return True
+    return False
+
+
+def _finalize_reply(reply: str, approval: AgentActionResponse | None) -> str:
+    text = reply.strip() or "我已经处理好了。"
+    if approval is not None:
+        return text
+    if _reply_claims_frontend_confirmation(text):
+        return "我这轮还没有成功发起前端确认卡片，所以现在不会弹出确认框。请再试一次，我会重新发起需要确认的操作。"
+    return text
+
+
+def _confirmation_repair_message() -> dict[str, str]:
+    return {
+        "role": "system",
+        "content": (
+            "系统纠偏：你刚才提到了需要用户在前端确认，但当前并没有任何 approval_required 票据。"
+            "如果这一步确实需要审批，请立即调用对应的 prepare skill 真正发起审批；"
+            "如果不需要审批，就直接正常回答。"
+            "不要再次输出“去前端确认/点击确认按钮”之类的话，除非这轮已经返回了 approval_required。"
+        ),
+    }
+
+
 def _merge_stream_tool_calls(existing: list[dict[str, Any]], raw_calls: Any) -> None:
     if not isinstance(raw_calls, list):
         return
@@ -284,6 +322,7 @@ async def _run_chat_turn(
     tools = tool_definitions(allowed_skills)
     messages = messages_for_model(body, profile)
     latest_approval: AgentActionResponse | None = None
+    confirmation_repair_used = False
     for _ in range(max_tool_loops(profile.max_tool_loops)):
         model_message = await deepseek_chat_completion(messages, tools, temperature=profile.temperature)
         assistant_entry: dict[str, Any] = {"role": "assistant", "content": extract_text_content(model_message)}
@@ -292,7 +331,11 @@ async def _run_chat_turn(
             assistant_entry["tool_calls"] = tool_calls
         messages.append(assistant_entry)
         if not tool_calls:
-            return assistant_entry["content"] or "我已经处理好了。", latest_approval
+            if latest_approval is None and _reply_claims_frontend_confirmation(assistant_entry["content"]) and not confirmation_repair_used:
+                confirmation_repair_used = True
+                messages.append(_confirmation_repair_message())
+                continue
+            return _finalize_reply(assistant_entry["content"], latest_approval), latest_approval
         for call in tool_calls:
             tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
             if approval is not None:
@@ -315,6 +358,7 @@ async def _stream_chat_turn(
         tools = tool_definitions(allowed_skills)
         messages = messages_for_model(body, profile)
         latest_approval: AgentActionResponse | None = None
+        confirmation_repair_used = False
         yield _sse_event(
                     {
                         "type": "profile",
@@ -339,10 +383,14 @@ async def _stream_chat_turn(
                 assistant_entry["tool_calls"] = assistant_tool_calls
             messages.append(assistant_entry)
             if not assistant_tool_calls:
+                if latest_approval is None and _reply_claims_frontend_confirmation(assistant_entry["content"]) and not confirmation_repair_used:
+                    confirmation_repair_used = True
+                    messages.append(_confirmation_repair_message())
+                    continue
                 yield _sse_event(
                     {
                         "type": "done",
-                        "reply": assistant_entry["content"] or "我已经处理好了。",
+                        "reply": _finalize_reply(assistant_entry["content"], latest_approval),
                         "approval": latest_approval.model_dump(mode="json") if latest_approval else None,
                     }
                 )
