@@ -152,7 +152,6 @@ def test_chat_tool_definitions_can_be_filtered() -> None:
 
     names = [item["function"]["name"] for item in tool_definitions(["task_list"]) if item.get("type") == "function"]
     assert "task_list" in names
-    assert "approval_commit" in names
     assert "task_update" not in names
     assert "arxiv_search" not in names
 
@@ -174,7 +173,7 @@ def test_chat_passes_allowed_skills_to_model(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"message": "查论文", "history": [], "allowed_skills": ["arxiv_search"]})
     assert resp.status_code == 200
-    assert captured["tools"] == ["task_list", "delete_task", "approval_commit"]
+    assert captured["tools"] == ["task_list", "delete_task"]
     assert "task_list" in captured["system"]
     assert "arxiv_search" not in captured["system"]
     assert captured["temperature"] == 0.2
@@ -209,10 +208,41 @@ def test_chat_uses_selected_profile(monkeypatch) -> None:
     client = TestClient(_build_app())
     resp = client.post("/api/chat", json={"profile_id": "apf_custom", "message": "你好", "history": []})
     assert resp.status_code == 200
-    assert captured["tools"] == ["delete_task", "approval_commit"]
+    assert captured["tools"] == ["delete_task"]
     assert "Research Agent" in captured["system"]
     assert "当前主应用：ArXiv" in captured["system"]
     assert captured["temperature"] == 0.7
+
+
+def test_chat_rejects_model_side_approval_commit(monkeypatch) -> None:
+    async def _fake_completion(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ) -> dict[str, Any]:
+        _ = messages
+        _ = tools
+        _ = temperature
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "approval_commit",
+                        "arguments": '{"approval_id":"appr_1","commit_action":"task.delete.commit"}',
+                    },
+                }
+            ],
+        }
+
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat", json={"message": "确认删除", "history": []})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "approval_commit 只能由前端确认按钮触发"
 
 
 def test_chat_stream_emits_text_events(monkeypatch) -> None:

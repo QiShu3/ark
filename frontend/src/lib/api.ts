@@ -52,11 +52,13 @@ export async function apiSSE(
   path: string,
   body: unknown,
   onEvent: (event: Record<string, unknown>) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  extraHeaders?: HeadersInit,
 ): Promise<void> {
   const token = useAuthStore.getState().token;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const headers = new Headers(extraHeaders);
+  headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const res = await fetch(path, {
     method: 'POST',

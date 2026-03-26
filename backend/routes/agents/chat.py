@@ -58,8 +58,9 @@ def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str]) -> 
         "你可以调用 skills 来查看任务、更新任务、发起敏感操作审批，以及访问当前主应用或受控跨应用的信息。"
         "规则：1. 优先使用工具获取事实，不要编造任务数据。"
         "2. 如果工具返回 approval_required，向用户简洁解释将发生什么，并明确需要在前端确认。"
-        "3. 不要声称已经完成需要确认的敏感操作，除非 commit 工具已经成功执行。"
-        "4. 回答使用简体中文，简洁、自然、像产品里的助手。"
+        "3. 不要尝试替用户提交审批确认；审批只能由前端确认按钮触发。"
+        "4. 不要声称已经完成需要确认的敏感操作，除非前端确认后的 commit 请求已经成功执行。"
+        "5. 回答使用简体中文，简洁、自然、像产品里的助手。"
     )
     context = profile.context_prompt.strip() or app.default_context_prompt
     constraints = (
@@ -72,7 +73,7 @@ def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str]) -> 
 
 def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, Any]]:
     allowed = set(allowed_skills or [])
-    tools = [
+    return [
         {
             "type": "function",
             "function": {
@@ -84,24 +85,6 @@ def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, 
         for skill in list_agent_skills_registry()
         if not allowed or skill.name in allowed
     ]
-    tools.append(
-        {
-            "type": "function",
-            "function": {
-                "name": "approval_commit",
-                "description": "在用户已经通过前端确认后，执行批准中的敏感操作。",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "approval_id": {"type": "string"},
-                        "commit_action": {"type": "string", "enum": ["task.delete.commit", "arxiv.daily_tasks.commit"]},
-                    },
-                    "required": ["approval_id", "commit_action"],
-                },
-            },
-        }
-    )
-    return tools
 
 
 def messages_for_model(body: ChatRequest, profile: AgentProfileOut) -> list[dict[str, Any]]:
@@ -277,18 +260,13 @@ async def execute_tool_call(
         raise HTTPException(status_code=422, detail="工具调用缺少名称")
     arguments = parse_tool_arguments(function.get("arguments"))
     if name == "approval_commit":
-        approval_id = arguments.get("approval_id")
-        commit_action = arguments.get("commit_action")
-        if not isinstance(approval_id, str) or not isinstance(commit_action, str):
-            raise HTTPException(status_code=422, detail="approval_commit 参数无效")
-        result = await execute_action_with_context(pool, action_name=commit_action, ctx=ctx, payload={"approval_id": approval_id})
-    else:
-        if name not in allowed_skills:
-            raise HTTPException(status_code=403, detail=f"skill 未被当前会话允许：{name}")
-        action_name = skill_action_map().get(name)
-        if action_name is None:
-            raise HTTPException(status_code=422, detail=f"未知 skill：{name}")
-        result = await execute_action_with_context(pool, action_name=action_name, ctx=ctx, payload=arguments)
+        raise HTTPException(status_code=403, detail="approval_commit 只能由前端确认按钮触发")
+    if name not in allowed_skills:
+        raise HTTPException(status_code=403, detail=f"skill 未被当前会话允许：{name}")
+    action_name = skill_action_map().get(name)
+    if action_name is None:
+        raise HTTPException(status_code=422, detail=f"未知 skill：{name}")
+    result = await execute_action_with_context(pool, action_name=action_name, ctx=ctx, payload=arguments)
     tool_message = {"role": "tool", "tool_call_id": call.get("id"), "content": result.model_dump_json()}
     return tool_message, result if result.type == "approval_required" else None
 

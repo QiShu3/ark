@@ -461,6 +461,9 @@ const AgentDesk: React.FC = () => {
           }
         },
         controller.signal,
+        {
+          'X-Ark-Session-Id': sessionIdRef.current,
+        },
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
