@@ -1,5 +1,6 @@
 import React from 'react';
 import CharacterDisplay from './CharacterDisplay';
+import CharaAgentOverlay from './CharaAgentOverlay';
 import EventCountdownCard from './EventCountdownCard';
 
 /**
@@ -15,6 +16,7 @@ const LeftPanel: React.FC = () => {
       <div className="w-full h-full absolute top-0 left-0 pt-16 z-0 flex items-center justify-center">
         <CharacterDisplay />
       </div>
+      <CharaAgentOverlay />
     </div>
   );
 };

@@ -19,6 +19,9 @@ from routes.auth_routes import get_current_user
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+SUGGESTIONS_START = "\n<ark_suggestions>"
+SUGGESTIONS_END = "</ark_suggestions>"
+
 
 def chat_model() -> str:
     return os.getenv("DEEPSEEK_MODEL", "deepseek-chat").strip() or "deepseek-chat"
@@ -51,7 +54,11 @@ def _allowed_skill_names(body: ChatRequest, profile: AgentProfileOut) -> list[st
     return list(dict.fromkeys(selected))
 
 
-def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str]) -> str:
+def _response_mode(scope: str | None) -> str:
+    return "chara" if (scope or "").strip() == "dashboard_chara" else "default"
+
+
+def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str], *, response_mode: str = "default") -> str:
     app = get_app_definition(profile.primary_app_id)
     system_base = (
         "你是 Ark 的 AI Agent，对话对象是产品用户。"
@@ -68,7 +75,19 @@ def build_system_prompt(profile: AgentProfileOut, allowed_skills: list[str]) -> 
         f"当前主应用：{app.display_name}。"
         f"当前会话仅允许调用这些 skills：{', '.join(allowed_skills) or '无'}。不要调用未被允许的 skill。"
     )
-    return "\n".join([system_base, context, constraints])
+    suggestion_format = (
+        "最终回复时，请把用户可见正文放在前面；在最后紧跟一个建议块，格式必须是："
+        f"{SUGGESTIONS_START}"
+        '["建议1","建议2","建议3"]'
+        f"{SUGGESTIONS_END}。"
+        "建议块不能出现在正文中间。建议要简短、可点击、适合继续对话，最多 3 条。"
+    )
+    chara_constraints = (
+        "当前是首页角色悬浮字幕模式。正文控制在 1 到 2 句内，像角色当下说出的话，避免写成长段说明。"
+        if response_mode == "chara"
+        else "正文保持自然、清晰；如无必要，不要冗长。"
+    )
+    return "\n".join([system_base, context, constraints, chara_constraints, suggestion_format])
 
 
 def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, Any]]:
@@ -89,7 +108,9 @@ def tool_definitions(allowed_skills: list[str] | None = None) -> list[dict[str, 
 
 def messages_for_model(body: ChatRequest, profile: AgentProfileOut) -> list[dict[str, Any]]:
     allowed_skills = _allowed_skill_names(body, profile)
-    messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt(profile, allowed_skills)}]
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": build_system_prompt(profile, allowed_skills, response_mode=_response_mode(body.scope))}
+    ]
     for item in body.history[-12:]:
         messages.append({"role": item.role, "content": item.content})
     messages.append({"role": "user", "content": body.message})
@@ -188,6 +209,54 @@ def _finalize_reply(reply: str, approval: AgentActionResponse | None) -> str:
     if _reply_claims_frontend_confirmation(text):
         return "我这轮还没有成功发起前端确认卡片，所以现在不会弹出确认框。请再试一次，我会重新发起需要确认的操作。"
     return text
+
+
+def _clean_suggestion(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split()).strip()
+    if not text:
+        return None
+    return text[:80]
+
+
+def split_reply_and_suggestions(raw_reply: str) -> tuple[str, list[str]]:
+    text = raw_reply.strip()
+    if not text:
+        return "", []
+    start = text.find(SUGGESTIONS_START)
+    if start == -1:
+        return text, []
+    end = text.find(SUGGESTIONS_END, start + len(SUGGESTIONS_START))
+    if end == -1:
+        return text[:start].strip(), []
+    visible = text[:start].strip()
+    payload = text[start + len(SUGGESTIONS_START) : end].strip()
+    try:
+        parsed = json.loads(payload)
+    except Exception:
+        return visible, []
+    items = parsed if isinstance(parsed, list) else parsed.get("suggestions") if isinstance(parsed, dict) else []
+    if not isinstance(items, list):
+        return visible, []
+    suggestions: list[str] = []
+    for item in items:
+        cleaned = _clean_suggestion(item)
+        if cleaned and cleaned not in suggestions:
+            suggestions.append(cleaned)
+        if len(suggestions) >= 3:
+            break
+    return visible, suggestions
+
+
+def _visible_stream_text(raw_text: str, emitted_chars: int) -> str:
+    marker_index = raw_text.find(SUGGESTIONS_START)
+    if marker_index >= 0:
+        visible = raw_text[:marker_index]
+    else:
+        safe_end = max(0, len(raw_text) - (len(SUGGESTIONS_START) - 1))
+        visible = raw_text[:safe_end]
+    return visible[emitted_chars:]
 
 
 def _confirmation_repair_message() -> dict[str, str]:
@@ -352,7 +421,7 @@ async def _run_chat_turn(
     body: ChatRequest,
     user_id: int,
     session_id: str | None,
-) -> tuple[str, AgentActionResponse | None]:
+) -> tuple[str, AgentActionResponse | None, list[str]]:
     profile = await _resolve_profile(pool, body=body, user_id=user_id)
     ctx = build_profile_context(profile, user_id=user_id, session_id=session_id)
     allowed_skills = _allowed_skill_names(body, profile)
@@ -373,7 +442,8 @@ async def _run_chat_turn(
                 confirmation_repair_used = True
                 messages.append(_confirmation_repair_message())
                 continue
-            return _finalize_reply(assistant_entry["content"], latest_approval), latest_approval
+            visible_reply, suggestions = split_reply_and_suggestions(assistant_entry["content"])
+            return _finalize_reply(visible_reply, latest_approval), latest_approval, suggestions
         retry_for_invalid_arguments = False
         for call in tool_calls:
             try:
@@ -422,12 +492,16 @@ async def _stream_chat_turn(
                 )
         for _ in range(max_tool_loops(profile.max_tool_loops)):
             assistant_text = ""
+            emitted_chars = 0
             assistant_tool_calls: list[dict[str, Any]] = []
             async for delta in deepseek_chat_completion_stream(messages, tools, temperature=profile.temperature):
                 text_delta = _stream_delta_text(delta)
                 if text_delta:
                     assistant_text += text_delta
-                    yield _sse_event({"type": "message_delta", "delta": text_delta})
+                    visible_delta = _visible_stream_text(assistant_text, emitted_chars)
+                    if visible_delta:
+                        emitted_chars += len(visible_delta)
+                        yield _sse_event({"type": "message_delta", "delta": visible_delta})
                 _merge_stream_tool_calls(assistant_tool_calls, delta.get("tool_calls"))
             assistant_entry: dict[str, Any] = {"role": "assistant", "content": assistant_text.strip()}
             if assistant_tool_calls:
@@ -438,11 +512,16 @@ async def _stream_chat_turn(
                     confirmation_repair_used = True
                     messages.append(_confirmation_repair_message())
                     continue
+                visible_reply, suggestions = split_reply_and_suggestions(assistant_entry["content"])
+                final_delta = visible_reply[emitted_chars:]
+                if final_delta:
+                    yield _sse_event({"type": "message_delta", "delta": final_delta})
                 yield _sse_event(
                     {
                         "type": "done",
-                        "reply": _finalize_reply(assistant_entry["content"], latest_approval),
+                        "reply": _finalize_reply(visible_reply, latest_approval),
                         "approval": latest_approval.model_dump(mode="json") if latest_approval else None,
+                        "suggestions": suggestions,
                     }
                 )
                 return
@@ -486,8 +565,8 @@ async def chat_with_agent(
 ) -> ChatResponse:
     pool = pool_from_request(request)
     session_id = (request.headers.get("X-Ark-Session-Id") or "").strip() or None
-    reply, approval = await _run_chat_turn(pool=pool, body=body, user_id=int(user.id), session_id=session_id)
-    return ChatResponse(reply=reply, approval=approval)
+    reply, approval, suggestions = await _run_chat_turn(pool=pool, body=body, user_id=int(user.id), session_id=session_id)
+    return ChatResponse(reply=reply, approval=approval, suggestions=suggestions)
 
 
 @router.post("/stream")

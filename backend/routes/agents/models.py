@@ -188,9 +188,11 @@ class ChatResponse(BaseModel):
         reply: AI 助手的文本回复。
         approval: 如果执行了需要审批的操作，返回确认信息供前端展示确认弹窗。
                   用户确认后，前端需将 approval.data 作为 payload 提交到 approval.commit_action。
+        suggestions: 建议的后续追问/操作文案，最多 3 条。
     """
     reply: str
     approval: AgentActionResponse | None = None
+    suggestions: list[str] = Field(default_factory=list)
 
 
 class AgentProfileOut(BaseModel):

@@ -77,7 +77,7 @@ def test_chat_returns_plain_reply(monkeypatch) -> None:
         assert temperature == 0.2
         assert tools
         assert messages[-1]["content"] == "你好"
-        return {"role": "assistant", "content": "你好，我在。"}
+        return {"role": "assistant", "content": '你好，我在。\n<ark_suggestions>["看看今天待办","帮我整理优先级","还有别的建议吗"]</ark_suggestions>'}
 
     monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
     monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
@@ -88,6 +88,7 @@ def test_chat_returns_plain_reply(monkeypatch) -> None:
     body = resp.json()
     assert body["reply"] == "你好，我在。"
     assert body["approval"] is None
+    assert body["suggestions"] == ["看看今天待办", "帮我整理优先级", "还有别的建议吗"]
 
 
 def test_chat_surfaces_approval(monkeypatch) -> None:
@@ -136,6 +137,25 @@ def test_chat_surfaces_approval(monkeypatch) -> None:
     body = resp.json()
     assert "审批" in body["reply"]
     assert body["approval"]["data"] == {"task_id": "task_1"}
+    assert body["suggestions"] == []
+
+
+def test_split_reply_and_suggestions_parses_hidden_block() -> None:
+    from routes.agents.chat import split_reply_and_suggestions
+
+    reply, suggestions = split_reply_and_suggestions(
+        '先做最重要的两件事。\n<ark_suggestions>["帮我列一下","换个说法","更具体一点"]</ark_suggestions>'
+    )
+    assert reply == "先做最重要的两件事。"
+    assert suggestions == ["帮我列一下", "换个说法", "更具体一点"]
+
+
+def test_split_reply_and_suggestions_ignores_invalid_json() -> None:
+    from routes.agents.chat import split_reply_and_suggestions
+
+    reply, suggestions = split_reply_and_suggestions("先看看今天安排。\n<ark_suggestions>{bad}</ark_suggestions>")
+    assert reply == "先看看今天安排。"
+    assert suggestions == []
 
 
 def test_chat_rewrites_fake_frontend_confirmation_without_approval(monkeypatch) -> None:
@@ -392,7 +412,7 @@ def test_chat_stream_emits_text_events(monkeypatch) -> None:
         _ = messages
         _ = tools
         assert temperature == 0.2
-        for item in [{"content": "你好"}, {"content": "，我是流式助手。"}]:
+        for item in [{"content": "你好"}, {"content": "，我是流式助手。"}, {"content": '\n<ark_suggestions>["继续说","帮我行动","再具体点"]</ark_suggestions>'}]:
             yield item
 
     monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion_stream", _fake_stream)
@@ -411,6 +431,7 @@ def test_chat_stream_emits_text_events(monkeypatch) -> None:
     assert events[2] == {"type": "message_delta", "delta": "，我是流式助手。"}
     assert events[-1]["type"] == "done"
     assert events[-1]["reply"] == "你好，我是流式助手。"
+    assert events[-1]["suggestions"] == ["继续说", "帮我行动", "再具体点"]
 
 
 def test_chat_stream_rewrites_fake_frontend_confirmation_without_approval(monkeypatch) -> None:
@@ -628,3 +649,4 @@ def test_chat_stream_emits_approval_events(monkeypatch) -> None:
     assert approval_events[0]["approval"]["data"] == {"task_id": "task_1"}
     assert events[-1]["type"] == "done"
     assert events[-1]["approval"]["data"] == {"task_id": "task_1"}
+    assert events[-1]["suggestions"] == []
