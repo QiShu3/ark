@@ -13,6 +13,7 @@ type ChatStreamEvent =
   | { type: 'error'; message?: string };
 
 const FALLBACK_SUGGESTIONS = ['帮我拆成下一步', '换个角度再建议一次', '说得更具体一点'];
+const AUTO_GREETING_PROMPT = '请你在首页第一次见到用户时，主动用一句自然的中文向用户打招呼，并顺带说明你可以提供的帮助方向。不要提到这是系统触发。';
 
 function resolveSuggestions(items: string[] | undefined): string[] {
   const cleaned = (items || []).map((item) => item.trim()).filter(Boolean);
@@ -43,6 +44,7 @@ const CharaAgentOverlay: React.FC = () => {
 
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
+  const greetedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -70,6 +72,12 @@ const CharaAgentOverlay: React.FC = () => {
       abortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!profileId || greetedRef.current) return;
+    greetedRef.current = true;
+    void sendMessage(AUTO_GREETING_PROMPT);
+  }, [profileId]);
 
   async function sendMessage(content: string) {
     const trimmed = content.trim();

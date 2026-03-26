@@ -40,7 +40,21 @@ describe('CharaAgentOverlay', () => {
   });
 
   it('streams a single-round subtitle and shows three suggestions after completion', async () => {
-    apiSSE.mockImplementation(async (_path, body, onEvent) => {
+    apiSSE
+      .mockImplementationOnce(async (_path, body, onEvent) => {
+        expect(body).toMatchObject({
+          profile_id: 'apf_dashboard',
+          history: [],
+          scope: 'dashboard_chara',
+        });
+        onEvent({
+          type: 'done',
+          reply: '你好，今天我可以陪你把事情理顺。',
+          approval: null,
+          suggestions: ['看看今天待办', '帮我排优先级', '给我一个开始动作'],
+        });
+      })
+      .mockImplementationOnce(async (_path, body, onEvent) => {
       expect(body).toMatchObject({
         profile_id: 'apf_dashboard',
         message: '今天我先做什么？',
@@ -54,11 +68,11 @@ describe('CharaAgentOverlay', () => {
         approval: null,
         suggestions: ['帮我拆一下', '列出前三件事', '换个角度建议'],
       });
-    });
+      });
 
     render(<CharaAgentOverlay />);
 
-    await waitFor(() => expect(listAgentProfiles).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('你好，今天我可以陪你把事情理顺。')).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText('想让我现在帮你什么？'), {
       target: { value: '今天我先做什么？' },
     });
@@ -72,8 +86,39 @@ describe('CharaAgentOverlay', () => {
     expect(screen.getByRole('button', { name: '换个角度建议' })).toBeInTheDocument();
   });
 
+  it('auto greets the user after the dashboard profile is loaded', async () => {
+    apiSSE.mockImplementation(async (_path, body, onEvent) => {
+      expect(body).toMatchObject({
+        profile_id: 'apf_dashboard',
+        history: [],
+        scope: 'dashboard_chara',
+      });
+      expect(typeof body.message).toBe('string');
+      onEvent({
+        type: 'done',
+        reply: '欢迎回来，今天想先推进哪件事？',
+        approval: null,
+        suggestions: ['看看今天待办', '帮我选最重要的一件', '我有点没状态'],
+      });
+    });
+
+    render(<CharaAgentOverlay />);
+
+    await waitFor(() => expect(apiSSE).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('欢迎回来，今天想先推进哪件事？')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '看看今天待办' })).toBeInTheDocument();
+  });
+
   it('replaces the previous subtitle and suggestions when clicking a generated suggestion', async () => {
     apiSSE
+      .mockImplementationOnce(async (_path, _body, onEvent) => {
+        onEvent({
+          type: 'done',
+          reply: '你好，我们来把事情理清楚。',
+          approval: null,
+          suggestions: ['先看今天待办', '帮我抓重点', '我有点乱'],
+        });
+      })
       .mockImplementationOnce(async (_path, _body, onEvent) => {
         onEvent({
           type: 'done',
@@ -94,7 +139,7 @@ describe('CharaAgentOverlay', () => {
 
     render(<CharaAgentOverlay />);
 
-    await waitFor(() => expect(listAgentProfiles).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('你好，我们来把事情理清楚。')).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText('想让我现在帮你什么？'), {
       target: { value: '我现在该做什么' },
     });
@@ -110,38 +155,47 @@ describe('CharaAgentOverlay', () => {
   });
 
   it('shows approval card and confirms actions inline', async () => {
-    apiSSE.mockImplementation(async (_path, _body, onEvent) => {
-      onEvent({ type: 'message_delta', delta: '我可以帮你删掉这个任务。' });
-      onEvent({
-        type: 'approval_required',
-        approval: {
+    apiSSE
+      .mockImplementationOnce(async (_path, _body, onEvent) => {
+        onEvent({
+          type: 'done',
+          reply: '你好，我已经在这里了。',
+          approval: null,
+          suggestions: ['删掉那个任务', '看一下今天安排', '帮我排序'],
+        });
+      })
+      .mockImplementationOnce(async (_path, _body, onEvent) => {
+        onEvent({ type: 'message_delta', delta: '我可以帮你删掉这个任务。' });
+        onEvent({
           type: 'approval_required',
-          action_id: 'task.delete.prepare',
-          data: { task_id: 'task-1' },
-          title: '删除任务',
-          message: '该操作需要你确认。',
-          commit_action: 'task.delete.commit',
-        },
+          approval: {
+            type: 'approval_required',
+            action_id: 'task.delete.prepare',
+            data: { task_id: 'task-1' },
+            title: '删除任务',
+            message: '该操作需要你确认。',
+            commit_action: 'task.delete.commit',
+          },
+        });
+        onEvent({
+          type: 'done',
+          reply: '我已经为你准备好了确认。',
+          approval: {
+            type: 'approval_required',
+            action_id: 'task.delete.prepare',
+            data: { task_id: 'task-1' },
+            title: '删除任务',
+            message: '该操作需要你确认。',
+            commit_action: 'task.delete.commit',
+          },
+          suggestions: ['继续别的事', '换个建议', '回到当前任务'],
+        });
       });
-      onEvent({
-        type: 'done',
-        reply: '我已经为你准备好了确认。',
-        approval: {
-          type: 'approval_required',
-          action_id: 'task.delete.prepare',
-          data: { task_id: 'task-1' },
-          title: '删除任务',
-          message: '该操作需要你确认。',
-          commit_action: 'task.delete.commit',
-        },
-        suggestions: ['继续别的事', '换个建议', '回到当前任务'],
-      });
-    });
     executeAgentAction.mockResolvedValue({ type: 'result', action_id: 'task.delete.commit', data: { ok: true } });
 
     render(<CharaAgentOverlay />);
 
-    await waitFor(() => expect(listAgentProfiles).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('你好，我已经在这里了。')).toBeInTheDocument());
     fireEvent.change(screen.getByPlaceholderText('想让我现在帮你什么？'), {
       target: { value: '删掉那个任务' },
     });
