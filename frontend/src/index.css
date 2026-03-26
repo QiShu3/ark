@@ -24,3 +24,12 @@
   transform-origin: 50% 50%;
   animation: tag-edit-wiggle 0.18s ease-in-out infinite alternate;
 }
+
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}

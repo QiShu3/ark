@@ -598,7 +598,7 @@ const AgentDesk: React.FC = () => {
               <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div>
             ) : null}
 
-            <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="scrollbar-hidden mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="space-y-4 pb-4">
                 <div>
                   <div className="mb-3 text-sm text-white/60">头像</div>
@@ -647,7 +647,7 @@ const AgentDesk: React.FC = () => {
                   <textarea
                     value={draft.description}
                     onChange={(e) => updateDraft('description', e.target.value)}
-                    className="min-h-[76px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                    className="min-h-[76px] w-full resize-none overflow-hidden rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                   />
                 </div>
 
@@ -671,7 +671,7 @@ const AgentDesk: React.FC = () => {
                   <textarea
                     value={draft.context_prompt}
                     onChange={(e) => updateDraft('context_prompt', e.target.value)}
-                    className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                    className="min-h-[120px] w-full resize-none overflow-hidden rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                     placeholder="描述这个 agent 的职责、服务对象、工作场景和行为风格。"
                   />
                 </div>
