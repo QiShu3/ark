@@ -13,12 +13,6 @@ vi.mock('../../lib/api', () => ({
 vi.mock('../../components/Navigation', () => ({
   default: () => <div data-testid="navigation">Navigation</div>,
 }));
-vi.mock('../../components/ChatBox', () => ({
-  default: () => <div data-testid="chatbox">ChatBox</div>,
-}));
-vi.mock('../../components/AIAssistantShell', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
 
 describe('Arxiv Page', () => {
   beforeEach(() => {
