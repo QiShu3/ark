@@ -427,8 +427,7 @@ def test_chat_stream_emits_text_events(monkeypatch) -> None:
         if line.startswith("data:")
     ]
     assert events[0]["type"] == "profile"
-    assert events[1] == {"type": "message_delta", "delta": "你好"}
-    assert events[2] == {"type": "message_delta", "delta": "，我是流式助手。"}
+    assert events[1] == {"type": "message_delta", "delta": "你好，我是流式助手。"}
     assert events[-1]["type"] == "done"
     assert events[-1]["reply"] == "你好，我是流式助手。"
     assert events[-1]["suggestions"] == ["继续说", "帮我行动", "再具体点"]
