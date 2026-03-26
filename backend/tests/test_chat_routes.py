@@ -215,6 +215,69 @@ def test_chat_repairs_frontend_confirmation_into_real_approval(monkeypatch) -> N
     assert "审批" in body["reply"]
 
 
+def test_chat_repairs_invalid_tool_arguments(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    async def _fake_completion(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ) -> dict[str, Any]:
+        _ = tools
+        _ = temperature
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_bad_1",
+                        "type": "function",
+                        "function": {"name": "delete_task", "arguments": '{"task_id":}'},
+                    }
+                ],
+            }
+        if calls["count"] == 2:
+            assert messages[-2]["role"] == "tool"
+            assert "invalid_tool_arguments" in messages[-2]["content"]
+            assert "参数不是合法 JSON" in messages[-1]["content"]
+            return {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call_good_1",
+                        "type": "function",
+                        "function": {"name": "delete_task", "arguments": '{"task_id":"task_1"}'},
+                    }
+                ],
+            }
+        return {"role": "assistant", "content": "我已经发起删除审批，请在界面确认。"}
+
+    async def _fake_execute_action(pool: Any, *, action_name: str, ctx: Any, payload: dict[str, Any]) -> Any:
+        _ = pool
+        _ = ctx
+        assert action_name == "task.delete.prepare"
+        assert payload == {"task_id": "task_1"}
+        return AgentActionResponse(
+            type="approval_required",
+            action_id="task.delete.prepare",
+            approval_id="appr_args_fix_1",
+            title="删除任务",
+            message="需要确认",
+            commit_action="task.delete.commit",
+        )
+
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion", _fake_completion)
+    monkeypatch.setattr("routes.agents.chat.execute_action_with_context", _fake_execute_action)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat", json={"message": "删除任务", "history": []})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["approval"]["approval_id"] == "appr_args_fix_1"
+
+
 def test_chat_tool_definitions_include_arxiv_skills() -> None:
     from routes.agents.chat import tool_definitions
 
@@ -438,6 +501,75 @@ def test_chat_stream_repairs_frontend_confirmation_into_real_approval(monkeypatc
     assert approval_events
     assert approval_events[0]["approval"]["approval_id"] == "appr_stream_fix_1"
     assert events[-1]["approval"]["approval_id"] == "appr_stream_fix_1"
+
+
+def test_chat_stream_repairs_invalid_tool_arguments(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    async def _fake_stream(
+        messages: list[dict[str, Any]], tools: list[dict[str, Any]], *, temperature: float = 0.2
+    ):
+        _ = tools
+        _ = temperature
+        calls["count"] += 1
+        if calls["count"] == 1:
+            yield {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_bad_1",
+                        "type": "function",
+                        "function": {"name": "delete_task", "arguments": '{"task_id":}'},
+                    }
+                ]
+            }
+            return
+        if calls["count"] == 2:
+            assert messages[-2]["role"] == "tool"
+            assert "invalid_tool_arguments" in messages[-2]["content"]
+            assert "参数不是合法 JSON" in messages[-1]["content"]
+            yield {
+                "tool_calls": [
+                    {
+                        "index": 0,
+                        "id": "call_good_1",
+                        "type": "function",
+                        "function": {"name": "delete_task", "arguments": '{"task_id":"task_1"}'},
+                    }
+                ]
+            }
+            return
+        yield {"content": "我已经发起删除审批，请在界面确认。"}
+
+    async def _fake_execute_action(pool: Any, *, action_name: str, ctx: Any, payload: dict[str, Any]) -> Any:
+        _ = pool
+        _ = ctx
+        assert action_name == "task.delete.prepare"
+        assert payload == {"task_id": "task_1"}
+        return AgentActionResponse(
+            type="approval_required",
+            action_id="task.delete.prepare",
+            approval_id="appr_stream_args_fix_1",
+            title="删除任务",
+            message="需要确认",
+            commit_action="task.delete.commit",
+        )
+
+    monkeypatch.setattr("routes.agents.chat.deepseek_chat_completion_stream", _fake_stream)
+    monkeypatch.setattr("routes.agents.chat.execute_action_with_context", _fake_execute_action)
+    monkeypatch.setattr("routes.agents.chat.pool_from_request", lambda _: _FakePool())
+    monkeypatch.setattr("routes.agents.chat.get_default_profile", _fake_default_profile)
+    client = TestClient(_build_app())
+    resp = client.post("/api/chat/stream", json={"message": "删除任务", "history": []})
+    assert resp.status_code == 200
+    events = [
+        json.loads(line[5:].strip())
+        for line in resp.text.splitlines()
+        if line.startswith("data:")
+    ]
+    approval_events = [item for item in events if item.get("type") == "approval_required"]
+    assert approval_events
+    assert approval_events[0]["approval"]["approval_id"] == "appr_stream_args_fix_1"
 
 
 def test_chat_stream_emits_approval_events(monkeypatch) -> None:

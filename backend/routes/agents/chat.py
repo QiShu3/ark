@@ -202,6 +202,43 @@ def _confirmation_repair_message() -> dict[str, str]:
     }
 
 
+def _is_tool_argument_parse_error(exc: HTTPException) -> bool:
+    return exc.status_code == 422 and isinstance(exc.detail, str) and exc.detail.startswith("工具参数解析失败：")
+
+
+def _tool_argument_repair_message(call: dict[str, Any], detail: str) -> dict[str, str]:
+    function = call.get("function") if isinstance(call, dict) else None
+    name = function.get("name") if isinstance(function, dict) and isinstance(function.get("name"), str) else "未知工具"
+    raw_arguments = (
+        function.get("arguments") if isinstance(function, dict) and isinstance(function.get("arguments"), str) else ""
+    )
+    return {
+        "role": "system",
+        "content": (
+            f"系统纠偏：你刚才调用工具 {name} 时，参数不是合法 JSON。"
+            f"错误：{detail}。"
+            f"上次的 arguments 原文：{raw_arguments or '<empty>'}。"
+            "请立即重新发起同一个工具调用，并只输出合法 JSON 参数对象。"
+            "不要输出解释，不要改成自然语言回答。"
+        ),
+    }
+
+
+def _tool_argument_error_tool_message(call: dict[str, Any], detail: str) -> dict[str, Any]:
+    return {
+        "role": "tool",
+        "tool_call_id": call.get("id"),
+        "content": json.dumps(
+            {
+                "ok": False,
+                "error": "invalid_tool_arguments",
+                "detail": detail,
+            },
+            ensure_ascii=False,
+        ),
+    }
+
+
 def _merge_stream_tool_calls(existing: list[dict[str, Any]], raw_calls: Any) -> None:
     if not isinstance(raw_calls, list):
         return
@@ -323,6 +360,7 @@ async def _run_chat_turn(
     messages = messages_for_model(body, profile)
     latest_approval: AgentActionResponse | None = None
     confirmation_repair_used = False
+    argument_repair_used = False
     for _ in range(max_tool_loops(profile.max_tool_loops)):
         model_message = await deepseek_chat_completion(messages, tools, temperature=profile.temperature)
         assistant_entry: dict[str, Any] = {"role": "assistant", "content": extract_text_content(model_message)}
@@ -336,11 +374,23 @@ async def _run_chat_turn(
                 messages.append(_confirmation_repair_message())
                 continue
             return _finalize_reply(assistant_entry["content"], latest_approval), latest_approval
+        retry_for_invalid_arguments = False
         for call in tool_calls:
-            tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
+            try:
+                tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
+            except HTTPException as exc:
+                if _is_tool_argument_parse_error(exc) and not argument_repair_used:
+                    argument_repair_used = True
+                    messages.append(_tool_argument_error_tool_message(call, exc.detail))
+                    messages.append(_tool_argument_repair_message(call, exc.detail))
+                    retry_for_invalid_arguments = True
+                    break
+                raise
             if approval is not None:
                 latest_approval = approval
             messages.append(tool_message)
+        if retry_for_invalid_arguments:
+            continue
     raise HTTPException(status_code=502, detail="工具调用轮数超过限制")
 
 
@@ -359,6 +409,7 @@ async def _stream_chat_turn(
         messages = messages_for_model(body, profile)
         latest_approval: AgentActionResponse | None = None
         confirmation_repair_used = False
+        argument_repair_used = False
         yield _sse_event(
                     {
                         "type": "profile",
@@ -395,6 +446,7 @@ async def _stream_chat_turn(
                     }
                 )
                 return
+            retry_for_invalid_arguments = False
             for call in assistant_tool_calls:
                 function = call.get("function") if isinstance(call, dict) else None
                 yield _sse_event(
@@ -403,11 +455,22 @@ async def _stream_chat_turn(
                         "name": function.get("name") if isinstance(function, dict) else None,
                     }
                 )
-                tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
+                try:
+                    tool_message, approval = await execute_tool_call(pool, ctx=ctx, call=call, allowed_skills=set(allowed_skills))
+                except HTTPException as exc:
+                    if _is_tool_argument_parse_error(exc) and not argument_repair_used:
+                        argument_repair_used = True
+                        messages.append(_tool_argument_error_tool_message(call, exc.detail))
+                        messages.append(_tool_argument_repair_message(call, exc.detail))
+                        retry_for_invalid_arguments = True
+                        break
+                    raise
                 if approval is not None:
                     latest_approval = approval
                     yield _sse_event({"type": "approval_required", "approval": approval.model_dump(mode="json")})
                 messages.append(tool_message)
+            if retry_for_invalid_arguments:
+                continue
         raise HTTPException(status_code=502, detail="工具调用轮数超过限制")
     except HTTPException as exc:
         yield _sse_event({"type": "error", "message": exc.detail if isinstance(exc.detail, str) else "请求失败"})
