@@ -520,7 +520,7 @@ const AgentDesk: React.FC = () => {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#07111e] text-white">
+    <div className="relative h-screen overflow-hidden bg-[#07111e] text-white supports-[height:100dvh]:h-[100dvh]">
       <div className="fixed inset-0 z-0">
         <img
           src={`${import.meta.env.BASE_URL}images/background.jpg`}
@@ -532,8 +532,8 @@ const AgentDesk: React.FC = () => {
 
       <Navigation />
 
-      <div className="relative z-10 flex min-h-screen gap-4 px-4 pb-6 pt-20 xl:px-8">
-        <aside className="hidden w-[280px] shrink-0 rounded-[28px] border border-white/10 bg-[#0c1726]/80 p-4 backdrop-blur-xl xl:block">
+      <div className="relative z-10 flex h-full gap-4 overflow-hidden px-4 pb-6 pt-20 xl:px-8">
+        <aside className="hidden h-full min-h-0 w-[280px] shrink-0 flex-col rounded-[28px] border border-white/10 bg-[#0c1726]/80 p-4 backdrop-blur-xl xl:flex">
           <div className="flex items-start gap-3">
             <div className="rounded-2xl bg-cyan-400/15 p-3 text-cyan-200">
               <Sparkles size={22} />
@@ -552,7 +552,7 @@ const AgentDesk: React.FC = () => {
             新建 Agent
           </button>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
             {profiles.map((profile) => {
               const profileApp = appsById.get(profile.primary_app_id);
               return (
@@ -584,8 +584,8 @@ const AgentDesk: React.FC = () => {
           </div>
         </aside>
 
-        <section className="flex w-full min-h-[calc(100vh-6rem)] gap-4">
-          <div className="w-full rounded-[30px] border border-white/10 bg-[#09111d]/78 p-5 backdrop-blur-2xl xl:w-[430px]">
+        <section className="flex min-h-0 w-full flex-1 gap-4 overflow-hidden">
+          <div className="flex h-full min-h-0 w-full flex-col rounded-[30px] border border-white/10 bg-[#09111d]/78 p-5 backdrop-blur-2xl xl:w-[430px]">
             <div className="flex items-center gap-3">
               <ProfileAvatar profile={selectedProfile} sizeClass="h-12 w-12" />
               <div>
@@ -598,157 +598,162 @@ const AgentDesk: React.FC = () => {
               <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{error}</div>
             ) : null}
 
-            <div className="mt-5 space-y-4">
-              <div>
-                <div className="mb-3 text-sm text-white/60">头像</div>
-                <div className="flex items-center gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
-                  <ProfileAvatar profile={selectedProfile} sizeClass="h-20 w-20" textClass="text-white/65" />
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="hidden"
-                      onChange={(e) => void handleAvatarSelected(e.target.files?.[0] || null)}
-                      disabled={!selectedProfile || uploadingAvatar}
-                    />
-                    <button
-                      onClick={() => avatarInputRef.current?.click()}
-                      disabled={!selectedProfile || uploadingAvatar}
-                      className="flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:opacity-60"
-                    >
-                      {uploadingAvatar ? <LoaderCircle size={15} className="animate-spin" /> : <Camera size={15} />}
-                      {uploadingAvatar ? '上传中...' : '上传头像'}
-                    </button>
-                    <button
-                      onClick={() => void handleRemoveAvatar()}
-                      disabled={!selectedProfile?.avatar_url || uploadingAvatar}
-                      className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:opacity-60"
-                    >
-                      <Trash2 size={15} />
-                      移除头像
-                    </button>
+            <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="space-y-4 pb-4">
+                <div>
+                  <div className="mb-3 text-sm text-white/60">头像</div>
+                  <div className="flex items-center gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
+                    <ProfileAvatar profile={selectedProfile} sizeClass="h-20 w-20" textClass="text-white/65" />
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) => void handleAvatarSelected(e.target.files?.[0] || null)}
+                        disabled={!selectedProfile || uploadingAvatar}
+                      />
+                      <button
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={!selectedProfile || uploadingAvatar}
+                        className="flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:opacity-60"
+                      >
+                        {uploadingAvatar ? <LoaderCircle size={15} className="animate-spin" /> : <Camera size={15} />}
+                        {uploadingAvatar ? '上传中...' : '上传头像'}
+                      </button>
+                      <button
+                        onClick={() => void handleRemoveAvatar()}
+                        disabled={!selectedProfile?.avatar_url || uploadingAvatar}
+                        className="flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:opacity-60"
+                      >
+                        <Trash2 size={15} />
+                        移除头像
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <div className="mb-2 text-sm text-white/60">名称</div>
-                <input
-                  value={draft.name}
-                  onChange={(e) => updateDraft('name', e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
-                />
-              </div>
-
-              <div>
-                <div className="mb-2 text-sm text-white/60">简介</div>
-                <textarea
-                  value={draft.description}
-                  onChange={(e) => updateDraft('description', e.target.value)}
-                  className="min-h-[76px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
-                />
-              </div>
-
-              <div>
-                <div className="mb-2 text-sm text-white/60">主应用 / 工作区</div>
-                <select
-                  value={draft.primary_app_id}
-                  onChange={(e) => updatePrimaryApp(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
-                >
-                  {apps.map((app) => (
-                    <option key={app.app_id} value={app.app_id} className="bg-slate-900">
-                      {app.display_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <div className="mb-2 text-sm text-white/60">上下文描述</div>
-                <textarea
-                  value={draft.context_prompt}
-                  onChange={(e) => updateDraft('context_prompt', e.target.value)}
-                  className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
-                  placeholder="描述这个 agent 的职责、服务对象、工作场景和行为风格。"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="mb-2 text-sm text-white/60">Temperature</div>
+                  <div className="mb-2 text-sm text-white/60">名称</div>
                   <input
-                    type="number"
-                    min="0"
-                    max="1.2"
-                    step="0.1"
-                    value={draft.temperature}
-                    onChange={(e) => updateDraft('temperature', Number(e.target.value))}
+                    value={draft.name}
+                    onChange={(e) => updateDraft('name', e.target.value)}
                     className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                   />
                 </div>
+
                 <div>
-                  <div className="mb-2 text-sm text-white/60">Tool Loops</div>
-                  <input
-                    type="number"
-                    min="1"
-                    max="8"
-                    value={draft.max_tool_loops ?? 4}
-                    onChange={(e) => updateDraft('max_tool_loops', Number(e.target.value))}
-                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                  <div className="mb-2 text-sm text-white/60">简介</div>
+                  <textarea
+                    value={draft.description}
+                    onChange={(e) => updateDraft('description', e.target.value)}
+                    className="min-h-[76px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
                   />
                 </div>
-              </div>
 
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="text-sm text-white/60">启用 Skills</div>
-                  <div className="text-xs text-white/40">{draft.allowed_skills.length} / {skills.length}</div>
+                <div>
+                  <div className="mb-2 text-sm text-white/60">主应用 / 工作区</div>
+                  <select
+                    value={draft.primary_app_id}
+                    onChange={(e) => updatePrimaryApp(e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                  >
+                    {apps.map((app) => (
+                      <option key={app.app_id} value={app.app_id} className="bg-slate-900">
+                        {app.display_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="max-h-[320px] space-y-4 overflow-y-auto pr-1">
-                  {visibleSkillGroups.map(([appId, items]) => {
-                    const app = appsById.get(appId);
-                    const isPrimary = appId === draft.primary_app_id;
-                    return (
-                      <div key={appId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="font-medium text-white">{app?.display_name || appId}</div>
-                            <div className="text-xs text-white/45">{isPrimary ? '主应用技能组' : '跨应用技能组'}</div>
+
+                <div>
+                  <div className="mb-2 text-sm text-white/60">上下文描述</div>
+                  <textarea
+                    value={draft.context_prompt}
+                    onChange={(e) => updateDraft('context_prompt', e.target.value)}
+                    className="min-h-[120px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                    placeholder="描述这个 agent 的职责、服务对象、工作场景和行为风格。"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="mb-2 text-sm text-white/60">Temperature</div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1.2"
+                      step="0.1"
+                      value={draft.temperature}
+                      onChange={(e) => updateDraft('temperature', Number(e.target.value))}
+                      className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-2 text-sm text-white/60">Tool Loops</div>
+                    <input
+                      type="number"
+                      min="1"
+                      max="8"
+                      value={draft.max_tool_loops ?? 4}
+                      onChange={(e) => updateDraft('max_tool_loops', Number(e.target.value))}
+                      className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-cyan-300/30"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-sm text-white/60">启用 Skills</div>
+                    <div className="text-xs text-white/40">{draft.allowed_skills.length} / {skills.length}</div>
+                  </div>
+                  <div className="space-y-4">
+                    {visibleSkillGroups.map(([appId, items]) => {
+                      const app = appsById.get(appId);
+                      const isPrimary = appId === draft.primary_app_id;
+                      return (
+                        <div key={appId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="font-medium text-white">{app?.display_name || appId}</div>
+                              <div className="text-xs text-white/45">{isPrimary ? '主应用技能组' : '跨应用技能组'}</div>
+                            </div>
+                            {isPrimary ? (
+                              <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-100">Primary</span>
+                            ) : null}
                           </div>
-                          {isPrimary ? (
-                            <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-100">Primary</span>
-                          ) : null}
-                        </div>
-                        <div className="space-y-3">
-                          {items.map((skill) => (
-                            <label key={skill.name} className="block rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedSkillSet.has(skill.name)}
-                                    onChange={() => toggleSkill(skill.name)}
-                                    className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
-                                  />
-                                  <div className="font-medium text-white">{skill.name}</div>
+                          <div className="space-y-3">
+                            {items.map((skill) => (
+                              <label key={skill.name} className="block rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedSkillSet.has(skill.name)}
+                                      onChange={() => toggleSkill(skill.name)}
+                                      className="h-4 w-4 rounded border-white/20 bg-transparent accent-cyan-300"
+                                    />
+                                    <div className="font-medium text-white">{skill.name}</div>
+                                  </div>
+                                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
+                                    {skill.side_effect}
+                                  </span>
                                 </div>
-                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${sideEffectStyles[skill.side_effect]}`}>
-                                  {skill.side_effect}
-                                </span>
-                              </div>
-                              <div className="mt-2 text-sm leading-6 text-white/58">{skill.description}</div>
-                            </label>
-                          ))}
+                                <div className="mt-2 text-sm leading-6 text-white/58">{skill.description}</div>
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2 pt-2">
+              </div>
+            </div>
+
+            <div className="mt-4 border-t border-white/8 pt-4">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => void saveProfile()}
                   disabled={savingProfile || loading}
@@ -780,7 +785,7 @@ const AgentDesk: React.FC = () => {
             </div>
           </div>
 
-          <main className="flex min-h-[calc(100vh-6rem)] flex-1 flex-col rounded-[30px] border border-white/10 bg-[#09111d]/78 backdrop-blur-2xl">
+          <main className="flex h-full min-h-0 flex-1 flex-col rounded-[30px] border border-white/10 bg-[#09111d]/78 backdrop-blur-2xl">
             <div className="flex items-center justify-between border-b border-white/8 px-6 py-5">
               <div className="flex items-center gap-3">
                 <ProfileAvatar profile={selectedProfile} sizeClass="h-14 w-14" />
@@ -794,7 +799,7 @@ const AgentDesk: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 md:px-6">
               <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
                 {toolTimeline.length ? (
                   <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
