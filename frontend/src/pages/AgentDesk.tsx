@@ -498,20 +498,21 @@ const AgentDesk: React.FC = () => {
   }
 
   async function handleCommitApproval() {
-    if (!approval?.approval_id || !approval.commit_action || approving || !selectedProfile) return;
+    if (!approval?.commit_action || approving || !selectedProfile) return;
     setApproving(true);
     setError(null);
     try {
+      const commitPayload = (approval.data && typeof approval.data === 'object' ? approval.data : {}) as Record<string, unknown>;
       const result = await executeAgentAction(
         approval.commit_action,
-        { approval_id: approval.approval_id },
+        commitPayload,
         {
           primaryAppId: selectedProfile.primary_app_id,
           sessionId: sessionIdRef.current,
         },
       );
       if (result.type === 'forbidden') {
-        throw new Error(result.reason || '审批票据无效');
+        throw new Error(result.reason || '执行被拒绝');
       }
       setMessages((prev) => [...prev, { role: 'assistant', content: '确认已收到，敏感操作已经执行完成。' }]);
       setApproval(null);

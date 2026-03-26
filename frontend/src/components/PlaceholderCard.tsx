@@ -795,15 +795,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }
 
   async function _commitDeleteTask() {
-    if (!taskDeleteAction?.approval_id || !taskDeleteAction.commit_action || taskDeleteBusy) return;
+    if (!taskDeleteAction?.commit_action || taskDeleteBusy) return;
     setTaskDeleteBusy(true);
     setTaskDeleteError(null);
     try {
-      const result = await executeAgentAction(taskDeleteAction.commit_action, { approval_id: taskDeleteAction.approval_id }, {
+      const commitPayload = (taskDeleteAction.data && typeof taskDeleteAction.data === 'object' ? taskDeleteAction.data : {}) as Record<string, unknown>;
+      const result = await executeAgentAction(taskDeleteAction.commit_action, commitPayload, {
         primaryAppId: 'dashboard',
       });
       if (result.type === 'forbidden') {
-        throw new Error(result.reason || '审批票据无效');
+        throw new Error(result.reason || '执行被拒绝');
       }
       setTaskDeleteAction(null);
       await _loadTasks();

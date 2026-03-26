@@ -50,8 +50,6 @@ ACTION_REGISTRY: dict[str, ActionDefinition] = {
         action_id="task.delete.commit",
         policy_action_id="task.delete",
         handler=handle_task_delete_commit,
-        uses_approval=True,
-        approval_action_id="task.delete",
     ),
     "arxiv.daily_tasks.prepare": ActionDefinition(
         action_id="arxiv.daily_tasks.prepare",
@@ -62,8 +60,6 @@ ACTION_REGISTRY: dict[str, ActionDefinition] = {
         action_id="arxiv.daily_tasks.commit",
         policy_action_id="arxiv.daily_tasks",
         handler=handle_arxiv_daily_tasks_commit,
-        uses_approval=True,
-        approval_action_id="arxiv.daily_tasks",
     ),
 }
 

@@ -598,14 +598,15 @@ const Arxiv: React.FC = () => {
   };
 
   const commitConfirmAction = useCallback(async () => {
-    if (!confirmAction?.approval_id || !confirmAction.commit_action) return;
+    if (!confirmAction?.commit_action) return;
     setIsExecutingAction(true);
     try {
-      const result = await executeAgentAction(confirmAction.commit_action, { approval_id: confirmAction.approval_id }, {
+      const commitPayload = (confirmAction.data && typeof confirmAction.data === 'object' ? confirmAction.data : {}) as Record<string, unknown>;
+      const result = await executeAgentAction(confirmAction.commit_action, commitPayload, {
         primaryAppId: 'arxiv',
       });
       if (result.type === 'forbidden') {
-        throw new Error(result.reason || '审批票据无效');
+        throw new Error(result.reason || '执行被拒绝');
       }
       setConfirmAction(null);
       await loadDailyViewData(true);

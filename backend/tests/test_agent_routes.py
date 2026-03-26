@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -172,13 +172,6 @@ class _FakeAgentConn:
                 "created_at": now,
                 "updated_at": now,
             }
-        if "FROM agent_approvals" in sql:
-            approval_id = str(args[0])
-            user_id = int(args[1])
-            row = self.approvals.get(approval_id)
-            if row is None or int(row["user_id"]) != user_id:
-                return None
-            return row
         if "FROM agent_profiles" in sql:
             user_id = int(args[0])
             if "WHERE user_id = $1 AND id = $2" in sql:
@@ -206,31 +199,6 @@ class _FakeAgentConn:
                 if row["user_id"] == user_id and row["is_default"] and row["id"] != exclude_id:
                     row["is_default"] = False
                     row["updated_at"] = datetime.now(UTC)
-            return "UPDATE 1"
-        if "INSERT INTO agent_approvals" in sql:
-            approval_id = str(args[0])
-            self.approvals[approval_id] = {
-                "id": approval_id,
-                "user_id": int(args[1]),
-                "agent_type": str(args[2]),
-                "primary_app_id": args[3],
-                "session_id": args[4],
-                "action_id": str(args[5]),
-                "payload_json": {"task_id": self.task_id},
-                "status": "pending",
-                "expires_at": args[9],
-            }
-            return "INSERT 1"
-        if "SET status = 'expired'" in sql:
-            approval_id = str(args[0])
-            if approval_id in self.approvals:
-                self.approvals[approval_id]["status"] = "expired"
-            return "UPDATE 1"
-        if "SET status = 'confirmed'" in sql:
-            approval_id = str(args[0])
-            if approval_id in self.approvals:
-                self.approvals[approval_id]["status"] = "confirmed"
-                self.approvals[approval_id]["confirmed_at"] = datetime.now(UTC)
             return "UPDATE 1"
         if "UPDATE tasks" in sql and "SET is_deleted = TRUE" in sql:
             task_id = str(args[0])
@@ -613,13 +581,12 @@ def test_task_delete_prepare_and_commit(monkeypatch) -> None:
     assert prepare.status_code == 200
     prepare_body = prepare.json()
     assert prepare_body["type"] == "approval_required"
-    approval_id = prepare_body["approval_id"]
-    assert approval_id in conn.approvals
+    assert prepare_body["data"] == {"task_id": conn.task_id}
 
     commit = client.post(
         "/api/agent/actions/task.delete.commit",
         headers={"X-Ark-Primary-App-Id": "dashboard"},
-        json={"payload": {"approval_id": approval_id}},
+        json={"payload": prepare_body["data"]},
     )
     assert commit.status_code == 200
     commit_body = commit.json()
@@ -630,33 +597,6 @@ def test_task_delete_prepare_and_commit(monkeypatch) -> None:
     second_commit = client.post(
         "/api/agent/actions/task.delete.commit",
         headers={"X-Ark-Primary-App-Id": "dashboard"},
-        json={"payload": {"approval_id": approval_id}},
+        json={"payload": prepare_body["data"]},
     )
-    assert second_commit.status_code == 200
-    assert second_commit.json()["type"] == "forbidden"
-
-
-def test_task_delete_commit_rejects_expired_approval(monkeypatch) -> None:
-    conn = _FakeAgentConn()
-    expired_id = "appr_expired"
-    conn.approvals[expired_id] = {
-        "id": expired_id,
-        "user_id": 7,
-        "agent_type": "dashboard",
-        "primary_app_id": "dashboard",
-        "session_id": None,
-        "action_id": "task.delete",
-        "payload_json": {"task_id": conn.task_id},
-        "status": "pending",
-        "expires_at": datetime.now(UTC) - timedelta(minutes=1),
-    }
-    monkeypatch.setattr("routes.agents.routes.pool_from_request", lambda _: _FakePool(conn))
-    client = TestClient(_build_app())
-    resp = client.post(
-        "/api/agent/actions/task.delete.commit",
-        headers={"X-Ark-Primary-App-Id": "dashboard"},
-        json={"payload": {"approval_id": expired_id}},
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["type"] == "forbidden"
+    assert second_commit.status_code == 404

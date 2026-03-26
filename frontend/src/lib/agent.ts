@@ -6,7 +6,6 @@ export type AgentActionResponse<T = unknown> = {
   type: AgentActionType;
   action_id: string;
   data?: T;
-  approval_id?: string;
   title?: string;
   message?: string;
   impact?: {
@@ -15,7 +14,6 @@ export type AgentActionResponse<T = unknown> = {
     count?: number;
   };
   commit_action?: string;
-  expires_at?: string;
   reason?: string;
 };
 

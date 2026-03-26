@@ -5,7 +5,6 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
-from routes.agents.approval import create_approval
 from routes.agents.models import AgentActionResponse, AgentContext
 from routes.todo_routes import TaskOut, TaskUpdateRequest, _row_to_task
 
@@ -136,18 +135,14 @@ async def prepare_task_delete_action(
     row = await fetch_task_row(conn, task_id=UUID(task_id_raw), user_id=ctx.user_id)
     if row is None:
         raise HTTPException(status_code=404, detail="任务不存在")
-    approval_id, expires_at = await create_approval(
-        conn, ctx=ctx, action_id="task.delete", resource_scope=resource_scope, payload={"task_id": task_id_raw}
-    )
     return AgentActionResponse(
         type="approval_required",
         action_id="task.delete.prepare",
-        approval_id=approval_id,
+        data={"task_id": task_id_raw},
         title="删除任务",
         message=f"该操作将删除任务《{row['title']}》。确认后不可自动恢复。",
         impact={"resource_type": "task", "resource_ids": [task_id_raw], "count": 1},
         commit_action="task.delete.commit",
-        expires_at=expires_at,
     )
 
 
@@ -194,8 +189,6 @@ async def handle_task_delete_prepare(
 async def handle_task_delete_commit(
     conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
 ) -> dict[str, Any]:
-    _ = payload
     _ = resource_scope
-    if approval_payload is None:
-        raise HTTPException(status_code=422, detail="缺少审批负载")
-    return await commit_task_delete_action(conn, user_id=ctx.user_id, payload=approval_payload)
+    _ = approval_payload
+    return await commit_task_delete_action(conn, user_id=ctx.user_id, payload=payload)

@@ -120,7 +120,7 @@ def test_chat_surfaces_approval(monkeypatch) -> None:
         return AgentActionResponse(
             type="approval_required",
             action_id="task.delete.prepare",
-            approval_id="appr_1",
+            data={"task_id": "task_1"},
             title="删除任务",
             message="需要确认",
             commit_action="task.delete.commit",
@@ -135,7 +135,7 @@ def test_chat_surfaces_approval(monkeypatch) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert "审批" in body["reply"]
-    assert body["approval"]["approval_id"] == "appr_1"
+    assert body["approval"]["data"] == {"task_id": "task_1"}
 
 
 def test_chat_rewrites_fake_frontend_confirmation_without_approval(monkeypatch) -> None:
@@ -197,7 +197,7 @@ def test_chat_repairs_frontend_confirmation_into_real_approval(monkeypatch) -> N
         return AgentActionResponse(
             type="approval_required",
             action_id="task.delete.prepare",
-            approval_id="appr_fix_1",
+            data={"task_id": "task_1"},
             title="删除任务",
             message="需要确认",
             commit_action="task.delete.commit",
@@ -211,7 +211,7 @@ def test_chat_repairs_frontend_confirmation_into_real_approval(monkeypatch) -> N
     resp = client.post("/api/chat", json={"message": "帮我删除任务", "history": []})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["approval"]["approval_id"] == "appr_fix_1"
+    assert body["approval"]["data"] == {"task_id": "task_1"}
     assert "审批" in body["reply"]
 
 
@@ -261,7 +261,7 @@ def test_chat_repairs_invalid_tool_arguments(monkeypatch) -> None:
         return AgentActionResponse(
             type="approval_required",
             action_id="task.delete.prepare",
-            approval_id="appr_args_fix_1",
+            data={"task_id": "task_1"},
             title="删除任务",
             message="需要确认",
             commit_action="task.delete.commit",
@@ -275,7 +275,7 @@ def test_chat_repairs_invalid_tool_arguments(monkeypatch) -> None:
     resp = client.post("/api/chat", json={"message": "删除任务", "history": []})
     assert resp.status_code == 200
     body = resp.json()
-    assert body["approval"]["approval_id"] == "appr_args_fix_1"
+    assert body["approval"]["data"] == {"task_id": "task_1"}
 
 
 def test_chat_tool_definitions_include_arxiv_skills() -> None:
@@ -479,7 +479,7 @@ def test_chat_stream_repairs_frontend_confirmation_into_real_approval(monkeypatc
         return AgentActionResponse(
             type="approval_required",
             action_id="task.delete.prepare",
-            approval_id="appr_stream_fix_1",
+            data={"task_id": "task_1"},
             title="删除任务",
             message="需要确认",
             commit_action="task.delete.commit",
@@ -499,8 +499,8 @@ def test_chat_stream_repairs_frontend_confirmation_into_real_approval(monkeypatc
     ]
     approval_events = [item for item in events if item.get("type") == "approval_required"]
     assert approval_events
-    assert approval_events[0]["approval"]["approval_id"] == "appr_stream_fix_1"
-    assert events[-1]["approval"]["approval_id"] == "appr_stream_fix_1"
+    assert approval_events[0]["approval"]["data"] == {"task_id": "task_1"}
+    assert events[-1]["approval"]["data"] == {"task_id": "task_1"}
 
 
 def test_chat_stream_repairs_invalid_tool_arguments(monkeypatch) -> None:
@@ -549,7 +549,7 @@ def test_chat_stream_repairs_invalid_tool_arguments(monkeypatch) -> None:
         return AgentActionResponse(
             type="approval_required",
             action_id="task.delete.prepare",
-            approval_id="appr_stream_args_fix_1",
+            data={"task_id": "task_1"},
             title="删除任务",
             message="需要确认",
             commit_action="task.delete.commit",
@@ -569,7 +569,7 @@ def test_chat_stream_repairs_invalid_tool_arguments(monkeypatch) -> None:
     ]
     approval_events = [item for item in events if item.get("type") == "approval_required"]
     assert approval_events
-    assert approval_events[0]["approval"]["approval_id"] == "appr_stream_args_fix_1"
+    assert approval_events[0]["approval"]["data"] == {"task_id": "task_1"}
 
 
 def test_chat_stream_emits_approval_events(monkeypatch) -> None:
@@ -604,7 +604,7 @@ def test_chat_stream_emits_approval_events(monkeypatch) -> None:
         return AgentActionResponse(
             type="approval_required",
             action_id="task.delete.prepare",
-            approval_id="appr_stream_1",
+            data={"task_id": "task_1"},
             title="删除任务",
             message="需要确认",
             commit_action="task.delete.commit",
@@ -625,6 +625,6 @@ def test_chat_stream_emits_approval_events(monkeypatch) -> None:
     assert any(item == {"type": "tool_call", "name": "delete_task"} for item in events)
     approval_events = [item for item in events if item.get("type") == "approval_required"]
     assert approval_events
-    assert approval_events[0]["approval"]["approval_id"] == "appr_stream_1"
+    assert approval_events[0]["approval"]["data"] == {"task_id": "task_1"}
     assert events[-1]["type"] == "done"
-    assert events[-1]["approval"]["approval_id"] == "appr_stream_1"
+    assert events[-1]["approval"]["data"] == {"task_id": "task_1"}

@@ -95,13 +95,11 @@ class AgentActionResponse(BaseModel):
         type: 响应类型，决定前端如何处理该响应。
         action_id: Action 标识符，用于追踪和日志。
         data: 正常执行结果数据（type="result" 时使用）。
-        approval_id: 审批票据 ID（type="approval_required" 时使用），
-                     用户确认后需携带此 ID 调用 commit_action。
+        data: 当 type="approval_required" 时，可作为用户确认后提交到 commit_action 的 payload。
         title: 审批弹窗标题（type="approval_required" 时使用）。
         message: 审批弹窗提示信息（type="approval_required" 时使用）。
         impact: 操作影响描述，包含资源类型、ID 列表、数量等。
         commit_action: 确认后需要执行的 commit action 名称。
-        expires_at: 审批票据过期时间，默认 10 分钟。
         reason: 拒绝原因（type="forbidden" 时使用）。
 
     示例 - 正常结果:
@@ -115,23 +113,20 @@ class AgentActionResponse(BaseModel):
         {
             "type": "approval_required",
             "action_id": "task.delete.prepare",
-            "approval_id": "appr_xxx",
+            "data": {"task_id": "uuid"},
             "title": "删除任务",
             "message": "该操作将删除任务《XXX》。确认后不可自动恢复。",
             "impact": {"resource_type": "task", "resource_ids": ["uuid"], "count": 1},
-            "commit_action": "task.delete.commit",
-            "expires_at": "2024-01-01T12:10:00Z"
+            "commit_action": "task.delete.commit"
         }
     """
     type: ResponseType
     action_id: str
     data: dict[str, Any] | None = None
-    approval_id: str | None = None
     title: str | None = None
     message: str | None = None
     impact: dict[str, Any] | None = None
     commit_action: str | None = None
-    expires_at: datetime | None = None
     reason: str | None = None
 
 
@@ -191,8 +186,8 @@ class ChatResponse(BaseModel):
 
     Attributes:
         reply: AI 助手的文本回复。
-        approval: 如果执行了需要审批的操作，返回审批信息供前端展示确认弹窗。
-                  用户确认后，前端需调用 approval_commit skill 完成操作。
+        approval: 如果执行了需要审批的操作，返回确认信息供前端展示确认弹窗。
+                  用户确认后，前端需将 approval.data 作为 payload 提交到 approval.commit_action。
     """
     reply: str
     approval: AgentActionResponse | None = None
@@ -386,11 +381,6 @@ class ActionDefinition:
         policy_action_id: 对应的策略规则 ID，用于权限校验。
             有些 Action 可能共用同一个策略（如 prepare 和 commit）。
         handler: Action 处理函数，执行实际的业务逻辑。
-        uses_approval: 是否需要消费审批票据。
-            为 True 时，执行前会从 payload 中获取 approval_id 并验证。
-        approval_action_id: 审批票据对应的 action_id。
-            用于在 consume_approval 时验证票据是否匹配。
-
     示例 - 普通操作:
         ActionDefinition(
             action_id="task.list",
@@ -398,17 +388,7 @@ class ActionDefinition:
             handler=_handle_task_list,
         )
 
-    示例 - 需要审批的 commit 操作:
-        ActionDefinition(
-            action_id="task.delete.commit",
-            policy_action_id="task.delete",
-            handler=_handle_task_delete_commit,
-            uses_approval=True,
-            approval_action_id="task.delete",
-        )
     """
     action_id: str
     policy_action_id: str
     handler: ActionHandler
-    uses_approval: bool = False
-    approval_action_id: str | None = None

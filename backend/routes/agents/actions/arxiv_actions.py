@@ -5,7 +5,6 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from routes.agents.approval import create_approval
 from routes.agents.models import AgentActionResponse, AgentContext
 from routes.arxiv.service import (
     batch_create_daily_tasks,
@@ -22,18 +21,14 @@ async def prepare_arxiv_daily_tasks_action(
     ids = [str(x).strip() for x in raw_ids if isinstance(x, str) and str(x).strip()] if isinstance(raw_ids, list) else []
     if not ids:
         raise HTTPException(status_code=422, detail="缺少 arxiv_ids")
-    approval_id, expires_at = await create_approval(
-        conn, ctx=ctx, action_id="arxiv.daily_tasks", resource_scope=resource_scope, payload={"arxiv_ids": ids}
-    )
     return AgentActionResponse(
         type="approval_required",
         action_id="arxiv.daily_tasks.prepare",
-        approval_id=approval_id,
+        data={"arxiv_ids": ids},
         title=f"将今日 {len(ids)} 篇论文加入任务",
         message=f"将按每篇论文创建一条任务，共 {len(ids)} 条。确认后执行。",
         impact={"resource_type": "arxiv_daily_candidates", "resource_ids": ids, "count": len(ids)},
         commit_action="arxiv.daily_tasks.commit",
-        expires_at=expires_at,
     )
 
 
@@ -149,8 +144,6 @@ async def handle_arxiv_paper_details(
 async def handle_arxiv_daily_tasks_commit(
     conn: Any, *, ctx: AgentContext, payload: dict[str, Any], resource_scope: str, approval_payload: dict[str, Any] | None
 ) -> dict[str, Any]:
-    _ = payload
     _ = resource_scope
-    if approval_payload is None:
-        raise HTTPException(status_code=422, detail="缺少审批负载")
-    return await commit_arxiv_daily_tasks_action(conn, user_id=ctx.user_id, payload=approval_payload)
+    _ = approval_payload
+    return await commit_arxiv_daily_tasks_action(conn, user_id=ctx.user_id, payload=payload)
