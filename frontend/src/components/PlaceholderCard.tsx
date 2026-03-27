@@ -2268,14 +2268,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           ) : (
             <div
               key={subIndex}
-              onClick={index === 3 && subIndex === 2 ? () => navigate('/apps') : undefined}
+              onClick={index === 3 && subIndex === 1 ? () => navigate('/apps') : undefined}
               className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${
-                index === 3 && subIndex === 2 ? 'cursor-pointer' : ''
+                index === 3 && subIndex === 1 ? 'cursor-pointer' : ''
               }`}
             >
               {showWorkflowProgress ? (
                 <WorkflowProgressBar workflow={workflowForProgress} />
-              ) : index === 3 && subIndex === 2 ? (
+              ) : index === 3 && subIndex === 1 ? (
                 <span className="text-white/80 font-medium">应用中心</span>
               ) : index === 3 && subIndex === 0 ? (
                 <span className="text-white/80 font-medium">成就</span>
@@ -2290,7 +2290,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   {defaultWorkflowName}
                 </button>
               ) : (
-                <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : index === 3 && subIndex === 1 ? '快捷入口' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
+                <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : index === 3 && subIndex === 2 ? '快捷入口' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
               )}
             </div>
           )
