@@ -5,6 +5,7 @@ import { apiJson } from '../lib/api';
 import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
 import CalendarWidget from './CalendarWidget';
+import PhoneSimulator from './PhoneSimulator';
 
 interface Task {
   id: string;
@@ -33,6 +34,8 @@ interface Task {
 interface PlaceholderCardProps {
   index: number;
   split?: number;
+  /** RightPanel 容器的 ref，用于 PhoneSimulator 的覆盖定位 */
+  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 interface FocusSession {
@@ -106,11 +109,12 @@ const CREATE_TASK_FORM_DEFAULTS: CreateTaskForm = {
  * 右侧占位卡片组件
  * 用于展示占位内容
  */
-const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) => {
+const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anchorRef }) => {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [showTaskAssistantModal, setShowTaskAssistantModal] = useState(false);
+  const [showPhoneSimulator, setShowPhoneSimulator] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'daily' | 'weekly' | 'periodic' | 'custom' | 'all'>('today');
   const navigate = useNavigate();
 
@@ -2289,8 +2293,23 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 >
                   {defaultWorkflowName}
                 </button>
+              ) : index === 3 && subIndex === 2 ? (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowPhoneSimulator(true); }}
+                    className="font-medium text-white/80 hover:text-white transition-colors"
+                  >
+                    快捷入口
+                  </button>
+                  {showPhoneSimulator && anchorRef && (
+                    <PhoneSimulator
+                      anchorRef={anchorRef}
+                      onClose={() => setShowPhoneSimulator(false)}
+                    />
+                  )}
+                </>
               ) : (
-                <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : index === 3 && subIndex === 2 ? '快捷入口' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
+                <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
               )}
             </div>
           )
