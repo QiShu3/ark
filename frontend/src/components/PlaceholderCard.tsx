@@ -2272,9 +2272,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           ) : (
             <div
               key={subIndex}
-              onClick={index === 3 && subIndex === 1 ? () => navigate('/apps') : undefined}
+              onClick={
+                index === 3 && subIndex === 1 ? () => navigate('/apps') :
+                index === 3 && subIndex === 2 ? () => setShowPhoneSimulator(true) :
+                undefined
+              }
               className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${
-                index === 3 && subIndex === 1 ? 'cursor-pointer' : ''
+                (index === 3 && subIndex === 1) || (index === 3 && subIndex === 2) ? 'cursor-pointer' : ''
               }`}
             >
               {showWorkflowProgress ? (
@@ -2295,12 +2299,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 </button>
               ) : index === 3 && subIndex === 2 ? (
                 <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowPhoneSimulator(true); }}
-                    className="font-medium text-white/80 hover:text-white transition-colors"
-                  >
+                  <span className="font-medium text-white/80">
                     快捷入口
-                  </button>
+                  </span>
                   {showPhoneSimulator && anchorRef && (
                     <PhoneSimulator
                       anchorRef={anchorRef}

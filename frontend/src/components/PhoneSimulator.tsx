@@ -235,7 +235,7 @@ const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({ onClose, anchorRef, cla
             className="flex-1 flex flex-col items-center justify-center py-1.5 gap-0.5 transition-colors"
             style={{ color: tab.active ? '#07c160' : 'rgba(0,0,0,0.4)' }}
           >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>{tab.icon}</span>
+            <span style={{ fontSize: 26, lineHeight: 1 }}>{tab.icon}</span>
             <span style={{ fontSize: 9 }}>{tab.label}</span>
           </button>
         ))}
