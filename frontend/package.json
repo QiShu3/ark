@@ -23,7 +23,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.3.0",
+    "react-router-dom": "^7.13.2",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.0.2",
     "zustand": "^5.0.12"
@@ -49,10 +49,10 @@
     "postcss": "^8.5.3",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.57.1",
-    "vite": "^8.0.1",
+    "typescript-eslint": "^8.57.2",
+    "vite": "^8.0.3",
     "vite-plugin-trae-solo-badge": "^1.0.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.2"
   }
 }
