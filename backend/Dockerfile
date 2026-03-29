@@ -14,7 +14,7 @@ RUN apt-get update && \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 将 uv 添加到 PATH
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.local/bin:${PATH}"
 
 # 复制依赖文件
 COPY pyproject.toml uv.lock ./
