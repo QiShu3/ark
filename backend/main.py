@@ -4,7 +4,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
