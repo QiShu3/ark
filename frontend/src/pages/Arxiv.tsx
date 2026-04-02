@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowDown, History, ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
 import Navigation from '../components/Navigation';
-import { AgentActionResponse, executeAgentAction } from '../lib/agent';
 import { apiJson } from '../lib/api';
 
 type SortBy = 'relevance' | 'submitted_date' | 'last_updated_date';
@@ -221,8 +220,6 @@ const Arxiv: React.FC = () => {
   const [dailyCandidates, setDailyCandidates] = useState<DailyCandidate[]>([]);
   const [dailyBusy, setDailyBusy] = useState(false);
   const [dailyError, setDailyError] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<AgentActionResponse | null>(null);
-  const [isExecutingAction, setIsExecutingAction] = useState(false);
   const [currentDailyIndex, setCurrentDailyIndex] = useState(0);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
   const [tagPickerPaper, setTagPickerPaper] = useState<ArxivPaper | null>(null);
@@ -578,45 +575,21 @@ const Arxiv: React.FC = () => {
 
   const askCreateDailyTasks = useCallback(async () => {
     setDailyError(null);
+    setDailyBusy(true);
     try {
       const ids = dailyCandidates.map((x) => x.arxiv_id);
-      const action = await executeAgentAction('arxiv.daily_tasks.prepare', { arxiv_ids: ids }, {
-        primaryAppId: 'arxiv',
+      await apiJson('/api/arxiv/daily/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ arxiv_ids: ids }),
       });
-      if (action.type === 'forbidden') {
-        throw new Error(action.reason || '当前 agent 无权执行该操作');
-      }
-      setConfirmAction(action);
-    } catch (e) {
-      setDailyError(e instanceof Error ? e.message : '生成确认请求失败');
-    }
-  }, [dailyCandidates]);
-
-  const cancelConfirmAction = () => {
-    setConfirmAction(null);
-    setIsExecutingAction(false);
-  };
-
-  const commitConfirmAction = useCallback(async () => {
-    if (!confirmAction?.commit_action) return;
-    setIsExecutingAction(true);
-    try {
-      const commitPayload = (confirmAction.data && typeof confirmAction.data === 'object' ? confirmAction.data : {}) as Record<string, unknown>;
-      const result = await executeAgentAction(confirmAction.commit_action, commitPayload, {
-        primaryAppId: 'arxiv',
-      });
-      if (result.type === 'forbidden') {
-        throw new Error(result.reason || '执行被拒绝');
-      }
-      setConfirmAction(null);
       await loadDailyViewData(true);
     } catch (e) {
-      setDailyError(e instanceof Error ? e.message : '执行失败');
-      setConfirmAction(null);
+      setDailyError(e instanceof Error ? e.message : '创建任务失败');
     } finally {
-      setIsExecutingAction(false);
+      setDailyBusy(false);
     }
-  }, [confirmAction, loadDailyViewData]);
+  }, [dailyCandidates, loadDailyViewData]);
 
   const handleRefreshStates = useCallback(async () => {
     await loadPaperStates();
@@ -1420,32 +1393,6 @@ const Arxiv: React.FC = () => {
                 disabled={tagModalBusy}
               >
                 {tagModalBusy ? '删除中...' : '确认删除'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {confirmAction ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 rounded-2xl">
-          <div className="w-[92%] max-w-md bg-zinc-900/90 border border-white/10 rounded-2xl p-4 shadow-xl">
-            <div className="text-white text-base font-medium mb-2">{String(confirmAction.title || '需要确认')}</div>
-            <div className="text-white/70 text-sm whitespace-pre-wrap mb-4">
-              {String(confirmAction.message || '即将执行敏感操作，是否确认？')}
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={cancelConfirmAction}
-                disabled={isExecutingAction}
-                className="px-3 py-2 rounded-lg bg-white/10 text-white/80 hover:bg-white/15 disabled:opacity-60"
-              >
-                取消
-              </button>
-              <button
-                onClick={commitConfirmAction}
-                disabled={isExecutingAction}
-                className="px-3 py-2 rounded-lg bg-blue-500/80 text-white hover:bg-blue-500 disabled:opacity-60"
-              >
-                {isExecutingAction ? '执行中...' : '确认'}
               </button>
             </div>
           </div>
