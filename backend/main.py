@@ -4,11 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
-from routes.agents import chat_router, init_agent
-from routes.agents import router as agent_router
-from routes.agents.profiles import avatar_upload_dir
 from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
@@ -28,7 +24,6 @@ async def _lifespan(app: FastAPI):
     await init_checkin(app)
     await init_todo(app)
     await init_arxiv(app)
-    await init_agent(app)
     try:
         yield
     finally:
@@ -46,15 +41,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-avatar_upload_dir().mkdir(parents=True, exist_ok=True)
-app.mount("/uploads/agent-avatars", StaticFiles(directory=avatar_upload_dir()), name="agent-avatars")
-
 app.include_router(auth_router)
 app.include_router(checkin_router)
-app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(arxiv_router)
-app.include_router(agent_router)
 
 
 @app.get("/health")

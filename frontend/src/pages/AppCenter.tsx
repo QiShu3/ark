@@ -7,13 +7,12 @@ const AppCenter: React.FC = () => {
 
   // 模拟一些应用数据，用于生成应用卡片
   const apps = [
-    { id: 0, name: 'Agent', description: '对话式任务助手', icon: '◉', route: '/agent' },
-    { id: 1, name: 'Arxiv', description: '阅读文献', icon: '∑', route: '/arxiv' },
-    { id: 2, name: '应用 2', description: '这是一个待开发的应用', icon: '⚡' },
-    { id: 3, name: '应用 3', description: '这是一个待开发的应用', icon: '🎨' },
-    { id: 4, name: '应用 4', description: '这是一个待开发的应用', icon: '🔧' },
-    { id: 5, name: '应用 5', description: '这是一个待开发的应用', icon: '📊' },
-    { id: 6, name: '应用 6', description: '这是一个待开发的应用', icon: '🎮' },
+    { id: 0, name: 'Arxiv', description: '阅读文献', icon: '∑', route: '/arxiv' },
+    { id: 1, name: '应用 2', description: '这是一个待开发的应用', icon: '⚡' },
+    { id: 2, name: '应用 3', description: '这是一个待开发的应用', icon: '🎨' },
+    { id: 3, name: '应用 4', description: '这是一个待开发的应用', icon: '🔧' },
+    { id: 4, name: '应用 5', description: '这是一个待开发的应用', icon: '📊' },
+    { id: 5, name: '应用 6', description: '这是一个待开发的应用', icon: '🎮' },
   ];
 
   return (
