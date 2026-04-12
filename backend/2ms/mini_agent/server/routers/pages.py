@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 
 import asyncpg
@@ -19,6 +20,7 @@ from mini_agent.server.runtime import build_profile_runtime_config, build_sessio
 from mini_agent.server.schemas import SessionResponse
 
 router = APIRouter(prefix="/pages", tags=["Pages"])
+_page_session_bootstrap_locks: dict[tuple[int, str], asyncio.Lock] = {}
 
 
 async def _pool_dep(request: Request) -> asyncpg.Pool:
@@ -27,6 +29,15 @@ async def _pool_dep(request: Request) -> asyncpg.Pool:
 
 def _default_session_name(session_id: str) -> str:
     return f"会话 {session_id[:8]}"
+
+
+def _page_session_bootstrap_lock(user_id: int, profile_id: str) -> asyncio.Lock:
+    key = (user_id, profile_id)
+    lock = _page_session_bootstrap_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _page_session_bootstrap_locks[key] = lock
+    return lock
 
 
 @router.post("/{profile_key}/session", response_model=SessionResponse)
@@ -39,35 +50,36 @@ async def route_get_or_create_page_session(
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    existing = await get_latest_session_for_profile(pool, current_user.id, profile.id)
-    if existing is not None:
-        return existing
+    async with _page_session_bootstrap_lock(current_user.id, profile.id):
+        existing = await get_latest_session_for_profile(pool, current_user.id, profile.id)
+        if existing is not None:
+            return existing
 
-    try:
-        runtime_config = build_profile_runtime_config(profile)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        try:
+            runtime_config = build_profile_runtime_config(profile)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    created = await create_session(
-        pool,
-        user_id=current_user.id,
-        profile_id=profile.id,
-        name=None,
-        workspace_path=None,
-        status="idle",
-    )
-    workspace_path = str(
-        build_session_workspace_path(
-            config=runtime_config,
-            session_id=created.id,
-            explicit_workspace_path=None,
+        created = await create_session(
+            pool,
+            user_id=current_user.id,
+            profile_id=profile.id,
+            name=None,
+            workspace_path=None,
+            status="idle",
         )
-    )
-    return await update_session(
-        pool,
-        current_user.id,
-        created.id,
-        name=_default_session_name(created.id),
-        workspace_path=workspace_path,
-        status="idle",
-    ) or created
+        workspace_path = str(
+            build_session_workspace_path(
+                config=runtime_config,
+                session_id=created.id,
+                explicit_workspace_path=None,
+            )
+        )
+        return await update_session(
+            pool,
+            current_user.id,
+            created.id,
+            name=_default_session_name(created.id),
+            workspace_path=workspace_path,
+            status="idle",
+        ) or created

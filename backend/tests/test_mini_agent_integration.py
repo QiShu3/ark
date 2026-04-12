@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 from datetime import datetime
 from types import SimpleNamespace
@@ -250,6 +251,109 @@ def test_page_session_route_creates_session_when_missing(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["id"] == "session-2"
     assert response.json()["workspace_path"] == "/tmp/workspace/session-2"
+
+
+@pytest.mark.asyncio
+async def test_page_session_route_deduplicates_concurrent_creation(monkeypatch) -> None:
+    module = importlib.import_module("mini_agent_integration")
+    module._ensure_mini_agent_import_path()
+    auth_module = importlib.import_module("mini_agent.server.auth")
+    pages_module = importlib.import_module("mini_agent.server.routers.pages")
+    repository_module = importlib.import_module("mini_agent.server.repository")
+
+    profile = repository_module.ProfileRecord(
+        id="profile-3",
+        user_id=1,
+        key="agent-console",
+        name="Agent Console",
+        config_json={"llm": {"api_key": "test-key"}},
+        system_prompt=None,
+        system_prompt_path=None,
+        mcp_config_json=None,
+        is_default=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    current_user = auth_module.CurrentUser(
+        id=11,
+        username="dedupe",
+        is_active=True,
+        is_admin=False,
+        created_at=datetime.utcnow(),
+    )
+    created_at = datetime.utcnow()
+    create_calls = 0
+    latest_lookup_calls = 0
+    second_lookup_seen = asyncio.Event()
+    existing_session = None
+
+    async def fake_get_profile_by_key(pool, key):
+        del pool
+        return profile if key == "agent-console" else None
+
+    async def fake_get_latest_session_for_profile(pool, user_id, profile_id):
+        del pool, user_id, profile_id
+        nonlocal latest_lookup_calls
+        latest_lookup_calls += 1
+        if latest_lookup_calls == 1:
+            try:
+                await asyncio.wait_for(second_lookup_seen.wait(), timeout=0.05)
+            except TimeoutError:
+                pass
+        else:
+            second_lookup_seen.set()
+        return existing_session
+
+    async def fake_create_session(pool, *, user_id, profile_id, name, workspace_path, status):
+        del pool, user_id, profile_id, name, workspace_path, status
+        nonlocal create_calls, existing_session
+        create_calls += 1
+        existing_session = repository_module.SessionRecord(
+            id=f"session-{create_calls}",
+            user_id=current_user.id,
+            profile_id=profile.id,
+            name=None,
+            workspace_path=None,
+            status="idle",
+            created_at=created_at,
+            updated_at=created_at,
+        )
+        return existing_session
+
+    async def fake_update_session(pool, user_id, session_id, **kwargs):
+        del pool, user_id
+        nonlocal existing_session
+        existing_session = repository_module.SessionRecord(
+            id=session_id,
+            user_id=current_user.id,
+            profile_id=profile.id,
+            name=kwargs.get("name"),
+            workspace_path=kwargs.get("workspace_path"),
+            status=kwargs.get("status", "idle"),
+            created_at=created_at,
+            updated_at=datetime.utcnow(),
+        )
+        return existing_session
+
+    monkeypatch.setattr(pages_module, "get_profile_by_key", fake_get_profile_by_key)
+    monkeypatch.setattr(pages_module, "get_latest_session_for_profile", fake_get_latest_session_for_profile)
+    monkeypatch.setattr(pages_module, "build_profile_runtime_config", lambda profile: SimpleNamespace())
+    monkeypatch.setattr(
+        pages_module,
+        "build_session_workspace_path",
+        lambda config, session_id, explicit_workspace_path=None: f"/tmp/workspace/{session_id}",
+    )
+    monkeypatch.setattr(pages_module, "create_session", fake_create_session)
+    monkeypatch.setattr(pages_module, "update_session", fake_update_session)
+
+    first, second = await asyncio.gather(
+        pages_module.route_get_or_create_page_session("agent-console", current_user, object()),
+        pages_module.route_get_or_create_page_session("agent-console", current_user, object()),
+    )
+
+    assert create_calls == 1
+    assert first.id == second.id == "session-1"
+    assert first.workspace_path == second.workspace_path == "/tmp/workspace/session-1"
 
 
 @pytest.mark.asyncio

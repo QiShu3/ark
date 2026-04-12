@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -266,6 +267,24 @@ describe('AgentConsole', () => {
       expect(MockAudio.instances).toHaveLength(1);
       expect(MockAudio.instances[0].play).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('deduplicates page session bootstrap requests in StrictMode', async () => {
+    render(
+      <StrictMode>
+        <AgentConsole />
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances.length).toBeGreaterThan(0);
+    });
+
+    const bootstrapCalls = (apiJson as Mock).mock.calls.filter(
+      ([url, options]) => url === '/api/pages/agent-console/session' && options?.method === 'POST',
+    );
+
+    expect(bootstrapCalls).toHaveLength(1);
   });
 
   it('starts low-latency playback through MediaSource before the stream ends', async () => {

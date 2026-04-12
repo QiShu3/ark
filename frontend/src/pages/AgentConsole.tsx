@@ -92,10 +92,26 @@ const defaultTtsState: TtsState = {
   status: 'off',
   error: null,
 };
+const pageSessionRequests = new Map<string, Promise<SessionResponse>>();
 
 function buildWebSocketUrl(sessionId: string, token: string) {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${protocol}://${window.location.host}/api/sessions/ws/${sessionId}?token=${encodeURIComponent(token)}`;
+}
+
+function getOrCreatePageSession(profileKey: string) {
+  const pending = pageSessionRequests.get(profileKey);
+  if (pending) {
+    return pending;
+  }
+
+  const request = apiJson<SessionResponse>(`/api/pages/${profileKey}/session`, {
+    method: 'POST',
+  }).finally(() => {
+    pageSessionRequests.delete(profileKey);
+  });
+  pageSessionRequests.set(profileKey, request);
+  return request;
 }
 
 function formatTime(value: string) {
@@ -451,9 +467,7 @@ export default function AgentConsole() {
       stopTtsPlayback('bootstrap');
 
       try {
-        const nextSession = await apiJson<SessionResponse>(`/api/pages/${PROFILE_KEY}/session`, {
-          method: 'POST',
-        });
+        const nextSession = await getOrCreatePageSession(PROFILE_KEY);
         if (cancelled) return;
         setSession(nextSession);
 
