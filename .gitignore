@@ -34,3 +34,13 @@ vercel.json
 pictures/
 .claude/
 CLAUDE.md
+
+# Embedded backend/2ms local artifacts
+backend/2ms/.venv/
+backend/2ms/*.egg-info/
+backend/2ms/.pytest_cache/
+backend/2ms/.trae/
+backend/2ms/workspace/
+backend/2ms/mini_agent.db
+backend/2ms/mini_agent/app_state/log/
+backend/2ms/mini_agent/app_state/.history/

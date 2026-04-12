@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Agent</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div id="app">
+        <div id="auth-section" class="container">
+            <h1>Mini Agent</h1>
+            <div id="login-form" class="form">
+                <h2>登录</h2>
+                <input type="text" id="login-username" placeholder="用户名">
+                <input type="password" id="login-password" placeholder="密码">
+                <button onclick="login()">登录</button>
+                <p>还没有账号？<a href="#" onclick="showRegister()">注册</a></p>
+            </div>
+            <div id="register-form" class="form hidden">
+                <h2>注册</h2>
+                <input type="text" id="register-username" placeholder="用户名">
+                <input type="email" id="register-email" placeholder="邮箱">
+                <input type="password" id="register-password" placeholder="密码">
+                <button onclick="register()">注册</button>
+                <p>已有账号？<a href="#" onclick="showLogin()">登录</a></p>
+            </div>
+            <div id="auth-error" class="error"></div>
+        </div>
+
+        <div id="main-section" class="container hidden">
+            <header>
+                <h1>Mini Agent</h1>
+                <div class="user-info">
+                    <span id="username"></span>
+                    <button class="danger-button" onclick="logout()">退出</button>
+                </div>
+            </header>
+
+            <div class="main-content">
+                <aside class="sidebar">
+                    <div class="section">
+                        <div class="section-header">
+                            <h3>Profiles</h3>
+                            <button class="secondary-button small-button" onclick="showNewProfileForm()">+ 新建</button>
+                        </div>
+                        <div id="profiles-list"></div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-header">
+                            <h3>会话</h3>
+                            <button class="secondary-button small-button" onclick="createSession()">+ 新建</button>
+                        </div>
+                        <div id="sessions-list"></div>
+                    </div>
+                </aside>
+
+                <aside class="session-info-panel">
+                    <div class="section-header">
+                        <h3 id="info-panel-title">信息面板</h3>
+                    </div>
+                    <div id="session-overview" class="session-overview">
+                        <div class="pane-empty-state session-overview-empty">
+                            <strong>还没有可展示的信息</strong>
+                            <p>点击左侧 Profile 或会话后，这里会显示对应的配置、上下文和运行信息。</p>
+                        </div>
+                    </div>
+                </aside>
+
+                <main class="chat-area">
+                    <div class="chat-header">
+                        <div>
+                            <h2 id="chat-title">选择一个会话开始</h2>
+                            <p id="chat-subtitle">先选择 Profile，再创建会话。</p>
+                        </div>
+                        <div class="chat-actions">
+                            <span id="tts-state-badge" class="status-badge secondary">tts: off</span>
+                            <button id="tts-toggle-button" class="secondary-button small-button" onclick="toggleTtsPlayback()" disabled>启用朗读</button>
+                            <button id="tts-stop-button" class="danger-button small-button" onclick="stopTtsPlayback('manual_stop')" disabled>停止朗读</button>
+                            <span id="session-status-badge" class="status-badge">idle</span>
+                        </div>
+                    </div>
+
+                    <div class="chat-columns">
+                        <section class="chat-pane raw-pane">
+                            <div class="chat-pane-header">
+                                <div>
+                                    <h3>原始事件流</h3>
+                                    <p>完整展示运行时事件，方便调试。</p>
+                                </div>
+                            </div>
+                            <div id="raw-chat-messages" class="chat-pane-messages">
+                                <div class="pane-empty-state">
+                                    <strong>还没有原始事件</strong>
+                                    <p>选择会话后，这里会完整显示消息、工具、状态和元数据。</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="chat-pane filtered-pane">
+                            <div class="chat-pane-header">
+                                <div>
+                                    <h3>真实聊天视图</h3>
+                                    <p>仅保留用户和 Agent 对话，模拟实际聊天场景。</p>
+                                </div>
+                            </div>
+                            <div id="filtered-chat-messages" class="chat-pane-messages">
+                                <div class="pane-empty-state">
+                                    <strong>还没有聊天记录</strong>
+                                    <p>用户消息和 Agent 回复会显示在这里。</p>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="input-area">
+                        <textarea id="message-input" placeholder="输入任务，让 Agent 在当前工作目录中执行..." rows="4"></textarea>
+                        <div class="input-actions">
+                            <button id="send-button" onclick="sendMessage()">发送</button>
+                            <button id="cancel-button" class="danger-button hidden" onclick="cancelRun()">取消运行</button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <div id="new-profile-modal" class="modal hidden">
+            <div class="modal-content profile-modal">
+                <span class="close" onclick="closeNewProfileForm()">&times;</span>
+                <h2 id="profile-modal-title">新建 Profile</h2>
+                <input type="text" id="profile-name" placeholder="Profile 名称">
+                <input type="text" id="profile-key" placeholder="Profile Key，例如 agent-console">
+                <textarea id="profile-system-prompt" placeholder="System Prompt" rows="5"></textarea>
+                <input type="text" id="profile-workspace-dir" placeholder="会话工作区根目录，例如 /tmp/mini-agent-workspace">
+
+                <div class="grid-two">
+                    <select id="profile-provider">
+                        <option value="anthropic">anthropic</option>
+                        <option value="openai">openai</option>
+                    </select>
+                    <input type="text" id="profile-model" placeholder="模型，例如 MiniMax-M2.5">
+                </div>
+
+                <input type="text" id="profile-api-base" placeholder="API Base，例如 https://api.minimax.io">
+                <input type="password" id="profile-api-key" placeholder="API Key">
+                <input type="number" id="profile-max-steps" placeholder="最大步数 (默认 50)" min="1">
+
+                <div class="checkbox-grid">
+                    <label><input type="checkbox" id="profile-is-default"> 设为默认 Profile</label>
+                    <label><input type="checkbox" id="tts-enable" checked> 启用 TTS</label>
+                    <label><input type="checkbox" id="tts-auto-play"> Web 自动播放</label>
+                </div>
+                <div class="grid-two">
+                    <select id="tts-provider">
+                        <option value="minimax">minimax</option>
+                        <option value="edge">edge</option>
+                    </select>
+                    <input type="text" id="tts-voice" placeholder="TTS Voice，例如 female-shaonv">
+                </div>
+                <input type="text" id="tts-minimax-group-id" placeholder="MiniMax Group ID（使用 minimax TTS 时必填）">
+                <input type="text" id="tts-minimax-model" placeholder="MiniMax Model，例如 speech-02-hd（仅 MiniMax）">
+                <input type="number" id="tts-sentence-buffer-chars" placeholder="TTS 分句阈值 (默认 120)" min="1">
+
+                <div class="checkbox-grid">
+                    <label><input type="checkbox" id="tool-enable-file" checked> 文件工具</label>
+                    <label><input type="checkbox" id="tool-enable-bash" checked> Bash</label>
+                    <label><input type="checkbox" id="tool-enable-note" checked> Session Note</label>
+                    <label><input type="checkbox" id="tool-enable-skills" checked> Skills</label>
+                    <label><input type="checkbox" id="tool-enable-mcp"> MCP</label>
+                </div>
+
+                <input type="text" id="profile-skills-dir" placeholder="Skills 目录，例如 ./skills">
+                <textarea id="profile-mcp-config" placeholder='MCP JSON，例如 {"mcpServers": {...}}' rows="6"></textarea>
+                <button id="profile-submit-button" onclick="submitProfileForm()">创建 Profile</button>
+            </div>
+        </div>
+
+        <div id="edit-session-modal" class="modal hidden">
+            <div class="modal-content session-modal">
+                <span class="close" onclick="closeSessionForm()">&times;</span>
+                <h2>编辑会话</h2>
+                <input type="text" id="session-name-input" placeholder="会话名称">
+                <select id="session-profile-select"></select>
+                <input type="text" id="session-workspace-path" placeholder="工作目录" disabled>
+                <p class="field-hint">工作目录由创建时决定，当前不支持编辑。</p>
+                <button id="session-submit-button" onclick="submitSessionForm()">保存会话</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
