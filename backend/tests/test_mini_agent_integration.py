@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -49,6 +51,7 @@ def test_register_mini_agent_routes_are_exposed_on_main_app() -> None:
     assert "/auth/login" in http_paths
     assert "/web" in http_paths
     assert "/api/profiles" in http_paths
+    assert "/api/pages/{profile_key}/session" in http_paths
     assert "/api/sessions" in http_paths
     assert "/api/sessions/ws/{session_id}" in websocket_paths
 
@@ -65,6 +68,28 @@ def test_web_page_serves_static_assets_with_cache_busting() -> None:
     assert "/static/styles.css?v=" in response.text
 
 
+def test_web_page_exposes_minimax_group_id_field() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/web")
+
+    assert response.status_code == 200
+    assert 'id="tts-minimax-group-id"' in response.text
+
+
+def test_web_page_exposes_profile_key_field() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/web")
+
+    assert response.status_code == 200
+    assert 'id="profile-key"' in response.text
+
+
 def test_profile_routes_require_authentication() -> None:
     app = FastAPI()
     register_mini_agent(app)
@@ -73,6 +98,158 @@ def test_profile_routes_require_authentication() -> None:
     response = client.get("/api/profiles")
 
     assert response.status_code == 401
+
+
+def test_page_session_route_returns_latest_existing_session(monkeypatch) -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+
+    module = importlib.import_module("mini_agent_integration")
+    module._ensure_mini_agent_import_path()
+    auth_module = importlib.import_module("mini_agent.server.auth")
+    pages_module = importlib.import_module("mini_agent.server.routers.pages")
+    repository_module = importlib.import_module("mini_agent.server.repository")
+
+    async def fake_current_user():
+        return auth_module.CurrentUser(
+            id=7,
+            username="tester",
+            is_active=True,
+            is_admin=False,
+            created_at=datetime.utcnow(),
+        )
+
+    profile = repository_module.ProfileRecord(
+        id="profile-1",
+        user_id=1,
+        key="agent-console",
+        name="Agent Console",
+        config_json={"llm": {"api_key": "test-key"}},
+        system_prompt=None,
+        system_prompt_path=None,
+        mcp_config_json=None,
+        is_default=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    session = repository_module.SessionRecord(
+        id="session-1",
+        user_id=7,
+        profile_id="profile-1",
+        name="会话 session-1",
+        workspace_path="/tmp/session-1",
+        status="idle",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    app.dependency_overrides[auth_module.get_current_user] = fake_current_user
+    app.state.auth_pool = object()
+    async def fake_get_profile_by_key(pool, key):
+        return profile if key == "agent-console" else None
+
+    async def fake_get_latest_session_for_profile(pool, user_id, profile_id):
+        return session
+
+    monkeypatch.setattr(pages_module, "get_profile_by_key", fake_get_profile_by_key)
+    monkeypatch.setattr(pages_module, "get_latest_session_for_profile", fake_get_latest_session_for_profile)
+
+    client = TestClient(app)
+    response = client.post("/api/pages/agent-console/session")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "session-1"
+
+
+def test_page_session_route_creates_session_when_missing(monkeypatch) -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+
+    module = importlib.import_module("mini_agent_integration")
+    module._ensure_mini_agent_import_path()
+    auth_module = importlib.import_module("mini_agent.server.auth")
+    pages_module = importlib.import_module("mini_agent.server.routers.pages")
+    repository_module = importlib.import_module("mini_agent.server.repository")
+
+    async def fake_current_user():
+        return auth_module.CurrentUser(
+            id=9,
+            username="creator",
+            is_active=True,
+            is_admin=False,
+            created_at=datetime.utcnow(),
+        )
+
+    profile = repository_module.ProfileRecord(
+        id="profile-2",
+        user_id=1,
+        key="agent-console",
+        name="Agent Console",
+        config_json={"llm": {"api_key": "test-key"}},
+        system_prompt=None,
+        system_prompt_path=None,
+        mcp_config_json=None,
+        is_default=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    created = repository_module.SessionRecord(
+        id="session-2",
+        user_id=9,
+        profile_id="profile-2",
+        name=None,
+        workspace_path=None,
+        status="idle",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    finalized = repository_module.SessionRecord(
+        id="session-2",
+        user_id=9,
+        profile_id="profile-2",
+        name="会话 session-",
+        workspace_path="/tmp/workspace/session-2",
+        status="idle",
+        created_at=created.created_at,
+        updated_at=datetime.utcnow(),
+    )
+
+    async def fake_get_profile_by_key(pool, key):
+        return profile if key == "agent-console" else None
+
+    async def fake_get_latest_session_for_profile(pool, user_id, profile_id):
+        return None
+
+    async def fake_create_session(pool, *, user_id, profile_id, name, workspace_path, status):
+        assert user_id == 9
+        assert profile_id == "profile-2"
+        return created
+
+    async def fake_update_session(pool, user_id, session_id, **kwargs):
+        assert user_id == 9
+        assert session_id == "session-2"
+        assert kwargs["workspace_path"] == "/tmp/workspace/session-2"
+        return finalized
+
+    app.dependency_overrides[auth_module.get_current_user] = fake_current_user
+    app.state.auth_pool = object()
+    monkeypatch.setattr(pages_module, "get_profile_by_key", fake_get_profile_by_key)
+    monkeypatch.setattr(pages_module, "get_latest_session_for_profile", fake_get_latest_session_for_profile)
+    monkeypatch.setattr(pages_module, "build_profile_runtime_config", lambda profile: SimpleNamespace())
+    monkeypatch.setattr(
+        pages_module,
+        "build_session_workspace_path",
+        lambda config, session_id, explicit_workspace_path=None: "/tmp/workspace/session-2",
+    )
+    monkeypatch.setattr(pages_module, "create_session", fake_create_session)
+    monkeypatch.setattr(pages_module, "update_session", fake_update_session)
+
+    client = TestClient(app)
+    response = client.post("/api/pages/agent-console/session")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "session-2"
+    assert response.json()["workspace_path"] == "/tmp/workspace/session-2"
 
 
 @pytest.mark.asyncio
