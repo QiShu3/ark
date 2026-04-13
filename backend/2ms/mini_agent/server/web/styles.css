@@ -743,6 +743,16 @@ header h1 {
     line-height: 1.5;
 }
 
+#open-mcp-servers-modal-button {
+    margin-top: 12px;
+}
+
+#mcp-servers-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
 .skill-selection-list {
     display: grid;
     gap: 10px;

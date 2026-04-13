@@ -45,6 +45,7 @@
                             <button class="secondary-button small-button" onclick="showNewProfileForm()">+ 新建</button>
                         </div>
                         <div id="profiles-list"></div>
+                        <button id="open-mcp-servers-modal-button" class="secondary-button" onclick="showMcpServersModal()">管理 MCP Servers</button>
                     </div>
 
                     <div class="section">
@@ -196,7 +197,16 @@
                     <div id="profile-allowed-skills" class="skill-selection-list"></div>
                     <p class="field-hint">仅允许当前 Profile 调用勾选的 skills。旧 Profile 如果还没有白名单配置，默认视为允许全部可用 skills。</p>
                 </div>
-                <textarea id="profile-mcp-config" placeholder='MCP JSON，例如 {"mcpServers": {...}}' rows="6"></textarea>
+                <button
+                    type="button"
+                    id="profile-mcp-server-selector-toggle"
+                    class="secondary-button"
+                    onclick="toggleProfileMcpServerSelector()"
+                >选择 MCP Servers</button>
+                <div id="profile-mcp-server-selector-panel" class="hidden">
+                    <div id="profile-mcp-server-options" class="skill-selection-list"></div>
+                    <p class="field-hint">当前 Profile 勾选的 MCP Servers 会组成它可用的 MCP server 集合。具体 server 定义请在“管理 MCP Servers”弹窗里维护。</p>
+                </div>
                 <button id="profile-submit-button" onclick="submitProfileForm()">创建 Profile</button>
             </div>
         </div>
@@ -221,6 +231,23 @@
                 <p class="field-hint">上传 skill ZIP 包后，这里会显示当前系统可用 skills，Profile 里可以按需勾选允许调用的项。</p>
                 <button class="secondary-button" onclick="uploadSkill()">上传 ZIP</button>
                 <div id="skills-list"></div>
+            </div>
+        </div>
+
+        <div id="mcp-servers-modal" class="modal hidden">
+            <div class="modal-content profile-modal">
+                <span class="close" onclick="closeMcpServersModal()">&times;</span>
+                <h2>MCP Servers</h2>
+                <textarea id="mcp-server-import-input" placeholder='导入 MCP JSON，例如 {"mcpServers": {"memory": {...}}}' rows="5"></textarea>
+                <button class="secondary-button" onclick="importMcpServers()">导入 MCP JSON</button>
+                <input type="text" id="mcp-server-name" placeholder="Server 名称，例如 memory">
+                <input type="text" id="mcp-server-description" placeholder="Server 描述（可选）">
+                <textarea id="mcp-server-config-json" placeholder='单个 server JSON，例如 {"command":"npx","args":["-y","@modelcontextprotocol/server-memory"]}' rows="6"></textarea>
+                <div class="input-actions">
+                    <button type="button" class="secondary-button" onclick="resetMcpServerForm()">清空表单</button>
+                    <button type="button" id="mcp-server-save-button" onclick="saveMcpServer()">添加 MCP Server</button>
+                </div>
+                <div id="mcp-servers-list"></div>
             </div>
         </div>
 

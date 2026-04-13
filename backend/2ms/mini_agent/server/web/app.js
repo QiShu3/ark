@@ -7,6 +7,7 @@ let selectedProfileId = null;
 let profiles = [];
 let sessions = [];
 let availableSkills = [];
+let availableMcpServers = [];
 let ws = null;
 let runInProgress = false;
 let currentSessionEvents = [];
@@ -15,6 +16,7 @@ let streamingAnimationTimer = null;
 let activeInfoPanel = 'none';
 let editingProfileId = null;
 let editingSessionId = null;
+let editingMcpServerId = null;
 let ttsState = {
     enabled: false,
     auto_play: false,
@@ -518,7 +520,7 @@ async function loadUser() {
         currentUser = await response.json();
         document.getElementById('username').textContent = currentUser.username;
         showMainSection();
-        await Promise.all([loadProfiles(), loadSessions(), loadSkills()]);
+        await Promise.all([loadProfiles(), loadSessions(), loadSkills(), loadMcpServers()]);
     } catch (error) {
         console.error('Failed to load user:', error);
         logout();
@@ -543,6 +545,14 @@ async function loadSkills() {
     renderSkillsList();
     const hasExistingSelection = document.querySelector('input[name="profile-allowed-skill"]') !== null;
     renderProfileSkillOptions(hasExistingSelection ? getSelectedAllowedSkillsFromForm() : null);
+    renderInfoPanel();
+}
+
+async function loadMcpServers() {
+    availableMcpServers = await api('/mcp-servers');
+    renderMcpServersList();
+    const hasExistingSelection = document.querySelector('input[name="profile-mcp-server"]') !== null;
+    renderProfileMcpServerOptions(hasExistingSelection ? getSelectedMcpServerIdsFromForm() : null);
     renderInfoPanel();
 }
 
@@ -604,8 +614,43 @@ function renderSkillsList() {
     `).join('');
 }
 
+function renderMcpServersList() {
+    const container = document.getElementById('mcp-servers-list');
+    if (!container) {
+        return;
+    }
+    if (availableMcpServers.length === 0) {
+        container.innerHTML = '<div class="empty-state">还没有 MCP Server。你可以导入 MCP JSON，或手动新增一个 server。</div>';
+        return;
+    }
+
+    container.innerHTML = availableMcpServers.map((server) => {
+        const config = server.config_json || {};
+        const summary = config.command
+            ? `${config.command}${Array.isArray(config.args) && config.args.length > 0 ? ` ${config.args.join(' ')}` : ''}`
+            : (config.url || '未配置 command/url');
+        return `
+            <div class="item">
+                <div class="item-row">
+                    <div class="item-title">${escapeHtml(server.name)}</div>
+                    <div class="item-actions">
+                        <button class="ghost-button tiny-button" onclick="editMcpServer('${server.id}')">编辑</button>
+                        <button class="ghost-button tiny-button danger-text" onclick="deleteMcpServerById('${server.id}')">删除</button>
+                    </div>
+                </div>
+                <div class="item-subtitle">${escapeHtml(server.description || '无描述')}</div>
+                <div class="item-subtitle">${escapeHtml(summary)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
 function allAvailableSkillNames() {
     return availableSkills.map((skill) => skill.name);
+}
+
+function allAvailableMcpServerIds() {
+    return availableMcpServers.map((server) => server.id);
 }
 
 function resolveAllowedSkillsForProfile(profile) {
@@ -626,6 +671,17 @@ function resolveAllowedSkillsForProfile(profile) {
 
 function getSelectedAllowedSkillsFromForm() {
     return Array.from(document.querySelectorAll('input[name="profile-allowed-skill"]:checked')).map((input) => input.value);
+}
+
+function resolveSelectedMcpServerIdsForProfile(profile) {
+    if (Array.isArray(profile?.mcp_server_ids)) {
+        return profile.mcp_server_ids.filter((serverId) => allAvailableMcpServerIds().includes(serverId));
+    }
+    return [];
+}
+
+function getSelectedMcpServerIdsFromForm() {
+    return Array.from(document.querySelectorAll('input[name="profile-mcp-server"]:checked')).map((input) => input.value);
 }
 
 function updateProfileSkillSelectorButton() {
@@ -667,6 +723,92 @@ function toggleProfileSkillSelector() {
         return;
     }
     setProfileSkillSelectorExpanded(panel.classList.contains('hidden'));
+}
+
+function updateProfileMcpServerSelectorButton() {
+    const button = document.getElementById('profile-mcp-server-selector-toggle');
+    const mcpEnabled = document.getElementById('tool-enable-mcp')?.checked ?? false;
+    if (!button) {
+        return;
+    }
+
+    if (!mcpEnabled) {
+        button.textContent = 'MCP 已禁用';
+        button.disabled = true;
+        return;
+    }
+
+    button.disabled = false;
+    const selectedCount = getSelectedMcpServerIdsFromForm().length;
+    const totalCount = availableMcpServers.length;
+    const isExpanded = !document.getElementById('profile-mcp-server-selector-panel')?.classList.contains('hidden');
+    const prefix = isExpanded ? '收起 MCP Server 选择' : '选择 MCP Servers';
+    button.textContent = totalCount > 0 ? `${prefix} (${selectedCount}/${totalCount})` : prefix;
+}
+
+function setProfileMcpServerSelectorExpanded(expanded) {
+    const panel = document.getElementById('profile-mcp-server-selector-panel');
+    if (!panel) {
+        return;
+    }
+    panel.classList.toggle('hidden', !expanded);
+    updateProfileMcpServerSelectorButton();
+}
+
+function toggleProfileMcpServerSelector() {
+    const panel = document.getElementById('profile-mcp-server-selector-panel');
+    const mcpEnabled = document.getElementById('tool-enable-mcp')?.checked ?? false;
+    if (!panel || !mcpEnabled) {
+        return;
+    }
+    setProfileMcpServerSelectorExpanded(panel.classList.contains('hidden'));
+}
+
+function renderProfileMcpServerOptions(selectedIds = null) {
+    const container = document.getElementById('profile-mcp-server-options');
+    const mcpEnabled = document.getElementById('tool-enable-mcp')?.checked ?? false;
+    if (!container) {
+        return;
+    }
+
+    container.classList.toggle('is-disabled', !mcpEnabled);
+
+    if (availableMcpServers.length === 0) {
+        container.innerHTML = '<div class="empty-state">当前没有可选 MCP Server。先点击“管理 MCP Servers”导入或新增。</div>';
+        updateProfileMcpServerSelectorButton();
+        return;
+    }
+
+    const selected = Array.isArray(selectedIds)
+        ? selectedIds
+        : (editingProfileId
+            ? resolveSelectedMcpServerIdsForProfile(profiles.find((item) => item.id === editingProfileId))
+            : []);
+    const selectedSet = new Set(selected);
+
+    container.innerHTML = availableMcpServers.map((server) => {
+        const config = server.config_json || {};
+        const typeLabel = config.type || (config.url ? 'streamable_http' : 'stdio');
+        return `
+            <label class="skill-option">
+                <input
+                    type="checkbox"
+                    name="profile-mcp-server"
+                    value="${escapeHtml(server.id)}"
+                    ${selectedSet.has(server.id) ? 'checked' : ''}
+                    ${mcpEnabled ? '' : 'disabled'}
+                >
+                <span>
+                    <span class="skill-option-title">
+                        <strong>${escapeHtml(server.name)}</strong>
+                        <span class="skill-option-source">${escapeHtml(typeLabel)}</span>
+                    </span>
+                    <span class="skill-option-description">${escapeHtml(server.description || '无描述')}</span>
+                </span>
+            </label>
+        `;
+    }).join('');
+    updateProfileMcpServerSelectorButton();
 }
 
 function renderProfileSkillOptions(selectedNames = null) {
@@ -1620,9 +1762,11 @@ function renderProfileOverview() {
         tools.enable_skills ? 'skills' : null,
         tools.enable_mcp ? 'mcp' : null,
     ].filter(Boolean);
-    const mcpServerCount = profile.mcp_config_json?.mcpServers
-        ? Object.keys(profile.mcp_config_json.mcpServers).length
-        : 0;
+    const selectedMcpServerIds = resolveSelectedMcpServerIdsForProfile(profile);
+    const selectedMcpServerNames = selectedMcpServerIds
+        .map((serverId) => availableMcpServers.find((server) => server.id === serverId)?.name)
+        .filter(Boolean);
+    const mcpServerCount = selectedMcpServerIds.length;
     const sessionCount = sessions.filter((session) => session.profile_id === profile.id).length;
     const details = [
         ['Profile 名称', profile.name || '未命名', false],
@@ -1642,6 +1786,7 @@ function renderProfileOverview() {
         ['允许 Skills', tools.enable_skills ? (allowedSkills.length > 0 ? allowedSkills.join(', ') : '未选择') : '已禁用', false],
         ['可用 Skills 数', String(availableSkills.length), false],
         ['MCP Server 数', String(mcpServerCount), false],
+        ['MCP Servers', mcpServerCount > 0 ? selectedMcpServerNames.join(', ') : '未选择', false],
         ['关联会话数', String(sessionCount), false],
         ['Prompt 长度', String((profile.system_prompt || '').length), false],
         ['创建时间', formatNullableTimestamp(profile.created_at), false],
@@ -2200,6 +2345,7 @@ function showEditProfileForm(profileId) {
 function closeNewProfileForm() {
     editingProfileId = null;
     setProfileSkillSelectorExpanded(false);
+    setProfileMcpServerSelectorExpanded(false);
     document.getElementById('new-profile-modal').classList.add('hidden');
 }
 
@@ -2211,10 +2357,107 @@ function closeSkillsModal() {
     document.getElementById('skills-modal').classList.add('hidden');
 }
 
+function showMcpServersModal() {
+    resetMcpServerForm();
+    document.getElementById('mcp-servers-modal').classList.remove('hidden');
+}
+
+function closeMcpServersModal() {
+    resetMcpServerForm();
+    document.getElementById('mcp-servers-modal').classList.add('hidden');
+}
+
+function resetMcpServerForm() {
+    editingMcpServerId = null;
+    document.getElementById('mcp-server-name').value = '';
+    document.getElementById('mcp-server-description').value = '';
+    document.getElementById('mcp-server-config-json').value = '';
+    document.getElementById('mcp-server-import-input').value = '';
+    document.getElementById('mcp-server-save-button').textContent = '添加 MCP Server';
+}
+
+function editMcpServer(serverId) {
+    const server = availableMcpServers.find((item) => item.id === serverId);
+    if (!server) {
+        return;
+    }
+    editingMcpServerId = serverId;
+    document.getElementById('mcp-server-name').value = server.name || '';
+    document.getElementById('mcp-server-description').value = server.description || '';
+    document.getElementById('mcp-server-config-json').value = prettyJson(server.config_json || {});
+    document.getElementById('mcp-server-save-button').textContent = '保存 MCP Server';
+    document.getElementById('mcp-servers-modal').classList.remove('hidden');
+}
+
+async function saveMcpServer() {
+    const name = document.getElementById('mcp-server-name').value.trim();
+    const description = document.getElementById('mcp-server-description').value.trim();
+    const configText = document.getElementById('mcp-server-config-json').value.trim();
+
+    if (!name) {
+        alert('请输入 MCP Server 名称。');
+        return;
+    }
+    if (!configText) {
+        alert('请输入 MCP Server JSON。');
+        return;
+    }
+
+    try {
+        const payload = {
+            name,
+            description: description || null,
+            config_json: JSON.parse(configText),
+        };
+        const endpoint = editingMcpServerId ? `/mcp-servers/${editingMcpServerId}` : '/mcp-servers';
+        const method = editingMcpServerId ? 'PUT' : 'POST';
+        await api(endpoint, {
+            method,
+            body: JSON.stringify(payload),
+        });
+        resetMcpServerForm();
+        await loadMcpServers();
+    } catch (error) {
+        alert(error.message || '保存 MCP Server 失败');
+    }
+}
+
+async function deleteMcpServerById(serverId) {
+    if (!confirm('确定删除这个 MCP Server 吗？')) {
+        return;
+    }
+    try {
+        await api(`/mcp-servers/${serverId}`, { method: 'DELETE' });
+        if (editingMcpServerId === serverId) {
+            resetMcpServerForm();
+        }
+        await loadMcpServers();
+    } catch (error) {
+        alert(error.message || '删除 MCP Server 失败');
+    }
+}
+
+async function importMcpServers() {
+    const importText = document.getElementById('mcp-server-import-input').value.trim();
+    if (!importText) {
+        alert('请先粘贴 MCP JSON。');
+        return;
+    }
+    try {
+        await api('/mcp-servers/import', {
+            method: 'POST',
+            body: JSON.stringify({ config_json: JSON.parse(importText) }),
+        });
+        document.getElementById('mcp-server-import-input').value = '';
+        await loadMcpServers();
+    } catch (error) {
+        alert(error.message || '导入 MCP Servers 失败');
+    }
+}
+
 async function submitProfileForm() {
     try {
         const profileKey = document.getElementById('profile-key').value.trim();
-        const mcpConfigText = document.getElementById('profile-mcp-config').value.trim();
         const workspaceDir = document.getElementById('profile-workspace-dir').value.trim();
         const maxSteps = document.getElementById('profile-max-steps').value.trim();
         const ttsSentenceBufferChars = document.getElementById('tts-sentence-buffer-chars').value.trim();
@@ -2278,7 +2521,8 @@ async function submitProfileForm() {
             name: document.getElementById('profile-name').value.trim(),
             system_prompt: document.getElementById('profile-system-prompt').value.trim() || null,
             config_json: configJson,
-            mcp_config_json: mcpConfigText ? JSON.parse(mcpConfigText) : null,
+            mcp_config_json: null,
+            mcp_server_ids: getSelectedMcpServerIdsFromForm(),
             is_default: profiles.length === 0 || document.getElementById('profile-is-default').checked,
         };
 
@@ -2329,7 +2573,6 @@ function populateProfileForm(profile) {
     document.getElementById('tts-minimax-group-id').value = tts.minimax_group_id || '';
     document.getElementById('tts-minimax-model').value = tts.minimax_model || DEFAULT_MINIMAX_MODEL;
     document.getElementById('tts-sentence-buffer-chars').value = tts.sentence_buffer_chars || '';
-    document.getElementById('profile-mcp-config').value = profile.mcp_config_json ? prettyJson(profile.mcp_config_json) : '';
     document.getElementById('tool-enable-file').checked = tools.enable_file_tools ?? true;
     document.getElementById('tool-enable-bash').checked = tools.enable_bash ?? true;
     document.getElementById('tool-enable-note').checked = tools.enable_note ?? true;
@@ -2337,6 +2580,8 @@ function populateProfileForm(profile) {
     document.getElementById('tool-enable-mcp').checked = Boolean(tools.enable_mcp);
     renderProfileSkillOptions(resolveAllowedSkillsForProfile(profile));
     setProfileSkillSelectorExpanded(false);
+    renderProfileMcpServerOptions(resolveSelectedMcpServerIdsForProfile(profile));
+    setProfileMcpServerSelectorExpanded(false);
     updateTtsVoiceFieldForProvider();
 }
 
@@ -2357,7 +2602,6 @@ function resetProfileForm() {
     document.getElementById('tts-minimax-group-id').value = '';
     document.getElementById('tts-minimax-model').value = DEFAULT_MINIMAX_MODEL;
     document.getElementById('tts-sentence-buffer-chars').value = '';
-    document.getElementById('profile-mcp-config').value = '';
     document.getElementById('tool-enable-file').checked = true;
     document.getElementById('tool-enable-bash').checked = true;
     document.getElementById('tool-enable-note').checked = true;
@@ -2365,6 +2609,8 @@ function resetProfileForm() {
     document.getElementById('tool-enable-mcp').checked = false;
     renderProfileSkillOptions(allAvailableSkillNames());
     setProfileSkillSelectorExpanded(false);
+    renderProfileMcpServerOptions([]);
+    setProfileMcpServerSelectorExpanded(false);
     updateTtsVoiceFieldForProvider({ forceDefault: true });
 }
 
@@ -2523,7 +2769,9 @@ function escapeHtml(value) {
 document.addEventListener('DOMContentLoaded', () => {
     const ttsProviderNode = document.getElementById('tts-provider');
     const skillToggleNode = document.getElementById('tool-enable-skills');
+    const mcpToggleNode = document.getElementById('tool-enable-mcp');
     const profileAllowedSkillsNode = document.getElementById('profile-allowed-skills');
+    const profileMcpServersNode = document.getElementById('profile-mcp-server-options');
     if (ttsProviderNode) {
         ttsProviderNode.addEventListener('change', () => updateTtsVoiceFieldForProvider());
     }
@@ -2535,6 +2783,14 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProfileSkillOptions(getSelectedAllowedSkillsFromForm());
         });
     }
+    if (mcpToggleNode) {
+        mcpToggleNode.addEventListener('change', () => {
+            if (!mcpToggleNode.checked) {
+                setProfileMcpServerSelectorExpanded(false);
+            }
+            renderProfileMcpServerOptions(getSelectedMcpServerIdsFromForm());
+        });
+    }
     if (profileAllowedSkillsNode) {
         profileAllowedSkillsNode.addEventListener('change', (event) => {
             if (event.target instanceof HTMLInputElement && event.target.name === 'profile-allowed-skill') {
@@ -2542,8 +2798,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    if (profileMcpServersNode) {
+        profileMcpServersNode.addEventListener('change', (event) => {
+            if (event.target instanceof HTMLInputElement && event.target.name === 'profile-mcp-server') {
+                updateProfileMcpServerSelectorButton();
+            }
+        });
+    }
     updateTtsVoiceFieldForProvider({ forceDefault: true });
     setProfileSkillSelectorExpanded(false);
+    setProfileMcpServerSelectorExpanded(false);
     renderLogExportModal();
     const token = localStorage.getItem('token');
     if (token) {

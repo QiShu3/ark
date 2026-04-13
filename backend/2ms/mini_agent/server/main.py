@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from mini_agent.server.database import close_db, init_db
-from mini_agent.server.routers import auth, pages, profiles, sessions, skills
+from mini_agent.server.routers import auth, mcp_servers, pages, profiles, sessions, skills
 
 
 @asynccontextmanager
@@ -38,6 +38,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(profiles.router, prefix="/api")
+app.include_router(mcp_servers.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
 app.include_router(pages.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")

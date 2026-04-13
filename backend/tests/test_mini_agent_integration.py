@@ -52,6 +52,8 @@ def test_register_mini_agent_routes_are_exposed_on_main_app() -> None:
     assert "/auth/login" in http_paths
     assert "/web" in http_paths
     assert "/api/profiles" in http_paths
+    assert "/api/mcp-servers" in http_paths
+    assert "/api/mcp-servers/import" in http_paths
     assert "/api/skills" in http_paths
     assert "/api/skills/upload" in http_paths
     assert "/api/pages/{profile_key}/session" in http_paths
@@ -109,6 +111,23 @@ def test_web_page_exposes_skill_management_controls() -> None:
     assert 'id="profile-skill-selector-toggle"' in response.text
     assert 'id="profile-skill-selector-panel"' in response.text
     assert 'id="profile-allowed-skills"' in response.text
+
+
+def test_web_page_exposes_mcp_management_controls() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/web")
+
+    assert response.status_code == 200
+    assert 'id="open-mcp-servers-modal-button"' in response.text
+    assert 'id="mcp-servers-modal"' in response.text
+    assert 'id="mcp-servers-list"' in response.text
+    assert 'id="mcp-server-import-input"' in response.text
+    assert 'id="profile-mcp-server-selector-toggle"' in response.text
+    assert 'id="profile-mcp-server-selector-panel"' in response.text
+    assert 'id="profile-mcp-server-options"' in response.text
 
 
 def test_web_page_exposes_log_export_controls() -> None:
@@ -180,6 +199,16 @@ def test_profile_routes_require_authentication() -> None:
     client = TestClient(app)
 
     response = client.get("/api/profiles")
+
+    assert response.status_code == 401
+
+
+def test_mcp_server_routes_require_authentication() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/api/mcp-servers")
 
     assert response.status_code == 401
 

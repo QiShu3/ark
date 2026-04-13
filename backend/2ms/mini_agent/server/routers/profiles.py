@@ -60,6 +60,7 @@ async def route_create_profile(
         system_prompt=profile.system_prompt,
         system_prompt_path=profile.system_prompt_path,
         mcp_config_json=profile.mcp_config_json,
+        mcp_server_ids=profile.mcp_server_ids,
         is_default=profile.is_default,
     )
 

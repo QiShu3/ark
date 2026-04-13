@@ -23,6 +23,7 @@ from mini_agent.server.repository import (
     SessionRunRecord,
     create_run,
     get_pool_from_app,
+    list_mcp_servers_for_profile,
     get_profile,
     get_session,
     get_session_history,
@@ -215,6 +216,18 @@ def resolve_mcp_config_snapshot(
         return json.loads(mcp_config_path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def build_profile_bound_mcp_config(servers: list[Any]) -> dict[str, Any] | None:
+    """Compose an in-memory MCP config payload from bound server records."""
+    if not servers:
+        return None
+    return {
+        "mcpServers": {
+            str(server.name): dict(server.config_json or {})
+            for server in servers
+        }
+    }
 
 
 def _built_in_tool_names(config: Config) -> list[str]:
@@ -656,10 +669,12 @@ class WebAgentRuntimeManager:
                 ) or session
 
             workspace_dir = resolve_workspace_path(session, config)
-            tools, skill_loader = await build_agent_tools(config, workspace_dir, profile.mcp_config_json)
+            bound_mcp_servers = await list_mcp_servers_for_profile(pool, user_id, profile.id)
+            profile_mcp_config = build_profile_bound_mcp_config(bound_mcp_servers) or profile.mcp_config_json
+            tools, skill_loader = await build_agent_tools(config, workspace_dir, profile_mcp_config)
             skills_metadata = skill_loader.get_skills_metadata_prompt() if skill_loader else ""
             system_prompt = resolve_system_prompt(profile, config, skills_metadata=skills_metadata)
-            mcp_config_snapshot = resolve_mcp_config_snapshot(config, profile.mcp_config_json)
+            mcp_config_snapshot = resolve_mcp_config_snapshot(config, profile_mcp_config)
             run_snapshot = build_run_snapshot(
                 profile=profile,
                 config=config,

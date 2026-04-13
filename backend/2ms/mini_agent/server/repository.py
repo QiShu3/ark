@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -22,6 +22,18 @@ class ProfileRecord:
     system_prompt_path: str | None
     mcp_config_json: dict[str, Any] | None
     is_default: bool
+    created_at: datetime
+    updated_at: datetime
+    mcp_server_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MCPServerRecord:
+    id: str
+    user_id: int
+    name: str
+    description: str | None
+    config_json: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 
@@ -99,6 +111,19 @@ AGENT_TABLES = {
         "content": "TEXT",
         "created_at": "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
         "updated_at": "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    },
+    "agent_mcp_servers": {
+        "user_id": "BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE",
+        "name": "VARCHAR(120) NOT NULL",
+        "description": "VARCHAR(255)",
+        "config_json": "JSONB NOT NULL",
+        "created_at": "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+        "updated_at": "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+    },
+    "agent_profile_mcp_servers": {
+        "profile_id": "UUID NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE",
+        "mcp_server_id": "UUID NOT NULL REFERENCES agent_mcp_servers(id) ON DELETE CASCADE",
+        "created_at": "TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     },
     "agent_sessions": {
         "user_id": "BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE",
@@ -253,7 +278,15 @@ async def ensure_agent_schema(conn: asyncpg.Connection) -> None:
         WHERE profile_key IS NOT NULL;
         """
     )
+    await conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_mcp_servers_user_name_unique ON agent_mcp_servers(user_id, name);"
+    )
+    await conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_profile_mcp_servers_unique ON agent_profile_mcp_servers(profile_id, mcp_server_id);"
+    )
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id);")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_mcp_servers_user_id ON agent_mcp_servers(user_id);")
+    await conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_profile_mcp_servers_profile_id ON agent_profile_mcp_servers(profile_id);")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_sessions_user_id ON agent_sessions(user_id);")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_sessions_profile_id ON agent_sessions(profile_id);")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_session_runs_session_id ON agent_session_runs(session_id);")
@@ -275,7 +308,7 @@ def get_pool_from_app(app: Any) -> asyncpg.Pool:
     return pool
 
 
-def _profile_from_row(row: asyncpg.Record) -> ProfileRecord:
+def _profile_from_row(row: asyncpg.Record, mcp_server_ids: list[str] | None = None) -> ProfileRecord:
     return ProfileRecord(
         id=str(row["id"]),
         user_id=int(row["user_id"]),
@@ -286,6 +319,19 @@ def _profile_from_row(row: asyncpg.Record) -> ProfileRecord:
         system_prompt_path=row["system_prompt_path"],
         mcp_config_json=_decode_json_object(row["mcp_config_json"]),
         is_default=bool(row["is_default"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        mcp_server_ids=list(mcp_server_ids or []),
+    )
+
+
+def _mcp_server_from_row(row: asyncpg.Record) -> MCPServerRecord:
+    return MCPServerRecord(
+        id=str(row["id"]),
+        user_id=int(row["user_id"]),
+        name=str(row["name"]),
+        description=row["description"],
+        config_json=_decode_json_object(row["config_json"], default={}) or {},
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -348,32 +394,37 @@ def _message_from_row(row: asyncpg.Record) -> MessageRecord:
 
 
 async def list_profiles(pool: asyncpg.Pool, user_id: int) -> list[ProfileRecord]:
-    del user_id
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT id, user_id, profile_key AS key, name, config_json, system_prompt, system_prompt_path,
                    mcp_config_json, is_default, created_at, updated_at
             FROM agent_profiles
+            WHERE user_id = $1
             ORDER BY is_default DESC, created_at ASC, id ASC
             """,
+            user_id,
         )
-    return [_profile_from_row(row) for row in rows]
+        mcp_server_ids = await _load_profile_mcp_server_ids_map(conn, [str(row["id"]) for row in rows])
+    return [_profile_from_row(row, mcp_server_ids.get(str(row["id"]), [])) for row in rows]
 
 
 async def get_profile(pool: asyncpg.Pool, user_id: int, profile_id: str) -> ProfileRecord | None:
-    del user_id
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT id, user_id, profile_key AS key, name, config_json, system_prompt, system_prompt_path,
                    mcp_config_json, is_default, created_at, updated_at
             FROM agent_profiles
-            WHERE id = $1::uuid
+            WHERE user_id = $1 AND id = $2::uuid
             """,
+            user_id,
             profile_id,
         )
-    return _profile_from_row(row) if row else None
+        if row is None:
+            return None
+        mcp_server_ids = await _load_profile_mcp_server_ids_map(conn, [profile_id])
+    return _profile_from_row(row, mcp_server_ids.get(profile_id, []))
 
 
 async def get_profile_by_key(pool: asyncpg.Pool, profile_key: str) -> ProfileRecord | None:
@@ -387,7 +438,65 @@ async def get_profile_by_key(pool: asyncpg.Pool, profile_key: str) -> ProfileRec
             """,
             profile_key,
         )
-    return _profile_from_row(row) if row else None
+        if row is None:
+            return None
+        profile_id = str(row["id"])
+        mcp_server_ids = await _load_profile_mcp_server_ids_map(conn, [profile_id])
+    return _profile_from_row(row, mcp_server_ids.get(profile_id, []))
+
+
+async def _load_profile_mcp_server_ids_map(
+    conn: asyncpg.Connection,
+    profile_ids: list[str],
+) -> dict[str, list[str]]:
+    if not profile_ids:
+        return {}
+    rows = await conn.fetch(
+        """
+        SELECT profile_id, mcp_server_id
+        FROM agent_profile_mcp_servers
+        WHERE profile_id = ANY($1::uuid[])
+        ORDER BY created_at ASC, mcp_server_id ASC
+        """,
+        profile_ids,
+    )
+    mapping: dict[str, list[str]] = {profile_id: [] for profile_id in profile_ids}
+    for row in rows:
+        mapping.setdefault(str(row["profile_id"]), []).append(str(row["mcp_server_id"]))
+    return mapping
+
+
+async def _replace_profile_mcp_server_bindings(
+    conn: asyncpg.Connection,
+    profile_id: str,
+    mcp_server_ids: list[str],
+) -> None:
+    await conn.execute("DELETE FROM agent_profile_mcp_servers WHERE profile_id = $1::uuid", profile_id)
+    if not mcp_server_ids:
+        return
+    rows = await conn.fetch(
+        """
+        SELECT id
+        FROM agent_mcp_servers
+        WHERE id = ANY($1::uuid[])
+        ORDER BY id ASC
+        """,
+        mcp_server_ids,
+    )
+    valid_ids = {str(row["id"]) for row in rows}
+    missing = [server_id for server_id in mcp_server_ids if server_id not in valid_ids]
+    if missing:
+        raise HTTPException(status_code=400, detail="One or more selected MCP servers were not found")
+    for server_id in mcp_server_ids:
+        await conn.execute(
+            """
+            INSERT INTO agent_profile_mcp_servers(profile_id, mcp_server_id)
+            VALUES ($1::uuid, $2::uuid)
+            ON CONFLICT (profile_id, mcp_server_id) DO NOTHING
+            """,
+            profile_id,
+            server_id,
+        )
 
 
 async def create_profile(
@@ -400,16 +509,18 @@ async def create_profile(
     system_prompt: str | None,
     system_prompt_path: str | None,
     mcp_config_json: dict[str, Any] | None,
+    mcp_server_ids: list[str] | None,
     is_default: bool,
 ) -> ProfileRecord:
     async with pool.acquire() as conn:
         try:
             async with conn.transaction():
-                existing = await conn.fetchval("SELECT id FROM agent_profiles LIMIT 1")
+                existing = await conn.fetchval("SELECT id FROM agent_profiles WHERE user_id = $1 LIMIT 1", user_id)
                 should_be_default = is_default or existing is None
                 if should_be_default:
                     await conn.execute(
-                        "UPDATE agent_profiles SET is_default = FALSE, updated_at = NOW() WHERE is_default = TRUE"
+                        "UPDATE agent_profiles SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_default = TRUE",
+                        user_id,
                     )
                 row = await conn.fetchrow(
                     """
@@ -427,13 +538,13 @@ async def create_profile(
                     json.dumps(mcp_config_json) if mcp_config_json is not None else None,
                     should_be_default,
                 )
+                await _replace_profile_mcp_server_bindings(conn, str(row["id"]), list(mcp_server_ids or []))
         except asyncpg.UniqueViolationError as exc:
             raise HTTPException(status_code=409, detail=f"Profile key `{key}` already exists") from exc
-    return _profile_from_row(row)
+    return _profile_from_row(row, list(mcp_server_ids or []))
 
 
 async def update_profile(pool: asyncpg.Pool, user_id: int, profile_id: str, data: dict[str, Any]) -> ProfileRecord | None:
-    del user_id
     async with pool.acquire() as conn:
         try:
             async with conn.transaction():
@@ -442,21 +553,25 @@ async def update_profile(pool: asyncpg.Pool, user_id: int, profile_id: str, data
                     SELECT id, user_id, profile_key AS key, name, config_json, system_prompt, system_prompt_path,
                            mcp_config_json, is_default, created_at, updated_at
                     FROM agent_profiles
-                    WHERE id = $1::uuid
+                    WHERE user_id = $1 AND id = $2::uuid
                     """,
+                    user_id,
                     profile_id,
                 )
                 if current is None:
                     return None
-                current_profile = _profile_from_row(current)
+                current_ids_map = await _load_profile_mcp_server_ids_map(conn, [profile_id])
+                current_profile = _profile_from_row(current, current_ids_map.get(profile_id, []))
                 is_default = data.get("is_default")
                 if is_default is True:
                     await conn.execute(
-                        "UPDATE agent_profiles SET is_default = FALSE, updated_at = NOW() WHERE is_default = TRUE"
+                        "UPDATE agent_profiles SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_default = TRUE",
+                        user_id,
                     )
                 elif is_default is False and current_profile.is_default:
                     replacement = await conn.fetchval(
-                        "SELECT id FROM agent_profiles WHERE id != $1::uuid ORDER BY created_at ASC, id ASC LIMIT 1",
+                        "SELECT id FROM agent_profiles WHERE user_id = $1 AND id != $2::uuid ORDER BY created_at ASC, id ASC LIMIT 1",
+                        user_id,
                         profile_id,
                     )
                     if replacement is not None:
@@ -474,6 +589,7 @@ async def update_profile(pool: asyncpg.Pool, user_id: int, profile_id: str, data
                     "system_prompt": data.get("system_prompt", current_profile.system_prompt),
                     "system_prompt_path": data.get("system_prompt_path", current_profile.system_prompt_path),
                     "mcp_config_json": data.get("mcp_config_json", current_profile.mcp_config_json),
+                    "mcp_server_ids": data.get("mcp_server_ids", current_profile.mcp_server_ids),
                     "is_default": data.get("is_default", current_profile.is_default),
                 }
                 row = await conn.fetchrow(
@@ -487,7 +603,7 @@ async def update_profile(pool: asyncpg.Pool, user_id: int, profile_id: str, data
                         mcp_config_json = $7::jsonb,
                         is_default = $8,
                         updated_at = NOW()
-                    WHERE id = $1::uuid
+                    WHERE user_id = $9 AND id = $1::uuid
                     RETURNING id, user_id, profile_key AS key, name, config_json, system_prompt, system_prompt_path,
                               mcp_config_json, is_default, created_at, updated_at
                     """,
@@ -499,25 +615,28 @@ async def update_profile(pool: asyncpg.Pool, user_id: int, profile_id: str, data
                     merged["system_prompt_path"],
                     json.dumps(merged["mcp_config_json"]) if merged["mcp_config_json"] is not None else None,
                     merged["is_default"],
+                    user_id,
                 )
+                await _replace_profile_mcp_server_bindings(conn, profile_id, list(merged["mcp_server_ids"] or []))
         except asyncpg.UniqueViolationError as exc:
             attempted_key = data.get("key", "")
             raise HTTPException(status_code=409, detail=f"Profile key `{attempted_key}` already exists") from exc
-    return _profile_from_row(row) if row else None
+    return _profile_from_row(row, list(merged["mcp_server_ids"] or [])) if row else None
 
 
 async def delete_profile(pool: asyncpg.Pool, user_id: int, profile_id: str) -> tuple[bool, str | None]:
-    del user_id
     async with pool.acquire() as conn:
         async with conn.transaction():
             profile_row = await conn.fetchrow(
-                "SELECT id, is_default FROM agent_profiles WHERE id = $1::uuid",
+                "SELECT id, is_default FROM agent_profiles WHERE user_id = $1 AND id = $2::uuid",
+                user_id,
                 profile_id,
             )
             if profile_row is None:
                 return False, None
             replacement = await conn.fetchrow(
-                "SELECT id FROM agent_profiles WHERE id != $1::uuid ORDER BY created_at ASC, id ASC LIMIT 1",
+                "SELECT id FROM agent_profiles WHERE user_id = $1 AND id != $2::uuid ORDER BY created_at ASC, id ASC LIMIT 1",
+                user_id,
                 profile_id,
             )
             if replacement is None:
@@ -546,17 +665,18 @@ async def delete_profile(pool: asyncpg.Pool, user_id: int, profile_id: str) -> t
 
 
 async def set_default_profile(pool: asyncpg.Pool, user_id: int, profile_id: str) -> ProfileRecord | None:
-    del user_id
     async with pool.acquire() as conn:
         async with conn.transaction():
             exists = await conn.fetchval(
-                "SELECT id FROM agent_profiles WHERE id = $1::uuid",
+                "SELECT id FROM agent_profiles WHERE user_id = $1 AND id = $2::uuid",
+                user_id,
                 profile_id,
             )
             if exists is None:
                 return None
             await conn.execute(
-                "UPDATE agent_profiles SET is_default = FALSE, updated_at = NOW() WHERE is_default = TRUE",
+                "UPDATE agent_profiles SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_default = TRUE",
+                user_id,
             )
             row = await conn.fetchrow(
                 """
@@ -568,7 +688,143 @@ async def set_default_profile(pool: asyncpg.Pool, user_id: int, profile_id: str)
                 """,
                 profile_id,
             )
-    return _profile_from_row(row) if row else None
+        mcp_server_ids = await _load_profile_mcp_server_ids_map(conn, [profile_id])
+    return _profile_from_row(row, mcp_server_ids.get(profile_id, [])) if row else None
+
+
+async def list_mcp_servers(pool: asyncpg.Pool, user_id: int) -> list[MCPServerRecord]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, name, description, config_json, created_at, updated_at
+            FROM agent_mcp_servers
+            WHERE user_id = $1
+            ORDER BY name ASC, id ASC
+            """,
+            user_id,
+        )
+    return [_mcp_server_from_row(row) for row in rows]
+
+
+async def create_mcp_server(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    name: str,
+    description: str | None,
+    config_json: dict[str, Any],
+) -> MCPServerRecord:
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO agent_mcp_servers(user_id, name, description, config_json, updated_at)
+                VALUES ($1, $2, $3, $4::jsonb, NOW())
+                RETURNING id, user_id, name, description, config_json, created_at, updated_at
+                """,
+                user_id,
+                name,
+                description,
+                json.dumps(config_json),
+            )
+        except asyncpg.UniqueViolationError as exc:
+            raise HTTPException(status_code=409, detail=f"MCP server `{name}` already exists") from exc
+    return _mcp_server_from_row(row)
+
+
+async def update_mcp_server(
+    pool: asyncpg.Pool,
+    user_id: int,
+    server_id: str,
+    data: dict[str, Any],
+) -> MCPServerRecord | None:
+    async with pool.acquire() as conn:
+        current = await conn.fetchrow(
+            """
+            SELECT id, user_id, name, description, config_json, created_at, updated_at
+            FROM agent_mcp_servers
+            WHERE user_id = $1 AND id = $2::uuid
+            """,
+            user_id,
+            server_id,
+        )
+        if current is None:
+            return None
+        current_server = _mcp_server_from_row(current)
+        try:
+            row = await conn.fetchrow(
+                """
+                UPDATE agent_mcp_servers
+                SET name = $3,
+                    description = $4,
+                    config_json = $5::jsonb,
+                    updated_at = NOW()
+                WHERE user_id = $1 AND id = $2::uuid
+                RETURNING id, user_id, name, description, config_json, created_at, updated_at
+                """,
+                user_id,
+                server_id,
+                data.get("name", current_server.name),
+                data.get("description", current_server.description),
+                json.dumps(data.get("config_json", current_server.config_json)),
+            )
+        except asyncpg.UniqueViolationError as exc:
+            attempted_name = data.get("name", current_server.name)
+            raise HTTPException(status_code=409, detail=f"MCP server `{attempted_name}` already exists") from exc
+    return _mcp_server_from_row(row) if row else None
+
+
+async def delete_mcp_server(pool: asyncpg.Pool, user_id: int, server_id: str) -> bool:
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM agent_mcp_servers WHERE user_id = $1 AND id = $2::uuid",
+            user_id,
+            server_id,
+        )
+    return result.endswith("1")
+
+
+async def import_mcp_servers(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    config_json: dict[str, Any],
+) -> list[MCPServerRecord]:
+    mcp_servers = config_json.get("mcpServers", {})
+    if not isinstance(mcp_servers, dict) or not mcp_servers:
+        raise HTTPException(status_code=400, detail="Import payload must contain a non-empty `mcpServers` object")
+
+    imported: list[MCPServerRecord] = []
+    for name, server_config in mcp_servers.items():
+        if not isinstance(server_config, dict):
+            raise HTTPException(status_code=400, detail=f"MCP server `{name}` must be a JSON object")
+        imported.append(
+            await create_mcp_server(
+                pool,
+                user_id=user_id,
+                name=name,
+                description=server_config.get("description") if isinstance(server_config.get("description"), str) else None,
+                config_json=server_config,
+            )
+        )
+    return imported
+
+
+async def list_mcp_servers_for_profile(pool: asyncpg.Pool, user_id: int, profile_id: str) -> list[MCPServerRecord]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT s.id, s.user_id, s.name, s.description, s.config_json, s.created_at, s.updated_at
+            FROM agent_mcp_servers s
+            JOIN agent_profile_mcp_servers pms ON pms.mcp_server_id = s.id
+            JOIN agent_profiles p ON p.id = pms.profile_id
+            WHERE p.user_id = $1 AND p.id = $2::uuid
+            ORDER BY s.name ASC, s.id ASC
+            """,
+            user_id,
+            profile_id,
+        )
+    return [_mcp_server_from_row(row) for row in rows]
 
 
 async def list_profile_files(pool: asyncpg.Pool, user_id: int, profile_id: str) -> list[ProfileFileRecord]:

@@ -47,10 +47,12 @@ async def init_mini_agent(app: Any) -> None:
 def register_mini_agent(app: FastAPI) -> None:
     _ensure_mini_agent_import_path()
 
-    from mini_agent.server.routers import pages, profiles, sessions, skills
+    from mini_agent.server.routers import mcp_servers, pages, profiles, sessions, skills
 
     if not _has_route_path(app, "/api/profiles"):
         app.include_router(profiles.router, prefix="/api")
+    if not _has_route_path(app, "/api/mcp-servers"):
+        app.include_router(mcp_servers.router, prefix="/api")
     if not _has_route_path(app, "/api/skills"):
         app.include_router(skills.router, prefix="/api")
     if not _has_route_path(app, "/api/pages/{profile_key}/session"):

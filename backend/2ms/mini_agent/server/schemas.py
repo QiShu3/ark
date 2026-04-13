@@ -13,6 +13,7 @@ class ProfileBase(BaseModel):
     system_prompt: Optional[str] = None
     system_prompt_path: Optional[str] = None
     mcp_config_json: Optional[dict[str, Any]] = None
+    mcp_server_ids: list[str] = Field(default_factory=list)
     is_default: bool = False
 
 
@@ -45,6 +46,36 @@ class SkillResponse(BaseModel):
     description: str
     source: str
     path: str
+
+
+class MCPServerBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=255)
+    config_json: dict[str, Any]
+
+
+class MCPServerCreate(MCPServerBase):
+    pass
+
+
+class MCPServerUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=255)
+    config_json: Optional[dict[str, Any]] = None
+
+
+class MCPServerImportRequest(BaseModel):
+    config_json: dict[str, Any]
+
+
+class MCPServerResponse(MCPServerBase):
+    id: str
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class ProfileFileBase(BaseModel):
