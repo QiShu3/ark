@@ -56,6 +56,20 @@ const TTS_DEFAULT_VOICES = {
     edge: 'zh-CN-XiaoxiaoNeural',
 };
 const DEFAULT_MINIMAX_MODEL = 'speech-02-hd';
+const LOG_EXPORT_DEFAULTS = Object.freeze({
+    sessionSummary: true,
+    sessionEvents: true,
+    runs: true,
+    clientDebug: true,
+    ttsDebug: true,
+});
+
+let logExportState = {
+    isOpen: false,
+    isDownloading: false,
+    error: '',
+    selected: { ...LOG_EXPORT_DEFAULTS },
+};
 
 function nowIsoString() {
     return new Date().toISOString();
@@ -193,6 +207,93 @@ function downloadTtsDebugLog() {
     URL.revokeObjectURL(url);
     appendTtsDebugLog('debug_log_downloaded', { file_name: anchor.download });
     renderInfoPanel();
+}
+
+function logExportCheckboxMap() {
+    return {
+        sessionSummary: document.getElementById('log-export-session-summary'),
+        sessionEvents: document.getElementById('log-export-session-events'),
+        runs: document.getElementById('log-export-runs'),
+        clientDebug: document.getElementById('log-export-client-debug'),
+        ttsDebug: document.getElementById('log-export-tts-debug'),
+    };
+}
+
+function selectedLogExportCount() {
+    return Object.values(logExportState.selected).filter(Boolean).length;
+}
+
+function setLogExportError(message) {
+    logExportState.error = message ? String(message) : '';
+    renderLogExportModal();
+}
+
+function resetLogExportState() {
+    logExportState = {
+        isOpen: false,
+        isDownloading: false,
+        error: '',
+        selected: { ...LOG_EXPORT_DEFAULTS },
+    };
+}
+
+function openLogExportModal() {
+    if (!currentSession) {
+        return;
+    }
+    logExportState.isOpen = true;
+    logExportState.isDownloading = false;
+    logExportState.error = '';
+    logExportState.selected = { ...LOG_EXPORT_DEFAULTS };
+    renderLogExportModal();
+}
+
+function closeLogExportModal() {
+    logExportState.isOpen = false;
+    logExportState.isDownloading = false;
+    logExportState.error = '';
+    renderLogExportModal();
+}
+
+function toggleLogExportOption(key) {
+    logExportState.selected[key] = !logExportState.selected[key];
+    renderLogExportModal();
+}
+
+function renderLogExportModal() {
+    const modal = document.getElementById('log-export-modal');
+    const errorNode = document.getElementById('log-export-error');
+    const labelNode = document.getElementById('log-export-session-label');
+    const confirmButton = document.getElementById('log-export-confirm-button');
+    const checkboxMap = logExportCheckboxMap();
+
+    if (!modal || !errorNode || !labelNode || !confirmButton) {
+        return;
+    }
+
+    const hasSelection = selectedLogExportCount() > 0;
+    modal.classList.toggle('hidden', !logExportState.isOpen);
+    labelNode.textContent = currentSession
+        ? `当前会话：${currentSession.name || currentSession.id} (${currentSession.id})`
+        : '请选择会话后导出。';
+
+    Object.entries(checkboxMap).forEach(([key, node]) => {
+        if (!node) {
+            return;
+        }
+        node.checked = Boolean(logExportState.selected[key]);
+        node.disabled = logExportState.isDownloading;
+        node.onchange = () => toggleLogExportOption(key);
+    });
+
+    errorNode.textContent = logExportState.error;
+    errorNode.classList.toggle('hidden', !logExportState.error);
+    confirmButton.disabled = !currentSession || !hasSelection || logExportState.isDownloading;
+    confirmButton.textContent = logExportState.isDownloading ? '正在生成 ZIP...' : '下载 ZIP';
+}
+
+async function downloadSelectedSessionLogs() {
+    setLogExportError('日志导出功能正在接入中。');
 }
 
 function defaultTtsVoiceForProvider(provider) {
@@ -338,8 +439,10 @@ async function logout() {
     sessions = [];
     availableSkills = [];
     runInProgress = false;
+    resetLogExportState();
     resetStreamingAssistantMessage();
     renderInfoPanel();
+    renderLogExportModal();
     showAuthSection();
 }
 
@@ -600,6 +703,7 @@ function resetCurrentSessionSelection() {
     currentSessionRuns = [];
     currentSessionEvents = [];
     activeInfoPanel = selectedProfileId ? 'profile' : 'none';
+    closeLogExportModal();
     resetStreamingAssistantMessage();
     updateSessionHeader();
     renderInfoPanel();
@@ -1396,6 +1500,7 @@ function updateRunControls() {
     document.getElementById('send-button').disabled = !currentSession || runInProgress;
     document.getElementById('message-input').disabled = !currentSession || runInProgress;
     document.getElementById('cancel-button').classList.toggle('hidden', !runInProgress);
+    document.getElementById('download-session-logs-button').disabled = !currentSession || logExportState.isDownloading;
     updateTtsControls();
 }
 
@@ -2254,6 +2359,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateTtsVoiceFieldForProvider({ forceDefault: true });
     setProfileSkillSelectorExpanded(false);
+    renderLogExportModal();
     const token = localStorage.getItem('token');
     if (token) {
         loadUser();

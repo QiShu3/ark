@@ -154,6 +154,20 @@ button:disabled {
     text-align: center;
 }
 
+.log-export-grid {
+    margin: 16px 0;
+}
+
+.log-export-grid label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#log-export-error {
+    margin-bottom: 12px;
+}
+
 header {
     display: flex;
     justify-content: space-between;

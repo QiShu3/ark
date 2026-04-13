@@ -129,6 +129,21 @@ def test_web_page_exposes_log_export_controls() -> None:
     assert "/static/jszip.min.js?v=" in response.text
 
 
+def test_web_export_script_exposes_modal_state_hooks() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/static/app.js")
+
+    assert response.status_code == 200
+    assert "const LOG_EXPORT_DEFAULTS = Object.freeze(" in response.text
+    assert "function openLogExportModal()" in response.text
+    assert "function closeLogExportModal()" in response.text
+    assert "function renderLogExportModal()" in response.text
+    assert "function downloadSelectedSessionLogs()" in response.text
+
+
 def test_profile_routes_require_authentication() -> None:
     app = FastAPI()
     register_mini_agent(app)
