@@ -1,14 +1,24 @@
 import React from 'react';
 import CharacterDisplay from './CharacterDisplay';
 import EventCountdownCard from './EventCountdownCard';
+import { cn } from '../lib/utils';
+
+type LeftPanelProps = {
+  collapsed: boolean;
+};
 
 /**
  * 左侧面板组件
  * 包含人物展示
  */
-const LeftPanel: React.FC = () => {
+const LeftPanel: React.FC<LeftPanelProps> = ({ collapsed }) => {
   return (
-    <div className="w-[65%] h-full relative border-r border-white/10">
+    <div
+      className={cn(
+        'h-full relative border-r border-white/10 transition-all duration-300 ease-out',
+        collapsed ? 'w-[65%] lg:w-[calc(100%-1rem)]' : 'w-[65%] lg:w-[65%]',
+      )}
+    >
       <EventCountdownCard />
 
       {/* 人物展示区域，占据全屏空间 */}

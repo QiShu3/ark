@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Navigation from './components/Navigation';
 import LeftPanel from './components/LeftPanel';
 import RightPanel from './components/RightPanel';
 
+const HOME_RIGHT_PANEL_STORAGE_KEY = 'ark-home-right-panel-collapsed';
+
 function App() {
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(HOME_RIGHT_PANEL_STORAGE_KEY) === 'true';
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(HOME_RIGHT_PANEL_STORAGE_KEY, String(rightPanelCollapsed));
+  }, [rightPanelCollapsed]);
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black text-white font-sans">
       {/* 背景图片 */}
@@ -22,8 +33,8 @@ function App() {
 
       {/* 主体内容区域 */}
       <div className="relative z-10 flex w-full h-full pt-0">
-        <LeftPanel />
-        <RightPanel />
+        <LeftPanel collapsed={rightPanelCollapsed} />
+        <RightPanel collapsed={rightPanelCollapsed} onToggle={() => setRightPanelCollapsed((prev) => !prev)} />
       </div>
     </div>
   );

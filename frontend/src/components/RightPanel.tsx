@@ -1,11 +1,16 @@
 import React, { useRef } from 'react';
 import PlaceholderCard from './PlaceholderCard';
 
+interface RightPanelProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
 /**
  * 右侧面板组件
  * 包含4个等高的占位块
  */
-const RightPanel: React.FC = () => {
+const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
   // 将面板容器的 ref 传给最後一张卡片，用于 PhoneSimulator 的覆盖定位
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -20,6 +25,9 @@ const RightPanel: React.FC = () => {
     { split: 2 },
     { split: 3 },
   ];
+
+  void collapsed;
+  void onToggle;
 
   return (
     <div ref={panelRef} className="w-[35%] mt-16 h-[calc(100%-4rem)] p-4 flex flex-col gap-4">
