@@ -30,12 +30,13 @@ from mini_agent.server.repository import (
     update_run_status,
     update_session,
 )
-from mini_agent.tts import TTSManager, TTSSettings, create_tts_provider, provider_supports_streaming
+from mini_agent.server.skill_registry import get_uploaded_skills_dir
 from mini_agent.tools.base import Tool
 from mini_agent.tools.bash_tool import BashTool
 from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
 from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
 from mini_agent.tools.skill_tool import create_skill_tools
+from mini_agent.tts import TTSManager, TTSSettings, create_tts_provider, provider_supports_streaming
 
 if TYPE_CHECKING:
     from mini_agent.agent import Agent
@@ -313,7 +314,7 @@ async def build_agent_tools(
     tools: list[Tool] = []
     skill_loader = None
 
-    workspace_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(workspace_dir.mkdir, parents=True, exist_ok=True)
 
     if config.tools.enable_bash:
         tools.append(BashTool(workspace_dir=str(workspace_dir)))
@@ -337,7 +338,12 @@ async def build_agent_tools(
         )
 
     if config.tools.enable_skills:
-        skill_tools, skill_loader = create_skill_tools(_resolve_skills_dir(config.tools.skills_dir))
+        builtin_skills_dir = _resolve_skills_dir(config.tools.skills_dir)
+        uploaded_skills_dir = get_uploaded_skills_dir(create=True)
+        skill_tools, skill_loader = create_skill_tools(
+            [builtin_skills_dir, str(uploaded_skills_dir)],
+            allowed_skills=config.tools.allowed_skills,
+        )
         tools.extend(skill_tools)
 
     if config.tools.enable_mcp:
@@ -376,8 +382,8 @@ def build_agent_for_session(
     system_prompt: str | None = None,
 ) -> Agent:
     """Create an agent instance for a session."""
-    Agent = _load_agent_cls()
-    LLMClient = _load_llm_client_cls()
+    agent_cls = _load_agent_cls()
+    llm_client_cls = _load_llm_client_cls()
     system_prompt = system_prompt or resolve_system_prompt(profile, config, skills_metadata=skills_metadata)
     retry_config = RuntimeRetryConfig(
         enabled=config.llm.retry.enabled,
@@ -386,14 +392,14 @@ def build_agent_for_session(
         max_delay=config.llm.retry.max_delay,
         exponential_base=config.llm.retry.exponential_base,
     )
-    llm = LLMClient(
+    llm = llm_client_cls(
         api_key=config.llm.api_key,
         api_base=config.llm.api_base,
         model=config.llm.model,
         provider=config.llm.provider,
         retry_config=retry_config,
     )
-    agent = Agent(
+    agent = agent_cls(
         llm_client=llm,
         system_prompt=system_prompt,
         tools=tools,

@@ -729,6 +729,57 @@ header h1 {
     line-height: 1.5;
 }
 
+.skill-selection-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.skill-selection-list.is-disabled {
+    opacity: 0.72;
+}
+
+.skill-option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+}
+
+.skill-option input {
+    width: auto;
+    margin: 2px 0 0;
+}
+
+.skill-option-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.skill-option-title strong {
+    font-size: 14px;
+}
+
+.skill-option-source {
+    color: var(--brand-dark);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.skill-option-description {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 @media (max-width: 960px) {
     .container {
         padding: 16px;

@@ -6,6 +6,7 @@ let currentSessionRuns = [];
 let selectedProfileId = null;
 let profiles = [];
 let sessions = [];
+let availableSkills = [];
 let ws = null;
 let runInProgress = false;
 let currentSessionEvents = [];
@@ -335,6 +336,7 @@ async function logout() {
     currentSessionEvents = [];
     profiles = [];
     sessions = [];
+    availableSkills = [];
     runInProgress = false;
     resetStreamingAssistantMessage();
     renderInfoPanel();
@@ -355,7 +357,7 @@ async function loadUser() {
         currentUser = await response.json();
         document.getElementById('username').textContent = currentUser.username;
         showMainSection();
-        await Promise.all([loadProfiles(), loadSessions()]);
+        await Promise.all([loadProfiles(), loadSessions(), loadSkills()]);
     } catch (error) {
         console.error('Failed to load user:', error);
         logout();
@@ -372,6 +374,14 @@ async function loadProfiles() {
         selectedProfileId = defaultProfile.id;
     }
     renderProfiles();
+    renderInfoPanel();
+}
+
+async function loadSkills() {
+    availableSkills = await api('/skills');
+    renderSkillsList();
+    const hasExistingSelection = document.querySelector('input[name="profile-allowed-skill"]') !== null;
+    renderProfileSkillOptions(hasExistingSelection ? getSelectedAllowedSkillsFromForm() : null);
     renderInfoPanel();
 }
 
@@ -410,6 +420,157 @@ function renderProfiles() {
             <div class="item-subtitle">${escapeHtml(profile.key || '未设置 key')} · ${profile.is_default ? '默认 Profile' : '点击后用于新建会话'}</div>
         </div>
     `).join('');
+}
+
+function renderSkillsList() {
+    const container = document.getElementById('skills-list');
+    if (!container) {
+        return;
+    }
+    if (availableSkills.length === 0) {
+        container.innerHTML = '<div class="empty-state">还没有可用的 skills，先上传一个 ZIP skill 包。</div>';
+        return;
+    }
+
+    container.innerHTML = availableSkills.map((skill) => `
+        <div class="item">
+            <div class="item-row">
+                <div class="item-title">${escapeHtml(skill.name)}</div>
+                <div class="item-subtitle">${escapeHtml(skill.source)}</div>
+            </div>
+            <div class="item-subtitle">${escapeHtml(skill.description || '无描述')}</div>
+        </div>
+    `).join('');
+}
+
+function allAvailableSkillNames() {
+    return availableSkills.map((skill) => skill.name);
+}
+
+function resolveAllowedSkillsForProfile(profile) {
+    const config = profile?.config_json || {};
+    const tools = config.tools || {};
+    if (!tools.enable_skills) {
+        return [];
+    }
+    if (Array.isArray(tools.allowed_skills)) {
+        if (availableSkills.length === 0) {
+            return [...tools.allowed_skills];
+        }
+        const known = new Set(allAvailableSkillNames());
+        return tools.allowed_skills.filter((name) => known.has(name));
+    }
+    return allAvailableSkillNames();
+}
+
+function getSelectedAllowedSkillsFromForm() {
+    return Array.from(document.querySelectorAll('input[name="profile-allowed-skill"]:checked')).map((input) => input.value);
+}
+
+function updateProfileSkillSelectorButton() {
+    const button = document.getElementById('profile-skill-selector-toggle');
+    const skillsEnabled = document.getElementById('tool-enable-skills')?.checked ?? true;
+    if (!button) {
+        return;
+    }
+
+    if (!skillsEnabled) {
+        button.textContent = 'Skills 已禁用';
+        button.disabled = true;
+        return;
+    }
+
+    button.disabled = false;
+    const selectedCount = getSelectedAllowedSkillsFromForm().length;
+    const totalCount = availableSkills.length;
+    const isExpanded = !document.getElementById('profile-skill-selector-panel')?.classList.contains('hidden');
+    const prefix = isExpanded ? '收起 Skills 选择' : '选择允许的 Skills';
+    button.textContent = totalCount > 0
+        ? `${prefix} (${selectedCount}/${totalCount})`
+        : prefix;
+}
+
+function setProfileSkillSelectorExpanded(expanded) {
+    const panel = document.getElementById('profile-skill-selector-panel');
+    if (!panel) {
+        return;
+    }
+    panel.classList.toggle('hidden', !expanded);
+    updateProfileSkillSelectorButton();
+}
+
+function toggleProfileSkillSelector() {
+    const panel = document.getElementById('profile-skill-selector-panel');
+    const skillsEnabled = document.getElementById('tool-enable-skills')?.checked ?? true;
+    if (!panel || !skillsEnabled) {
+        return;
+    }
+    setProfileSkillSelectorExpanded(panel.classList.contains('hidden'));
+}
+
+function renderProfileSkillOptions(selectedNames = null) {
+    const container = document.getElementById('profile-allowed-skills');
+    const skillsEnabled = document.getElementById('tool-enable-skills')?.checked ?? true;
+    if (!container) {
+        return;
+    }
+
+    container.classList.toggle('is-disabled', !skillsEnabled);
+
+    if (availableSkills.length === 0) {
+        container.innerHTML = '<div class="empty-state">当前没有可选 skill。你可以先点击 Skills 按钮，在弹窗中上传 ZIP skill 包。</div>';
+        updateProfileSkillSelectorButton();
+        return;
+    }
+
+    const selected = Array.isArray(selectedNames)
+        ? selectedNames
+        : (editingProfileId
+            ? resolveAllowedSkillsForProfile(profiles.find((item) => item.id === editingProfileId))
+            : allAvailableSkillNames());
+    const selectedSet = new Set(selected);
+
+    container.innerHTML = availableSkills.map((skill) => `
+        <label class="skill-option">
+            <input
+                type="checkbox"
+                name="profile-allowed-skill"
+                value="${escapeHtml(skill.name)}"
+                ${selectedSet.has(skill.name) ? 'checked' : ''}
+                ${skillsEnabled ? '' : 'disabled'}
+            >
+            <span>
+                <span class="skill-option-title">
+                    <strong>${escapeHtml(skill.name)}</strong>
+                    <span class="skill-option-source">${escapeHtml(skill.source)}</span>
+                </span>
+                <span class="skill-option-description">${escapeHtml(skill.description || '无描述')}</span>
+            </span>
+        </label>
+    `).join('');
+    updateProfileSkillSelectorButton();
+}
+
+async function uploadSkill() {
+    const input = document.getElementById('skill-upload-input');
+    if (!input?.files?.length) {
+        alert('请先选择一个 ZIP skill 包。');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    try {
+        await api('/skills/upload', {
+            method: 'POST',
+            body: formData,
+        });
+        input.value = '';
+        await loadSkills();
+    } catch (error) {
+        alert(error.message || '上传 Skill 失败');
+    }
 }
 
 function renderSessions() {
@@ -1162,6 +1323,7 @@ function renderProfileOverview() {
     const agent = config.agent || {};
     const tts = config.tts || {};
     const tools = config.tools || {};
+    const allowedSkills = resolveAllowedSkillsForProfile(profile);
     const enabledTools = [
         tools.enable_file_tools ? 'file' : null,
         tools.enable_bash ? 'bash' : null,
@@ -1188,7 +1350,8 @@ function renderProfileOverview() {
         ['TTS Voice', tts.voice || '未设置', false],
         ['MiniMax Model', tts.minimax_model || '未设置', false],
         ['TTS 自动播放', tts.auto_play ? '是' : '否', false],
-        ['Skills 目录', tools.skills_dir || '未设置', true],
+        ['允许 Skills', tools.enable_skills ? (allowedSkills.length > 0 ? allowedSkills.join(', ') : '未选择') : '已禁用', false],
+        ['可用 Skills 数', String(availableSkills.length), false],
         ['MCP Server 数', String(mcpServerCount), false],
         ['关联会话数', String(sessionCount), false],
         ['Prompt 长度', String((profile.system_prompt || '').length), false],
@@ -1746,7 +1909,16 @@ function showEditProfileForm(profileId) {
 
 function closeNewProfileForm() {
     editingProfileId = null;
+    setProfileSkillSelectorExpanded(false);
     document.getElementById('new-profile-modal').classList.add('hidden');
+}
+
+function showSkillsModal() {
+    document.getElementById('skills-modal').classList.remove('hidden');
+}
+
+function closeSkillsModal() {
+    document.getElementById('skills-modal').classList.add('hidden');
 }
 
 async function submitProfileForm() {
@@ -1755,7 +1927,6 @@ async function submitProfileForm() {
         const mcpConfigText = document.getElementById('profile-mcp-config').value.trim();
         const workspaceDir = document.getElementById('profile-workspace-dir').value.trim();
         const maxSteps = document.getElementById('profile-max-steps').value.trim();
-        const skillsDir = document.getElementById('profile-skills-dir').value.trim();
         const ttsSentenceBufferChars = document.getElementById('tts-sentence-buffer-chars').value.trim();
         const ttsProvider = document.getElementById('tts-provider').value;
         const ttsVoice = document.getElementById('tts-voice').value.trim() || defaultTtsVoiceForProvider(ttsProvider);
@@ -1794,6 +1965,7 @@ async function submitProfileForm() {
                 enable_bash: document.getElementById('tool-enable-bash').checked,
                 enable_note: document.getElementById('tool-enable-note').checked,
                 enable_skills: document.getElementById('tool-enable-skills').checked,
+                allowed_skills: getSelectedAllowedSkillsFromForm(),
                 enable_mcp: document.getElementById('tool-enable-mcp').checked,
             },
         };
@@ -1810,7 +1982,6 @@ async function submitProfileForm() {
         if (workspaceDir) configJson.agent.workspace_dir = workspaceDir;
         if (maxSteps) configJson.agent.max_steps = Number(maxSteps);
         if (ttsSentenceBufferChars) configJson.tts.sentence_buffer_chars = Number(ttsSentenceBufferChars);
-        if (skillsDir) configJson.tools.skills_dir = skillsDir;
 
         const payload = {
             key: profileKey,
@@ -1868,13 +2039,14 @@ function populateProfileForm(profile) {
     document.getElementById('tts-minimax-group-id').value = tts.minimax_group_id || '';
     document.getElementById('tts-minimax-model').value = tts.minimax_model || DEFAULT_MINIMAX_MODEL;
     document.getElementById('tts-sentence-buffer-chars').value = tts.sentence_buffer_chars || '';
-    document.getElementById('profile-skills-dir').value = tools.skills_dir || '';
     document.getElementById('profile-mcp-config').value = profile.mcp_config_json ? prettyJson(profile.mcp_config_json) : '';
     document.getElementById('tool-enable-file').checked = tools.enable_file_tools ?? true;
     document.getElementById('tool-enable-bash').checked = tools.enable_bash ?? true;
     document.getElementById('tool-enable-note').checked = tools.enable_note ?? true;
     document.getElementById('tool-enable-skills').checked = tools.enable_skills ?? true;
     document.getElementById('tool-enable-mcp').checked = Boolean(tools.enable_mcp);
+    renderProfileSkillOptions(resolveAllowedSkillsForProfile(profile));
+    setProfileSkillSelectorExpanded(false);
     updateTtsVoiceFieldForProvider();
 }
 
@@ -1895,13 +2067,14 @@ function resetProfileForm() {
     document.getElementById('tts-minimax-group-id').value = '';
     document.getElementById('tts-minimax-model').value = DEFAULT_MINIMAX_MODEL;
     document.getElementById('tts-sentence-buffer-chars').value = '';
-    document.getElementById('profile-skills-dir').value = '';
     document.getElementById('profile-mcp-config').value = '';
     document.getElementById('tool-enable-file').checked = true;
     document.getElementById('tool-enable-bash').checked = true;
     document.getElementById('tool-enable-note').checked = true;
     document.getElementById('tool-enable-skills').checked = true;
     document.getElementById('tool-enable-mcp').checked = false;
+    renderProfileSkillOptions(allAvailableSkillNames());
+    setProfileSkillSelectorExpanded(false);
     updateTtsVoiceFieldForProvider({ forceDefault: true });
 }
 
@@ -2059,10 +2232,28 @@ function escapeHtml(value) {
 
 document.addEventListener('DOMContentLoaded', () => {
     const ttsProviderNode = document.getElementById('tts-provider');
+    const skillToggleNode = document.getElementById('tool-enable-skills');
+    const profileAllowedSkillsNode = document.getElementById('profile-allowed-skills');
     if (ttsProviderNode) {
         ttsProviderNode.addEventListener('change', () => updateTtsVoiceFieldForProvider());
     }
+    if (skillToggleNode) {
+        skillToggleNode.addEventListener('change', () => {
+            if (!skillToggleNode.checked) {
+                setProfileSkillSelectorExpanded(false);
+            }
+            renderProfileSkillOptions(getSelectedAllowedSkillsFromForm());
+        });
+    }
+    if (profileAllowedSkillsNode) {
+        profileAllowedSkillsNode.addEventListener('change', (event) => {
+            if (event.target instanceof HTMLInputElement && event.target.name === 'profile-allowed-skill') {
+                updateProfileSkillSelectorButton();
+            }
+        });
+    }
     updateTtsVoiceFieldForProvider({ forceDefault: true });
+    setProfileSkillSelectorExpanded(false);
     const token = localStorage.getItem('token');
     if (token) {
         loadUser();

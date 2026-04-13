@@ -49,6 +49,14 @@
 
                     <div class="section">
                         <div class="section-header">
+                            <h3>Skills</h3>
+                        </div>
+                        <p class="field-hint">Skill 管理已收进弹窗里，避免左侧栏长期占据太多空间。</p>
+                        <button id="open-skills-modal-button" class="secondary-button" onclick="showSkillsModal()">查看 Skills</button>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-header">
                             <h3>会话</h3>
                             <button class="secondary-button small-button" onclick="createSession()">+ 新建</button>
                         </div>
@@ -170,7 +178,16 @@
                     <label><input type="checkbox" id="tool-enable-mcp"> MCP</label>
                 </div>
 
-                <input type="text" id="profile-skills-dir" placeholder="Skills 目录，例如 ./skills">
+                <button
+                    type="button"
+                    id="profile-skill-selector-toggle"
+                    class="secondary-button"
+                    onclick="toggleProfileSkillSelector()"
+                >选择允许的 Skills</button>
+                <div id="profile-skill-selector-panel" class="hidden">
+                    <div id="profile-allowed-skills" class="skill-selection-list"></div>
+                    <p class="field-hint">仅允许当前 Profile 调用勾选的 skills。旧 Profile 如果还没有白名单配置，默认视为允许全部可用 skills。</p>
+                </div>
                 <textarea id="profile-mcp-config" placeholder='MCP JSON，例如 {"mcpServers": {...}}' rows="6"></textarea>
                 <button id="profile-submit-button" onclick="submitProfileForm()">创建 Profile</button>
             </div>
@@ -185,6 +202,17 @@
                 <input type="text" id="session-workspace-path" placeholder="工作目录" disabled>
                 <p class="field-hint">工作目录由创建时决定，当前不支持编辑。</p>
                 <button id="session-submit-button" onclick="submitSessionForm()">保存会话</button>
+            </div>
+        </div>
+
+        <div id="skills-modal" class="modal hidden">
+            <div class="modal-content profile-modal">
+                <span id="close-skills-modal-button" class="close" onclick="closeSkillsModal()">&times;</span>
+                <h2>Skills</h2>
+                <input type="file" id="skill-upload-input" accept=".zip">
+                <p class="field-hint">上传 skill ZIP 包后，这里会显示当前系统可用 skills，Profile 里可以按需勾选允许调用的项。</p>
+                <button class="secondary-button" onclick="uploadSkill()">上传 ZIP</button>
+                <div id="skills-list"></div>
             </div>
         </div>
     </div>

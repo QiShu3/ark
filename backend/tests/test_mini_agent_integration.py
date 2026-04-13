@@ -52,6 +52,8 @@ def test_register_mini_agent_routes_are_exposed_on_main_app() -> None:
     assert "/auth/login" in http_paths
     assert "/web" in http_paths
     assert "/api/profiles" in http_paths
+    assert "/api/skills" in http_paths
+    assert "/api/skills/upload" in http_paths
     assert "/api/pages/{profile_key}/session" in http_paths
     assert "/api/sessions" in http_paths
     assert "/api/sessions/ws/{session_id}" in websocket_paths
@@ -89,6 +91,24 @@ def test_web_page_exposes_profile_key_field() -> None:
 
     assert response.status_code == 200
     assert 'id="profile-key"' in response.text
+
+
+def test_web_page_exposes_skill_management_controls() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/web")
+
+    assert response.status_code == 200
+    assert 'id="open-skills-modal-button"' in response.text
+    assert 'id="skills-modal"' in response.text
+    assert 'id="close-skills-modal-button"' in response.text
+    assert 'id="skills-list"' in response.text
+    assert 'id="skill-upload-input"' in response.text
+    assert 'id="profile-skill-selector-toggle"' in response.text
+    assert 'id="profile-skill-selector-panel"' in response.text
+    assert 'id="profile-allowed-skills"' in response.text
 
 
 def test_profile_routes_require_authentication() -> None:

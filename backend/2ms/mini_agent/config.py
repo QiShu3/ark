@@ -71,6 +71,7 @@ class ToolsConfig(BaseModel):
     # Skills
     enable_skills: bool = True
     skills_dir: str = "./skills"
+    allowed_skills: list[str] | None = None
 
     # MCP tools
     enable_mcp: bool = True
@@ -159,6 +160,7 @@ class Config(BaseModel):
             enable_note=tools_data.get("enable_note", True),
             enable_skills=tools_data.get("enable_skills", True),
             skills_dir=tools_data.get("skills_dir", "./skills"),
+            allowed_skills=tools_data.get("allowed_skills"),
             enable_mcp=tools_data.get("enable_mcp", True),
             mcp_config_path=tools_data.get("mcp_config_path", "mcp.json"),
             mcp=mcp_config,
@@ -211,6 +213,7 @@ class Config(BaseModel):
                 "enable_note": self.tools.enable_note,
                 "enable_skills": self.tools.enable_skills,
                 "skills_dir": self.tools.skills_dir,
+                "allowed_skills": self.tools.allowed_skills,
                 "enable_mcp": self.tools.enable_mcp,
                 "mcp_config_path": self.tools.mcp_config_path,
                 "mcp": {

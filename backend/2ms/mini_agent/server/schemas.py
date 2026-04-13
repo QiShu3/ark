@@ -40,6 +40,13 @@ class ProfileResponse(ProfileBase):
         from_attributes = True
 
 
+class SkillResponse(BaseModel):
+    name: str
+    description: str
+    source: str
+    path: str
+
+
 class ProfileFileBase(BaseModel):
     file_type: str
     filename: str

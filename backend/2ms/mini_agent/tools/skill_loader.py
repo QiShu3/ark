@@ -5,9 +5,9 @@ Supports loading skills from SKILL.md files and providing them to Agent
 """
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import yaml
 
@@ -19,10 +19,10 @@ class Skill:
     name: str
     description: str
     content: str
-    license: Optional[str] = None
-    allowed_tools: Optional[List[str]] = None
-    metadata: Optional[Dict[str, str]] = None
-    skill_path: Optional[Path] = None
+    license: str | None = None
+    allowed_tools: list[str] | None = None
+    metadata: dict[str, str] | None = None
+    skill_path: Path | None = None
 
     def to_prompt(self) -> str:
         """Convert skill to prompt format"""
@@ -47,17 +47,25 @@ All files and references in this skill are relative to this directory.
 class SkillLoader:
     """Skill loader"""
 
-    def __init__(self, skills_dir: str = "./skills"):
+    def __init__(
+        self,
+        skills_dir: str | Sequence[str] = "./skills",
+        allowed_skills: Iterable[str] | None = None,
+    ):
         """
         Initialize Skill Loader
 
         Args:
             skills_dir: Skills directory path
         """
-        self.skills_dir = Path(skills_dir)
-        self.loaded_skills: Dict[str, Skill] = {}
+        if isinstance(skills_dir, (str, Path)):
+            self.skills_dirs = [Path(skills_dir)]
+        else:
+            self.skills_dirs = [Path(path) for path in skills_dir]
+        self.allowed_skills = set(allowed_skills) if allowed_skills is not None else None
+        self.loaded_skills: dict[str, Skill] = {}
 
-    def load_skill(self, skill_path: Path) -> Optional[Skill]:
+    def load_skill(self, skill_path: Path) -> Skill | None:
         """
         Load single skill from SKILL.md file
 
@@ -191,7 +199,7 @@ class SkillLoader:
 
         return content
 
-    def discover_skills(self) -> List[Skill]:
+    def discover_skills(self) -> list[Skill]:
         """
         Discover and load all skills in the skills directory
 
@@ -200,20 +208,26 @@ class SkillLoader:
         """
         skills = []
 
-        if not self.skills_dir.exists():
-            print(f"⚠️  Skills directory does not exist: {self.skills_dir}")
-            return skills
+        for skills_dir in self.skills_dirs:
+            if not skills_dir.exists():
+                print(f"⚠️  Skills directory does not exist: {skills_dir}")
+                continue
 
-        # Recursively find all SKILL.md files
-        for skill_file in self.skills_dir.rglob("SKILL.md"):
-            skill = self.load_skill(skill_file)
-            if skill:
+            # Recursively find all SKILL.md files
+            for skill_file in skills_dir.rglob("SKILL.md"):
+                skill = self.load_skill(skill_file)
+                if not skill:
+                    continue
+                if self.allowed_skills is not None and skill.name not in self.allowed_skills:
+                    continue
+                if skill.name in self.loaded_skills:
+                    continue
                 skills.append(skill)
                 self.loaded_skills[skill.name] = skill
 
         return skills
 
-    def get_skill(self, name: str) -> Optional[Skill]:
+    def get_skill(self, name: str) -> Skill | None:
         """
         Get loaded skill
 
@@ -225,7 +239,7 @@ class SkillLoader:
         """
         return self.loaded_skills.get(name)
 
-    def list_skills(self) -> List[str]:
+    def list_skills(self) -> list[str]:
         """
         List all loaded skill names
 
