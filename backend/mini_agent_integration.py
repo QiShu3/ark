@@ -75,8 +75,10 @@ def register_mini_agent(app: FastAPI) -> None:
         html = index_path.read_text(encoding="utf-8")
         app_js = f"/static/app.js?v={_asset_version(_MINI_AGENT_WEB_DIR / 'app.js')}"
         styles_css = f"/static/styles.css?v={_asset_version(_MINI_AGENT_WEB_DIR / 'styles.css')}"
+        jszip_js = f"/static/jszip.min.js?v={_asset_version(_MINI_AGENT_WEB_DIR / 'jszip.min.js')}"
         html = html.replace("/static/app.js", app_js)
         html = html.replace("/static/styles.css", styles_css)
+        html = html.replace("/static/jszip.min.js", jszip_js)
         return HTMLResponse(html)
 
     app.add_api_route("/web", serve_web, methods=["GET"], response_class=HTMLResponse, name="mini-agent-web")

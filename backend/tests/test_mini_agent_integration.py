@@ -111,6 +111,24 @@ def test_web_page_exposes_skill_management_controls() -> None:
     assert 'id="profile-allowed-skills"' in response.text
 
 
+def test_web_page_exposes_log_export_controls() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/web")
+
+    assert response.status_code == 200
+    assert 'id="download-session-logs-button"' in response.text
+    assert 'id="log-export-modal"' in response.text
+    assert 'id="log-export-session-summary"' in response.text
+    assert 'id="log-export-session-events"' in response.text
+    assert 'id="log-export-runs"' in response.text
+    assert 'id="log-export-client-debug"' in response.text
+    assert 'id="log-export-tts-debug"' in response.text
+    assert "/static/jszip.min.js?v=" in response.text
+
+
 def test_profile_routes_require_authentication() -> None:
     app = FastAPI()
     register_mini_agent(app)

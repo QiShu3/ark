@@ -83,6 +83,14 @@
                             <p id="chat-subtitle">先选择 Profile，再创建会话。</p>
                         </div>
                         <div class="chat-actions">
+                            <button
+                                id="download-session-logs-button"
+                                class="secondary-button small-button"
+                                onclick="openLogExportModal()"
+                                disabled
+                            >
+                                下载日志
+                            </button>
                             <span id="tts-state-badge" class="status-badge secondary">tts: off</span>
                             <button id="tts-toggle-button" class="secondary-button small-button" onclick="toggleTtsPlayback()" disabled>启用朗读</button>
                             <button id="tts-stop-button" class="danger-button small-button" onclick="stopTtsPlayback('manual_stop')" disabled>停止朗读</button>
@@ -215,8 +223,29 @@
                 <div id="skills-list"></div>
             </div>
         </div>
+
+        <div id="log-export-modal" class="modal hidden">
+            <div class="modal-content session-modal">
+                <span class="close" onclick="closeLogExportModal()">&times;</span>
+                <h2>下载调试日志</h2>
+                <p class="field-hint" id="log-export-session-label">请选择会话后导出。</p>
+                <div class="checkbox-grid log-export-grid">
+                    <label><input type="checkbox" id="log-export-session-summary" checked> 会话/Profile 摘要</label>
+                    <label><input type="checkbox" id="log-export-session-events" checked> 会话事件流</label>
+                    <label><input type="checkbox" id="log-export-runs" checked> Run 摘要</label>
+                    <label><input type="checkbox" id="log-export-client-debug" checked> 浏览器调试信息</label>
+                    <label><input type="checkbox" id="log-export-tts-debug" checked> TTS 调试日志</label>
+                </div>
+                <div id="log-export-error" class="error hidden"></div>
+                <div class="input-actions">
+                    <button type="button" class="secondary-button" onclick="closeLogExportModal()">取消</button>
+                    <button type="button" id="log-export-confirm-button" onclick="downloadSelectedSessionLogs()">下载 ZIP</button>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <script src="/static/jszip.min.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>
