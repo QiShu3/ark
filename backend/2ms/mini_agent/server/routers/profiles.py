@@ -21,12 +21,14 @@ from mini_agent.server.repository import (
     upsert_profile_file,
     create_profile,
 )
+from mini_agent.server.runtime import build_profile_runtime_config, resolve_profile_prompt_source
 from mini_agent.server.schemas import (
     ProfileCreate,
     ProfileFileCreate,
     ProfileFileResponse,
     ProfileFileUpdate,
     ProfileResponse,
+    ResolvedPromptResponse,
     ProfileUpdate,
 )
 
@@ -75,6 +77,21 @@ async def route_get_profile(
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
+
+
+@router.get("/{profile_id}/resolved-prompt", response_model=ResolvedPromptResponse)
+async def route_get_profile_resolved_prompt(
+    profile_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    pool: Annotated[asyncpg.Pool, Depends(_pool_dep)],
+):
+    profile = await get_profile(pool, current_user.id, profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    config = build_profile_runtime_config(profile, require_api_key=False)
+    resolved_prompt = resolve_profile_prompt_source(profile, config)
+    return ResolvedPromptResponse(**resolved_prompt)
 
 
 @router.put("/{profile_id}", response_model=ProfileResponse)

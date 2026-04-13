@@ -1,4 +1,9 @@
 const API_BASE = '/api';
+const RESOLVED_PROMPT_SOURCE_KINDS = Object.freeze({
+    RUN_SNAPSHOT: 'run_snapshot',
+    PROFILE_RESOLVED: 'profile_resolved',
+    PROFILE_RAW: 'profile_raw',
+});
 
 let currentUser = null;
 let currentSession = null;
@@ -17,6 +22,9 @@ let activeInfoPanel = 'none';
 let editingProfileId = null;
 let editingSessionId = null;
 let editingMcpServerId = null;
+let resolvedProfilePromptsById = {};
+let resolvedPromptLoadingByProfileId = {};
+let resolvedPromptErrorByProfileId = {};
 let ttsState = {
     enabled: false,
     auto_play: false,
@@ -529,6 +537,9 @@ async function loadUser() {
 
 async function loadProfiles() {
     profiles = await api('/profiles');
+    resolvedProfilePromptsById = {};
+    resolvedPromptLoadingByProfileId = {};
+    resolvedPromptErrorByProfileId = {};
     if (selectedProfileId && !profiles.some((profile) => profile.id === selectedProfileId)) {
         selectedProfileId = null;
     }
@@ -1609,6 +1620,48 @@ function buildClientDebugPayload(session, runs, messages) {
     };
 }
 
+async function ensureResolvedProfilePrompt(profileId) {
+    if (!profileId) {
+        return null;
+    }
+    if (resolvedProfilePromptsById[profileId]) {
+        return resolvedProfilePromptsById[profileId];
+    }
+    if (resolvedPromptLoadingByProfileId[profileId]) {
+        return null;
+    }
+
+    resolvedPromptLoadingByProfileId[profileId] = true;
+    delete resolvedPromptErrorByProfileId[profileId];
+
+    try {
+        const resolvedPrompt = await api(`/profiles/${profileId}/resolved-prompt`);
+        resolvedProfilePromptsById[profileId] = resolvedPrompt;
+        return resolvedPrompt;
+    } catch (error) {
+        resolvedPromptErrorByProfileId[profileId] = error.message || 'Resolved prompt request failed';
+        return null;
+    } finally {
+        resolvedPromptLoadingByProfileId[profileId] = false;
+        if (currentSession?.profile_id === profileId || selectedProfileId === profileId) {
+            renderInfoPanel();
+        }
+    }
+}
+
+function promptSourceBadgeLabel(sourceKind) {
+    if (sourceKind === RESOLVED_PROMPT_SOURCE_KINDS.RUN_SNAPSHOT) {
+        return 'Run Snapshot';
+    }
+    if (sourceKind === RESOLVED_PROMPT_SOURCE_KINDS.PROFILE_RESOLVED) {
+        return 'Profile Resolved';
+    }
+    if (sourceKind === RESOLVED_PROMPT_SOURCE_KINDS.PROFILE_RAW) {
+        return 'Profile Raw';
+    }
+    return 'Prompt';
+}
+
 function renderSessionOverviewItem(label, value, { monospace = false } = {}) {
     const content = monospace ? `<code>${escapeHtml(value)}</code>` : escapeHtml(value);
     return `
@@ -1661,11 +1714,18 @@ function renderSessionOverview() {
     const profile = currentSessionProfile();
     const latestRun = currentSessionRuns[currentSessionRuns.length - 1] || null;
     const latestRunPrompt = latestRun?.snapshot_json?.system_prompt || '';
+    const resolvedProfilePrompt = profile?.id ? resolvedProfilePromptsById[profile.id] || null : null;
     const profilePrompt = profile?.system_prompt || '';
-    const displayedPrompt = latestRunPrompt || profilePrompt;
+    if (!latestRunPrompt && profile?.id && !resolvedProfilePrompt && !resolvedPromptLoadingByProfileId[profile.id]) {
+        void ensureResolvedProfilePrompt(profile.id);
+    }
+    const promptSourceKind = latestRunPrompt
+        ? RESOLVED_PROMPT_SOURCE_KINDS.RUN_SNAPSHOT
+        : (resolvedProfilePrompt?.source_kind || (profilePrompt ? RESOLVED_PROMPT_SOURCE_KINDS.PROFILE_RAW : ''));
+    const displayedPrompt = latestRunPrompt || resolvedProfilePrompt?.prompt || profilePrompt;
     const promptSource = latestRunPrompt
         ? '最近一次 Run 的已解析 System Prompt'
-        : (profilePrompt ? '当前 Profile 的 System Prompt' : '暂无可用 Prompt');
+        : (resolvedProfilePrompt?.source_label || (profilePrompt ? '当前 Profile 的原始 System Prompt' : '暂无可用 Prompt'));
     const filteredEventsCount = currentSessionEvents.filter((event) => isFilteredChatEvent(event)).length;
     const latestEvent = currentSessionEvents[currentSessionEvents.length - 1];
     const details = [
@@ -1714,7 +1774,7 @@ function renderSessionOverview() {
         <section class="tts-debug-panel">
             <div class="tts-debug-header">
                 <h4>Prompts</h4>
-                <span class="tts-debug-pill">${escapeHtml(latestRunPrompt ? 'Resolved' : 'Fallback')}</span>
+                <span class="tts-debug-pill">${escapeHtml(promptSourceBadgeLabel(promptSourceKind))}</span>
             </div>
             ${renderInfoPanelBlock(promptSource, displayedPrompt || '暂无可展示的 Prompt。')}
         </section>

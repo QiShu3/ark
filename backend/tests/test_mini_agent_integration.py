@@ -52,6 +52,7 @@ def test_register_mini_agent_routes_are_exposed_on_main_app() -> None:
     assert "/auth/login" in http_paths
     assert "/web" in http_paths
     assert "/api/profiles" in http_paths
+    assert "/api/profiles/{profile_id}/resolved-prompt" in http_paths
     assert "/api/mcp-servers" in http_paths
     assert "/api/mcp-servers/import" in http_paths
     assert "/api/skills" in http_paths
@@ -178,6 +179,18 @@ def test_web_export_script_exposes_log_builders() -> None:
     assert "function buildClientDebugPayload(session, runs, messages)" in response.text
 
 
+def test_web_export_script_exposes_resolved_prompt_helpers() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/static/app.js")
+
+    assert response.status_code == 200
+    assert "const RESOLVED_PROMPT_SOURCE_KINDS = Object.freeze(" in response.text
+    assert "async function ensureResolvedProfilePrompt(profileId)" in response.text
+
+
 def test_web_page_log_export_defaults_are_checked() -> None:
     app = FastAPI()
     register_mini_agent(app)
@@ -211,6 +224,115 @@ def test_mcp_server_routes_require_authentication() -> None:
     response = client.get("/api/mcp-servers")
 
     assert response.status_code == 401
+
+
+def test_resolved_prompt_route_requires_authentication() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/api/profiles/profile-1/resolved-prompt")
+
+    assert response.status_code == 401
+
+
+def test_resolved_prompt_route_returns_resolved_prompt_payload(monkeypatch) -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+
+    module = importlib.import_module("mini_agent_integration")
+    module._ensure_mini_agent_import_path()
+    auth_module = importlib.import_module("mini_agent.server.auth")
+    profiles_module = importlib.import_module("mini_agent.server.routers.profiles")
+    repository_module = importlib.import_module("mini_agent.server.repository")
+
+    async def fake_current_user():
+        return auth_module.CurrentUser(
+            id=7,
+            username="tester",
+            is_active=True,
+            is_admin=False,
+            created_at=datetime.utcnow(),
+        )
+
+    profile = repository_module.ProfileRecord(
+        id="profile-1",
+        user_id=7,
+        key="agent-console",
+        name="Agent Console",
+        config_json={"llm": {"api_key": "test-key"}},
+        system_prompt=None,
+        system_prompt_path=None,
+        mcp_config_json=None,
+        is_default=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+    app.dependency_overrides[auth_module.get_current_user] = fake_current_user
+    app.state.auth_pool = object()
+
+    async def fake_get_profile(pool, user_id, profile_id):
+        assert user_id == 7
+        return profile if profile_id == "profile-1" else None
+
+    monkeypatch.setattr(profiles_module, "get_profile", fake_get_profile)
+    monkeypatch.setattr(
+        profiles_module,
+        "build_profile_runtime_config",
+        lambda profile, require_api_key=True: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        profiles_module,
+        "resolve_profile_prompt_source",
+        lambda profile, config, skills_metadata="": {
+            "prompt": "Resolved profile prompt",
+            "source_label": "当前 Profile 解析后的 System Prompt",
+            "source_kind": "profile_resolved",
+        },
+    )
+
+    client = TestClient(app)
+    response = client.get("/api/profiles/profile-1/resolved-prompt")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "prompt": "Resolved profile prompt",
+        "source_label": "当前 Profile 解析后的 System Prompt",
+        "source_kind": "profile_resolved",
+    }
+
+
+def test_resolved_prompt_route_returns_404_for_missing_profile(monkeypatch) -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+
+    module = importlib.import_module("mini_agent_integration")
+    module._ensure_mini_agent_import_path()
+    auth_module = importlib.import_module("mini_agent.server.auth")
+    profiles_module = importlib.import_module("mini_agent.server.routers.profiles")
+
+    async def fake_current_user():
+        return auth_module.CurrentUser(
+            id=8,
+            username="tester",
+            is_active=True,
+            is_admin=False,
+            created_at=datetime.utcnow(),
+        )
+
+    app.dependency_overrides[auth_module.get_current_user] = fake_current_user
+    app.state.auth_pool = object()
+
+    async def fake_get_profile(pool, user_id, profile_id):
+        return None
+
+    monkeypatch.setattr(profiles_module, "get_profile", fake_get_profile)
+
+    client = TestClient(app)
+    response = client.get("/api/profiles/missing/resolved-prompt")
+
+    assert response.status_code == 404
 
 
 def test_page_session_route_returns_latest_existing_session(monkeypatch) -> None:

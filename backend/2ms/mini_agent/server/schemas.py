@@ -1,7 +1,7 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,6 +40,12 @@ class ProfileResponse(ProfileBase):
 
     class Config:
         from_attributes = True
+
+
+class ResolvedPromptResponse(BaseModel):
+    prompt: str
+    source_label: str
+    source_kind: Literal["run_snapshot", "profile_resolved", "profile_raw"]
 
 
 class SkillResponse(BaseModel):

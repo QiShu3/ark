@@ -75,3 +75,70 @@ def test_build_runtime_tool_availability_summary_handles_no_tools_without_listin
     assert "bash" not in summary.lower()
     assert "read_file" not in summary
     assert "mcp" not in summary.lower()
+
+
+def test_resolve_profile_prompt_source_prefers_profile_system_prompt_with_skills_metadata():
+    profile = SimpleNamespace(
+        system_prompt="System says {SKILLS_METADATA}",
+        system_prompt_path=None,
+    )
+    config = runtime.Config.from_dict({"llm": {"api_key": "test-key"}}, require_api_key=False)
+
+    resolved = runtime.resolve_profile_prompt_source(profile, config, skills_metadata="skill list")
+
+    assert resolved["prompt"] == "System says skill list"
+    assert resolved["source_kind"] == "profile_resolved"
+    assert resolved["source_label"] == "当前 Profile 解析后的 System Prompt"
+
+
+def test_resolve_profile_prompt_source_reads_prompt_file_when_profile_prompt_missing(tmp_path):
+    prompt_file = tmp_path / "profile-prompt.md"
+    prompt_file.write_text("From file prompt", encoding="utf-8")
+    profile = SimpleNamespace(
+        system_prompt="",
+        system_prompt_path=str(prompt_file),
+    )
+    config = runtime.Config.from_dict({"llm": {"api_key": "test-key"}}, require_api_key=False)
+
+    resolved = runtime.resolve_profile_prompt_source(profile, config)
+
+    assert resolved["prompt"] == "From file prompt"
+    assert resolved["source_kind"] == "profile_resolved"
+
+
+def test_resolve_profile_prompt_source_falls_back_to_default_prompt_file(monkeypatch, tmp_path):
+    default_prompt_file = tmp_path / "default-system-prompt.md"
+    default_prompt_file.write_text("Default prompt body", encoding="utf-8")
+    profile = SimpleNamespace(
+        system_prompt=None,
+        system_prompt_path=None,
+    )
+    config = runtime.Config.from_dict(
+        {
+            "llm": {"api_key": "test-key"},
+            "agent": {"system_prompt_path": "default-system-prompt.md"},
+        },
+        require_api_key=False,
+    )
+
+    monkeypatch.setattr(runtime.Config, "find_config_file", classmethod(lambda cls, filename: default_prompt_file))
+
+    resolved = runtime.resolve_profile_prompt_source(profile, config)
+
+    assert resolved["prompt"] == "Default prompt body"
+    assert resolved["source_kind"] == "profile_resolved"
+
+
+def test_resolve_profile_prompt_source_uses_builtin_default_when_no_prompt_sources_exist(monkeypatch):
+    profile = SimpleNamespace(
+        system_prompt=None,
+        system_prompt_path=None,
+    )
+    config = runtime.Config.from_dict({"llm": {"api_key": "test-key"}}, require_api_key=False)
+
+    monkeypatch.setattr(runtime.Config, "find_config_file", classmethod(lambda cls, filename: None))
+
+    resolved = runtime.resolve_profile_prompt_source(profile, config)
+
+    assert resolved["prompt"] == runtime.DEFAULT_SYSTEM_PROMPT
+    assert resolved["source_kind"] == "profile_resolved"

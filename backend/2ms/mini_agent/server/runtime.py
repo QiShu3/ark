@@ -137,7 +137,7 @@ def _default_runtime_config_dict() -> dict[str, Any]:
     }
 
 
-def build_profile_runtime_config(profile: Any) -> Config:
+def build_profile_runtime_config(profile: Any, require_api_key: bool = True) -> Config:
     """Build effective runtime config for a profile."""
     try:
         base_config = Config.from_yaml(Config.get_default_config_path()).to_dict()
@@ -145,7 +145,7 @@ def build_profile_runtime_config(profile: Any) -> Config:
         base_config = _default_runtime_config_dict()
     override = profile.config_json or {}
     merged = _deep_merge_dict(base_config, override)
-    return Config.from_dict(merged, require_api_key=True)
+    return Config.from_dict(merged, require_api_key=require_api_key)
 
 
 def resolve_workspace_path(session: Any, config: Config) -> Path:
@@ -190,6 +190,31 @@ def resolve_system_prompt(profile: Any, config: Config, skills_metadata: str = "
         prompt = prompt.replace("{SKILLS_METADATA}", skills_metadata)
 
     return prompt
+
+
+def resolve_skills_metadata_prompt(config: Config) -> str:
+    """Resolve the skill metadata section used in system prompt interpolation."""
+    if not config.tools.enable_skills:
+        return ""
+
+    builtin_skills_dir = _resolve_skills_dir(config.tools.skills_dir)
+    uploaded_skills_dir = get_uploaded_skills_dir(create=True)
+    _, skill_loader = create_skill_tools(
+        [builtin_skills_dir, str(uploaded_skills_dir)],
+        allowed_skills=config.tools.allowed_skills,
+    )
+    return skill_loader.get_skills_metadata_prompt() if skill_loader else ""
+
+
+def resolve_profile_prompt_source(profile: Any, config: Config, skills_metadata: str = "") -> dict[str, str]:
+    """Resolve the complete prompt text used for non-run profile display."""
+    effective_skills_metadata = skills_metadata or resolve_skills_metadata_prompt(config)
+    prompt = resolve_system_prompt(profile, config, skills_metadata=effective_skills_metadata)
+    return {
+        "prompt": prompt,
+        "source_label": "当前 Profile 解析后的 System Prompt",
+        "source_kind": "profile_resolved",
+    }
 
 
 def resolve_mcp_config_snapshot(
