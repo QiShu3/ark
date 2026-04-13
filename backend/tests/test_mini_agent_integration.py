@@ -144,6 +144,36 @@ def test_web_export_script_exposes_modal_state_hooks() -> None:
     assert "function downloadSelectedSessionLogs()" in response.text
 
 
+def test_web_export_script_exposes_log_builders() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/static/app.js")
+
+    assert response.status_code == 200
+    assert "function buildExportZipFilename(session)" in response.text
+    assert "async function fetchExportSessionData(sessionId)" in response.text
+    assert "function buildLogExportSummary(session, profile, runs, messages)" in response.text
+    assert "function buildSessionEventsJsonl(messages)" in response.text
+    assert "function buildClientDebugPayload(session, runs, messages)" in response.text
+
+
+def test_web_page_log_export_defaults_are_checked() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/web")
+
+    assert response.status_code == 200
+    assert 'id="log-export-session-summary" checked' in response.text
+    assert 'id="log-export-session-events" checked' in response.text
+    assert 'id="log-export-runs" checked' in response.text
+    assert 'id="log-export-client-debug" checked' in response.text
+    assert 'id="log-export-tts-debug" checked' in response.text
+
+
 def test_profile_routes_require_authentication() -> None:
     app = FastAPI()
     register_mini_agent(app)

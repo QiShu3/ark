@@ -293,7 +293,65 @@ function renderLogExportModal() {
 }
 
 async function downloadSelectedSessionLogs() {
-    setLogExportError('日志导出功能正在接入中。');
+    if (!currentSession || logExportState.isDownloading || selectedLogExportCount() === 0) {
+        return;
+    }
+
+    logExportState.isDownloading = true;
+    logExportState.error = '';
+    updateRunControls();
+    renderLogExportModal();
+
+    try {
+        const { session, runs, messages } = await fetchExportSessionData(currentSession.id);
+        const profile = profiles.find((item) => item.id === session.profile_id) || null;
+        const zip = new JSZip();
+
+        zip.file('summary.json', JSON.stringify(buildLogExportSummary(session, profile, runs, messages), null, 2));
+
+        if (logExportState.selected.sessionSummary) {
+            zip.file('session-profile-summary.json', JSON.stringify({ session, profile }, null, 2));
+        }
+        if (logExportState.selected.sessionEvents) {
+            zip.file('session-events.jsonl', buildSessionEventsJsonl(messages));
+        }
+        if (logExportState.selected.runs) {
+            zip.file('runs.json', JSON.stringify(runs, null, 2));
+        }
+        if (logExportState.selected.clientDebug) {
+            zip.file('client-debug.json', JSON.stringify(buildClientDebugPayload(session, runs, messages), null, 2));
+        }
+        if (logExportState.selected.ttsDebug) {
+            zip.file('tts-debug.log', buildTtsDebugLogText());
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const filename = buildExportZipFilename(session);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+
+        appendTtsDebugLog('session_log_exported', {
+            file_name: filename,
+            selected_logs: { ...logExportState.selected },
+            run_count: runs.length,
+            event_count: messages.length,
+        });
+
+        closeLogExportModal();
+        renderInfoPanel();
+    } catch (error) {
+        setLogExportError(error instanceof Error ? error.message : '日志导出失败');
+    } finally {
+        logExportState.isDownloading = false;
+        updateRunControls();
+        renderLogExportModal();
+    }
 }
 
 function defaultTtsVoiceForProvider(provider) {
@@ -1249,19 +1307,45 @@ function selectedProfile() {
     return profiles.find((item) => item.id === selectedProfileId) || null;
 }
 
-function buildSessionWebSocketUrl(redactToken = false) {
-    if (!currentSession) {
+function buildSessionWebSocketUrlForSession(session, redactToken = false) {
+    if (!session) {
         return '';
     }
 
     const token = localStorage.getItem('token');
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const baseUrl = `${protocol}://${window.location.host}/api/sessions/ws/${currentSession.id}`;
+    const baseUrl = `${protocol}://${window.location.host}/api/sessions/ws/${session.id}`;
     if (!token) {
         return baseUrl;
     }
 
     return redactToken ? `${baseUrl}?token=***` : `${baseUrl}?token=${encodeURIComponent(token)}`;
+}
+
+function buildSessionWebSocketUrl(redactToken = false) {
+    return buildSessionWebSocketUrlForSession(currentSession, redactToken);
+}
+
+function sanitizeExportFilenamePart(value) {
+    return String(value || 'session')
+        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'session';
+}
+
+function buildExportZipFilename(session) {
+    const timestamp = nowIsoString().replace(/[:.]/g, '-');
+    const label = sanitizeExportFilenamePart(session?.name || session?.id || 'session');
+    return `agent-debug-${label}-${timestamp}.zip`;
+}
+
+async function fetchExportSessionData(sessionId) {
+    const [session, runs, messages] = await Promise.all([
+        api(`/sessions/${sessionId}`),
+        api(`/sessions/${sessionId}/runs`),
+        api(`/sessions/${sessionId}/messages`),
+    ]);
+    return { session, runs, messages };
 }
 
 function sessionSocketStateLabel() {
@@ -1280,6 +1364,107 @@ function sessionSocketStateLabel() {
 
 function formatNullableTimestamp(value) {
     return value ? formatTimestamp(value) : '暂无';
+}
+
+function buildCurrentStreamingDebugState() {
+    if (!streamingAssistantMessage) {
+        return null;
+    }
+
+    return {
+        status: streamingAssistantMessage.status || 'idle',
+        content_length: (streamingAssistantMessage.content || '').length,
+        displayed_content_length: (streamingAssistantMessage.displayedContent || '').length,
+        thinking_length: (streamingAssistantMessage.thinking || '').length,
+        pending_assistant_event_id: streamingAssistantMessage.pendingAssistantEventId || null,
+    };
+}
+
+function buildLogExportSummary(session, profile, runs, messages) {
+    return {
+        exported_at: nowIsoString(),
+        session: {
+            id: session.id,
+            name: session.name,
+            status: session.status,
+            workspace_path: session.workspace_path,
+            created_at: session.created_at,
+            updated_at: session.updated_at,
+        },
+        profile: profile ? {
+            id: profile.id,
+            key: profile.key,
+            name: profile.name,
+            updated_at: profile.updated_at,
+        } : null,
+        selected_logs: { ...logExportState.selected },
+        counts: {
+            runs: runs.length,
+            events: messages.length,
+            filtered_chat_events: messages.filter((message) => isFilteredChatEvent(message)).length,
+            tts_debug_entries: ttsDebug.detailedLogs.length,
+        },
+        latest_run_id: runs.length > 0 ? runs[runs.length - 1].id : null,
+        web_version_context: {
+            path: window.location.pathname,
+            user_agent: navigator.userAgent,
+        },
+    };
+}
+
+function buildSessionEventsJsonl(messages) {
+    return messages
+        .map((message) => JSON.stringify({
+            id: message.id,
+            session_id: message.session_id,
+            run_id: message.run_id,
+            role: message.role,
+            content: message.content,
+            event_type: message.event_type,
+            sequence_no: message.sequence_no,
+            name: message.name,
+            tool_call_id: message.tool_call_id,
+            metadata_json: message.metadata_json,
+            created_at: message.created_at,
+        }))
+        .join('\n');
+}
+
+function buildClientDebugPayload(session, runs, messages) {
+    return {
+        websocket: {
+            url: buildSessionWebSocketUrlForSession(session, true),
+            state: sessionSocketStateLabel(),
+        },
+        ui_state: {
+            run_in_progress: runInProgress,
+            raw_event_count: currentSessionEvents.length,
+            filtered_event_count: currentSessionEvents.filter((event) => isFilteredChatEvent(event)).length,
+            persisted_event_count: messages.length,
+            streaming: buildCurrentStreamingDebugState(),
+        },
+        selection_context: {
+            session_id: session.id,
+            profile_id: session.profile_id,
+            latest_run_id: runs.length > 0 ? runs[runs.length - 1].id : null,
+            selected_profile_id: selectedProfileId,
+        },
+        recent_errors: {
+            tts_last_error: ttsDebug.lastError || null,
+            export_error: logExportState.error || null,
+        },
+        export_context: {
+            exported_at: nowIsoString(),
+            selected_logs: { ...logExportState.selected },
+            current_page: window.location.href,
+        },
+        tts_state: {
+            ...ttsState,
+            playback_enabled: ttsPlaybackEnabled,
+            queue_length: ttsQueue.length,
+            buffered_items: ttsItemsBySequence.size,
+        },
+    };
 }
 
 function renderSessionOverviewItem(label, value, { monospace = false } = {}) {
