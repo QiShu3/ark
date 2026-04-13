@@ -28,6 +28,7 @@ class ProfileUpdate(BaseModel):
     system_prompt: Optional[str] = None
     system_prompt_path: Optional[str] = None
     mcp_config_json: Optional[dict[str, Any]] = None
+    mcp_server_ids: Optional[list[str]] = None
     is_default: Optional[bool] = None
 
 

@@ -43,3 +43,13 @@ def test_app_state_helpers_resolve_under_package_dir(tmp_path, monkeypatch):
     assert Config.get_app_state_dir() == package_dir / "app_state"
     assert Config.get_app_state_config_dir() == package_dir / "app_state" / "config"
     assert Config.get_app_state_log_dir() == package_dir / "app_state" / "log"
+
+
+def test_default_system_prompt_does_not_claim_fixed_tool_capabilities():
+    prompt_path = Config.get_package_dir() / "config" / "system_prompt.md"
+    prompt = prompt_path.read_text(encoding="utf-8")
+
+    assert "Bash Execution" not in prompt
+    assert "File Operations" not in prompt
+    assert "MCP Tools" not in prompt
+    assert "bash or read_file" not in prompt

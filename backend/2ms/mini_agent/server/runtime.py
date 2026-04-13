@@ -243,6 +243,41 @@ def _built_in_tool_names(config: Config) -> list[str]:
     return names
 
 
+KNOWN_BUILTIN_TOOL_NAMES = {
+    "bash",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "record_note",
+    "recall_notes",
+    "get_skill",
+}
+RUNTIME_TOOL_AVAILABILITY_HEADER = "## Runtime Tool Availability"
+
+
+def build_runtime_tool_availability_summary(tools: list[Tool]) -> str:
+    """Describe only the tools that are actually attached for the current run."""
+    tool_names = [tool.name for tool in tools]
+    lines = [
+        RUNTIME_TOOL_AVAILABILITY_HEADER,
+        "You can use only the following tools in this run:",
+    ]
+    if tool_names:
+        lines.extend(f"- `{name}`" for name in tool_names)
+    else:
+        lines.append("No external tools are available in this run.")
+    lines.append("Do not assume any other tools or capabilities exist unless they are listed above.")
+    return "\n".join(lines)
+
+
+def apply_runtime_tool_availability(system_prompt: str, tools: list[Tool]) -> str:
+    """Prefix the system prompt with the actual runtime tool availability."""
+    summary = build_runtime_tool_availability_summary(tools)
+    if summary in system_prompt or RUNTIME_TOOL_AVAILABILITY_HEADER in system_prompt:
+        return system_prompt
+    return f"{summary}\n\n{system_prompt}"
+
+
 def build_tts_settings(config: Config) -> TTSSettings:
     """Build TTS settings from resolved runtime config."""
     return TTSSettings(
@@ -398,6 +433,7 @@ def build_agent_for_session(
     agent_cls = _load_agent_cls()
     llm_client_cls = _load_llm_client_cls()
     system_prompt = system_prompt or resolve_system_prompt(profile, config, skills_metadata=skills_metadata)
+    system_prompt = apply_runtime_tool_availability(system_prompt, tools)
     retry_config = RuntimeRetryConfig(
         enabled=config.llm.retry.enabled,
         max_retries=config.llm.retry.max_retries,
@@ -673,7 +709,10 @@ class WebAgentRuntimeManager:
             profile_mcp_config = build_profile_bound_mcp_config(bound_mcp_servers) or profile.mcp_config_json
             tools, skill_loader = await build_agent_tools(config, workspace_dir, profile_mcp_config)
             skills_metadata = skill_loader.get_skills_metadata_prompt() if skill_loader else ""
-            system_prompt = resolve_system_prompt(profile, config, skills_metadata=skills_metadata)
+            system_prompt = apply_runtime_tool_availability(
+                resolve_system_prompt(profile, config, skills_metadata=skills_metadata),
+                tools,
+            )
             mcp_config_snapshot = resolve_mcp_config_snapshot(config, profile_mcp_config)
             run_snapshot = build_run_snapshot(
                 profile=profile,
