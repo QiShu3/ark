@@ -5,6 +5,8 @@ import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
 import { Calendar } from 'lucide-react';
 import CalendarWidget from './CalendarWidget';
+import WorkflowNavProgress from './WorkflowNavProgress';
+import type { WorkflowSnapshot } from './workflowProgress';
 
 /**
  * 顶部导航栏组件
@@ -19,6 +21,36 @@ const Navigation: React.FC = () => {
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
+
+  /**
+   * 加载当前工作流快照（用于导航栏中间的紧凑进度条）。
+   */
+  async function _loadWorkflowSnapshot(): Promise<void> {
+    try {
+      const res = await apiJson('/todo/focus/workflow/current');
+      const snapshot = res as WorkflowSnapshot;
+      if (!snapshot || typeof snapshot !== 'object') {
+        setWorkflowSnapshot(null);
+        return;
+      }
+      setWorkflowSnapshot(snapshot);
+    } catch {
+      setWorkflowSnapshot(null);
+    }
+  }
+
+  useEffect(() => {
+    const initTimer = window.setTimeout(_loadWorkflowSnapshot, 0);
+    const handleReload = () => _loadWorkflowSnapshot();
+    window.addEventListener('ark:reload-focus', handleReload);
+    const timer = window.setInterval(_loadWorkflowSnapshot, 60000);
+    return () => {
+      window.clearTimeout(initTimer);
+      window.removeEventListener('ark:reload-focus', handleReload);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (token && !user) {
@@ -68,6 +100,9 @@ const Navigation: React.FC = () => {
         onClick={() => navigate('/')}
       >
         Ark Project
+      </div>
+      <div className="flex-1 flex justify-center px-6">
+        {workflowSnapshot ? <WorkflowNavProgress workflow={workflowSnapshot} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-6">
         <div className="flex gap-4">
