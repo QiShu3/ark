@@ -64,6 +64,9 @@ const DialogueInteraction: React.FC = () => {
 
   return (
     <div className="absolute bottom-0 left-0 w-full z-10 flex flex-col justify-end pointer-events-none">
+      {/* 底部整体渐变遮罩，不阻挡鼠标事件但提供视觉背景 */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent pointer-events-none -z-10" />
+
       {/* 主体内容容器，恢复指针事件 */}
       <div className="w-full px-6 md:px-10 pb-6 md:pb-10 pointer-events-auto flex flex-col gap-6">
         
