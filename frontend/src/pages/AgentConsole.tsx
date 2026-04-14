@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import Navigation from '../components/Navigation';
 import { apiJson } from '../lib/api';
 import { useAuthStore } from '../lib/auth';
 
@@ -734,19 +733,8 @@ export default function AgentConsole() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black text-white font-sans">
-      <div className="fixed inset-0 z-0">
-        <img
-          src={`${import.meta.env.BASE_URL}images/background.jpg`}
-          alt="Background"
-          className="h-full w-full object-cover opacity-60"
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.18),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(251,191,36,0.16),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.48),rgba(0,0,0,0.8))]" />
-      </div>
-
-      <Navigation />
-
-      <div className="relative z-10 mx-auto flex h-screen w-full max-w-7xl flex-col gap-6 overflow-hidden px-4 pb-6 pt-24 md:px-6 lg:flex-row">
+    <div className="relative z-10 flex w-full h-full pt-16">
+      <div className="mx-auto flex w-full max-w-[1600px] gap-6 p-6">
         <aside className="w-full overflow-y-auto lg:max-w-sm">
           <div className="rounded-[28px] border border-white/10 bg-black/35 p-6 shadow-2xl backdrop-blur-xl">
             <div className="mb-5 inline-flex rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-cyan-100/80">
