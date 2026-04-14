@@ -1,0 +1,49 @@
+<h2>工作流快捷入口重构设计</h2>
+<p class="subtitle">针对“静止时是按钮，运行时是进度条”的这个快捷入口，我构思了 3 种不同的展现与交互模式：</p>
+
+<div class="options">
+  <div class="option" data-choice="pill" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>悬浮胶囊形态 (Floating Pill)</h3>
+      <p>将入口从当前的网格卡片中解放出来，变成一个悬浮的胶囊按钮。点击展开菜单，运行时变为一个带有微动画的紧凑进度胶囊。</p>
+      <div style="margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; display: flex; justify-content: center; gap: 10px;">
+        <div style="padding: 8px 16px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 9999px; display: flex; align-items: center; gap: 8px;">
+          <span style="display: block; width: 8px; height: 8px; background: #3b82f6; border-radius: 50%;"></span>
+          <span style="font-size: 14px; font-weight: 500;">test工作流</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="option" data-choice="integrated" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>整合式卡片 (Integrated Card)</h3>
+      <p>保持现有的网格布局，但优化内部视觉层级。静止时不仅显示名称，还显示工作流的总时长或阶段数；运行时，进度条和倒计时结合得更紧密，像音乐播放器一样优雅。</p>
+      <div style="margin-top: 10px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: left;">
+        <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">当前工作流</div>
+        <div style="font-size: 16px; font-weight: bold; display: flex; justify-content: space-between;">
+          <span>test工作流</span>
+          <span style="color: #60a5fa; font-size: 12px;">3 阶段 / 30m</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="option" data-choice="quick-action" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>一键快切卡片 (Quick Action Card)</h3>
+      <p>增强按钮的交互性。卡片内直接提供“开始”和“切换”两个热区。左侧点击直接执行默认工作流，右侧点击弹出切换/管理菜单。进度条也会更具侵入性地覆盖整个卡片背景。</p>
+      <div style="margin-top: 10px; display: flex; border-radius: 8px; overflow: hidden;">
+        <div style="flex: 3; background: rgba(59,130,246,0.2); padding: 12px; text-align: center; cursor: pointer; border-right: 1px solid rgba(255,255,255,0.1);">
+          <span style="font-size: 14px; font-weight: bold;">▶ 运行 test工作流</span>
+        </div>
+        <div style="flex: 1; background: rgba(255,255,255,0.1); padding: 12px; text-align: center; cursor: pointer;">
+          <span style="font-size: 14px;">⋮ 选项</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

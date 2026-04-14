@@ -2222,15 +2222,48 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               ) : index === 3 && subIndex === 0 ? (
                 <span className="text-white/80 font-medium">成就</span>
               ) : mergePlaceholders ? (
-                <button
-                  className="px-4 py-2 rounded-lg bg-black/20 hover:bg-black/40 text-white/70 hover:text-white transition-colors text-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.dispatchEvent(new Event('ark:open-workflow-modal'));
-                  }}
-                >
-                  {defaultWorkflowName}
-                </button>
+                <div className="flex w-full h-full rounded-lg overflow-hidden border border-white/10 group shadow-lg">
+                  {/* 左侧：一键运行 */}
+                  <div
+                    className="flex-[3] bg-blue-500/10 hover:bg-blue-500/20 transition-colors flex items-center justify-center cursor-pointer border-r border-white/10 relative overflow-hidden"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // 尝试寻找未完成的专注任务，或者弹出提示
+                      const targetTask = _pickTodayFocusTask();
+                      if (targetTask) {
+                        _startFocus(targetTask.id);
+                      } else {
+                        alert('今日无待办任务，请先创建或安排任务');
+                      }
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                      </div>
+                      <span className="font-bold text-white/90 text-sm tracking-wide">
+                        运行 {defaultWorkflowName}
+                      </span>
+                    </div>
+                  </div>
+                  {/* 右侧：设置弹窗 */}
+                  <div
+                    className="flex-[1] bg-white/5 hover:bg-white/15 transition-colors flex items-center justify-center cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(new Event('ark:open-workflow-modal'));
+                    }}
+                    title="工作流设置"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60 group-hover:text-white/90 transition-colors">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                  </div>
+                </div>
               ) : index === 3 && subIndex === 2 ? (
                 <>
                   <span className="font-medium text-white/80">

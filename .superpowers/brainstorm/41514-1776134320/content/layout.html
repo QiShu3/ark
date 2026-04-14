@@ -1,0 +1,49 @@
+<h2>我们来确定一下专注工作流面板的整体设计方向</h2>
+<p class="subtitle">当前界面功能比较密集，包含专注计时、阶段切换、任务切换等。为了提升前端样式和体验，您更偏好以下哪种重构方向？</p>
+
+<div class="options">
+  <div class="option" data-choice="dashboard" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>仪表盘风格 (Dashboard)</h3>
+      <p>强化数据和进度展示。使用显眼的环形进度条或大型计时器。操作按钮（开始/停止/完成）清晰排列，信息层级分明。</p>
+      <div style="margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+        <div style="text-align: center; font-size: 24px; font-weight: bold; color: #60a5fa;">25:00</div>
+        <div style="display: flex; justify-content: center; gap: 8px; margin-top: 8px;">
+          <span style="padding: 4px 8px; background: #3b82f6; border-radius: 4px; font-size: 12px;">⏸ 暂停</span>
+          <span style="padding: 4px 8px; background: #10b981; border-radius: 4px; font-size: 12px;">✓ 完成</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="option" data-choice="zen" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>极简禅意风格 (Minimalist Zen)</h3>
+      <p>大面积留白与干净的排版。弱化按钮边界，主要通过文字大小和毛玻璃质感区分层级。让视觉完全聚焦在当前唯一的任务上。</p>
+      <div style="margin-top: 10px; padding: 16px 10px; background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; text-align: center;">
+        <div style="font-size: 12px; color: rgba(255,255,255,0.5);">正在专注：设计重构</div>
+        <div style="font-size: 32px; font-weight: 300; margin: 4px 0;">25:00</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="option" data-choice="modular" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>模块化卡片 (Modular Cards)</h3>
+      <p>将“专注时间”、“工作流阶段”、“今日目标”拆分为内部更小的独立卡片组合。结构严谨，像一个小型的控制台面板。</p>
+      <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #aaa;">专注倒计时</div>
+          <div style="font-size: 16px; font-weight: bold;">25:00</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #aaa;">当前阶段</div>
+          <div style="font-size: 16px; font-weight: bold; color: #f59e0b;">休息</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
