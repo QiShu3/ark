@@ -68,6 +68,7 @@ const DialogueInteraction: React.FC = () => {
   
   // 提供 fallback
   const suggestions = latestSuggestions.length > 0 ? latestSuggestions : ['给我介绍一下这个系统', '你是谁？', '如何开始使用？'];
+  const dialogueContent = isGenerating && !streamingText ? '……' : typedContent;
 
   /**
    * 处理消息发送
@@ -169,7 +170,7 @@ const DialogueInteraction: React.FC = () => {
             <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
             
             <p className="text-white/95 text-lg md:text-2xl font-medium tracking-wide leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] relative z-10">
-              {typedContent}
+              {dialogueContent}
               {isGenerating && (
                 <span className="inline-block w-3 md:w-4 h-6 md:h-8 ml-2 bg-blue-400 animate-pulse align-middle shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
               )}
