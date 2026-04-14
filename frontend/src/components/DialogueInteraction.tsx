@@ -1,6 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Send } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAgentChat, MessageResponse } from '../hooks/useAgentChat';
+
+/**
+ * 提取 AI 回复中的 <suggestions> 标签内容
+ * 示例: "你好<suggestions>['选项1', '选项2']</suggestions>"
+ */
+function parseSuggestions(text: string): { cleanText: string; extractedSuggestions: string[] } {
+  const suggestionRegex = /<suggestions>([\s\S]*?)<\/suggestions>/;
+  const match = text.match(suggestionRegex);
+  
+  let extractedSuggestions: string[] = [];
+  const cleanText = text.replace(suggestionRegex, '').trim();
+
+  if (match && match[1]) {
+    try {
+      // 尝试解析 JSON 数组
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        extractedSuggestions = parsed.filter(item => typeof item === 'string').slice(0, 3);
+      }
+    } catch {
+      // 解析失败，忽略
+    }
+  }
+
+  return { cleanText, extractedSuggestions };
+}
 
 /**
  * 对话框与交互框合并组件
@@ -9,57 +36,72 @@ import { cn } from '../lib/utils';
  */
 const DialogueInteraction: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [displayContent, setDisplayContent] = useState('');
-  const [fullContent, setFullContent] = useState('你好！我是 AI 助手。你可以从右侧的快捷选项中选择回复，或者直接在下方输入你的问题。');
   const [suggestions, setSuggestions] = useState<string[]>([
     '给我介绍一下这个系统',
-    '讲一个有趣的科幻故事',
+    '你是谁？',
     '如何开始使用？',
   ]);
 
-  // 模拟打字机效果
-  useEffect(() => {
-    if (!fullContent) return;
-    
-    let currentIndex = 0;
-    setIsGenerating(true);
-    setDisplayContent('');
+  // 接入真实的 WebSocket 会话
+  const { messages, isGenerating, streamingText, sendMessage, socketState } = useAgentChat('agent-console');
 
-    const timer = setInterval(() => {
-      setDisplayContent(fullContent.slice(0, currentIndex + 1));
-      currentIndex++;
+  // 获取最新的一条 AI 回复（或者正在流式输出的文本）
+  const { latestAiMessage, latestSuggestions } = useMemo(() => {
+    let latestText = '';
+    let parsedOptions: string[] = [];
 
-      if (currentIndex >= fullContent.length) {
-        clearInterval(timer);
-        setIsGenerating(false);
+    if (streamingText) {
+      // 正在流式输出时
+      const { cleanText, extractedSuggestions } = parseSuggestions(streamingText);
+      latestText = cleanText;
+      parsedOptions = extractedSuggestions;
+    } else {
+      // 获取历史消息中最后一条 assistant 消息
+      const assistantMessages = messages.filter(m => m.role === 'assistant_message' || m.role === 'assistant');
+      if (assistantMessages.length > 0) {
+        const lastMsg = assistantMessages[assistantMessages.length - 1];
+        const { cleanText, extractedSuggestions } = parseSuggestions(lastMsg.content);
+        latestText = cleanText;
+        parsedOptions = extractedSuggestions;
+      } else {
+        latestText = '你好！我是莫宁。你可以从右侧的快捷选项中选择回复，或者直接在下方输入你的问题。';
       }
-    }, 50); // 每 50ms 打印一个字符
+    }
+    return { latestAiMessage: latestText, latestSuggestions: parsedOptions };
+  }, [messages, streamingText]);
 
-    return () => clearInterval(timer);
-  }, [fullContent]);
+  // 打字机特效状态
+  const [typedContent, setTypedContent] = useState('');
+
+  // 监听 latestAiMessage 的变化来控制输出（如果不是 streaming 的话实现打字机效果，如果是 streaming 则直接显示）
+  useEffect(() => {
+    if (isGenerating && streamingText) {
+      // 流式生成中，直接显示，不需要打字机延迟
+      setTypedContent(latestAiMessage);
+    } else {
+      // 非流式状态（如加载历史消息，或者刚好结束生成），我们可以选择直接显示
+      // 为了更像游戏，我们可以添加简短的打字机，但这里简化为直接显示
+      setTypedContent(latestAiMessage);
+    }
+  }, [latestAiMessage, isGenerating, streamingText]);
+
+  // 同步更新选项
+  useEffect(() => {
+    if (latestSuggestions.length > 0) {
+      setSuggestions(latestSuggestions);
+    }
+  }, [latestSuggestions]);
 
   /**
    * 处理消息发送
-   * @param message - 发送的消息内容
    */
   const handleSend = (message: string) => {
-    if (!message.trim() || isGenerating) return;
+    if (!message.trim() || isGenerating || socketState !== 'open') return;
     
-    // 模拟发送并清空输入
+    // 清空输入
     setInputValue('');
-    setIsGenerating(true);
-    
-    // 模拟网络延迟后的回复
-    setTimeout(() => {
-      setFullContent(`这是我对“${message}”的模拟回复。目前还在开发阶段，后续将接入真实的后端 API。`);
-      // 随机更新一些建议选项
-      setSuggestions([
-        '继续深入了解',
-        '换个话题',
-        '返回主菜单',
-      ]);
-    }, 600);
+    // 发送至 WebSocket
+    sendMessage(message);
   };
 
   return (
@@ -150,7 +192,7 @@ const DialogueInteraction: React.FC = () => {
             <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
             
             <p className="text-white/95 text-lg md:text-2xl font-medium tracking-wide leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] relative z-10">
-              {displayContent}
+              {typedContent}
               {isGenerating && (
                 <span className="inline-block w-3 md:w-4 h-6 md:h-8 ml-2 bg-blue-400 animate-pulse align-middle shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
               )}
