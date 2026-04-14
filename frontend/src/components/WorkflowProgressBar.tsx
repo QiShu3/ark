@@ -9,13 +9,9 @@ type WorkflowProgressBarProps = {
 };
 
 const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, className }) => {
-  const phases = Array.isArray(workflow.phases) ? workflow.phases : [];
+  const phases = React.useMemo(() => (Array.isArray(workflow.phases) ? workflow.phases : []), [workflow.phases]);
   const metrics = computeWorkflowProgress(workflow);
   const showProgress = workflow.state !== 'normal' && phases.length > 0 && metrics.totalSeconds > 0;
-
-  if (!showProgress) {
-    return null;
-  }
 
   // 格式化倒计时 MM:SS
   const formatTime = (secs: number) => {
@@ -32,6 +28,30 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
   const activeColorGradient = isFocus 
     ? 'linear-gradient(90deg, #60a5fa, #3b82f6)' 
     : 'linear-gradient(90deg, #fb923c, #f97316)';
+
+  const boundaryOffsets = React.useMemo(() => {
+    const safeDurations = phases.map((phase) => Math.max(0, Math.round(phase.duration || 0)));
+    const total = safeDurations.reduce((sum, value) => sum + value, 0);
+    const offsets: number[] = [];
+    let acc = 0;
+    offsets.push(0);
+    for (let i = 0; i < safeDurations.length; i++) {
+      acc += safeDurations[i];
+      offsets.push(total > 0 ? (acc / total) * 100 : 0);
+    }
+    if (offsets.length > 0) {
+      offsets[offsets.length - 1] = 100;
+    }
+    return offsets;
+  }, [phases]);
+
+  const activeNodeIndex = workflow.pending_confirmation
+    ? Math.min(metrics.activePhaseIndex + 1, boundaryOffsets.length - 1)
+    : Math.min(metrics.activePhaseIndex, boundaryOffsets.length - 1);
+
+  if (!showProgress) {
+    return null;
+  }
 
   return (
     <div
@@ -76,49 +96,40 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
         />
 
         {/* 节点渲染 */}
-        {phases.map((phase, idx) => {
-          const offset = phases.length === 1 ? 0 : (idx / (phases.length - 1)) * 100;
-          const isActive = idx === metrics.activePhaseIndex;
-          
-          // isPassed 定义：
-          // 1. 如果是之前的节点 (idx < activePhaseIndex)，必定 passed。
-          // 2. 如果进度 percent 大于当前节点的位置（并且加上一个微小容差），视为 passed
-          const isPassed = idx < metrics.activePhaseIndex || metrics.percent >= offset - 0.01;
-          
-          const isOddNode = idx % 2 === 0; // 0, 2, 4 are focus
-          
+        {boundaryOffsets.map((offset, idx) => {
+          const isActive = idx === activeNodeIndex;
+          const isPassed = idx < activeNodeIndex || metrics.percent >= offset - 0.01;
+          const phaseForNode = phases[Math.min(idx, Math.max(0, phases.length - 1))];
+          const nodePhaseType = phaseForNode?.phase_type ?? 'focus';
+          const nodeIsFocus = nodePhaseType === 'focus';
+          const nodeColorBg = nodeIsFocus ? 'bg-blue-400' : 'bg-orange-400';
+          const nodeColorSolid = nodeIsFocus ? 'border-blue-500 bg-blue-500' : 'border-orange-500 bg-orange-500';
+
           return (
             <div
-              key={`${phase.phase_type}-${idx}`}
+              key={`boundary-${idx}`}
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center transition-all duration-500"
               style={{ 
                 left: `calc(8px + ${offset}% * calc(1 - 16px / 100%))`,
                 zIndex: isActive ? 10 : 1 
               }}
             >
-              {isActive && !workflow.pending_confirmation ? (
-                // 活跃节点 (大尺寸 + 图标 + 光晕)
+              {isActive ? (
                 <div 
-                  className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform duration-300 scale-110`}
+                  className="w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform duration-300 scale-110"
                   style={{
-                    background: activeColorBg,
-                    boxShadow: `0 0 15px ${isFocus ? 'rgba(59,130,246,0.6)' : 'rgba(251,146,60,0.6)'}`
+                    background: nodeColorBg,
+                    boxShadow: `0 0 15px ${nodeIsFocus ? 'rgba(59,130,246,0.6)' : 'rgba(251,146,60,0.6)'}`
                   }}
                 >
                   <span className="text-[10px]">
-                    {isFocus ? '🧠' : '☕'}
+                    {nodeIsFocus ? '🧠' : '☕'}
                   </span>
                 </div>
               ) : isPassed ? (
-                // 已完成节点 (或者处于 pending_confirmation 状态的当前节点)
-                <div 
-                  className={`w-3 h-3 rounded-full border-2 transition-colors duration-300 ${isOddNode ? 'border-blue-500 bg-blue-500' : 'border-orange-500 bg-orange-500'} ${isActive && workflow.pending_confirmation ? 'shadow-[0_0_12px_currentColor] animate-pulse scale-125' : ''}`}
-                />
+                <div className={`w-3 h-3 rounded-full border-2 transition-colors duration-300 ${nodeColorSolid}`} />
               ) : (
-                // 未到达节点 (小尺寸 + 空心)
-                <div 
-                  className="w-3 h-3 rounded-full border-2 border-white/20 bg-[#1a1a1a]"
-                />
+                <div className="w-3 h-3 rounded-full border-2 border-white/20 bg-[#1a1a1a]" />
               )}
             </div>
           );
