@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Send } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useAgentChat, MessageResponse } from '../hooks/useAgentChat';
+import { useAgentChat } from '../hooks/useAgentChat';
 
 /**
  * 提取 AI 回复中的 <suggestions> 标签内容
@@ -36,61 +36,38 @@ function parseSuggestions(text: string): { cleanText: string; extractedSuggestio
  */
 const DialogueInteraction: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([
-    '给我介绍一下这个系统',
-    '你是谁？',
-    '如何开始使用？',
-  ]);
 
   // 接入真实的 WebSocket 会话
   const { messages, isGenerating, streamingText, sendMessage, socketState } = useAgentChat('agent-console');
 
   // 获取最新的一条 AI 回复（或者正在流式输出的文本）
   const { latestAiMessage, latestSuggestions } = useMemo(() => {
-    let latestText = '';
-    let parsedOptions: string[] = [];
-
     if (streamingText) {
       // 正在流式输出时
       const { cleanText, extractedSuggestions } = parseSuggestions(streamingText);
-      latestText = cleanText;
-      parsedOptions = extractedSuggestions;
+      return { latestAiMessage: cleanText, latestSuggestions: extractedSuggestions };
     } else {
       // 获取历史消息中最后一条 assistant 消息
       const assistantMessages = messages.filter(m => m.role === 'assistant_message' || m.role === 'assistant');
       if (assistantMessages.length > 0) {
         const lastMsg = assistantMessages[assistantMessages.length - 1];
         const { cleanText, extractedSuggestions } = parseSuggestions(lastMsg.content);
-        latestText = cleanText;
-        parsedOptions = extractedSuggestions;
-      } else {
-        latestText = '你好！我是莫宁。你可以从右侧的快捷选项中选择回复，或者直接在下方输入你的问题。';
+        return { latestAiMessage: cleanText, latestSuggestions: extractedSuggestions };
       }
     }
-    return { latestAiMessage: latestText, latestSuggestions: parsedOptions };
+    
+    // 如果没有任何建议选项，我们提供一些默认的 fallback
+    return { 
+      latestAiMessage: '你好！我是莫宁。你可以从右侧的快捷选项中选择回复，或者直接在下方输入你的问题。', 
+      latestSuggestions: ['给我介绍一下这个系统', '你是谁？', '如何开始使用？'] 
+    };
   }, [messages, streamingText]);
 
-  // 打字机特效状态
-  const [typedContent, setTypedContent] = useState('');
-
-  // 监听 latestAiMessage 的变化来控制输出（如果不是 streaming 的话实现打字机效果，如果是 streaming 则直接显示）
-  useEffect(() => {
-    if (isGenerating && streamingText) {
-      // 流式生成中，直接显示，不需要打字机延迟
-      setTypedContent(latestAiMessage);
-    } else {
-      // 非流式状态（如加载历史消息，或者刚好结束生成），我们可以选择直接显示
-      // 为了更像游戏，我们可以添加简短的打字机，但这里简化为直接显示
-      setTypedContent(latestAiMessage);
-    }
-  }, [latestAiMessage, isGenerating, streamingText]);
-
-  // 同步更新选项
-  useEffect(() => {
-    if (latestSuggestions.length > 0) {
-      setSuggestions(latestSuggestions);
-    }
-  }, [latestSuggestions]);
+  // 直接将 latestAiMessage 用作显示内容，去除冗余的 useState，以符合 React 的纯函数渲染模式
+  const typedContent = latestAiMessage;
+  
+  // 提供 fallback
+  const suggestions = latestSuggestions.length > 0 ? latestSuggestions : ['给我介绍一下这个系统', '你是谁？', '如何开始使用？'];
 
   /**
    * 处理消息发送

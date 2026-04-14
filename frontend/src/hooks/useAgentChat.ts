@@ -28,6 +28,7 @@ type SocketPacket =
   | { type: 'message_event'; session_id: string; event: MessageResponse }
   | { type: 'run_started' | 'run_completed' | 'run_failed' | 'run_cancelled'; session_id: string }
   | { type: 'error'; session_id: string; error: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | { type: string; [key: string]: any }; // Catch all for TTS and other events
 
 const visibleEventTypes = new Set(['user', 'assistant_message']);
@@ -97,7 +98,6 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       return;
     }
 
-    setSocketState('connecting');
     const socket = new WebSocket(buildWebSocketUrl(sessionId, token));
     socketRef.current = socket;
 
@@ -183,9 +183,6 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     if (!content.trim() || !socket || socket.readyState !== WebSocket.OPEN || isGenerating) {
       return false;
     }
-    
-    // Optimistically add user message (optional, backend usually echoes it back, but we can rely on backend echo to avoid duplicates)
-    // We rely on backend echo to keep things consistent.
     
     socket.send(JSON.stringify({ type: 'run', content: content.trim() }));
     setIsGenerating(true);
