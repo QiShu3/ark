@@ -64,6 +64,39 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   const [socketState, setSocketState] = useState<'disconnected' | 'connecting' | 'open'>('disconnected');
   
   const socketRef = useRef<WebSocket | null>(null);
+  const streamingRawTextRef = useRef('');
+  const streamingTimerRef = useRef<number | null>(null);
+
+  const stopStreamingTimer = useCallback(() => {
+    if (streamingTimerRef.current !== null) {
+      window.clearTimeout(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
+  }, []);
+
+  const resetStreamingText = useCallback(() => {
+    streamingRawTextRef.current = '';
+    stopStreamingTimer();
+    setStreamingText('');
+  }, [stopStreamingTimer]);
+
+  const startStreamingPump = useCallback(() => {
+    if (streamingTimerRef.current !== null) return;
+    const tick = () => {
+      streamingTimerRef.current = null;
+      const raw = streamingRawTextRef.current;
+      setStreamingText((current) => {
+        if (current.length >= raw.length) return current;
+        const nextLen = Math.min(raw.length, current.length + 1);
+        const next = raw.slice(0, nextLen);
+        if (nextLen < raw.length) {
+          streamingTimerRef.current = window.setTimeout(tick, 12);
+        }
+        return next;
+      });
+    };
+    tick();
+  }, []);
 
   // 初始化 Session 和历史记录
   useEffect(() => {
@@ -120,18 +153,22 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       if (data.type === 'error') {
         setError(data.error);
         setIsGenerating(false);
+        resetStreamingText();
         return;
       }
 
       if (data.type === 'message_event') {
         const eventType = data.event.event_type || data.event.role;
         if (eventType === 'content_delta') {
-          setStreamingText((current) => current + (data.event.content || ''));
+          const delta = data.event.content || '';
+          if (!delta) return;
+          streamingRawTextRef.current += delta;
+          startStreamingPump();
           return;
         }
 
         if (eventType === 'assistant_message') {
-          setStreamingText('');
+          resetStreamingText();
         }
 
         if (visibleEventTypes.has(eventType)) {
@@ -144,15 +181,14 @@ export function useAgentChat(profileKey: string = 'agent-console') {
         setIsGenerating(true);
         setSession((current) => (current ? { ...current, status: 'running' } : current));
         setError(null);
+        resetStreamingText();
         return;
       }
 
       if (data.type === 'run_completed' || data.type === 'run_failed' || data.type === 'run_cancelled') {
         setIsGenerating(false);
         setSession((current) => (current ? { ...current, status: data.type === 'run_completed' ? 'completed' : 'failed' } : current));
-        if (data.type !== 'run_completed') {
-          setStreamingText('');
-        }
+        if (data.type !== 'run_completed') resetStreamingText();
         return;
       }
     };
@@ -160,11 +196,13 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     socket.onerror = () => {
       setError('WebSocket 连接发生错误');
       setIsGenerating(false);
+      resetStreamingText();
     };
 
     socket.onclose = () => {
       setSocketState('disconnected');
       setIsGenerating(false);
+      resetStreamingText();
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
@@ -174,9 +212,10 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
+      resetStreamingText();
       socket.close();
     };
-  }, [session?.id, token]);
+  }, [resetStreamingText, session?.id, startStreamingPump, token]);
 
   const sendMessage = useCallback((content: string) => {
     const socket = socketRef.current;
@@ -186,10 +225,10 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     
     socket.send(JSON.stringify({ type: 'run', content: content.trim() }));
     setIsGenerating(true);
-    setStreamingText('');
+    resetStreamingText();
     setError(null);
     return true;
-  }, [isGenerating]);
+  }, [isGenerating, resetStreamingText]);
 
   return {
     session,
