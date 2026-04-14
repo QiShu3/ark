@@ -65,13 +65,13 @@ const DialogueInteraction: React.FC = () => {
   return (
     <div className="absolute bottom-0 left-0 w-full z-10 flex flex-col justify-end pointer-events-none">
       {/* 底部整体渐变遮罩，不阻挡鼠标事件但提供视觉背景 */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent pointer-events-none -z-10" />
+      <div className="absolute bottom-0 left-0 w-full h-[50%] bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none -z-10" />
 
       {/* 主体内容容器，恢复指针事件 */}
       <div className="w-full px-6 md:px-10 pb-6 md:pb-10 pointer-events-auto flex flex-col gap-6">
         
         {/* 右侧交互菜单：快捷选项 + 自由输入 */}
-        <div className="self-end w-full max-w-md flex flex-col gap-3">
+        <div className="self-end w-full max-w-[280px] flex flex-col gap-2">
           {/* 渲染快捷选项 */}
           {suggestions.map((suggestion, idx) => (
             <button
@@ -79,17 +79,17 @@ const DialogueInteraction: React.FC = () => {
               disabled={isGenerating}
               onClick={() => handleSend(suggestion)}
               className={cn(
-                "group relative flex items-center justify-between w-full px-5 py-4",
+                "group relative flex items-center justify-between w-full px-4 py-2.5",
                 "bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-left",
                 "transition-all duration-300 hover:-translate-x-2 hover:bg-black/60",
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0"
               )}
             >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <span className="font-mono text-blue-400 text-sm tracking-wider opacity-70">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <span className="font-mono text-blue-400 text-xs tracking-wider opacity-70">
                   0{idx + 1}
                 </span>
-                <span className="text-white/90 truncate">{suggestion}</span>
+                <span className="text-white/90 truncate text-sm">{suggestion}</span>
               </div>
               {/* 右侧蓝紫渐变指示线 */}
               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-2/3 bg-gradient-to-b from-blue-400 to-purple-600 rounded-l-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -99,7 +99,7 @@ const DialogueInteraction: React.FC = () => {
           {/* 自由输入框 (第4个选项) */}
           <div className="relative w-full group">
             {/* 编号 */}
-            <div className="absolute left-5 top-1/2 -translate-y-1/2 font-mono text-purple-400 text-sm tracking-wider opacity-70 z-10">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-purple-400 text-xs tracking-wider opacity-70 z-10">
               0{suggestions.length + 1}
             </div>
             <input
@@ -114,7 +114,7 @@ const DialogueInteraction: React.FC = () => {
               disabled={isGenerating}
               placeholder="Enter your message..."
               className={cn(
-                "w-full pl-14 pr-12 py-4 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg",
+                "w-full pl-10 pr-10 py-2.5 bg-black/40 backdrop-blur-md border border-white/10 rounded-lg text-sm",
                 "text-white/90 placeholder:text-white/30 focus:outline-none focus:border-blue-500/50",
                 "focus:ring-1 focus:ring-blue-500/30 transition-all duration-300",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
@@ -125,12 +125,12 @@ const DialogueInteraction: React.FC = () => {
               disabled={isGenerating || !inputValue.trim()}
               onClick={() => handleSend(inputValue)}
               className={cn(
-                "absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-md",
+                "absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md",
                 "text-white/50 hover:text-white hover:bg-white/10 transition-colors",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
               )}
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -138,9 +138,9 @@ const DialogueInteraction: React.FC = () => {
         {/* 底部字幕对话框 */}
         <div className="relative w-full">
           {/* 专属名牌 */}
-          <div className="absolute -top-10 left-4 px-6 py-2 bg-gradient-to-r from-blue-600/90 to-purple-600/90 rounded-t-xl rounded-br-xl backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(59,130,246,0.3)] z-10">
+          <div className="absolute -top-10 left-4 px-6 py-2 bg-gradient-to-r from-slate-500/90 to-slate-700/90 rounded-t-xl rounded-br-xl backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(100,116,139,0.4)] z-10">
             <span className="text-white font-bold tracking-wider text-sm md:text-base drop-shadow-md">
-              AI Assistant
+              莫宁
             </span>
           </div>
           
