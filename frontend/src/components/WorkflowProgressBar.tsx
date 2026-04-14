@@ -68,7 +68,7 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
         <div
           className="absolute left-2 top-1/2 h-1 -translate-y-1/2 rounded-full"
           style={{
-            width: `calc(${metrics.percent}% - 16px)`,
+            width: `calc(${metrics.percent}% - ${metrics.percent === 100 ? 16 : 16 * (metrics.percent / 100)}px)`,
             transition: 'width 1s linear',
             background: activeColorGradient,
             boxShadow: `0 0 10px ${isFocus ? 'rgba(59,130,246,0.4)' : 'rgba(251,146,60,0.4)'}`
@@ -79,7 +79,12 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
         {phases.map((phase, idx) => {
           const offset = phases.length === 1 ? 0 : (idx / (phases.length - 1)) * 100;
           const isActive = idx === metrics.activePhaseIndex;
-          const isPassed = idx < metrics.activePhaseIndex || metrics.percent >= offset;
+          
+          // isPassed 定义：
+          // 1. 如果是之前的节点 (idx < activePhaseIndex)，必定 passed。
+          // 2. 如果进度 percent 大于当前节点的位置（并且加上一个微小容差），视为 passed
+          const isPassed = idx < metrics.activePhaseIndex || metrics.percent >= offset - 0.01;
+          
           const isOddNode = idx % 2 === 0; // 0, 2, 4 are focus
           
           return (
@@ -91,7 +96,7 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
                 zIndex: isActive ? 10 : 1 
               }}
             >
-              {isActive ? (
+              {isActive && !workflow.pending_confirmation ? (
                 // 活跃节点 (大尺寸 + 图标 + 光晕)
                 <div 
                   className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform duration-300 scale-110`}
@@ -105,9 +110,9 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
                   </span>
                 </div>
               ) : isPassed ? (
-                // 已完成节点 (小尺寸 + 填充)
+                // 已完成节点 (或者处于 pending_confirmation 状态的当前节点)
                 <div 
-                  className={`w-3 h-3 rounded-full border-2 ${isOddNode ? 'border-blue-500 bg-blue-500' : 'border-orange-500 bg-orange-500'}`}
+                  className={`w-3 h-3 rounded-full border-2 transition-colors duration-300 ${isOddNode ? 'border-blue-500 bg-blue-500' : 'border-orange-500 bg-orange-500'} ${isActive && workflow.pending_confirmation ? 'shadow-[0_0_12px_currentColor] animate-pulse scale-125' : ''}`}
                 />
               ) : (
                 // 未到达节点 (小尺寸 + 空心)

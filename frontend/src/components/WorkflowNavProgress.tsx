@@ -97,7 +97,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
         <div
           className="absolute inset-y-0 left-0 rounded-full"
           style={{
-            width: `${metrics.percent}%`,
+            width: `calc(${metrics.percent}% - ${metrics.percent === 100 ? 1.5 : 1.5 * (metrics.percent / 100)}px)`,
             transition: 'width 600ms linear',
             background: activeColorGradient,
           }}
