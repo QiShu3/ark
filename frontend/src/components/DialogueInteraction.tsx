@@ -38,7 +38,7 @@ const DialogueInteraction: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
 
   // 接入真实的 WebSocket 会话
-  const { messages, isGenerating, streamingText, sendMessage, socketState } = useAgentChat('agent-console');
+  const { messages, isGenerating, streamingText, sendMessage, socketState } = useAgentChat('MainAgent');
 
   // 获取最新的一条 AI 回复（或者正在流式输出的文本）
   const { latestAiMessage, latestSuggestions } = useMemo(() => {
