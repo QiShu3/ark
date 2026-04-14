@@ -90,40 +90,10 @@ const DialogueInteraction: React.FC = () => {
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent pointer-events-none -z-10" />
 
       {/* 主体内容容器，恢复指针事件 */}
-      <div className="w-full px-6 md:px-10 pb-6 md:pb-10 pointer-events-auto flex items-end justify-between gap-6">
+      <div className="w-full px-6 md:px-10 pb-6 md:pb-10 pointer-events-auto flex flex-col gap-6">
         
-        {/* 底部字幕对话框 */}
-        <div className="relative flex-1">
-          {/* 专属名牌 - 高度中心对齐对话框上边缘 */}
-          <div className="absolute top-0 -translate-y-1/2 left-4 px-6 py-2 bg-gradient-to-r from-slate-500/90 to-slate-700/90 rounded-xl backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(100,116,139,0.4)] z-10">
-            <span className="text-white font-bold tracking-wider text-sm md:text-base drop-shadow-md">
-              莫宁
-            </span>
-          </div>
-          
-          {/* 对话内容容器 - 移除边框颜色，设为透明 */}
-          <div className="bg-black/50 backdrop-blur-xl border border-transparent rounded-2xl p-5 md:p-6 h-[160px] md:h-[190px] shadow-2xl relative overflow-hidden flex flex-col w-full">
-            {/* 装饰性发光背景 */}
-            <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
-            
-            <div className="relative z-10 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-              <div className="flex flex-col h-full">
-                <MarkdownContent
-                  content={dialogueContent}
-                  className="text-white/95 text-sm md:text-base font-medium tracking-wide leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] flex-1"
-                />
-                {isGenerating && (
-                  <div className="mt-2">
-                    <span className="inline-block w-2.5 md:w-3 h-5 md:h-6 bg-blue-400 animate-pulse align-middle shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* 右侧交互菜单：快捷选项 + 自由输入 */}
-        <div className="w-[280px] shrink-0 flex flex-col gap-2 z-20">
+        <div className="self-end w-full max-w-[280px] flex flex-col gap-2">
           {/* 渲染快捷选项 */}
           {suggestions.map((suggestion, idx) => (
             <button
@@ -186,6 +156,33 @@ const DialogueInteraction: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* 底部字幕对话框 */}
+        <div className="relative w-full">
+          {/* 专属名牌 - 高度中心对齐对话框上边缘 */}
+          <div className="absolute top-0 -translate-y-1/2 left-4 px-6 py-2 bg-gradient-to-r from-slate-500/90 to-slate-700/90 rounded-xl backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(100,116,139,0.4)] z-10">
+            <span className="text-white font-bold tracking-wider text-sm md:text-base drop-shadow-md">
+              莫宁
+            </span>
+          </div>
+          
+          {/* 对话内容容器 - 移除边框颜色，设为透明 */}
+          <div className="bg-black/50 backdrop-blur-xl border border-transparent rounded-2xl p-5 md:p-6 h-[160px] md:h-[190px] shadow-2xl relative overflow-hidden">
+            {/* 装饰性发光背景 */}
+            <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
+            
+            <div className="relative z-10 h-full overflow-y-auto pr-2">
+              <MarkdownContent
+                content={dialogueContent}
+                className="text-white/95 text-sm md:text-base font-medium tracking-wide leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+              />
+              {isGenerating && (
+                <span className="inline-block w-2.5 md:w-3 h-5 md:h-6 ml-2 bg-blue-400 animate-pulse align-middle shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
