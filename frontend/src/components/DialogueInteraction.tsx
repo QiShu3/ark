@@ -64,9 +64,6 @@ const DialogueInteraction: React.FC = () => {
 
   return (
     <div className="absolute bottom-0 left-0 w-full z-10 flex flex-col justify-end pointer-events-none">
-      {/* 底部整体渐变遮罩，不阻挡鼠标事件但提供视觉背景 */}
-      <div className="absolute bottom-0 left-0 w-full h-[50%] bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none -z-10" />
-
       {/* 主体内容容器，恢复指针事件 */}
       <div className="w-full px-6 md:px-10 pb-6 md:pb-10 pointer-events-auto flex flex-col gap-6">
         
@@ -137,15 +134,15 @@ const DialogueInteraction: React.FC = () => {
 
         {/* 底部字幕对话框 */}
         <div className="relative w-full">
-          {/* 专属名牌 */}
-          <div className="absolute -top-10 left-4 px-6 py-2 bg-gradient-to-r from-slate-500/90 to-slate-700/90 rounded-t-xl rounded-br-xl backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(100,116,139,0.4)] z-10">
+          {/* 专属名牌 - 高度中心对齐对话框上边缘 */}
+          <div className="absolute top-0 -translate-y-1/2 left-4 px-6 py-2 bg-gradient-to-r from-slate-500/90 to-slate-700/90 rounded-xl backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(100,116,139,0.4)] z-10">
             <span className="text-white font-bold tracking-wider text-sm md:text-base drop-shadow-md">
               莫宁
             </span>
           </div>
           
-          {/* 对话内容容器 */}
-          <div className="bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl rounded-tl-none p-6 md:p-8 min-h-[140px] shadow-2xl relative overflow-hidden">
+          {/* 对话内容容器 - 移除边框颜色，设为透明 */}
+          <div className="bg-black/50 backdrop-blur-xl border border-transparent rounded-2xl p-6 md:p-8 min-h-[140px] shadow-2xl relative overflow-hidden">
             {/* 装饰性发光背景 */}
             <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
             
