@@ -1534,14 +1534,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
 
         {showEditTaskModal && selectedTask && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 pt-16"
             onClick={() => setShowEditTaskModal(false)}
           >
             <div
-              className="w-[520px] max-w-[92vw] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
+              className="w-[520px] max-w-[92vw] max-h-[calc(100vh-6rem)] flex flex-col bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
+              <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
                 <h3 className="text-lg font-bold text-white">编辑任务</h3>
                 <button
                   onClick={() => setShowEditTaskModal(false)}
@@ -1554,7 +1554,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 </button>
               </div>
 
-              <div className="p-5 flex flex-col gap-4">
+              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-white/70">标题</label>
                   <input
@@ -1707,8 +1707,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 </div>
 
                 {editTaskError && <div className="text-sm text-red-400">{editTaskError}</div>}
-
-                <div className="flex items-center justify-end gap-3 pt-1">
+              </div>
+              <div className="p-5 pt-3 shrink-0 border-t border-white/10 flex items-center justify-end gap-3 bg-[#1a1a1a]">
                   <button
                     onClick={() => setShowEditTaskModal(false)}
                     className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
@@ -1739,7 +1739,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   >
                     {editTaskSubmitting ? '保存中...' : '保存'}
                   </button>
-                </div>
               </div>
             </div>
           </div>
@@ -1930,17 +1929,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
 
         {showCreateTaskModal && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 pt-16"
             onClick={() => {
               setShowCreateTaskModal(false);
               _resetCreateTaskForm();
             }}
           >
             <div
-              className="w-[520px] max-w-[92vw] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
+              className="w-[520px] max-w-[92vw] max-h-[calc(100vh-6rem)] flex flex-col bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
+              <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
                 <h3 className="text-lg font-bold text-white">创建任务</h3>
                 <button
                   onClick={() => {
@@ -1956,7 +1955,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 </button>
               </div>
 
-              <div className="p-5 flex flex-col gap-4">
+              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-white/70">标题</label>
                   <input
@@ -2100,8 +2099,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 )}
 
                 {createTaskError && <div className="text-sm text-red-400">{createTaskError}</div>}
-
-                <div className="flex items-center justify-end gap-3 pt-1">
+              </div>
+              <div className="p-5 pt-3 shrink-0 border-t border-white/10 flex items-center justify-end gap-3 bg-[#1a1a1a]">
                   <button
                     onClick={() => {
                       setShowCreateTaskModal(false);
@@ -2126,7 +2125,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   >
                     {createTaskSubmitting ? '创建中...' : '创建'}
                   </button>
-                </div>
               </div>
             </div>
           </div>
