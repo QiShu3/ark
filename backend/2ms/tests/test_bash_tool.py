@@ -3,7 +3,6 @@
 import asyncio
 
 import pytest
-
 from mini_agent.tools.bash_tool import BackgroundShellManager, BashKillTool, BashOutputTool, BashTool
 
 

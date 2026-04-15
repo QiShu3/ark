@@ -7,9 +7,7 @@ from typing import Any
 
 import pytest
 import yaml
-
-from mini_agent.llm import AnthropicClient
-from mini_agent.llm import LLMClient
+from mini_agent.llm import AnthropicClient, LLMClient
 from mini_agent.llm.base import LLMClientBase
 from mini_agent.schema import LLMProvider, LLMStreamEvent, Message
 

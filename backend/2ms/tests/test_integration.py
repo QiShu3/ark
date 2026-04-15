@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mini_agent import LLMClient
 from mini_agent.agent import Agent
 from mini_agent.config import Config

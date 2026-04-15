@@ -10,7 +10,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mini_agent.tools.skill_loader import SkillLoader
 from mini_agent.tools.skill_tool import GetSkillTool, create_skill_tools
 

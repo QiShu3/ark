@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mini_agent.tools import BashTool, EditTool, ReadTool, WriteTool
 
 

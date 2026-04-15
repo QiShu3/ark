@@ -1,7 +1,6 @@
 """Tests for terminal_utils module."""
 
 import pytest
-
 from mini_agent.utils import (
     calculate_display_width,
     pad_to_width,

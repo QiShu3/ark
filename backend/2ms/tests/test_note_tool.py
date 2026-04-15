@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
 
 
