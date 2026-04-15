@@ -45,3 +45,5 @@ backend/2ms/workspace/
 backend/2ms/mini_agent.db
 backend/2ms/mini_agent/app_state/log/
 backend/2ms/mini_agent/app_state/.history/
+
+DockerImages/
