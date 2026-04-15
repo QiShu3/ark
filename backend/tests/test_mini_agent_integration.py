@@ -50,6 +50,7 @@ def test_register_mini_agent_routes_are_exposed_on_main_app() -> None:
 
     assert "/health" in http_paths
     assert "/auth/login" in http_paths
+    assert "/api/chat" in http_paths
     assert "/web" in http_paths
     assert "/api/profiles" in http_paths
     assert "/api/profiles/{profile_id}/resolved-prompt" in http_paths

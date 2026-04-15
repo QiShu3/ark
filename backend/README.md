@@ -29,6 +29,37 @@ uv run uvicorn main:app --reload --port 8000
 uv run python scripts/auth_selftest.py
 ```
 
+## Chat（兼容 `/api/chat`）
+
+提供一个独立的最小兼容聊天接口，供前端的“快捷生成任务”和 ArXiv 摘要翻译复用。
+
+需要在环境变量中提供：
+- `CHAT_API_KEY`：OpenAI 兼容接口的 API Key
+- `CHAT_BASE_URL`：OpenAI 兼容接口 Base URL，例如 `https://api.openai.com/v1`
+- `CHAT_MODEL`：调用的模型名
+- `CHAT_TIMEOUT_SECONDS`（可选）：请求超时秒数，默认 45
+
+接口：
+- `POST /api/chat`
+
+请求体最小格式：
+
+```json
+{
+  "message": "请将以下任务描述解析成 JSON",
+  "history": [],
+  "scope": "general"
+}
+```
+
+响应格式：
+
+```json
+{
+  "reply": "..."
+}
+```
+
 ## ArXiv（论文检索与状态）
 
 接口：
@@ -60,7 +91,7 @@ AUTO_KILL_PORT=1 ./dev.sh
 
 ## MCP（工具接入）
 
-通过环境变量配置 MCP servers（stdio 子进程）。后端会在启动时连接这些 server，并把它们的 `tools/list` 映射为模型可用的 tools，然后在 `/api/chat` 内自动执行 tool_calls。
+通过环境变量配置 MCP servers（stdio 子进程）。后端会在启动时连接这些 server，并为 mini-agent 运行时提供可用工具。
 
 示例（使用仓库自带的 echo MCP server）：
 

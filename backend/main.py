@@ -10,6 +10,7 @@ from routes.arxiv import close_arxiv, init_arxiv
 from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
+from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
 from routes.todo_routes import init_todo
@@ -45,6 +46,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(checkin_router)
+app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(arxiv_router)
 register_mini_agent(app)
