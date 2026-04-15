@@ -88,6 +88,13 @@ type CreateTaskForm = {
   dueDate: string;
 };
 
+type TaskAssistantDraft = Partial<CreateTaskForm> & {
+  id: string;
+  rawTitle: string;
+  sourceText?: string;
+  state: 'pending' | 'created' | 'ignored';
+};
+
 const CREATE_TASK_FORM_DEFAULTS: CreateTaskForm = {
   title: '',
   content: '',
@@ -149,6 +156,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [taskAssistantInput, setTaskAssistantInput] = useState('');
   const [taskAssistantError, setTaskAssistantError] = useState<string | null>(null);
   const [taskAssistantSubmitting, setTaskAssistantSubmitting] = useState(false);
+  const [showTaskDraftModal, setShowTaskDraftModal] = useState(false);
+  const [taskAssistantDrafts, setTaskAssistantDrafts] = useState<TaskAssistantDraft[]>([]);
+  const [activeTaskDraftId, setActiveTaskDraftId] = useState<string | null>(null);
   const [workflowRenderTick, setWorkflowRenderTick] = useState(() => Date.now());
 
   // Task Management State
@@ -363,6 +373,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     setCreateTaskError(null);
     setCreateTaskForm({ ...CREATE_TASK_FORM_DEFAULTS });
     setShowCreateTaskMoreFields(false);
+    setActiveTaskDraftId(null);
   }
 
   function _openCreateTaskModal(preset?: Partial<CreateTaskForm>): void {
@@ -375,6 +386,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     setShowCreateTaskModal(true);
   }
 
+  function _closeCreateTaskModal(): void {
+    const shouldReturnToDrafts = !!activeTaskDraftId && taskAssistantDrafts.some((draft) => draft.state === 'pending');
+    setShowCreateTaskModal(false);
+    _resetCreateTaskForm();
+    if (shouldReturnToDrafts) {
+      setShowTaskDraftModal(true);
+    }
+  }
+
   function _toDateTimeLocal(value: unknown): string {
     if (typeof value !== 'string' || !value.trim()) return '';
     const parsed = new Date(value);
@@ -382,34 +402,57 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }
 
-  function _parseJsonObject(candidate: string): Record<string, unknown> | null {
+  function _parseJsonValue(candidate: string): unknown {
     try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
+      return JSON.parse(candidate);
     } catch {
       return null;
+    }
+  }
+
+  function _extractJsonValue(text: string): unknown {
+    const direct = text.trim();
+    if (!direct) return null;
+    const directParsed = _parseJsonValue(direct);
+    if (directParsed) return directParsed;
+    const fenced = direct.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
+      const fencedParsed = _parseJsonValue(fenced[1].trim());
+      if (fencedParsed) return fencedParsed;
+    }
+    const objectStart = direct.indexOf('{');
+    const objectEnd = direct.lastIndexOf('}');
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      const objectParsed = _parseJsonValue(direct.slice(objectStart, objectEnd + 1));
+      if (objectParsed) return objectParsed;
+    }
+    const arrayStart = direct.indexOf('[');
+    const arrayEnd = direct.lastIndexOf(']');
+    if (arrayStart >= 0 && arrayEnd > arrayStart) {
+      return _parseJsonValue(direct.slice(arrayStart, arrayEnd + 1));
     }
     return null;
   }
 
-  function _extractJsonObject(text: string): Record<string, unknown> | null {
-    const direct = text.trim();
-    if (!direct) return null;
-    const directParsed = _parseJsonObject(direct);
-    if (directParsed) return directParsed;
-    const fenced = direct.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fenced?.[1]) {
-      const fencedParsed = _parseJsonObject(fenced[1].trim());
-      if (fencedParsed) return fencedParsed;
+  function _extractTaskDraftObjects(payload: unknown): Record<string, unknown>[] {
+    if (Array.isArray(payload)) {
+      return payload.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item));
     }
-    const start = direct.indexOf('{');
-    const end = direct.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      return _parseJsonObject(direct.slice(start, end + 1));
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return [];
     }
-    return null;
+    const payloadObj = payload as Record<string, unknown>;
+    if (Array.isArray(payloadObj.tasks)) {
+      return payloadObj.tasks.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item));
+    }
+    if (Array.isArray(payloadObj.drafts)) {
+      return payloadObj.drafts.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item));
+    }
+    return [];
+  }
+
+  function _isLegacySingleTaskPayload(payload: unknown): payload is Record<string, unknown> {
+    return !!payload && typeof payload === 'object' && !Array.isArray(payload);
   }
 
   function _limitTitleLength(value: string, maxChars: number): string {
@@ -450,6 +493,66 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     };
   }
 
+  function _buildAssistantDrafts(inputText: string, records: Record<string, unknown>[]): TaskAssistantDraft[] {
+    return records
+      .map((record, index) => {
+        const preset = _draftToCreateTaskForm(inputText, record);
+        const rawTitle = (typeof record.title === 'string' ? record.title.trim() : preset.title?.trim()) || `任务 ${index + 1}`;
+        return {
+          ...preset,
+          id: `${Date.now()}-${index}`,
+          rawTitle,
+          sourceText: typeof record.sourceText === 'string'
+            ? record.sourceText
+            : (typeof record.source === 'string' ? record.source : ''),
+          state: 'pending' as const,
+        };
+      })
+      .filter((draft) => !!draft.title?.trim());
+  }
+
+  function _openDraftInCreateForm(draft: TaskAssistantDraft): void {
+    setActiveTaskDraftId(draft.id);
+    setShowTaskDraftModal(false);
+    _openCreateTaskModal(draft);
+  }
+
+  function _ignoreTaskDraft(draftId: string): void {
+    setTaskAssistantDrafts((drafts) => drafts.map((draft) => (
+      draft.id === draftId ? { ...draft, state: 'ignored' } : draft
+    )));
+  }
+
+  function _resetTaskAssistant(): void {
+    setShowTaskAssistantModal(false);
+    setTaskAssistantError(null);
+    setTaskAssistantInput('');
+  }
+
+  function _closeTaskDraftModal(): void {
+    setShowTaskDraftModal(false);
+    setTaskAssistantDrafts([]);
+    setActiveTaskDraftId(null);
+  }
+
+  function _allDraftsHandled(drafts: TaskAssistantDraft[]): boolean {
+    return drafts.length > 0 && drafts.every((draft) => draft.state !== 'pending');
+  }
+
+  function _completeActiveTaskDraft(): void {
+    if (!activeTaskDraftId) return;
+    setTaskAssistantDrafts((drafts) => {
+      const nextDrafts = drafts.map((draft) => (
+        draft.id === activeTaskDraftId ? { ...draft, state: 'created' as const } : draft
+      ));
+      if (!_allDraftsHandled(nextDrafts)) {
+        setShowTaskDraftModal(true);
+      }
+      return nextDrafts;
+    });
+    setActiveTaskDraftId(null);
+  }
+
   async function _generateTaskByAssistant(): Promise<void> {
     if (taskAssistantSubmitting) return;
     const text = taskAssistantInput.trim();
@@ -464,18 +567,32 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `请将以下任务描述解析成一个 JSON 对象，仅返回 JSON，不要返回其他文字。字段包含：title, content, priority(0-3), targetMinutes, targetCycleCount, cyclePeriod(daily|weekly|monthly|custom), customCycleDays, event, tags(字符串数组), startDate, dueDate。其中 title 必须简练且不超过 10 个字。任务描述：${text}`,
+          message: `请判断以下原始通知文本包含一个还是多个可执行事项，并仅返回 JSON，不要返回其他文字。返回格式为：{"mode":"single"|"multiple","tasks":[{"title":"不超过10个字的简练标题","content":"保留必要上下文和要求","priority":0-3,"targetMinutes":25,"targetCycleCount":1,"cyclePeriod":"daily|weekly|monthly|custom","customCycleDays":1,"event":"","tags":["字符串标签"],"startDate":"","dueDate":"","sourceText":"来自原文的依据片段"}]}。如果只有一个事项，tasks 只放一项；如果有多个独立事项，必须拆成多个任务草稿，不要合并。原始通知文本：${text}`,
           history: [],
           scope: 'general',
         }),
       });
-      const payload = _extractJsonObject(typeof res.reply === 'string' ? res.reply : '');
+      const payload = _extractJsonValue(typeof res.reply === 'string' ? res.reply : '');
       if (!payload) {
         throw new Error('AI 返回格式无法识别');
       }
-      const preset = _draftToCreateTaskForm(text, payload);
-      setShowTaskAssistantModal(false);
-      setTaskAssistantInput('');
+      const taskObjects = _extractTaskDraftObjects(payload);
+      if (taskObjects.length > 1) {
+        const drafts = _buildAssistantDrafts(text, taskObjects);
+        if (drafts.length <= 1) {
+          throw new Error('AI 返回的多任务草稿不完整');
+        }
+        setTaskAssistantDrafts(drafts);
+        _resetTaskAssistant();
+        setShowTaskDraftModal(true);
+        return;
+      }
+      const singleDraft = taskObjects[0] ?? (_isLegacySingleTaskPayload(payload) ? payload : null);
+      if (!singleDraft) {
+        throw new Error('AI 返回格式无法识别');
+      }
+      const preset = _draftToCreateTaskForm(text, singleDraft);
+      _resetTaskAssistant();
       _openCreateTaskModal(preset);
     } catch (e) {
       setTaskAssistantError(e instanceof Error ? e.message : '快捷生成失败');
@@ -1131,6 +1248,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
         }),
       });
       setShowCreateTaskModal(false);
+      _completeActiveTaskDraft();
       _resetCreateTaskForm();
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
@@ -1268,6 +1386,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             {/* 右下角加号按钮 */}
             <button 
               className="absolute bottom-2 right-2 w-8 h-8 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white shadow-lg transition-all hover:scale-105 active:scale-95 group-hover/task:opacity-100 opacity-60 backdrop-blur-sm"
+              aria-label="快捷创建任务"
               onClick={(e) => {
                 e.stopPropagation();
                 setTaskAssistantError(null);
@@ -1930,10 +2049,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
         {showCreateTaskModal && (
           <div
             className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 pt-16"
-            onClick={() => {
-              setShowCreateTaskModal(false);
-              _resetCreateTaskForm();
-            }}
+            onClick={_closeCreateTaskModal}
           >
             <div
               className="w-[520px] max-w-[92vw] max-h-[calc(100vh-6rem)] flex flex-col bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
@@ -1942,10 +2058,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
                 <h3 className="text-lg font-bold text-white">创建任务</h3>
                 <button
-                  onClick={() => {
-                    setShowCreateTaskModal(false);
-                    _resetCreateTaskForm();
-                  }}
+                  onClick={_closeCreateTaskModal}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1959,6 +2072,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-white/70">标题</label>
                   <input
+                    aria-label="标题"
                     value={createTaskForm.title}
                     onChange={(e) => setCreateTaskForm((s) => ({ ...s, title: e.target.value }))}
                     placeholder="例如：完成周报"
@@ -1971,6 +2085,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   <div className="flex flex-col gap-2">
                     <label className="text-sm text-white/70">目标时长（分钟）</label>
                     <input
+                      aria-label="目标时长（分钟）"
                       type="number"
                       min={0}
                       value={createTaskForm.targetMinutes}
@@ -1981,6 +2096,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   <div className="flex flex-col gap-2">
                     <label className="text-sm text-white/70">截止日期</label>
                     <input
+                      aria-label="截止日期"
                       type="datetime-local"
                       value={createTaskForm.dueDate}
                       onChange={(e) => setCreateTaskForm((s) => ({ ...s, dueDate: e.target.value }))}
@@ -1992,6 +2108,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-white/70">标签</label>
                   <input
+                    aria-label="标签"
                     value={createTaskForm.tagsText}
                     onChange={(e) => setCreateTaskForm((s) => ({ ...s, tagsText: e.target.value }))}
                     placeholder="逗号分隔，例如：学习,arxiv"
@@ -2102,10 +2219,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               </div>
               <div className="p-5 pt-3 shrink-0 border-t border-white/10 flex items-center justify-end gap-3 bg-[#1a1a1a]">
                   <button
-                    onClick={() => {
-                      setShowCreateTaskModal(false);
-                      _resetCreateTaskForm();
-                    }}
+                    onClick={_closeCreateTaskModal}
                     className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
                     disabled={createTaskSubmitting}
                   >
@@ -2129,13 +2243,101 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             </div>
           </div>
         )}
+        {showTaskDraftModal && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={_closeTaskDraftModal}
+          >
+            <div
+              className="w-[680px] max-w-[94vw] max-h-[78vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-16 shrink-0 border-b border-white/10 px-5 bg-white/5 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white">识别到 {taskAssistantDrafts.length} 个任务草稿</h3>
+                  <p className="text-xs text-white/45 mt-1">请逐个确认，需要的草稿会进入现有创建任务表单。</p>
+                </div>
+                <button
+                  onClick={_closeTaskDraftModal}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  aria-label="关闭任务草稿"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto flex flex-col gap-3">
+                {taskAssistantDrafts.map((draft, idx) => (
+                  <div
+                    key={draft.id}
+                    className={`rounded-xl border p-4 transition-colors ${
+                      draft.state === 'pending'
+                        ? 'bg-white/5 border-white/10'
+                        : 'bg-white/[0.02] border-white/5 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white/35">#{idx + 1}</span>
+                          <h4 className="font-semibold text-white truncate">{draft.title || draft.rawTitle}</h4>
+                          {draft.state === 'created' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/20">已创建</span>
+                          )}
+                          {draft.state === 'ignored' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/10">已忽略</span>
+                          )}
+                        </div>
+                        {draft.content ? (
+                          <p className="text-sm text-white/65 mt-2 line-clamp-2">{draft.content}</p>
+                        ) : null}
+                        {draft.sourceText ? (
+                          <p className="text-xs text-white/35 mt-2 line-clamp-2">依据：{draft.sourceText}</p>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2 mt-3 text-xs text-white/45">
+                          {draft.dueDate ? <span>截止：{draft.dueDate.replace('T', ' ')}</span> : null}
+                          {draft.targetMinutes !== undefined ? <span>时长：{draft.targetMinutes} 分钟</span> : null}
+                          {draft.tagsText ? <span>标签：{draft.tagsText}</span> : null}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {draft.state === 'pending' ? (
+                          <>
+                            <button
+                              onClick={() => _ignoreTaskDraft(draft.id)}
+                              className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors"
+                            >
+                              忽略
+                            </button>
+                            <button
+                              onClick={() => _openDraftInCreateForm(draft)}
+                              className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
+                              aria-label={`创建“${draft.title || draft.rawTitle}”`}
+                            >
+                              创建
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {taskAssistantDrafts.length > 0 && taskAssistantDrafts.every((draft) => draft.state !== 'pending') ? (
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                    所有草稿都已处理，可以关闭确认页。
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
         {showTaskAssistantModal && (
           <div
             className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => {
-              setShowTaskAssistantModal(false);
-              setTaskAssistantError(null);
-            }}
+            onClick={_resetTaskAssistant}
           >
             <div
               className="w-[560px] h-[420px] max-w-[92vw] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
@@ -2144,11 +2346,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               <div className="flex-[1] border-b border-white/10 px-5 bg-white/5 flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white">任务解析助手</h3>
                 <button
-                  onClick={() => {
-                    setShowTaskAssistantModal(false);
-                    setTaskAssistantError(null);
-                  }}
+                  onClick={_resetTaskAssistant}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  aria-label="关闭任务解析助手"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
