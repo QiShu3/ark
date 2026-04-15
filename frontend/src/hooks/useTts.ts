@@ -489,7 +489,6 @@ export function useTts() {
         return;
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       finalizeCurrentMediaSourceIfReady,
       flushCurrentTtsAppendQueue,

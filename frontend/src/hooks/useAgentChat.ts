@@ -102,12 +102,18 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   }, []);
 
   const resetStreamingTextRef = useRef(resetStreamingText);
-  resetStreamingTextRef.current = resetStreamingText;
-
   const startStreamingPumpRef = useRef(startStreamingPump);
-  startStreamingPumpRef.current = startStreamingPump;
+  const resetTtsRef = useRef(tts.resetTts);
+  const handleTtsMessageRef = useRef(tts.handleTtsMessage);
 
-  // 初始化 Session 和历史记录
+  useEffect(() => {
+    resetStreamingTextRef.current = resetStreamingText;
+    startStreamingPumpRef.current = startStreamingPump;
+    resetTtsRef.current = tts.resetTts;
+    handleTtsMessageRef.current = tts.handleTtsMessage;
+  }, [resetStreamingText, startStreamingPump, tts.resetTts, tts.handleTtsMessage]);
+
+  // 初始化 Session 和历史记录 
   useEffect(() => {
     let cancelled = false;
 
@@ -134,15 +140,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     };
   }, [profileKey]);
 
-  const resetTtsRef = useRef(tts.resetTts);
-  useEffect(() => {
-    resetTtsRef.current = tts.resetTts;
-  }, [tts.resetTts]);
 
-  const handleTtsMessageRef = useRef(tts.handleTtsMessage);
-  useEffect(() => {
-    handleTtsMessageRef.current = tts.handleTtsMessage;
-  }, [tts.handleTtsMessage]);
 
   // 管理 WebSocket 连接
   useEffect(() => {
@@ -151,7 +149,16 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       return;
     }
 
-    setSocketState('connecting');
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+    
+    let cancelled = false;
+
+    setTimeout(() => {
+      if (cancelled) return;
+      setSocketState('connecting');
+    }, 0);
     const socket = new WebSocket(buildWebSocketUrl(sessionId, token));
     socketRef.current = socket;
 
@@ -236,6 +243,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     };
 
     return () => {
+      cancelled = true;
       if (socketRef.current === socket) {
         socketRef.current = null;
       }

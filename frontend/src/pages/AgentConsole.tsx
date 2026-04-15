@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { apiJson } from '../lib/api';
 import { useAuthStore } from '../lib/auth';
