@@ -1,9 +1,7 @@
 """Tests for the TTS subsystem."""
 
-import asyncio
 
 import pytest
-
 from mini_agent.tts.factory import create_tts_provider
 from mini_agent.tts.manager import TTSManager
 from mini_agent.tts.providers import edge as edge_provider_module
@@ -232,7 +230,8 @@ async def test_edge_provider_uses_edge_tts_save(monkeypatch, tmp_path):
 
         async def save(self, path):
             saved["path"] = path
-            with open(path, "wb") as file_obj:
+            # ASYNC230 false positive in tests since it's an I/O mock mock
+            with open(path, "wb") as file_obj:  # noqa: ASYNC230
                 file_obj.write(b"edge-audio")
 
     monkeypatch.setattr(edge_provider_module, "edge_tts", type("FakeEdgeModule", (), {"Communicate": FakeCommunicate}))
