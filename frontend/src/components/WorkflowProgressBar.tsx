@@ -25,29 +25,6 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
   const isFocus = phaseType === 'focus';
   const activeColorText = isFocus ? 'text-blue-400' : 'text-orange-400';
   const activeColorBg = isFocus ? 'bg-blue-400' : 'bg-orange-400';
-  const activeColorGradient = isFocus 
-    ? 'linear-gradient(90deg, #60a5fa, #3b82f6)' 
-    : 'linear-gradient(90deg, #fb923c, #f97316)';
-
-  const boundaryOffsets = React.useMemo(() => {
-    const safeDurations = phases.map((phase) => Math.max(0, Math.round(phase.duration || 0)));
-    const total = safeDurations.reduce((sum, value) => sum + value, 0);
-    const offsets: number[] = [];
-    let acc = 0;
-    offsets.push(0);
-    for (let i = 0; i < safeDurations.length; i++) {
-      acc += safeDurations[i];
-      offsets.push(total > 0 ? (acc / total) * 100 : 0);
-    }
-    if (offsets.length > 0) {
-      offsets[offsets.length - 1] = 100;
-    }
-    return offsets;
-  }, [phases]);
-
-  const activeNodeIndex = workflow.pending_confirmation
-    ? Math.min(metrics.activePhaseIndex + 1, boundaryOffsets.length - 1)
-    : Math.min(metrics.activePhaseIndex, boundaryOffsets.length - 1);
 
   if (!showProgress) {
     return null;
@@ -79,58 +56,44 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
         </span>
       </div>
 
-      {/* 节点步进器 (Node Stepper) */}
-      <div className="relative h-8 w-full px-2">
-        {/* 背景底线 */}
-        <div className="absolute inset-x-2 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/10" />
-        
-        {/* 进度填充线 */}
-        <div
-          className="absolute left-2 top-1/2 h-1 -translate-y-1/2 rounded-full"
-          style={{
-            width: `calc(${metrics.percent}% - ${metrics.percent === 100 ? 16 : 16 * (metrics.percent / 100)}px)`,
-            transition: 'width 1s linear',
-            background: activeColorGradient,
-            boxShadow: `0 0 10px ${isFocus ? 'rgba(59,130,246,0.4)' : 'rgba(251,146,60,0.4)'}`
-          }}
-        />
+      {/* 分段胶囊进度条 (Segmented Capsules) */}
+      <div className="relative h-2 w-full flex gap-[3px] mt-2">
+        {phases.map((phase, idx) => {
+          const duration = Math.max(0, Math.round(phase.duration || 0));
+          
+          let fillPercent = 0;
+          if (idx < metrics.activePhaseIndex) {
+            fillPercent = 100;
+          } else if (idx === metrics.activePhaseIndex) {
+            const currentRemaining = workflow.pending_confirmation ? 0 : Math.max(0, Math.round(workflow.remaining_seconds ?? 0));
+            const elapsed = Math.max(0, duration - currentRemaining);
+            fillPercent = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+          }
 
-        {/* 节点渲染 */}
-        {boundaryOffsets.map((offset, idx) => {
-          const isActive = idx === activeNodeIndex;
-          const isPassed = idx < activeNodeIndex || metrics.percent >= offset - 0.01;
-          const phaseForNode = phases[Math.min(idx, Math.max(0, phases.length - 1))];
-          const nodePhaseType = phaseForNode?.phase_type ?? 'focus';
-          const nodeIsFocus = nodePhaseType === 'focus';
-          const nodeColorBg = nodeIsFocus ? 'bg-blue-400' : 'bg-orange-400';
-          const nodeColorSolid = nodeIsFocus ? 'border-blue-500 bg-blue-500' : 'border-orange-500 bg-orange-500';
+          const isFocusPhase = phase.phase_type === 'focus';
+          const trackBg = 'bg-white/10';
+          const fillGradient = isFocusPhase 
+            ? 'linear-gradient(90deg, #60a5fa, #3b82f6)' 
+            : 'linear-gradient(90deg, #fb923c, #f97316)';
+          const boxShadow = isFocusPhase
+            ? '0 0 10px rgba(59,130,246,0.4)'
+            : '0 0 10px rgba(251,146,60,0.4)';
 
           return (
             <div
-              key={`boundary-${idx}`}
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center transition-all duration-500"
-              style={{ 
-                left: `calc(8px + ${offset}% * calc(1 - 16px / 100%))`,
-                zIndex: isActive ? 10 : 1 
-              }}
+              key={idx}
+              className={`relative h-full rounded-full overflow-hidden ${trackBg}`}
+              style={{ flexGrow: duration, flexBasis: 0 }}
             >
-              {isActive ? (
-                <div 
-                  className="w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform duration-300 scale-110"
-                  style={{
-                    background: nodeColorBg,
-                    boxShadow: `0 0 15px ${nodeIsFocus ? 'rgba(59,130,246,0.6)' : 'rgba(251,146,60,0.6)'}`
-                  }}
-                >
-                  <span className="text-[10px]">
-                    {nodeIsFocus ? '🧠' : '☕'}
-                  </span>
-                </div>
-              ) : isPassed ? (
-                <div className={`w-3 h-3 rounded-full border-2 transition-colors duration-300 ${nodeColorSolid}`} />
-              ) : (
-                <div className="w-3 h-3 rounded-full border-2 border-white/20 bg-[#1a1a1a]" />
-              )}
+              <div
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{ 
+                  width: `${fillPercent}%`,
+                  transition: 'width 1s linear',
+                  background: fillGradient,
+                  boxShadow: fillPercent > 0 ? boxShadow : 'none'
+                }}
+              />
             </div>
           );
         })}
