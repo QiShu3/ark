@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(str, Enum):  # noqa: UP042
     """LLM provider types."""
 
     ANTHROPIC = "anthropic"

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from anyio import Path as AsyncPath
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
@@ -365,8 +366,7 @@ async def load_mcp_tools_async(config_path: str = "mcp.json") -> list[Tool]:
         return []
 
     try:
-        with open(config_file, encoding="utf-8") as f:
-            config = json.load(f)
+        config = json.loads(await AsyncPath(config_file).read_text(encoding="utf-8"))
         return await load_mcp_tools_from_config_async(config)
     except Exception as e:
         print(f"Error loading MCP config: {e}")

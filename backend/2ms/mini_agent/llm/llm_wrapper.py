@@ -5,7 +5,7 @@ This module provides a unified interface for different LLM providers
 """
 
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from ..retry import RetryConfig
 from ..schema import LLMProvider, LLMResponse, LLMStreamEvent, Message

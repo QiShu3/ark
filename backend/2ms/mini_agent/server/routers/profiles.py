@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, List
+from typing import Annotated
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from mini_agent.server.auth import CurrentUser, get_current_user
 from mini_agent.server.repository import (
+    create_profile,
     delete_profile,
     delete_profile_file,
     get_pool,
@@ -19,7 +20,6 @@ from mini_agent.server.repository import (
     set_default_profile,
     update_profile,
     upsert_profile_file,
-    create_profile,
 )
 from mini_agent.server.runtime import build_profile_runtime_config, resolve_profile_prompt_source
 from mini_agent.server.schemas import (
@@ -28,8 +28,8 @@ from mini_agent.server.schemas import (
     ProfileFileResponse,
     ProfileFileUpdate,
     ProfileResponse,
-    ResolvedPromptResponse,
     ProfileUpdate,
+    ResolvedPromptResponse,
 )
 
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
@@ -39,7 +39,7 @@ async def _pool_dep(request: Request) -> asyncpg.Pool:
     return await get_pool(request)
 
 
-@router.get("", response_model=List[ProfileResponse])
+@router.get("", response_model=list[ProfileResponse])
 async def route_list_profiles(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     pool: Annotated[asyncpg.Pool, Depends(_pool_dep)],
@@ -135,7 +135,7 @@ async def route_set_default_profile(
     return profile
 
 
-@router.get("/{profile_id}/files", response_model=List[ProfileFileResponse])
+@router.get("/{profile_id}/files", response_model=list[ProfileFileResponse])
 async def route_list_profile_files(
     profile_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],

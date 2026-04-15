@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import Any
 
+from anyio import Path as AsyncPath
+
 from .base import Tool, ToolResult
 
 
@@ -128,8 +130,7 @@ class ReadTool(Tool):
                 )
 
             # Read file content with line numbers
-            with open(file_path, encoding="utf-8") as f:
-                lines = f.readlines()
+            lines = (await AsyncPath(file_path).read_text(encoding="utf-8")).splitlines()
 
             # Apply offset and limit
             start = (offset - 1) if offset else 0

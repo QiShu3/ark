@@ -5,14 +5,14 @@ Kaleidoscope Effect - Create mirror/rotation effects.
 Apply kaleidoscope effects to frames or objects for psychedelic visuals.
 """
 
+import math
 import sys
 from pathlib import Path
-import math
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from PIL import Image, ImageOps, ImageDraw
 import numpy as np
+from PIL import Image, ImageDraw, ImageOps
 
 
 def apply_kaleidoscope(frame: Image.Image, segments: int = 8,
@@ -32,9 +32,6 @@ def apply_kaleidoscope(frame: Image.Image, segments: int = 8,
 
     if center is None:
         center = (width // 2, height // 2)
-
-    # Create output frame
-    output = Image.new('RGB', (width, height))
 
     # Calculate angle per segment
     angle_per_segment = 360 / segments

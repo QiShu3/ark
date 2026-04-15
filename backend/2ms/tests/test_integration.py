@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from anyio import Path as AsyncPath
 from mini_agent import LLMClient
 from mini_agent.agent import Agent
 from mini_agent.config import Config
@@ -26,11 +27,11 @@ async def test_basic_agent_usage():
     print("=" * 80)
 
     # Load configuration
-    config_path = Path("mini_agent/config/config.yaml")
-    if not config_path.exists():
+    config_path = AsyncPath("mini_agent/config/config.yaml")
+    if not await config_path.exists():
         pytest.skip("config.yaml not found")
 
-    config = Config.from_yaml(config_path)
+    config = Config.from_yaml(Path(str(config_path)))
 
     # Check API key
     if not config.llm.api_key or config.llm.api_key == "YOUR_MINIMAX_API_KEY_HERE":
@@ -39,9 +40,9 @@ async def test_basic_agent_usage():
     # Use temporary workspace
     with tempfile.TemporaryDirectory() as workspace_dir:
         # Load system prompt (Agent will auto-inject workspace info)
-        system_prompt_path = Path("mini_agent/config/system_prompt.md")
-        if system_prompt_path.exists():
-            system_prompt = system_prompt_path.read_text(encoding="utf-8")
+        system_prompt_path = AsyncPath("mini_agent/config/system_prompt.md")
+        if await system_prompt_path.exists():
+            system_prompt = await system_prompt_path.read_text(encoding="utf-8")
         else:
             system_prompt = "You are a helpful AI assistant."
 
@@ -130,11 +131,11 @@ async def test_session_memory_demo():
     print("=" * 80)
 
     # Load config
-    config_path = Path("mini_agent/config/config.yaml")
-    if not config_path.exists():
+    config_path = AsyncPath("mini_agent/config/config.yaml")
+    if not await config_path.exists():
         pytest.skip("config.yaml not found")
 
-    config = Config.from_yaml(config_path)
+    config = Config.from_yaml(Path(str(config_path)))
 
     # Check API key
     if not config.llm.api_key or config.llm.api_key == "YOUR_MINIMAX_API_KEY_HERE":
@@ -182,7 +183,7 @@ You have record_note and recall_notes tools:
         - Project: mini-agent
         - Tech stack: Python 3.12, async/await
         - Preference: concise code style
-        
+
         Use record_note to save this information.
         """
 
@@ -197,8 +198,9 @@ You have record_note and recall_notes tools:
         print("=" * 80)
 
         # Check if notes were recorded
-        if memory_file.exists():
-            notes = json.loads(memory_file.read_text())
+        async_memory_file = AsyncPath(str(memory_file))
+        if await async_memory_file.exists():
+            notes = json.loads(await async_memory_file.read_text())
             print(f"\n✅ Agent recorded {len(notes)} notes:")
             for note in notes:
                 print(f"  - [{note['category']}] {note['content']}")

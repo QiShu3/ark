@@ -1,12 +1,12 @@
 """Test cases for LLM wrapper client."""
 
 import asyncio
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import yaml
+from anyio import Path as AsyncPath
 from mini_agent.llm import AnthropicClient, LLMClient
 from mini_agent.llm.base import LLMClientBase
 from mini_agent.schema import LLMProvider, LLMStreamEvent, Message
@@ -18,9 +18,8 @@ async def test_wrapper_anthropic_provider():
     print("\n=== Testing LLM Wrapper (Anthropic Provider) ===")
 
     # Load config
-    config_path = Path("mini_agent/config/config.yaml")
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config_path = AsyncPath("mini_agent/config/config.yaml")
+    config = yaml.safe_load(await config_path.read_text(encoding="utf-8"))
 
     # Create client with Anthropic provider
     client = LLMClient(
@@ -65,9 +64,8 @@ async def test_wrapper_openai_provider():
     print("\n=== Testing LLM Wrapper (OpenAI Provider) ===")
 
     # Load config
-    config_path = Path("mini_agent/config/config.yaml")
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config_path = AsyncPath("mini_agent/config/config.yaml")
+    config = yaml.safe_load(await config_path.read_text(encoding="utf-8"))
 
     # Create client with OpenAI provider
     client = LLMClient(
@@ -111,9 +109,8 @@ async def test_wrapper_default_provider():
     print("\n=== Testing LLM Wrapper (Default Provider) ===")
 
     # Load config
-    config_path = Path("mini_agent/config/config.yaml")
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config_path = AsyncPath("mini_agent/config/config.yaml")
+    config = yaml.safe_load(await config_path.read_text(encoding="utf-8"))
 
     # Create client without specifying provider (should default to Anthropic)
     client = LLMClient(
@@ -371,9 +368,8 @@ async def test_wrapper_tool_calling():
     print("\n=== Testing LLM Wrapper Tool Calling ===")
 
     # Load config
-    config_path = Path("mini_agent/config/config.yaml")
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config_path = AsyncPath("mini_agent/config/config.yaml")
+    config = yaml.safe_load(await config_path.read_text(encoding="utf-8"))
 
     # Create client with Anthropic provider
     client = LLMClient(

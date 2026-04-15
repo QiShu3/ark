@@ -221,7 +221,7 @@ class TTSManager:
         normalized = re.sub(r"\(" + url_pattern + r"\)", "", sentence)
         normalized = re.sub(r"<" + url_pattern + r">", "", normalized)
         normalized = re.sub(url_pattern, "", normalized)
-        
+
         normalized = re.sub(r"[*#`~_|\[\]]", "", normalized.strip())
         normalized = re.sub(r"^[-+>]\s+", "", normalized).strip()
         return normalized

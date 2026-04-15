@@ -1,7 +1,9 @@
 """Edge TTS provider."""
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
+from anyio import Path as AsyncPath
 
 from ..base import TTSProvider
 from ..schemas import TTSAudioChunk, TTSRequest
@@ -30,9 +32,9 @@ class EdgeTTSProvider(TTSProvider):
         try:
             communicate = edge_tts.Communicate(request.text, request.voice, rate=self.settings.edge_rate)
             await communicate.save(str(path))
-            audio_bytes = path.read_bytes()
+            audio_bytes = await AsyncPath(path).read_bytes()
         finally:
-            path.unlink(missing_ok=True)
+            await AsyncPath(path).unlink(missing_ok=True)
 
         return TTSAudioChunk(
             provider=self.provider_name,

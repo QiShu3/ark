@@ -5,7 +5,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class TTSProviderName(str, Enum):
+class TTSProviderName(str, Enum):  # noqa: UP042
     """Supported TTS providers."""
 
     MINIMAX = "minimax"

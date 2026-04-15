@@ -5,16 +5,15 @@ Wiggle Animation - Smooth, organic wobbling and jiggling motions.
 Creates playful, elastic movements that are smoother than shake.
 """
 
+import math
 import sys
 from pathlib import Path
-import math
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from PIL import Image
-from core.gif_builder import GIFBuilder
 from core.frame_composer import create_blank_frame, draw_emoji_enhanced
-from core.easing import interpolate
+from core.gif_builder import GIFBuilder
+from PIL import Image
 
 
 def create_wiggle_animation(
@@ -126,8 +125,6 @@ def create_wiggle_animation(
         # Apply transformations
         if object_type == 'emoji':
             size = object_data['size']
-            size_x = int(size * scale_x)
-            size_y = int(size * scale_y)
 
             # For non-uniform scaling or rotation, we need to use PIL transforms
             if abs(scale_x - scale_y) > 0.01 or abs(rotation) > 0.1:

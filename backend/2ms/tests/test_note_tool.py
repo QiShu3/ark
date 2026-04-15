@@ -1,9 +1,9 @@
 """Test cases for Session Note Tool."""
 
 import tempfile
-from pathlib import Path
 
 import pytest
+from anyio import Path as AsyncPath
 from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
 
 
@@ -53,7 +53,7 @@ async def test_record_and_recall_notes():
         print("✅ Note record and recall test passed")
 
     finally:
-        Path(note_file).unlink(missing_ok=True)
+        await AsyncPath(note_file).unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_empty_notes():
         note_file = f.name
 
     # Delete the file to test empty state
-    Path(note_file).unlink()
+    await AsyncPath(note_file).unlink()
 
     try:
         recall_tool = RecallNoteTool(memory_file=note_file)
@@ -79,7 +79,7 @@ async def test_empty_notes():
         print("✅ Empty notes test passed")
 
     finally:
-        Path(note_file).unlink(missing_ok=True)
+        await AsyncPath(note_file).unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_note_persistence():
         print("✅ Note persistence test passed")
 
     finally:
-        Path(note_file).unlink(missing_ok=True)
+        await AsyncPath(note_file).unlink(missing_ok=True)
 
 
 async def main():

@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from anyio import Path as AsyncPath
 from mini_agent import LLMClient
 from mini_agent.agent import Agent
 from mini_agent.config import Config
@@ -25,9 +26,9 @@ async def test_agent_simple_task():
         print(f"Using workspace: {workspace_dir}")
 
         # Load system prompt (Agent will auto-inject workspace info)
-        system_prompt_path = Path("mini_agent/config/system_prompt.md")
-        if system_prompt_path.exists():
-            system_prompt = system_prompt_path.read_text(encoding="utf-8")
+        system_prompt_path = AsyncPath("mini_agent/config/system_prompt.md")
+        if await system_prompt_path.exists():
+            system_prompt = await system_prompt_path.read_text(encoding="utf-8")
         else:
             system_prompt = "You are a helpful AI assistant that can use tools."
 
@@ -107,9 +108,9 @@ async def test_agent_bash_task():
         print(f"Using workspace: {workspace_dir}")
 
         # Load system prompt (Agent will auto-inject workspace info)
-        system_prompt_path = Path("mini_agent/config/system_prompt.md")
-        if system_prompt_path.exists():
-            system_prompt = system_prompt_path.read_text(encoding="utf-8")
+        system_prompt_path = AsyncPath("mini_agent/config/system_prompt.md")
+        if await system_prompt_path.exists():
+            system_prompt = await system_prompt_path.read_text(encoding="utf-8")
         else:
             system_prompt = "You are a helpful AI assistant that can use tools."
 
