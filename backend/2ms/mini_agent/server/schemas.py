@@ -1,7 +1,7 @@
 """Pydantic schemas for API request/response validation."""
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 class ProfileBase(BaseModel):
     key: str = Field(..., min_length=1, max_length=120)
     name: str = Field(..., min_length=1, max_length=50)
-    config_json: Optional[dict[str, Any]] = None
-    system_prompt: Optional[str] = None
-    system_prompt_path: Optional[str] = None
-    mcp_config_json: Optional[dict[str, Any]] = None
+    config_json: dict[str, Any] | None = None
+    system_prompt: str | None = None
+    system_prompt_path: str | None = None
+    mcp_config_json: dict[str, Any] | None = None
     mcp_server_ids: list[str] = Field(default_factory=list)
     is_default: bool = False
 
@@ -22,14 +22,14 @@ class ProfileCreate(ProfileBase):
 
 
 class ProfileUpdate(BaseModel):
-    key: Optional[str] = Field(None, min_length=1, max_length=120)
-    name: Optional[str] = Field(None, min_length=1, max_length=50)
-    config_json: Optional[dict[str, Any]] = None
-    system_prompt: Optional[str] = None
-    system_prompt_path: Optional[str] = None
-    mcp_config_json: Optional[dict[str, Any]] = None
-    mcp_server_ids: Optional[list[str]] = None
-    is_default: Optional[bool] = None
+    key: str | None = Field(None, min_length=1, max_length=120)
+    name: str | None = Field(None, min_length=1, max_length=50)
+    config_json: dict[str, Any] | None = None
+    system_prompt: str | None = None
+    system_prompt_path: str | None = None
+    mcp_config_json: dict[str, Any] | None = None
+    mcp_server_ids: list[str] | None = None
+    is_default: bool | None = None
 
 
 class ProfileResponse(ProfileBase):
@@ -57,7 +57,7 @@ class SkillResponse(BaseModel):
 
 class MCPServerBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
-    description: Optional[str] = Field(None, max_length=255)
+    description: str | None = Field(None, max_length=255)
     config_json: dict[str, Any]
 
 
@@ -66,9 +66,9 @@ class MCPServerCreate(MCPServerBase):
 
 
 class MCPServerUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=120)
-    description: Optional[str] = Field(None, max_length=255)
-    config_json: Optional[dict[str, Any]] = None
+    name: str | None = Field(None, min_length=1, max_length=120)
+    description: str | None = Field(None, max_length=255)
+    config_json: dict[str, Any] | None = None
 
 
 class MCPServerImportRequest(BaseModel):
@@ -88,7 +88,7 @@ class MCPServerResponse(MCPServerBase):
 class ProfileFileBase(BaseModel):
     file_type: str
     filename: str
-    content: Optional[str] = None
+    content: str | None = None
 
 
 class ProfileFileCreate(ProfileFileBase):
@@ -112,8 +112,8 @@ class ProfileFileResponse(ProfileFileBase):
 
 class SessionBase(BaseModel):
     profile_id: str
-    name: Optional[str] = Field(None, min_length=1, max_length=120)
-    workspace_path: Optional[str] = None
+    name: str | None = Field(None, min_length=1, max_length=120)
+    workspace_path: str | None = None
 
 
 class SessionCreate(SessionBase):
@@ -121,8 +121,8 @@ class SessionCreate(SessionBase):
 
 
 class SessionUpdate(BaseModel):
-    profile_id: Optional[str] = None
-    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    profile_id: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=120)
 
 
 class SessionResponse(SessionBase):
@@ -145,7 +145,7 @@ class SessionRunResponse(BaseModel):
     snapshot_json: dict[str, Any]
     created_at: datetime
     updated_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -163,12 +163,12 @@ class MessageCreate(MessageBase):
 class MessageResponse(MessageBase):
     id: str
     session_id: str
-    run_id: Optional[str] = None
-    event_type: Optional[str] = None
+    run_id: str | None = None
+    event_type: str | None = None
     sequence_no: int = 0
-    name: Optional[str] = None
-    tool_call_id: Optional[str] = None
-    metadata_json: Optional[dict[str, Any]] = None
+    name: str | None = None
+    tool_call_id: str | None = None
+    metadata_json: dict[str, Any] | None = None
     created_at: datetime
 
     class Config:

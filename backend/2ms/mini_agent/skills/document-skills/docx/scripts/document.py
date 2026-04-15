@@ -30,7 +30,7 @@ import html
 import random
 import shutil
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from defusedxml import minidom
@@ -127,9 +127,9 @@ class DocxXMLEditor(XMLEditor):
         Args:
             nodes: List of DOM nodes to process
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         def is_inside_deletion(elem):
             """Check if element is inside a w:del element."""
@@ -447,28 +447,28 @@ class DocxXMLEditor(XMLEditor):
         para = doc.getElementsByTagName("w:p")[0]
 
         # Ensure w:pPr exists
-        pPr_list = para.getElementsByTagName("w:pPr")
-        if not pPr_list:
-            pPr = doc.createElement("w:pPr")
+        p_pr_list = para.getElementsByTagName("w:pPr")
+        if not p_pr_list:
+            p_pr = doc.createElement("w:pPr")
             para.insertBefore(
-                pPr, para.firstChild
-            ) if para.firstChild else para.appendChild(pPr)
+                p_pr, para.firstChild
+            ) if para.firstChild else para.appendChild(p_pr)
         else:
-            pPr = pPr_list[0]
+            p_pr = p_pr_list[0]
 
         # Ensure w:rPr exists in w:pPr
-        rPr_list = pPr.getElementsByTagName("w:rPr")
-        if not rPr_list:
-            rPr = doc.createElement("w:rPr")
-            pPr.appendChild(rPr)
+        r_pr_list = p_pr.getElementsByTagName("w:rPr")
+        if not r_pr_list:
+            r_pr = doc.createElement("w:rPr")
+            p_pr.appendChild(r_pr)
         else:
-            rPr = rPr_list[0]
+            r_pr = r_pr_list[0]
 
         # Add <w:ins/> to w:rPr
         ins_marker = doc.createElement("w:ins")
-        rPr.insertBefore(
-            ins_marker, rPr.firstChild
-        ) if rPr.firstChild else rPr.appendChild(ins_marker)
+        r_pr.insertBefore(
+            ins_marker, r_pr.firstChild
+        ) if r_pr.firstChild else r_pr.appendChild(ins_marker)
 
         # Wrap all non-pPr children in <w:ins>
         ins_wrapper = doc.createElement("w:ins")
@@ -537,25 +537,25 @@ class DocxXMLEditor(XMLEditor):
                 raise ValueError("w:p element already contains tracked changes")
 
             # Check if it's a numbered list item
-            pPr_list = elem.getElementsByTagName("w:pPr")
-            is_numbered = pPr_list and pPr_list[0].getElementsByTagName("w:numPr")
+            p_pr_list = elem.getElementsByTagName("w:pPr")
+            is_numbered = p_pr_list and p_pr_list[0].getElementsByTagName("w:numPr")
 
             if is_numbered:
                 # Add <w:del/> to w:rPr in w:pPr
-                pPr = pPr_list[0]
-                rPr_list = pPr.getElementsByTagName("w:rPr")
+                p_pr = p_pr_list[0]
+                r_pr_list = p_pr.getElementsByTagName("w:rPr")
 
-                if not rPr_list:
-                    rPr = self.dom.createElement("w:rPr")
-                    pPr.appendChild(rPr)
+                if not r_pr_list:
+                    r_pr = self.dom.createElement("w:rPr")
+                    p_pr.appendChild(r_pr)
                 else:
-                    rPr = rPr_list[0]
+                    r_pr = r_pr_list[0]
 
                 # Add <w:del/> marker
                 del_marker = self.dom.createElement("w:del")
-                rPr.insertBefore(
-                    del_marker, rPr.firstChild
-                ) if rPr.firstChild else rPr.appendChild(del_marker)
+                r_pr.insertBefore(
+                    del_marker, r_pr.firstChild
+                ) if r_pr.firstChild else r_pr.appendChild(del_marker)
 
             # Convert w:t → w:delText in all runs
             for t_elem in list(elem.getElementsByTagName("w:t")):
@@ -730,7 +730,7 @@ class Document:
         comment_id = self.next_comment_id
         para_id = _generate_hex_id()
         durable_id = _generate_hex_id()
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Add comment ranges to document.xml immediately
         self._document.insert_before(start, self._comment_range_start_xml(comment_id))
@@ -787,7 +787,7 @@ class Document:
         comment_id = self.next_comment_id
         para_id = _generate_hex_id()
         durable_id = _generate_hex_id()
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Add comment ranges to document.xml immediately
         parent_start_elem = self._document.get_node(

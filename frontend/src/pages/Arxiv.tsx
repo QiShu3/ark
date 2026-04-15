@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ArrowUp, ArrowDown, History, ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
-import Navigation from '../components/Navigation';
 import { apiJson } from '../lib/api';
 
 type SortBy = 'relevance' | 'submitted_date' | 'last_updated_date';
@@ -675,16 +674,7 @@ const Arxiv: React.FC = () => {
 
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black text-white font-sans">
-      <div className="fixed inset-0 z-0">
-        <img
-          src={`${import.meta.env.BASE_URL}images/background.jpg`}
-          alt="Background"
-          className="w-full h-full object-cover opacity-60"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60"></div>
-      </div>
-      <Navigation />
+    <>
       <div className="relative z-10 w-full h-full pt-20 px-8 pb-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col items-center mb-6">
@@ -1398,7 +1388,7 @@ const Arxiv: React.FC = () => {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 };
 

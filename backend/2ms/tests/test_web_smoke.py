@@ -1,7 +1,6 @@
 """Lightweight smoke tests for the Web app surface."""
 
 from fastapi.routing import APIRoute, APIWebSocketRoute
-
 from mini_agent.server.main import app
 
 

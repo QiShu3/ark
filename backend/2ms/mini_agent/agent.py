@@ -3,13 +3,14 @@
 import asyncio
 import inspect
 import json
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from time import perf_counter
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from typing import Any
 
 from .llm import LLMClient
 from .logger import AgentLogger
-from .schema import LLMResponse, LLMStreamEvent, Message
+from .schema import LLMResponse, Message
 from .tools.base import Tool, ToolResult
 from .utils import calculate_display_width
 
@@ -61,7 +62,7 @@ class Agent:
         self.workspace_dir = Path(workspace_dir)
         self.event_handler = event_handler
         # Cancellation event for interrupting agent execution (set externally, e.g., by Esc key)
-        self.cancel_event: Optional[asyncio.Event] = None
+        self.cancel_event: asyncio.Event | None = None
 
         # Ensure workspace exists
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -384,7 +385,7 @@ Requirements:
             # Use simple text summary on failure
             return summary_content
 
-    async def run(self, cancel_event: Optional[asyncio.Event] = None) -> str:
+    async def run(self, cancel_event: asyncio.Event | None = None) -> str:
         """Execute agent loop until task is complete or max steps reached.
 
         Args:
@@ -428,14 +429,14 @@ Requirements:
             await self._summarize_messages()
 
             # Step header with proper width calculation
-            BOX_WIDTH = 58
+            box_width = 58
             step_text = f"{Colors.BOLD}{Colors.BRIGHT_CYAN}💭 Step {step + 1}/{self.max_steps}{Colors.RESET}"
             step_display_width = calculate_display_width(step_text)
-            padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
+            padding = max(0, box_width - 1 - step_display_width)  # -1 for leading space
 
-            print(f"\n{Colors.DIM}╭{'─' * BOX_WIDTH}╮{Colors.RESET}")
+            print(f"\n{Colors.DIM}╭{'─' * box_width}╮{Colors.RESET}")
             print(f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
-            print(f"{Colors.DIM}╰{'─' * BOX_WIDTH}╯{Colors.RESET}")
+            print(f"{Colors.DIM}╰{'─' * box_width}╯{Colors.RESET}")
 
             # Get tool list for LLM call
             tool_list = list(self.tools.values())

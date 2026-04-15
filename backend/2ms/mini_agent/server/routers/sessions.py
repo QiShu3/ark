@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, List
+from typing import Annotated
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
@@ -12,6 +12,7 @@ from mini_agent.server.auth import CurrentUser, get_current_user, get_current_us
 from mini_agent.server.repository import (
     create_message,
     create_session,
+    delete_session,
     get_pool,
     get_profile,
     get_run,
@@ -20,7 +21,6 @@ from mini_agent.server.repository import (
     list_runs,
     list_sessions,
     update_session,
-    delete_session,
 )
 from mini_agent.server.runtime import (
     WebAgentRuntimeManager,
@@ -29,8 +29,14 @@ from mini_agent.server.runtime import (
     build_tts_settings,
     serialize_tts_state,
 )
-from mini_agent.server.schemas import MessageCreate, MessageResponse, SessionCreate, SessionResponse, SessionRunResponse
-from mini_agent.server.schemas import SessionUpdate
+from mini_agent.server.schemas import (
+    MessageCreate,
+    MessageResponse,
+    SessionCreate,
+    SessionResponse,
+    SessionRunResponse,
+    SessionUpdate,
+)
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
 runtime_manager = WebAgentRuntimeManager()
@@ -44,7 +50,7 @@ def _default_session_name(session_id: str) -> str:
     return f"会话 {session_id[:8]}"
 
 
-@router.get("", response_model=List[SessionResponse])
+@router.get("", response_model=list[SessionResponse])
 async def route_list_sessions(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     pool: Annotated[asyncpg.Pool, Depends(_pool_dep)],
@@ -149,7 +155,7 @@ async def route_delete_session(
     await delete_session(pool, current_user.id, session_id)
 
 
-@router.get("/{session_id}/messages", response_model=List[MessageResponse])
+@router.get("/{session_id}/messages", response_model=list[MessageResponse])
 async def route_get_session_messages(
     session_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -161,7 +167,7 @@ async def route_get_session_messages(
     return await list_messages(pool, current_user.id, session_id)
 
 
-@router.get("/{session_id}/runs", response_model=List[SessionRunResponse])
+@router.get("/{session_id}/runs", response_model=list[SessionRunResponse])
 async def route_get_session_runs(
     session_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],

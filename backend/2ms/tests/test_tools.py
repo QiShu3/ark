@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
+from anyio import Path as AsyncPath
 from mini_agent.tools import BashTool, EditTool, ReadTool, WriteTool
 
 
@@ -29,7 +29,7 @@ async def test_read_tool():
         assert "|Hello, World!" in result.content, f"Expected line number format: {result.content}"
         print("✅ ReadTool test passed")
     finally:
-        Path(temp_path).unlink()
+        await AsyncPath(temp_path).unlink()
 
 
 @pytest.mark.asyncio
@@ -65,11 +65,11 @@ async def test_edit_tool():
         )
 
         assert result.success, f"Edit failed: {result.error}"
-        content = Path(temp_path).read_text()
+        content = await AsyncPath(temp_path).read_text()
         assert content == "Hello, Agent!", f"Content mismatch: {content}"
         print("✅ EditTool test passed")
     finally:
-        Path(temp_path).unlink()
+        await AsyncPath(temp_path).unlink()
 
 
 @pytest.mark.asyncio

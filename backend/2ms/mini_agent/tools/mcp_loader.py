@@ -5,8 +5,9 @@ import json
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
+from anyio import Path as AsyncPath
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
@@ -98,8 +99,9 @@ class MCPTool(Tool):
             # MCP tool results are a list of content items
             content_parts = []
             for item in result.content:
-                if hasattr(item, "text"):
-                    content_parts.append(item.text)
+                item_text = getattr(item, "text", None)
+                if isinstance(item_text, str):
+                    content_parts.append(item_text)
                 else:
                     content_parts.append(str(item))
 
@@ -233,11 +235,15 @@ class MCPServerConnection:
 
     async def _connect_stdio(self):
         """Connect via STDIO transport."""
+        assert self.command is not None
+        assert self.exit_stack is not None
         server_params = StdioServerParameters(command=self.command, args=self.args, env=self.env if self.env else None)
         return await self.exit_stack.enter_async_context(stdio_client(server_params))
 
     async def _connect_sse(self):
         """Connect via SSE transport with timeout parameters."""
+        assert self.url is not None
+        assert self.exit_stack is not None
         connect_timeout = self._get_connect_timeout()
         sse_read_timeout = self._get_sse_read_timeout()
 
@@ -252,6 +258,8 @@ class MCPServerConnection:
 
     async def _connect_streamable_http(self):
         """Connect via Streamable HTTP transport with timeout parameters."""
+        assert self.url is not None
+        assert self.exit_stack is not None
         connect_timeout = self._get_connect_timeout()
         sse_read_timeout = self._get_sse_read_timeout()
 
@@ -264,7 +272,7 @@ class MCPServerConnection:
                 sse_read_timeout=sse_read_timeout,
             )
         )
-        return read_stream, write_stream
+        return cast(tuple[Any, Any], (read_stream, write_stream))
 
     async def disconnect(self):
         """Properly disconnect from the MCP server."""
@@ -365,8 +373,7 @@ async def load_mcp_tools_async(config_path: str = "mcp.json") -> list[Tool]:
         return []
 
     try:
-        with open(config_file, encoding="utf-8") as f:
-            config = json.load(f)
+        config = json.loads(await AsyncPath(config_file).read_text(encoding="utf-8"))
         return await load_mcp_tools_from_config_async(config)
     except Exception as e:
         print(f"Error loading MCP config: {e}")

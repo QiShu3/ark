@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from mini_agent.llm import AnthropicClient, OpenAIClient
 from mini_agent.retry import RetryConfig
 from mini_agent.schema import Message

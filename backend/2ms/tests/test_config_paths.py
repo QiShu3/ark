@@ -1,6 +1,5 @@
 """Tests for package-local config path resolution."""
 
-from pathlib import Path
 
 from mini_agent.config import Config
 

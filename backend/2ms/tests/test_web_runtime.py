@@ -3,21 +3,21 @@
 import asyncio
 import tempfile
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from mini_agent.agent import Agent
 from mini_agent.config import Config
-from mini_agent.schema import FunctionCall, LLMResponse, LLMStreamEvent, Message, ToolCall
+from mini_agent.schema import FunctionCall, LLMResponse, LLMStreamEvent, ToolCall
 from mini_agent.server import database, runtime
 from mini_agent.server.main import app
+from mini_agent.server.routers.auth import create_access_token
 from mini_agent.server.routers.sessions import runtime_manager
 from mini_agent.tools.base import Tool, ToolResult
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 pytestmark = pytest.mark.skip(reason="Legacy SQLAlchemy web runtime tests are obsolete after the asyncpg migration.")
 
@@ -281,15 +281,14 @@ def web_client(tmp_path, monkeypatch):
 
 def create_user_and_headers(session_factory, suffix: str = "tester"):
     db = session_factory()
-    user = User(
-        username=suffix,
-        email=f"{suffix}@example.com",
-        password_hash=get_password_hash("secret123"),
+    from sqlalchemy import text
+    db.execute(
+        text("INSERT INTO auth_users(username, password_hash, password_salt, is_active, is_admin) VALUES (:username, 'fakehash', 'fakesalt', 1, 0)"),
+        {"username": suffix}
     )
-    db.add(user)
     db.commit()
-    db.refresh(user)
-    token = create_access_token({"sub": user.id})
+    user_id = db.execute(text("SELECT id FROM auth_users WHERE username = :username"), {"username": suffix}).scalar()
+    token = create_access_token({"sub": user_id})
     db.close()
     return {"Authorization": f"Bearer {token}"}
 

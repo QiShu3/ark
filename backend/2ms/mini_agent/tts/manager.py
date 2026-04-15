@@ -1,6 +1,7 @@
 """High-level TTS orchestration."""
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any
@@ -26,6 +27,10 @@ class TTSManager:
         self.sequence_no = 0
         self._generation = 0
         self._seen_content_delta = False
+        self._suggestions_pending = ""
+        self._in_suggestions = False
+        self._url_pending = ""
+        self._url_state = "NORMAL"
         self._queue: asyncio.Queue[tuple[int, TTSRequest] | None] = asyncio.Queue()
         self._worker: asyncio.Task | None = None
 
@@ -47,7 +52,9 @@ class TTSManager:
 
         if event_type == "content_delta":
             self._seen_content_delta = True
-            for sentence in self.segmenter.push(payload.get("delta", "")):
+            delta = self._strip_suggestions_stream(payload.get("delta", ""))
+            delta = self._strip_urls_stream(delta)
+            for sentence in self.segmenter.push(delta):
                 await self._enqueue_sentence(sentence)
             return
 
@@ -59,11 +66,13 @@ class TTSManager:
             else:
                 await self._enqueue_text(payload.get("content", ""))
             self._seen_content_delta = False
+            self._reset_stream_parsers()
             return
 
         if event_type == "run_completed":
             await self.flush()
             self._seen_content_delta = False
+            self._reset_stream_parsers()
             return
 
         if event_type in {"run_cancelled", "run_failed"}:
@@ -84,6 +93,7 @@ class TTSManager:
             return
         self._generation += 1
         self._seen_content_delta = False
+        self._reset_stream_parsers()
         self.segmenter.reset()
         self._drain_queue()
         await self._emit("tts_stop", {"reason": reason})
@@ -108,13 +118,121 @@ class TTSManager:
         if self.provider is not None and hasattr(self.provider, "close"):
             await self.provider.close()
 
+    def _reset_stream_parsers(self) -> None:
+        """Reset streaming text parsers."""
+        self._suggestions_pending = ""
+        self._in_suggestions = False
+        self._url_pending = ""
+        self._url_state = "NORMAL"
+
+    def _strip_suggestions_stream(self, text: str) -> str:
+        """Strip <suggestions>...</suggestions> blocks from a potentially streamed text."""
+        if not text and not self._suggestions_pending:
+            return ""
+
+        start_tag = "<suggestions>"
+        end_tag = "</suggestions>"
+        data = f"{self._suggestions_pending}{text or ''}"
+        pending = ""
+        output: list[str] = []
+        index = 0
+
+        while index < len(data):
+            if not self._in_suggestions and data.startswith(start_tag, index):
+                self._in_suggestions = True
+                index += len(start_tag)
+                continue
+
+            if self._in_suggestions and data.startswith(end_tag, index):
+                self._in_suggestions = False
+                index += len(end_tag)
+                continue
+
+            if data[index] == "<":
+                candidate = data[index:]
+                if not self._in_suggestions and start_tag.startswith(candidate):
+                    pending = candidate
+                    break
+                if self._in_suggestions and end_tag.startswith(candidate):
+                    pending = candidate
+                    break
+
+            if not self._in_suggestions:
+                output.append(data[index])
+            index += 1
+
+        self._suggestions_pending = pending
+        return "".join(output)
+
+    def _strip_urls_stream(self, text: str) -> str:
+        """Strip URLs from a potentially streamed text incrementally."""
+        if not text and not self._url_pending:
+            return ""
+
+        data = self._url_pending + (text or "")
+        output: list[str] = []
+        i = 0
+
+        while i < len(data):
+            if self._url_state == "IN_URL_ANGLE":
+                if data[i] == ">":
+                    self._url_state = "NORMAL"
+                i += 1
+                continue
+            elif self._url_state == "IN_URL_PAREN":
+                if data[i] == ")":
+                    self._url_state = "NORMAL"
+                i += 1
+                continue
+            elif self._url_state == "IN_URL_RAW":
+                if data[i].isspace() or data[i] in "。！？；\n>":
+                    self._url_state = "NORMAL"
+                else:
+                    i += 1
+                    continue
+
+            remaining = data[i:]
+            if remaining.startswith("<http"):
+                self._url_state = "IN_URL_ANGLE"
+                i += 5
+                continue
+            elif remaining.startswith("(http"):
+                self._url_state = "IN_URL_PAREN"
+                i += 5
+                continue
+            elif remaining.startswith("http://") or remaining.startswith("https://"):
+                self._url_state = "IN_URL_RAW"
+                i += 7
+                continue
+
+            if any(m.startswith(remaining) for m in ["<http", "(http", "http://", "https://"]):
+                break
+
+            output.append(data[i])
+            i += 1
+
+        self._url_pending = data[i:]
+        return "".join(output)
+
+    def _sanitize_sentence_for_tts(self, sentence: str) -> str:
+        """Normalize a sentence before sending it to the TTS provider."""
+        # Strip URLs from the sentence (inside (), inside <>, or standalone)
+        url_pattern = r"https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+"
+        normalized = re.sub(r"\(" + url_pattern + r"\)", "", sentence)
+        normalized = re.sub(r"<" + url_pattern + r">", "", normalized)
+        normalized = re.sub(url_pattern, "", normalized)
+
+        normalized = re.sub(r"[*#`~_|\[\]]", "", normalized.strip())
+        normalized = re.sub(r"^[-+>]\s+", "", normalized).strip()
+        return normalized
+
     async def _enqueue_sentence(self, sentence: str) -> None:
-        sentence = sentence.strip()
-        if not sentence or not self.provider:
+        normalized = self._sanitize_sentence_for_tts(sentence)
+        if not normalized or not self.provider:
             return
         self.sequence_no += 1
         request = TTSRequest(
-            text=sentence,
+            text=normalized,
             voice=self.settings.voice,
             audio_format=self.settings.audio_format,
             sequence_no=self.sequence_no,
@@ -122,7 +240,9 @@ class TTSManager:
         await self._queue.put((self._generation, request))
 
     async def _enqueue_text(self, text: str) -> None:
-        for sentence in self.segmenter.push(text or ""):
+        cleaned = self._strip_suggestions_stream(text or "")
+        cleaned = self._strip_urls_stream(cleaned)
+        for sentence in self.segmenter.push(cleaned):
             await self._enqueue_sentence(sentence)
         tail = self.segmenter.flush()
         if tail:

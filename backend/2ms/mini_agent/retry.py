@@ -13,7 +13,8 @@ Features:
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, Type, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class RetryConfig:
         initial_delay: float = 1.0,
         max_delay: float = 60.0,
         exponential_base: float = 2.0,
-        retryable_exceptions: tuple[Type[Exception], ...] = (Exception,),
+        retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
     ):
         """
         Args:

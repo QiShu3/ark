@@ -99,7 +99,7 @@ class BackgroundShell:
             self.process.terminate()
             try:
                 await asyncio.wait_for(self.process.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.process.kill()
         self.status = "terminated"
         self.exit_code = self.process.returncode
@@ -152,7 +152,7 @@ class BackgroundShellManager:
                                 shell.add_output(decoded_line)
                             else:
                                 break
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         await asyncio.sleep(0.1)
                         continue
                     except Exception:
@@ -309,7 +309,7 @@ Examples:
     async def execute(
         self,
         command: str,
-        timeout: int = 120,
+        timeout: int = 120,  # noqa: ASYNC109
         run_in_background: bool = False,
     ) -> ToolResult:
         """Execute shell command with optional background execution.
@@ -397,7 +397,7 @@ Examples:
 
                 try:
                     stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     process.kill()
                     error_msg = f"Command timed out after {timeout} seconds"
                     return BashOutputResult(

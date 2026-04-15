@@ -12,7 +12,7 @@ unless "paragraphs" is specified in the replacements for that shape.
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from inventory import InventoryData, extract_text_inventory
 from pptx import Presentation
@@ -25,28 +25,28 @@ from pptx.util import Pt
 
 def clear_paragraph_bullets(paragraph):
     """Clear bullet formatting from a paragraph."""
-    pPr = paragraph._element.get_or_add_pPr()
+    p_pr = paragraph._element.get_or_add_pPr()
 
     # Remove existing bullet elements
-    for child in list(pPr):
+    for child in list(p_pr):
         if (
             child.tag.endswith("buChar")
             or child.tag.endswith("buNone")
             or child.tag.endswith("buAutoNum")
             or child.tag.endswith("buFont")
         ):
-            pPr.remove(child)
+            p_pr.remove(child)
 
-    return pPr
+    return p_pr
 
 
-def apply_paragraph_properties(paragraph, para_data: Dict[str, Any]):
+def apply_paragraph_properties(paragraph, para_data: dict[str, Any]):
     """Apply formatting properties to a paragraph."""
     # Get the text but don't set it on paragraph directly yet
     text = para_data.get("text", "")
 
     # Get or create paragraph properties
-    pPr = clear_paragraph_bullets(paragraph)
+    p_pr = clear_paragraph_bullets(paragraph)
 
     # Handle bullet formatting
     if para_data.get("bullet", False):
@@ -59,25 +59,25 @@ def apply_paragraph_properties(paragraph, para_data: Dict[str, Any]):
         hanging_indent_emu = int(-font_size * 0.8 * 12700)
 
         # Set indentation
-        pPr.attrib["marL"] = str(level_indent_emu)
-        pPr.attrib["indent"] = str(hanging_indent_emu)
+        p_pr.attrib["marL"] = str(level_indent_emu)
+        p_pr.attrib["indent"] = str(hanging_indent_emu)
 
         # Add bullet character
-        buChar = OxmlElement("a:buChar")
-        buChar.set("char", "•")
-        pPr.append(buChar)
+        bu_char = OxmlElement("a:buChar")
+        bu_char.set("char", "•")
+        p_pr.append(bu_char)
 
         # Default to left alignment for bullets if not specified
         if "alignment" not in para_data:
             paragraph.alignment = PP_ALIGN.LEFT
     else:
         # Remove indentation for non-bullet text
-        pPr.attrib["marL"] = "0"
-        pPr.attrib["indent"] = "0"
+        p_pr.attrib["marL"] = "0"
+        p_pr.attrib["indent"] = "0"
 
         # Add buNone element
-        buNone = OxmlElement("a:buNone")
-        pPr.insert(0, buNone)
+        bu_none = OxmlElement("a:buNone")
+        p_pr.insert(0, bu_none)
 
     # Apply alignment
     if "alignment" in para_data:
@@ -110,7 +110,7 @@ def apply_paragraph_properties(paragraph, para_data: Dict[str, Any]):
     apply_font_properties(run, para_data)
 
 
-def apply_font_properties(run, para_data: Dict[str, Any]):
+def apply_font_properties(run, para_data: dict[str, Any]):
     """Apply font properties to a text run."""
     if "bold" in para_data:
         run.font.bold = para_data["bold"]
@@ -140,7 +140,7 @@ def apply_font_properties(run, para_data: Dict[str, Any]):
             print(f"  WARNING: Unknown theme color name '{theme_name}'")
 
 
-def detect_frame_overflow(inventory: InventoryData) -> Dict[str, Dict[str, float]]:
+def detect_frame_overflow(inventory: InventoryData) -> dict[str, dict[str, float]]:
     """Detect text overflow in shapes (text exceeding shape bounds).
 
     Returns dict of slide_key -> shape_key -> overflow_inches.
@@ -159,7 +159,7 @@ def detect_frame_overflow(inventory: InventoryData) -> Dict[str, Dict[str, float
     return overflow_map
 
 
-def validate_replacements(inventory: InventoryData, replacements: Dict) -> List[str]:
+def validate_replacements(inventory: InventoryData, replacements: dict) -> list[str]:
     """Validate that all shapes in replacements exist in inventory.
 
     Returns list of error messages.
@@ -225,7 +225,7 @@ def apply_replacements(pptx_file: str, json_file: str, output_file: str):
     original_overflow = detect_frame_overflow(inventory)
 
     # Load replacement data with duplicate key detection
-    with open(json_file, "r") as f:
+    with open(json_file) as f:
         replacements = json.load(f, object_pairs_hook=check_duplicate_keys)
 
     # Validate replacements
