@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAgentChat } from '../hooks/useAgentChat';
 import MarkdownContent from './MarkdownContent';
@@ -40,7 +40,7 @@ const DialogueInteraction: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
 
   // 接入真实的 WebSocket 会话
-  const { messages, isGenerating, streamingText, sendMessage, socketState } = useAgentChat('MainAgent');
+  const { messages, isGenerating, streamingText, sendMessage, socketState, tts } = useAgentChat('MainAgent');
 
   // 获取最新的一条 AI 回复（或者正在流式输出的文本）
   const { latestAiMessage, latestSuggestions } = useMemo(() => {
@@ -170,6 +170,22 @@ const DialogueInteraction: React.FC = () => {
           <div className="bg-black/50 backdrop-blur-xl border border-transparent rounded-2xl p-5 md:p-6 h-[160px] md:h-[190px] shadow-2xl relative overflow-hidden">
             {/* 装饰性发光背景 */}
             <div className="absolute top-0 left-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
+            
+            {/* TTS 控制按钮 */}
+            <button
+              onClick={tts.toggleTtsPlayback}
+              disabled={!tts.ttsState.enabled}
+              className={cn(
+                "absolute top-4 right-4 z-20 p-2 rounded-full transition-colors pointer-events-auto",
+                tts.ttsPlaybackEnabled 
+                  ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30" 
+                  : "bg-white/5 text-white/40 hover:bg-white/10",
+                !tts.ttsState.enabled && "opacity-50 cursor-not-allowed"
+              )}
+              title={tts.ttsPlaybackEnabled ? "关闭朗读" : "启用朗读"}
+            >
+              {tts.ttsPlaybackEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
             
             <div className="relative z-10 h-full overflow-y-auto pr-2">
               <MarkdownContent

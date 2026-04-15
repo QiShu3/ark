@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiJson } from '../lib/api';
 import { useAuthStore } from '../lib/auth';
+import { useTts } from './useTts';
 
 export type MessageResponse = {
   id: string | null;
@@ -63,6 +64,8 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   const [error, setError] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<'disconnected' | 'connecting' | 'open'>('disconnected');
   
+  const tts = useTts();
+
   const socketRef = useRef<WebSocket | null>(null);
   const streamingRawTextRef = useRef('');
   const streamingTimerRef = useRef<number | null>(null);
@@ -98,12 +101,19 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     tick();
   }, []);
 
+  const resetStreamingTextRef = useRef(resetStreamingText);
+  resetStreamingTextRef.current = resetStreamingText;
+
+  const startStreamingPumpRef = useRef(startStreamingPump);
+  startStreamingPumpRef.current = startStreamingPump;
+
   // 初始化 Session 和历史记录
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
       setError(null);
+      resetTtsRef.current();
       try {
         const nextSession = await getOrCreatePageSession(profileKey);
         if (cancelled) return;
@@ -124,6 +134,16 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     };
   }, [profileKey]);
 
+  const resetTtsRef = useRef(tts.resetTts);
+  useEffect(() => {
+    resetTtsRef.current = tts.resetTts;
+  }, [tts.resetTts]);
+
+  const handleTtsMessageRef = useRef(tts.handleTtsMessage);
+  useEffect(() => {
+    handleTtsMessageRef.current = tts.handleTtsMessage;
+  }, [tts.handleTtsMessage]);
+
   // 管理 WebSocket 连接
   useEffect(() => {
     const sessionId = session?.id;
@@ -131,6 +151,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       return;
     }
 
+    setSocketState('connecting');
     const socket = new WebSocket(buildWebSocketUrl(sessionId, token));
     socketRef.current = socket;
 
@@ -150,10 +171,15 @@ export function useAgentChat(profileKey: string = 'agent-console') {
         return;
       }
 
+      if (data.type.startsWith('tts_')) {
+        handleTtsMessageRef.current(data);
+        return;
+      }
+
       if (data.type === 'error') {
         setError(data.error);
         setIsGenerating(false);
-        resetStreamingText();
+        resetStreamingTextRef.current();
         return;
       }
 
@@ -163,12 +189,12 @@ export function useAgentChat(profileKey: string = 'agent-console') {
           const delta = data.event.content || '';
           if (!delta) return;
           streamingRawTextRef.current += delta;
-          startStreamingPump();
+          startStreamingPumpRef.current();
           return;
         }
 
         if (eventType === 'assistant_message') {
-          resetStreamingText();
+          resetStreamingTextRef.current();
         }
 
         if (visibleEventTypes.has(eventType)) {
@@ -181,14 +207,14 @@ export function useAgentChat(profileKey: string = 'agent-console') {
         setIsGenerating(true);
         setSession((current) => (current ? { ...current, status: 'running' } : current));
         setError(null);
-        resetStreamingText();
+        resetStreamingTextRef.current();
         return;
       }
 
       if (data.type === 'run_completed' || data.type === 'run_failed' || data.type === 'run_cancelled') {
         setIsGenerating(false);
         setSession((current) => (current ? { ...current, status: data.type === 'run_completed' ? 'completed' : 'failed' } : current));
-        if (data.type !== 'run_completed') resetStreamingText();
+        if (data.type !== 'run_completed') resetStreamingTextRef.current();
         return;
       }
     };
@@ -196,13 +222,14 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     socket.onerror = () => {
       setError('WebSocket 连接发生错误');
       setIsGenerating(false);
-      resetStreamingText();
+      resetStreamingTextRef.current();
     };
 
     socket.onclose = () => {
       setSocketState('disconnected');
       setIsGenerating(false);
-      resetStreamingText();
+      resetStreamingTextRef.current();
+      resetTtsRef.current();
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
@@ -212,10 +239,11 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
-      resetStreamingText();
+      resetStreamingTextRef.current();
+      resetTtsRef.current();
       socket.close();
     };
-  }, [resetStreamingText, session?.id, startStreamingPump, token]);
+  }, [session?.id, token]);
 
   const sendMessage = useCallback((content: string) => {
     const socket = socketRef.current;
@@ -238,5 +266,6 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     error,
     socketState,
     sendMessage,
+    tts,
   };
 }
