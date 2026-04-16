@@ -49,6 +49,7 @@ describe('MultiWeekCalendarModal', () => {
     render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
 
     expect(await screen.findByRole('dialog', { name: '多周任务日历' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '打开年月选择器，当前 2026年4月' })).toBeInTheDocument();
     expect(screen.getAllByTestId('calendar-day-cell')).toHaveLength(14);
     expect(await screen.findByText('准备工作汇报')).toBeInTheDocument();
     expect(mockApiJson).toHaveBeenCalledWith('/todo/tasks/calendar?start=2026-04-12&end=2026-04-26');
@@ -73,5 +74,53 @@ describe('MultiWeekCalendarModal', () => {
 
     expect(screen.getByRole('complementary', { name: '2026-04-16 日期详情' })).toBeInTheDocument();
     expect(screen.getByText('任务五')).toBeInTheDocument();
+  });
+
+  it('keeps the calendar grid stable while a navigated range is loading', async () => {
+    const user = userEvent.setup();
+    let resolveSecondLoad: (value: unknown[]) => void = () => {};
+    mockApiJson
+      .mockResolvedValueOnce([
+        task({ id: 'focus', title: '准备工作汇报', start_date: '2026-04-16T09:00:00+08:00', priority: 3 }),
+      ])
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveSecondLoad = resolve;
+      }));
+
+    render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
+    await screen.findByText('准备工作汇报');
+
+    await user.click(screen.getByRole('button', { name: '下一段日期' }));
+
+    expect(screen.queryByText('加载中...')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('calendar-day-cell')).toHaveLength(14);
+
+    resolveSecondLoad([]);
+  });
+
+  it('allows switching year and month from the title picker', async () => {
+    const user = userEvent.setup();
+    render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
+
+    await user.click(await screen.findByRole('button', { name: '打开年月选择器，当前 2026年4月' }));
+    expect(screen.getByRole('dialog', { name: '选择年份和月份' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '上一年' }));
+    await user.click(screen.getByRole('button', { name: '切换到 2025年12月' }));
+
+    expect(screen.getByRole('button', { name: '打开年月选择器，当前 2025年12月' })).toBeInTheDocument();
+    expect(mockApiJson).toHaveBeenLastCalledWith('/todo/tasks/calendar?start=2025-11-30&end=2025-12-14');
+  });
+
+  it('renders the year-month picker as an opaque surface', async () => {
+    const user = userEvent.setup();
+    render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
+
+    await user.click(await screen.findByRole('button', { name: '打开年月选择器，当前 2026年4月' }));
+
+    const picker = screen.getByRole('dialog', { name: '选择年份和月份' });
+    expect(picker).toHaveClass('bg-slate-950');
+    expect(picker).toHaveClass('z-30');
+    expect(picker.className).not.toContain('backdrop-blur');
   });
 });
