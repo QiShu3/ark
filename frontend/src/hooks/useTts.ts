@@ -348,6 +348,21 @@ export function useTts() {
     playNextTtsChunk();
   }, [playNextTtsChunk, stopTtsPlayback]);
 
+  const ensureAutoPlayReady = useCallback(() => {
+    if (!ttsStateRef.current.enabled || !ttsStateRef.current.autoPlay || ttsPreferenceLockedRef.current) {
+      return false;
+    }
+    if (ttsPlaybackEnabledRef.current) {
+      return true;
+    }
+
+    ttsPlaybackEnabledRef.current = true;
+    setTtsPlaybackEnabled(true);
+    setTtsState((current) => ({ ...current, status: 'ready', error: null }));
+    playNextTtsChunk();
+    return true;
+  }, [playNextTtsChunk]);
+
   useEffect(() => {
     ttsStateRef.current = ttsState;
   }, [ttsState]);
@@ -513,6 +528,7 @@ export function useTts() {
     ttsPlaybackEnabled,
     ttsPendingCount,
     toggleTtsPlayback,
+    ensureAutoPlayReady,
     stopTtsPlayback,
     handleTtsMessage,
     resetTts,

@@ -412,6 +412,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     }
 
     setAutoOpenPhase('ready');
+    tts.ensureAutoPlayReady?.();
     const sent = sendMessage(buildAutoOpenPrompt());
     if (!sent) {
       setAutoOpenPhase('blocked');
@@ -421,7 +422,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     hasAutoOpenAttemptedRef.current = true;
     autoOpenAwaitingAckRef.current = true;
     setAutoOpenPhase('sending');
-  }, [autoOpenPhase, isGenerating, profileKey, sendMessage, session, socketState]);
+  }, [autoOpenPhase, isGenerating, profileKey, sendMessage, session, socketState, tts]);
 
   useEffect(() => {
     if (autoOpenPhase !== 'confirmed') {

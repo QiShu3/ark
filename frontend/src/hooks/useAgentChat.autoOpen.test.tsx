@@ -7,28 +7,36 @@ import { useAgentChat } from './useAgentChat';
 import { useAuthStore } from '../lib/auth';
 import { apiJson } from '../lib/api';
 
+const mockEnsureAutoPlayReady = vi.fn();
+const mockHandleTtsMessage = vi.fn();
+const mockResetTts = vi.fn();
+const mockToggleTtsPlayback = vi.fn();
+const mockStopTtsPlayback = vi.fn();
+const mockTtsState = {
+  enabled: false,
+  provider: null,
+  voice: null,
+  audioFormat: 'mp3',
+  autoPlay: false,
+  streamingMode: 'buffered_chunk',
+  status: 'off',
+  error: null,
+};
+
 vi.mock('../lib/api', () => ({
   apiJson: vi.fn(),
 }));
 
 vi.mock('./useTts', () => ({
   useTts: () => ({
-    ttsState: {
-      enabled: false,
-      provider: null,
-      voice: null,
-      audioFormat: 'mp3',
-      autoPlay: false,
-      streamingMode: 'buffered_chunk',
-      status: 'off',
-      error: null,
-    },
+    ttsState: mockTtsState,
     ttsPlaybackEnabled: false,
     ttsPendingCount: 0,
-    toggleTtsPlayback: vi.fn(),
-    stopTtsPlayback: vi.fn(),
-    handleTtsMessage: vi.fn(),
-    resetTts: vi.fn(),
+    toggleTtsPlayback: mockToggleTtsPlayback,
+    stopTtsPlayback: mockStopTtsPlayback,
+    handleTtsMessage: mockHandleTtsMessage,
+    resetTts: mockResetTts,
+    ensureAutoPlayReady: mockEnsureAutoPlayReady,
   }),
 }));
 
@@ -101,6 +109,16 @@ describe('useAgentChat auto open', () => {
     currentSessionStatus = 'idle';
     currentHistory = [];
     MockWebSocket.instances = [];
+    Object.assign(mockTtsState, {
+      enabled: false,
+      provider: null,
+      voice: null,
+      audioFormat: 'mp3',
+      autoPlay: false,
+      streamingMode: 'buffered_chunk',
+      status: 'off',
+      error: null,
+    });
 
     useAuthStore.setState({
       token: 'token-123',
@@ -167,6 +185,7 @@ describe('useAgentChat auto open', () => {
     await waitFor(() => {
       expect(socket.sent).toHaveLength(1);
     });
+    expect(mockEnsureAutoPlayReady).toHaveBeenCalledTimes(1);
 
     const sentPayload = JSON.parse(socket.sent[0]) as { type: string; content: string };
     expect(sentPayload.type).toBe('run');
@@ -188,6 +207,30 @@ describe('useAgentChat auto open', () => {
         profileKey: 'MainAgent',
       });
     });
+  });
+
+  it('arms TTS autoplay before auto open when TTS is enabled and allowed to autoplay', async () => {
+    Object.assign(mockTtsState, {
+      enabled: true,
+      autoPlay: true,
+      status: 'ready',
+    });
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].open();
+    });
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances[0].sent).toHaveLength(1);
+    });
+
+    expect(mockEnsureAutoPlayReady).toHaveBeenCalledTimes(1);
   });
 
   it('does not auto open when the cooldown window is still active', async () => {
