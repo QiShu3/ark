@@ -5,31 +5,9 @@ import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
 import CalendarWidget from './CalendarWidget';
 import PhoneSimulator from './PhoneSimulator';
+import TaskEditModal from './TaskEditModal';
+import type { Task } from './taskTypes';
 import { formatClockTime } from './workflowProgress';
-
-interface Task {
-  id: string;
-  user_id: number;
-  title: string;
-  content: string | null;
-  status: 'todo' | 'done';
-  priority: number;
-  target_duration: number;
-  current_cycle_count: number;
-  target_cycle_count: number;
-  cycle_period: 'daily' | 'weekly' | 'monthly' | 'custom';
-  cycle_every_days: number | null;
-  event: string;
-  event_ids: string[];
-  task_type: 'focus' | 'checkin';
-  tags: string[];
-  actual_duration: number;
-  start_date: string | null;
-  due_date: string | null;
-  is_deleted: boolean;
-  created_at: string;
-  updated_at: string;
-}
 
 interface PlaceholderCardProps {
   index: number;
@@ -193,41 +171,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [tasksLoading, setTasksLoading] = useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [editTaskSubmitting, setEditTaskSubmitting] = useState(false);
-  const [editTaskError, setEditTaskError] = useState<string | null>(null);
-  const [editTaskForm, setEditTaskForm] = useState<{
-    id: string;
-    title: string;
-    content: string;
-    priority: 0 | 1 | 2 | 3;
-    targetMinutes: number;
-    currentCycleCount: number;
-    targetCycleCount: number;
-    cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
-    customCycleDays: number;
-    event: string;
-    eventIds: string[];
-    taskType: 'focus' | 'checkin';
-    tagsText: string;
-    startDate: string;
-    dueDate: string;
-  }>({
-    id: '',
-    title: '',
-    content: '',
-    priority: 0,
-    targetMinutes: 0,
-    currentCycleCount: 0,
-    targetCycleCount: 1,
-    cyclePeriod: 'daily',
-    customCycleDays: 1,
-    event: '',
-    eventIds: [],
-    taskType: 'focus',
-    tagsText: '',
-    startDate: '',
-    dueDate: '',
-  });
 
   useEffect(() => {
     _loadTasks();
@@ -960,66 +903,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
 
   function _openEditTask(task: Task) {
     setSelectedTask(task);
-    setEditTaskForm({
-      id: task.id,
-      title: task.title,
-      content: task.content || '',
-      priority: task.priority as 0 | 1 | 2 | 3,
-      targetMinutes: Math.round(task.target_duration / 60),
-      currentCycleCount: task.current_cycle_count,
-      targetCycleCount: task.target_cycle_count,
-      cyclePeriod: task.cycle_period,
-      customCycleDays: task.cycle_every_days ?? 1,
-      event: task.event || '',
-      eventIds: task.event_ids || [],
-      taskType: task.task_type || 'focus',
-      tagsText: task.tags.join(', '),
-      startDate: task.start_date ? new Date(new Date(task.start_date).getTime() - new Date(task.start_date).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '',
-      dueDate: task.due_date ? new Date(new Date(task.due_date).getTime() - new Date(task.due_date).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '',
-    });
     setShowEditTaskModal(true);
-  }
-
-  async function _submitEditTask() {
-    if (editTaskSubmitting || !selectedTask) return;
-    setEditTaskSubmitting(true);
-    setEditTaskError(null);
-    try {
-      const startDate = editTaskForm.startDate ? new Date(editTaskForm.startDate).toISOString() : null;
-      const dueDate = editTaskForm.dueDate ? new Date(editTaskForm.dueDate).toISOString() : null;
-      const cycleEveryDays = editTaskForm.cyclePeriod === 'custom' ? Math.max(1, Math.floor(editTaskForm.customCycleDays || 1)) : null;
-      const tags = editTaskForm.tagsText
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean);
-      await apiJson(`/todo/tasks/${selectedTask.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editTaskForm.title.trim(),
-          content: editTaskForm.content.trim() || null,
-          priority: editTaskForm.priority,
-          target_duration: Math.round(editTaskForm.targetMinutes * 60),
-          current_cycle_count: Math.max(0, Math.floor(editTaskForm.currentCycleCount || 0)),
-          target_cycle_count: Math.max(0, Math.floor(editTaskForm.targetCycleCount || 0)),
-          cycle_period: editTaskForm.cyclePeriod,
-          cycle_every_days: cycleEveryDays,
-          event: editTaskForm.event.trim(),
-          event_ids: editTaskForm.eventIds,
-          task_type: editTaskForm.taskType,
-          tags,
-          start_date: startDate,
-          due_date: dueDate,
-        }),
-      });
-      setShowEditTaskModal(false);
-      _loadTasks();
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-    } catch (e) {
-      setEditTaskError(e instanceof Error ? e.message : '编辑任务失败');
-    } finally {
-      setEditTaskSubmitting(false);
-    }
   }
 
   async function _handleDeleteTask(e: React.MouseEvent, task: Task) {
@@ -1865,217 +1749,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           </div>
         )}
 
-        {showEditTaskModal && selectedTask && (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 pt-16"
-            onClick={() => setShowEditTaskModal(false)}
-          >
-            <div
-              className="w-[520px] max-w-[92vw] max-h-[calc(100vh-6rem)] flex flex-col bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-                <h3 className="text-lg font-bold text-white">编辑任务</h3>
-                <button
-                  onClick={() => setShowEditTaskModal(false)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              </div>
-
-              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">标题</label>
-                  <input
-                    value={editTaskForm.title}
-                    onChange={(e) => setEditTaskForm((s) => ({ ...s, title: e.target.value }))}
-                    placeholder="例如：完成周报"
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">任务类型</label>
-                    <select
-                      value={editTaskForm.taskType}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, taskType: e.target.value as 'focus' | 'checkin' }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    >
-                      <option value="focus">专注任务</option>
-                      <option value="checkin">快速打卡</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">优先级</label>
-                  <select
-                    value={editTaskForm.priority}
-                    onChange={(e) => setEditTaskForm((s) => ({ ...s, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  >
-                    <option value={0}>0 低</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3 高</option>
-                  </select>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">备注</label>
-                  <textarea
-                    value={editTaskForm.content}
-                    onChange={(e) => setEditTaskForm((s) => ({ ...s, content: e.target.value }))}
-                    placeholder="可选：补充描述/拆解步骤"
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">目标时长（分钟）</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editTaskForm.targetMinutes}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, targetMinutes: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">循环周期</label>
-                    <select
-                      value={editTaskForm.cyclePeriod}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    >
-                      <option value="daily">每日</option>
-                      <option value="weekly">每周</option>
-                      <option value="monthly">每月</option>
-                      <option value="custom">自定义</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">当前循环次数</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editTaskForm.currentCycleCount}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, currentCycleCount: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">目的循环次数</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editTaskForm.targetCycleCount}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, targetCycleCount: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                </div>
-
-                {editTaskForm.cyclePeriod === 'custom' && (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">自定义间隔（天）</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={editTaskForm.customCycleDays}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, customCycleDays: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">开始日期</label>
-                    <input
-                      type="datetime-local"
-                      value={editTaskForm.startDate}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, startDate: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">截止日期</label>
-                    <input
-                      type="datetime-local"
-                      value={editTaskForm.dueDate}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, dueDate: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">事件</label>
-                    <input
-                      value={editTaskForm.event}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, event: e.target.value }))}
-                      placeholder="例如：晨间阅读"
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-white/70">标签</label>
-                    <input
-                      value={editTaskForm.tagsText}
-                      onChange={(e) => setEditTaskForm((s) => ({ ...s, tagsText: e.target.value }))}
-                      placeholder="逗号分隔，例如：学习,arxiv"
-                      className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                  </div>
-                </div>
-
-                {editTaskError && <div className="text-sm text-red-400">{editTaskError}</div>}
-              </div>
-              <div className="p-5 pt-3 shrink-0 border-t border-white/10 flex items-center justify-end gap-3 bg-[#1a1a1a]">
-                  <button
-                    onClick={() => setShowEditTaskModal(false)}
-                    className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
-                    disabled={editTaskSubmitting}
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      if (window.confirm('确定要彻底删除该任务吗？')) {
-                        const taskId = editTaskForm.id;
-                        const taskToDel = tasks.find(t => t.id === taskId);
-                        if (taskToDel) {
-                          _handleDeleteTask(e, taskToDel);
-                          setShowEditTaskModal(false);
-                        }
-                      }
-                    }}
-                    className="px-4 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 text-red-500 hover:text-red-400 transition-colors"
-                    disabled={editTaskSubmitting}
-                  >
-                    删除
-                  </button>
-                  <button
-                    onClick={_submitEditTask}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={editTaskSubmitting}
-                  >
-                    {editTaskSubmitting ? '保存中...' : '保存'}
-                  </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <TaskEditModal
+          open={showEditTaskModal}
+          task={selectedTask}
+          onClose={() => {
+            setShowEditTaskModal(false);
+            setSelectedTask(null);
+          }}
+        />
 
         {/* 任务悬浮页面 */}
         {showTaskModal && (

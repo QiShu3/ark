@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiJson } from '../lib/api';
 import CalendarDateDrawer from './CalendarDateDrawer';
 import MultiWeekCalendarGrid from './MultiWeekCalendarGrid';
+import TaskEditModal from './TaskEditModal';
 import {
   addDays,
   buildVisibleDays,
@@ -27,8 +28,10 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [editingTask, setEditingTask] = useState<CalendarTask | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => (initialDate || new Date()).getFullYear());
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   const visibleDays = useMemo(() => buildVisibleDays(anchorDate, weekCount), [anchorDate, weekCount]);
   const groupedTasks = useMemo(() => groupTasksByDay(tasks, visibleDays), [tasks, visibleDays]);
@@ -64,7 +67,7 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
     return () => {
       cancelled = true;
     };
-  }, [open, visibleDays]);
+  }, [open, visibleDays, reloadVersion]);
 
   if (!open) return null;
 
@@ -195,10 +198,25 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
           </header>
           {error ? <div className="border-b border-red-300/20 bg-red-400/10 px-6 py-2 text-sm text-red-100">{error}</div> : null}
           <div className="min-h-0 flex-1 overflow-auto">
-            <MultiWeekCalendarGrid days={visibleDays} groupedTasks={groupedTasks} todayKey={todayKey} onDateClick={setSelectedDate} />
+            <MultiWeekCalendarGrid
+              days={visibleDays}
+              groupedTasks={groupedTasks}
+              todayKey={todayKey}
+              onDateClick={setSelectedDate}
+              onTaskClick={setEditingTask}
+            />
           </div>
         </div>
         <CalendarDateDrawer date={selectedDate} tasks={selectedTasks} onClose={() => setSelectedDate(null)} />
+        <TaskEditModal
+          open={Boolean(editingTask)}
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onChanged={() => {
+            setEditingTask(null);
+            setReloadVersion((value) => value + 1);
+          }}
+        />
       </div>
     </div>
   );

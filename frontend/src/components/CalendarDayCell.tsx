@@ -28,7 +28,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
       type="button"
       data-testid="calendar-day-cell"
       onClick={() => onDateClick(day)}
-      className={`relative min-h-[236px] min-w-0 overflow-hidden border-r border-b border-white/[0.08] bg-white/[0.018] p-3 text-left transition-colors hover:bg-white/[0.04] ${
+      className={`relative min-h-[236px] min-w-0 overflow-hidden border-r border-b border-white/[0.08] bg-white/[0.018] p-3 text-left transition-colors ${
         isToday ? 'bg-cyan-300/[0.08]' : ''
       }`}
       aria-label={`${key}${isToday ? ' 今天' : ''}，${tasks.length} 项任务`}
@@ -61,7 +61,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
                 onTaskClick?.(task);
               }
             }}
-            className={`calendar-task-label calendar-task-${taskColor(task)}`}
+            className={`calendar-task-label calendar-task-interactive calendar-task-${taskColor(task)}`}
           >
             <span className="calendar-task-dot" />
             <span className="truncate">{task.title}</span>
@@ -75,7 +75,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
               event.stopPropagation();
               onDateClick(day);
             }}
-            className="flex h-7 items-center rounded-[10px] border border-dashed border-white/15 bg-white/[0.025] px-2 text-xs text-white/60"
+            className="calendar-task-interactive flex h-7 items-center rounded-[10px] border border-dashed border-white/15 bg-white/[0.025] px-2 text-xs text-white/60"
             aria-label={`${key} 还有 ${overflow} 项任务，打开详情`}
           >
             +{overflow} 项折叠

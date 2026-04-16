@@ -76,6 +76,16 @@ describe('MultiWeekCalendarModal', () => {
     expect(screen.getByText('任务五')).toBeInTheDocument();
   });
 
+  it('opens the full edit modal when a calendar task is clicked', async () => {
+    const user = userEvent.setup();
+    render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
+
+    await user.click(await screen.findByText('准备工作汇报'));
+
+    expect(screen.getByRole('heading', { name: '编辑任务' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('准备工作汇报')).toBeInTheDocument();
+  });
+
   it('keeps the calendar grid stable while a navigated range is loading', async () => {
     const user = userEvent.setup();
     let resolveSecondLoad: (value: unknown[]) => void = () => {};

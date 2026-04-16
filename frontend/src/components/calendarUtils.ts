@@ -1,17 +1,8 @@
+import type { Task } from './taskTypes';
+
 export type WeekCount = 2 | 3;
 
-export type CalendarTask = {
-  id: string;
-  title: string;
-  status: 'todo' | 'done';
-  priority: number;
-  start_date: string | null;
-  due_date: string | null;
-  updated_at: string;
-  task_type?: 'focus' | 'checkin';
-  event?: string;
-  tags?: string[];
-};
+export type CalendarTask = Task;
 
 export const CALENDAR_WEEK_COUNT_STORAGE_KEY = 'ark-calendar-week-count';
 
