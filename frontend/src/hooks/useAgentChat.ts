@@ -34,6 +34,11 @@ type SocketPacket =
 
 const visibleEventTypes = new Set(['user', 'assistant_message']);
 const pageSessionRequests = new Map<string, Promise<SessionResponse>>();
+const AUTO_OPEN_COOLDOWN_MS = 60 * 60 * 1000;
+const AUTO_OPEN_STORAGE_KEY = 'ark:auto-open:MainAgent:last-run-started-at';
+const HOME_AUTO_OPEN_SOURCE = 'home_auto_open';
+
+type AutoOpenPhase = 'idle' | 'blocked' | 'ready' | 'sending' | 'confirmed' | 'done';
 
 function buildWebSocketUrl(sessionId: string, token: string) {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -55,6 +60,105 @@ function getOrCreatePageSession(profileKey: string) {
   return request;
 }
 
+function currentHashPath() {
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+
+  const hash = window.location.hash || '#/';
+  const route = hash.startsWith('#') ? hash.slice(1) : hash;
+  const [path] = route.split('?');
+  return path || '/';
+}
+
+function isHomeMainAgentScope(profileKey: string) {
+  return profileKey === 'MainAgent' && currentHashPath() === '/';
+}
+
+function buildAutoOpenPrompt() {
+  return [
+    `来源：${HOME_AUTO_OPEN_SOURCE}`,
+    '场景：用户刚进入或刷新 Ark 首页，当前页面绑定 MainAgent，会话可能已有历史消息。',
+    '角色：你是首页助手“莫宁”。',
+    '任务：发起一段简短的延续型开场。',
+    '',
+    '要求：',
+    '1. 不要把这次开场说成第一次见面。',
+    '2. 不要长篇自我介绍。',
+    '3. 用 1-2 句话说明你已在首页待命，可以继续帮助用户。',
+    '4. 结合首页场景给出 2-3 个自然的下一步建议。',
+    '5. 建议项必须放在 <suggestions>JSON数组</suggestions> 中。',
+  ].join('\n');
+}
+
+function isAutoOpenCooldownExpired() {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+
+  const persisted = window.localStorage.getItem(AUTO_OPEN_STORAGE_KEY);
+  if (!persisted) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(persisted) as { timestamp?: string };
+    if (!parsed.timestamp) {
+      return true;
+    }
+
+    const lastStartedAt = new Date(parsed.timestamp).getTime();
+    if (!Number.isFinite(lastStartedAt)) {
+      return true;
+    }
+
+    return Date.now() - lastStartedAt >= AUTO_OPEN_COOLDOWN_MS;
+  } catch {
+    return true;
+  }
+}
+
+function persistAutoOpenCooldown() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(
+    AUTO_OPEN_STORAGE_KEY,
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: HOME_AUTO_OPEN_SOURCE,
+      profileKey: 'MainAgent',
+    }),
+  );
+}
+
+function canAttemptAutoOpen({
+  profileKey,
+  session,
+  socketState,
+  isGenerating,
+  hasAttempted,
+  awaitingAck,
+}: {
+  profileKey: string;
+  session: SessionResponse | null;
+  socketState: 'disconnected' | 'connecting' | 'open';
+  isGenerating: boolean;
+  hasAttempted: boolean;
+  awaitingAck: boolean;
+}) {
+  return (
+    isHomeMainAgentScope(profileKey)
+    && Boolean(session)
+    && socketState === 'open'
+    && !isGenerating
+    && !hasAttempted
+    && !awaitingAck
+    && isAutoOpenCooldownExpired()
+  );
+}
+
 export function useAgentChat(profileKey: string = 'agent-console') {
   const token = useAuthStore((s) => s.token);
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -63,12 +167,15 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<'disconnected' | 'connecting' | 'open'>('disconnected');
-  
+  const [autoOpenPhase, setAutoOpenPhase] = useState<AutoOpenPhase>('idle');
+
   const tts = useTts();
 
   const socketRef = useRef<WebSocket | null>(null);
   const streamingRawTextRef = useRef('');
   const streamingTimerRef = useRef<number | null>(null);
+  const hasAutoOpenAttemptedRef = useRef(false);
+  const autoOpenAwaitingAckRef = useRef(false);
 
   const stopStreamingTimer = useCallback(() => {
     if (streamingTimerRef.current !== null) {
@@ -113,6 +220,12 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     handleTtsMessageRef.current = tts.handleTtsMessage;
   }, [resetStreamingText, startStreamingPump, tts.resetTts, tts.handleTtsMessage]);
 
+  useEffect(() => {
+    hasAutoOpenAttemptedRef.current = false;
+    autoOpenAwaitingAckRef.current = false;
+    setAutoOpenPhase(isHomeMainAgentScope(profileKey) ? 'idle' : 'done');
+  }, [profileKey]);
+
   // 初始化 Session 和历史记录 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +237,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
         const nextSession = await getOrCreatePageSession(profileKey);
         if (cancelled) return;
         setSession(nextSession);
+        setIsGenerating(nextSession.status === 'running');
 
         const history = await apiJson<MessageResponse[]>(`/api/sessions/${nextSession.id}/messages`);
         if (cancelled) return;
@@ -174,6 +288,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       if (data.type === 'connected') {
         if (data.status) {
           setSession((current) => (current ? { ...current, status: data.status || current.status } : current));
+          setIsGenerating(data.status === 'running');
         }
         return;
       }
@@ -215,6 +330,9 @@ export function useAgentChat(profileKey: string = 'agent-console') {
         setSession((current) => (current ? { ...current, status: 'running' } : current));
         setError(null);
         resetStreamingTextRef.current();
+        if (autoOpenAwaitingAckRef.current) {
+          setAutoOpenPhase('confirmed');
+        }
         return;
       }
 
@@ -237,6 +355,10 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       setIsGenerating(false);
       resetStreamingTextRef.current();
       resetTtsRef.current();
+      if (autoOpenAwaitingAckRef.current) {
+        autoOpenAwaitingAckRef.current = false;
+        setAutoOpenPhase('done');
+      }
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
@@ -265,6 +387,51 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     setError(null);
     return true;
   }, [isGenerating, resetStreamingText]);
+
+  useEffect(() => {
+    if (!isHomeMainAgentScope(profileKey)) {
+      return;
+    }
+
+    if (autoOpenPhase === 'done' || autoOpenPhase === 'sending' || autoOpenPhase === 'confirmed') {
+      return;
+    }
+
+    const eligible = canAttemptAutoOpen({
+      profileKey,
+      session,
+      socketState,
+      isGenerating,
+      hasAttempted: hasAutoOpenAttemptedRef.current,
+      awaitingAck: autoOpenAwaitingAckRef.current,
+    });
+
+    if (!eligible) {
+      setAutoOpenPhase((current) => (current === 'idle' || current === 'ready' ? 'blocked' : current));
+      return;
+    }
+
+    setAutoOpenPhase('ready');
+    const sent = sendMessage(buildAutoOpenPrompt());
+    if (!sent) {
+      setAutoOpenPhase('blocked');
+      return;
+    }
+
+    hasAutoOpenAttemptedRef.current = true;
+    autoOpenAwaitingAckRef.current = true;
+    setAutoOpenPhase('sending');
+  }, [autoOpenPhase, isGenerating, profileKey, sendMessage, session, socketState]);
+
+  useEffect(() => {
+    if (autoOpenPhase !== 'confirmed') {
+      return;
+    }
+
+    persistAutoOpenCooldown();
+    autoOpenAwaitingAckRef.current = false;
+    setAutoOpenPhase('done');
+  }, [autoOpenPhase]);
 
   return {
     session,
