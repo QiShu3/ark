@@ -7,7 +7,15 @@ vi.mock('./lib/api', () => ({
     if (url === '/api/arxiv/daily/config') return null;
     if (url === '/api/arxiv/daily/candidates') return [];
     if (url === '/api/arxiv/papers?limit=200') return [];
+    if (typeof url === 'string' && url.startsWith('/todo/tasks/calendar')) return [];
     return [];
+  }),
+  checkIn: vi.fn().mockResolvedValue(undefined),
+  getCheckInStatus: vi.fn().mockResolvedValue({
+    is_checked_in_today: true,
+    current_streak: 1,
+    total_days: 1,
+    checked_dates: [],
   }),
 }));
 

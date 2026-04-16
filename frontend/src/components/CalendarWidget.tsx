@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCheckInStatus } from '../lib/api';
+import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 
 interface CalendarWidgetProps {
   className?: string;
@@ -7,6 +8,7 @@ interface CalendarWidgetProps {
 
 const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
   const [checkedDates, setCheckedDates] = useState<Set<string>>(new Set());
+  const [showMultiWeekCalendar, setShowMultiWeekCalendar] = useState(false);
 
   useEffect(() => {
     const load = () => {
@@ -53,52 +55,60 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
   });
 
   return (
-    <div className={`bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-3 flex flex-col ${className}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-white/85 text-sm font-semibold">日历</span>
-        <span className="text-white/60 text-xs">{monthLabel}</span>
-      </div>
-      <div className="grid grid-cols-7 gap-1 text-[10px] text-white/45 mb-1">
-        {weekdays.map((day) => (
-          <div key={day} className="h-5 flex items-center justify-center">
-            {day}
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1 flex-1">
-        {cells.map((cell, idx) => {
-          let dateStr = '';
-          if (cell.inCurrentMonth) {
-            dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
-          }
-          const isChecked = cell.inCurrentMonth && checkedDates.has(dateStr);
-          
-          return (
-            <div
-              key={`${cell.day}-${idx}`}
-              className={`h-6 rounded flex items-center justify-center text-[11px] relative ${
-                cell.isToday
-                  ? 'bg-[#B5D2E8]/90 text-black/80 font-bold shadow-sm'
-                  : cell.inCurrentMonth
-                    ? isChecked 
-                      ? 'bg-[#E5989B]/90 text-white font-bold shadow-sm' 
-                      : 'text-white/80 bg-white/[0.03]'
-                    : 'text-white/25'
-              }`}
-            >
-              {cell.day}
-              {isChecked && (
-                <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${cell.isToday ? 'bg-blue-500 shadow-sm border border-[#1a1a1a]' : 'bg-transparent'}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke={cell.isToday ? 'white' : '#3b82f6'} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </div>
-              )}
+    <>
+      <button
+        type="button"
+        aria-label="打开多周任务日历"
+        onClick={() => setShowMultiWeekCalendar(true)}
+        className={`bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-3 flex flex-col text-left hover:bg-white/[0.14] transition-colors ${className}`}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-white/85 text-sm font-semibold">日历</span>
+          <span className="text-white/60 text-xs">{monthLabel}</span>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-[10px] text-white/45 mb-1">
+          {weekdays.map((day) => (
+            <div key={day} className="h-5 flex items-center justify-center">
+              {day}
             </div>
-          );
-        })}
-      </div>
-    </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1 flex-1">
+          {cells.map((cell, idx) => {
+            let dateStr = '';
+            if (cell.inCurrentMonth) {
+              dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
+            }
+            const isChecked = cell.inCurrentMonth && checkedDates.has(dateStr);
+            
+            return (
+              <div
+                key={`${cell.day}-${idx}`}
+                className={`h-6 rounded flex items-center justify-center text-[11px] relative ${
+                  cell.isToday
+                    ? 'bg-[#B5D2E8]/90 text-black/80 font-bold shadow-sm'
+                    : cell.inCurrentMonth
+                      ? isChecked 
+                        ? 'bg-[#E5989B]/90 text-white font-bold shadow-sm' 
+                        : 'text-white/80 bg-white/[0.03]'
+                      : 'text-white/25'
+                }`}
+              >
+                {cell.day}
+                {isChecked && (
+                  <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${cell.isToday ? 'bg-blue-500 shadow-sm border border-[#1a1a1a]' : 'bg-transparent'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke={cell.isToday ? 'white' : '#3b82f6'} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </button>
+      <MultiWeekCalendarModal open={showMultiWeekCalendar} onClose={() => setShowMultiWeekCalendar(false)} />
+    </>
   );
 };
 

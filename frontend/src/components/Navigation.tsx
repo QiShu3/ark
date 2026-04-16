@@ -4,9 +4,9 @@ import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
 import { Calendar } from 'lucide-react';
-import CalendarWidget from './CalendarWidget';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
+import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 
 /**
  * 顶部导航栏组件
@@ -169,20 +169,7 @@ const Navigation: React.FC = () => {
       </div>
     )}
 
-    {/* Calendar Modal */}
-    {showCalendarModal && (
-      <div 
-        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
-        onClick={() => setShowCalendarModal(false)}
-      >
-        <div 
-          className="w-[340px] shadow-2xl animate-in zoom-in-95 duration-200"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <CalendarWidget />
-        </div>
-      </div>
-    )}
+    <MultiWeekCalendarModal open={showCalendarModal} onClose={() => setShowCalendarModal(false)} />
     </>
   );
 };
