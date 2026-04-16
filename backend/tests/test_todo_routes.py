@@ -41,6 +41,7 @@ class _FakeTodoConn:
     def __init__(self) -> None:
         self.stats_rows: list[dict[str, Any]] = []
         self.events: list[dict[str, Any]] = []
+        self.tasks: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -52,6 +53,32 @@ class _FakeTodoConn:
             user_id = args[0]
             rows = [event for event in self.events if event["user_id"] == user_id]
             return sorted(rows, key=lambda event: (event["due_at"], -event["created_at"].timestamp()))
+        if "FROM tasks" in sql and "calendar range endpoint" in sql:
+            user_id, range_start, range_end = args
+            rows = []
+            for task in self.tasks:
+                if task["user_id"] != user_id or task["is_deleted"]:
+                    continue
+                start = task["start_date"]
+                due = task["due_date"]
+                overlaps = False
+                if start is not None and due is not None:
+                    overlaps = start < range_end and due >= range_start
+                elif start is not None:
+                    overlaps = range_start <= start < range_end
+                elif due is not None:
+                    overlaps = range_start <= due < range_end
+                if overlaps:
+                    rows.append(task)
+            return sorted(
+                rows,
+                key=lambda task: (
+                    0 if task["status"] != "done" else 1,
+                    -task["priority"],
+                    task["due_date"] or datetime.max.replace(tzinfo=UTC),
+                    task["updated_at"],
+                ),
+            )
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -136,6 +163,42 @@ def _build_app() -> FastAPI:
     return app
 
 
+def _task_row(
+    *,
+    user_id: int = 7,
+    title: str = "Task",
+    status: str = "todo",
+    priority: int = 0,
+    start_date: datetime | None = None,
+    due_date: datetime | None = None,
+    is_deleted: bool = False,
+) -> dict[str, Any]:
+    now = datetime(2026, 4, 16, tzinfo=UTC)
+    return {
+        "id": uuid4(),
+        "user_id": user_id,
+        "title": title,
+        "content": None,
+        "status": status,
+        "priority": priority,
+        "target_duration": 0,
+        "current_cycle_count": 0,
+        "target_cycle_count": 0,
+        "cycle_period": "daily",
+        "cycle_every_days": None,
+        "event": "",
+        "event_ids": [],
+        "task_type": "focus",
+        "tags": [],
+        "actual_duration": 0,
+        "start_date": start_date,
+        "due_date": due_date,
+        "is_deleted": is_deleted,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
 def test_get_focus_stats_today(monkeypatch) -> None:
     conn = _FakeTodoConn()
     task_id = uuid4()
@@ -203,6 +266,50 @@ def test_get_focus_stats_invalid_range(monkeypatch) -> None:
 
     resp = client.get("/todo/focus/stats?range=year")
     assert resp.status_code == 422
+
+
+def test_list_calendar_tasks_includes_single_day_and_overlapping_tasks(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    conn.tasks = [
+        _task_row(title="Start only", start_date=datetime(2026, 4, 16, 8, tzinfo=UTC)),
+        _task_row(title="Due only", due_date=datetime(2026, 4, 17, 18, tzinfo=UTC)),
+        _task_row(
+            title="Multi day",
+            start_date=datetime(2026, 4, 15, 9, tzinfo=UTC),
+            due_date=datetime(2026, 4, 20, 18, tzinfo=UTC),
+        ),
+        _task_row(title="Outside", due_date=datetime(2026, 5, 1, 18, tzinfo=UTC)),
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/tasks/calendar?start=2026-04-16&end=2026-04-30")
+
+    assert resp.status_code == 200
+    titles = [task["title"] for task in resp.json()]
+    assert titles == ["Due only", "Multi day", "Start only"]
+
+
+def test_list_calendar_tasks_excludes_deleted_and_other_users(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    conn.tasks = [
+        _task_row(title="Mine", due_date=datetime(2026, 4, 17, 18, tzinfo=UTC)),
+        _task_row(user_id=8, title="Other user", due_date=datetime(2026, 4, 17, 18, tzinfo=UTC)),
+        _task_row(title="Deleted", due_date=datetime(2026, 4, 17, 18, tzinfo=UTC), is_deleted=True),
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/tasks/calendar?start=2026-04-16&end=2026-04-30")
+
+    assert resp.status_code == 200
+    assert [task["title"] for task in resp.json()] == ["Mine"]
 
 
 def test_create_event_can_be_primary(monkeypatch) -> None:

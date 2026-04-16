@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -841,6 +841,50 @@ async def list_tasks(
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, *args)
+    return [_row_to_task(r) for r in rows]
+
+
+@router.get("/tasks/calendar", response_model=list[TaskOut])
+async def list_calendar_tasks(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    start: date = Query(...),
+    end: date = Query(...),
+) -> list[TaskOut]:
+    """List tasks that overlap a calendar date range."""
+    if end <= start:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end must be after start")
+
+    range_start = datetime.combine(start, datetime.min.time(), tzinfo=UTC)
+    range_end = datetime.combine(end, datetime.min.time(), tzinfo=UTC)
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            -- calendar range endpoint
+            SELECT id, user_id, title, content, status, priority, target_duration,
+                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            FROM tasks
+            WHERE user_id = $1
+              AND is_deleted = FALSE
+              AND (
+                (start_date IS NOT NULL AND due_date IS NOT NULL AND start_date < $3 AND due_date >= $2)
+                OR (start_date IS NOT NULL AND due_date IS NULL AND start_date >= $2 AND start_date < $3)
+                OR (start_date IS NULL AND due_date IS NOT NULL AND due_date >= $2 AND due_date < $3)
+              )
+            ORDER BY
+              CASE WHEN status = 'done' THEN 1 ELSE 0 END ASC,
+              priority DESC,
+              due_date ASC NULLS LAST,
+              updated_at ASC
+            LIMIT 500
+            """,
+            int(user.id),
+            range_start,
+            range_end,
+        )
     return [_row_to_task(r) for r in rows]
 
 
