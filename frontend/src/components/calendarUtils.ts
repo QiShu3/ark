@@ -82,8 +82,10 @@ export function getTaskContinuationForDay(
     };
   }
 
-  const previousDay = index > 0 ? groupedTasks[toDayKey(days[index - 1])] || [] : [];
-  const nextDay = index < days.length - 1 ? groupedTasks[toDayKey(days[index + 1])] || [] : [];
+  const canConnectToPrevious = index > 0 && index % 7 !== 0;
+  const canConnectToNext = index < days.length - 1 && index % 7 !== 6;
+  const previousDay = canConnectToPrevious ? groupedTasks[toDayKey(days[index - 1])] || [] : [];
+  const nextDay = canConnectToNext ? groupedTasks[toDayKey(days[index + 1])] || [] : [];
 
   return {
     continuesFromPrev: previousDay.some((task) => task.id === taskId),

@@ -122,4 +122,28 @@ describe('calendarUtils', () => {
       continuesToNext: false,
     });
   });
+
+  it('does not connect a multi-day task across a wrapped week row', () => {
+    const days = buildVisibleDays(new Date('2026-04-16T12:00:00Z'), 2);
+    const grouped = groupTasksByDay(
+      [
+        baseTask({
+          id: 'wrap',
+          title: 'Wrap',
+          start_date: '2026-04-18T09:00:00+08:00',
+          due_date: '2026-04-19T18:00:00+08:00',
+        }),
+      ],
+      days,
+    );
+
+    expect(getTaskContinuationForDay(days, grouped, new Date('2026-04-18T12:00:00Z'), 'wrap')).toEqual({
+      continuesFromPrev: false,
+      continuesToNext: false,
+    });
+    expect(getTaskContinuationForDay(days, grouped, new Date('2026-04-19T12:00:00Z'), 'wrap')).toEqual({
+      continuesFromPrev: false,
+      continuesToNext: false,
+    });
+  });
 });
