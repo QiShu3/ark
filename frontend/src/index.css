@@ -39,3 +39,75 @@
     transform: translateX(100%);
   }
 }
+
+.calendar-task-label {
+  --task-rgb: 96, 165, 250;
+  position: relative;
+  display: flex;
+  height: 31px;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--task-rgb), 0.25);
+  background:
+    linear-gradient(135deg, rgba(var(--task-rgb), 0.13), rgba(var(--task-rgb), 0.035)),
+    rgba(255, 255, 255, 0.018);
+  padding: 0 0.625rem;
+  color: rgba(248, 250, 252, 0.88);
+  font-size: 0.875rem;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 16px rgba(var(--task-rgb), 0.045),
+    0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-task-label::before {
+  content: "";
+  position: absolute;
+  bottom: 7px;
+  left: 0;
+  top: 7px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(var(--task-rgb), 0.72);
+  box-shadow: 0 0 12px rgba(var(--task-rgb), 0.55);
+}
+
+.calendar-task-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 999px;
+  background: rgb(var(--task-rgb));
+  box-shadow: 0 0 12px rgba(var(--task-rgb), 0.65);
+}
+
+.calendar-task-pink {
+  --task-rgb: 251, 113, 133;
+}
+
+.calendar-task-mint {
+  --task-rgb: 45, 212, 191;
+}
+
+.calendar-task-sky {
+  --task-rgb: 56, 189, 248;
+}
+
+.calendar-task-green {
+  --task-rgb: 52, 211, 153;
+}
+
+.calendar-task-violet {
+  --task-rgb: 192, 132, 252;
+}
+
+.calendar-task-yellow {
+  --task-rgb: 251, 191, 36;
+}
+
+.calendar-task-lavender {
+  --task-rgb: 129, 140, 248;
+}
