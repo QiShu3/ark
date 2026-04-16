@@ -18,6 +18,8 @@ TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
 TaskType = Literal["focus", "checkin"]
 PhaseType = Literal["focus", "break"]
+FocusTimerMode = Literal["countdown", "countup"]
+COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
 
 
 class TaskCreateRequest(BaseModel):
@@ -143,6 +145,8 @@ class FocusWorkflowCreateRequest(BaseModel):
 class FocusWorkflowPhase(BaseModel):
     phase_type: Literal["focus", "break"]
     duration: int = Field(ge=60, le=24 * 60 * 60)
+    timer_mode: FocusTimerMode | None = None
+    task_id: UUID | None = None
 
 
 class FocusWorkflowOut(BaseModel):
@@ -156,8 +160,12 @@ class FocusWorkflowOut(BaseModel):
     break_duration: int | None = None
     phase_started_at: datetime | None = None
     phase_planned_duration: int | None = None
+    phase_timer_mode: FocusTimerMode | None = None
+    elapsed_seconds: int | None = None
     pending_confirmation: bool = False
+    pending_task_selection: bool = False
     remaining_seconds: int | None = None
+    runtime_task_id: UUID | None = None
     completed_workflow_name: str | None = None
 
 
@@ -166,6 +174,7 @@ class FocusWorkflowPresetCreateRequest(BaseModel):
     phases: list[FocusWorkflowPhase] | None = None
     focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
     break_duration: int = Field(default=300, ge=60, le=24 * 60 * 60)
+    default_focus_timer_mode: FocusTimerMode = "countdown"
     is_default: bool = False
 
 
@@ -174,6 +183,7 @@ class FocusWorkflowPresetUpdateRequest(BaseModel):
     phases: list[FocusWorkflowPhase] | None = None
     focus_duration: int | None = Field(default=None, ge=60, le=24 * 60 * 60)
     break_duration: int | None = Field(default=None, ge=60, le=24 * 60 * 60)
+    default_focus_timer_mode: FocusTimerMode | None = None
     is_default: bool | None = None
 
 
@@ -183,10 +193,15 @@ class FocusWorkflowPresetOut(BaseModel):
     name: str
     focus_duration: int
     break_duration: int
+    default_focus_timer_mode: FocusTimerMode = "countdown"
     phases: list[FocusWorkflowPhase]
     is_default: bool
     created_at: datetime
     updated_at: datetime
+
+
+class FocusWorkflowSelectTaskRequest(BaseModel):
+    task_id: UUID
 
 
 def _pool_from_request(request: Request) -> asyncpg.Pool:
@@ -315,6 +330,8 @@ async def init_todo(app: Any) -> None:
               phase_started_at TIMESTAMPTZ NOT NULL,
               phase_planned_duration INTEGER NOT NULL,
               pending_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
+              pending_task_selection BOOLEAN NOT NULL DEFAULT FALSE,
+              runtime_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL,
               status VARCHAR(20) NOT NULL DEFAULT 'active',
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -327,6 +344,8 @@ async def init_todo(app: Any) -> None:
             """
         )
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS pending_confirmation BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS pending_task_selection BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS runtime_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;")
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ NULL;")
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS workflow_name VARCHAR(100) NOT NULL DEFAULT '默认工作流';"
@@ -349,16 +368,25 @@ async def init_todo(app: Any) -> None:
               name VARCHAR(50) NOT NULL,
               focus_duration INTEGER NOT NULL,
               break_duration INTEGER NOT NULL,
+              default_focus_timer_mode VARCHAR(20) NOT NULL DEFAULT 'countdown',
               phases JSONB NOT NULL DEFAULT '[]'::jsonb,
               is_default BOOLEAN NOT NULL DEFAULT FALSE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_focus_workflow_presets_focus_duration CHECK (focus_duration >= 60),
-              CONSTRAINT chk_focus_workflow_presets_break_duration CHECK (break_duration >= 60)
+              CONSTRAINT chk_focus_workflow_presets_break_duration CHECK (break_duration >= 60),
+              CONSTRAINT chk_focus_workflow_presets_timer_mode CHECK (default_focus_timer_mode IN ('countdown', 'countup'))
             );
             """
         )
         await conn.execute("ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS phases JSONB NOT NULL DEFAULT '[]'::jsonb;")
+        await conn.execute(
+            "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS default_focus_timer_mode VARCHAR(20) NOT NULL DEFAULT 'countdown';"
+        )
+        await conn.execute("ALTER TABLE focus_workflow_presets DROP CONSTRAINT IF EXISTS chk_focus_workflow_presets_timer_mode;")
+        await conn.execute(
+            "ALTER TABLE focus_workflow_presets ADD CONSTRAINT chk_focus_workflow_presets_timer_mode CHECK (default_focus_timer_mode IN ('countdown', 'countup'));"
+        )
 
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_tasks_user_deleted_status ON tasks(user_id, is_deleted, status);"
@@ -515,17 +543,60 @@ def _normalize_phase_type(value: Any) -> PhaseType | None:
     return None
 
 
+def _normalize_timer_mode(value: Any, default: FocusTimerMode = "countdown") -> FocusTimerMode:
+    text = str(value or "").strip()
+    if text == "countup":
+        return "countup"
+    if text == "countdown":
+        return "countdown"
+    return default
+
+
+def _normalize_phase_task_id(value: Any) -> UUID | None:
+    if value in {None, "", "null"}:
+        return None
+    if isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _phase_is_focus(phase: dict[str, Any]) -> bool:
+    return _normalize_phase_type(phase.get("phase_type")) == "focus"
+
+
+def _phase_timer_mode_value(phase: dict[str, Any], *, default_focus_timer_mode: FocusTimerMode = "countdown") -> FocusTimerMode:
+    if not _phase_is_focus(phase):
+        return "countdown"
+    return _normalize_timer_mode(phase.get("timer_mode"), default_focus_timer_mode)
+
+
+def _phase_task_id_value(phase: dict[str, Any]) -> UUID | None:
+    if not _phase_is_focus(phase):
+        return None
+    return _normalize_phase_task_id(phase.get("task_id"))
+
+
+def _phase_elapsed_seconds(phase_started_at: datetime | None) -> int | None:
+    if phase_started_at is None:
+        return None
+    elapsed = int((datetime.now(UTC) - phase_started_at).total_seconds())
+    return elapsed if elapsed > 0 else 0
+
+
 def _to_jsonb_param(value: Any) -> str:
     """将值转换为可绑定到 jsonb 的字符串参数。"""
     if isinstance(value, str):
         return value
-    return json.dumps(value, ensure_ascii=False)
+    return json.dumps(value, ensure_ascii=False, default=str)
 
 
 def _build_default_phases(focus_duration: int, break_duration: int) -> list[dict[str, Any]]:
     """生成默认的专注-休息两阶段。"""
     return [
-        {"phase_type": "focus", "duration": int(focus_duration)},
+        {"phase_type": "focus", "duration": int(focus_duration), "timer_mode": "countdown", "task_id": None},
         {"phase_type": "break", "duration": int(break_duration)},
     ]
 
@@ -535,6 +606,7 @@ def _normalize_workflow_phases(
     *,
     fallback_focus_duration: int,
     fallback_break_duration: int,
+    default_focus_timer_mode: FocusTimerMode = "countdown",
 ) -> list[dict[str, Any]]:
     """规范化并校验工作流阶段。"""
     def _parse_duration(value: Any) -> int:
@@ -558,12 +630,20 @@ def _normalize_workflow_phases(
             if isinstance(phase, FocusWorkflowPhase):
                 phase_type = phase.phase_type
                 duration = _parse_duration(phase.duration)
+                timer_mode = phase.timer_mode
+                task_id = phase.task_id
             elif isinstance(phase, dict):
                 phase_type = str(phase.get("phase_type") or "").strip()
                 duration = _parse_duration(phase.get("duration"))
+                timer_mode = phase.get("timer_mode")
+                task_id = phase.get("task_id")
             else:
                 continue
-            items.append({"phase_type": phase_type, "duration": duration})
+            normalized: dict[str, Any] = {"phase_type": phase_type, "duration": duration}
+            if phase_type == "focus":
+                normalized["timer_mode"] = _normalize_timer_mode(timer_mode, default_focus_timer_mode)
+                normalized["task_id"] = _phase_task_id_value({"phase_type": "focus", "task_id": task_id})
+            items.append(normalized)
     if not items:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作流至少需要一个阶段")
     for idx, phase in enumerate(items):
@@ -573,6 +653,9 @@ def _normalize_workflow_phases(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="阶段类型必须是 focus 或 break")
         if duration < 60:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="阶段时长不能小于 60 秒")
+        if phase_type == "break":
+            phase["timer_mode"] = None
+            phase["task_id"] = None
         if idx > 0 and items[idx - 1]["phase_type"] == phase_type:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="相邻阶段必须交替 focus/break")
     if items[0]["phase_type"] != "focus":
@@ -582,6 +665,10 @@ def _normalize_workflow_phases(
 
 def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
     raw = row.get("phases", []) if hasattr(row, "get") else row["phases"] if "phases" in row else []
+    default_focus_timer_mode = _normalize_timer_mode(
+        row.get("default_focus_timer_mode", "countdown") if hasattr(row, "get") else row.get("default_focus_timer_mode", "countdown"),  # type: ignore[arg-type]
+        "countdown",
+    )
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
@@ -594,8 +681,25 @@ def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
                 phase_type = _normalize_phase_type(phase.get("phase_type"))
                 duration = _safe_int(phase.get("duration"), 0)
                 if phase_type is not None and duration >= 60:
-                    phases.append(FocusWorkflowPhase(phase_type=phase_type, duration=duration))
+                    phases.append(
+                        FocusWorkflowPhase(
+                            phase_type=phase_type,
+                            duration=duration,
+                            timer_mode=_phase_timer_mode_value(phase, default_focus_timer_mode=default_focus_timer_mode)
+                            if phase_type == "focus"
+                            else None,
+                            task_id=_phase_task_id_value(phase) if phase_type == "focus" else None,
+                        )
+                    )
     return phases
+
+
+def _phase_at_index(phases: list[FocusWorkflowPhase], index: int | None) -> FocusWorkflowPhase | None:
+    if index is None:
+        return None
+    if index < 0 or index >= len(phases):
+        return None
+    return phases[index]
 
 
 def _row_to_focus_workflow(
@@ -616,9 +720,14 @@ def _row_to_focus_workflow(
     phases = _phase_models_from_row(row)
     current_phase_index_raw = row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"]
     current_phase_index = _safe_int(current_phase_index_raw, 0)
+    current_phase = _phase_at_index(phases, current_phase_index)
+    elapsed_seconds = _phase_elapsed_seconds(started) if not bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False) else None
+    current_phase_timer_mode = current_phase.timer_mode if current_phase is not None else None
     workflow_name = (
         str(row.get("workflow_name", "默认工作流")) if hasattr(row, "get") else str(row["workflow_name"] or "默认工作流")
     )
+    pending_task_selection = bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False)
+    runtime_task_id = row.get("runtime_task_id") if hasattr(row, "get") else row.get("runtime_task_id")  # type: ignore[union-attr]
     return FocusWorkflowOut(
         state=row["current_phase"],
         workflow_name=workflow_name,
@@ -630,12 +739,16 @@ def _row_to_focus_workflow(
         break_duration=_safe_int(row["break_duration"], 0),
         phase_started_at=started,
         phase_planned_duration=planned,
+        phase_timer_mode=current_phase_timer_mode,
+        elapsed_seconds=elapsed_seconds,
         pending_confirmation=pending,
+        pending_task_selection=pending_task_selection,
         remaining_seconds=_workflow_remaining_seconds(
             started,
             planned,
             pending_confirmation=pending,
-        ),
+        ) if current_phase_timer_mode != "countup" else None,
+        runtime_task_id=runtime_task_id,
         completed_workflow_name=completed_workflow_name,
     )
 
@@ -655,6 +768,7 @@ def _row_to_focus_workflow_preset(row: asyncpg.Record) -> FocusWorkflowPresetOut
         name=str(row["name"]),
         focus_duration=int(row["focus_duration"]),
         break_duration=int(row["break_duration"]),
+        default_focus_timer_mode=_normalize_timer_mode(row.get("default_focus_timer_mode", "countdown") if hasattr(row, "get") else "countdown"),
         phases=phases,
         is_default=bool(row["is_default"]),
         created_at=row["created_at"],
@@ -667,7 +781,7 @@ async def _get_default_focus_workflow_preset(
 ) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
-        SELECT id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+        SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
         FROM focus_workflow_presets
         WHERE user_id = $1 AND is_default = TRUE
         LIMIT 1
@@ -676,13 +790,252 @@ async def _get_default_focus_workflow_preset(
     )
 
 
-async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record | None:
-    """同步活动工作流：阶段到时后置为待确认，并在 focus 阶段自动封账当前专注记录。"""
+async def _get_bindable_task(conn: Any, user_id: int, task_id: UUID | None) -> dict[str, Any] | None:
+    if task_id is None:
+        return None
+    return await conn.fetchrow(
+        """
+        SELECT id, status, is_deleted, title
+        FROM tasks
+        WHERE id = $1 AND user_id = $2
+        """,
+        task_id,
+        int(user_id),
+    )
+
+
+async def _validate_phase_task_bindings(conn: Any, user_id: int, phases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    validated: list[dict[str, Any]] = []
+    for phase in phases:
+        next_phase = dict(phase)
+        task_id = _phase_task_id_value(next_phase)
+        if _phase_is_focus(next_phase) and task_id is not None:
+            task_row = await _get_bindable_task(conn, user_id, task_id)
+            if task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="绑定任务必须是未完成任务")
+            next_phase["task_id"] = task_row["id"]
+        else:
+            next_phase["task_id"] = None if not _phase_is_focus(next_phase) else task_id
+        validated.append(next_phase)
+    return validated
+
+
+async def _start_focus_log_for_task(conn: Any, user_id: int, task_id: UUID) -> asyncpg.Record:
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+        INSERT INTO focus_logs(user_id, task_id, duration, start_time, end_at)
+        VALUES ($1, $2, 0, NOW(), NULL)
+        RETURNING id, user_id, task_id, duration, start_time, end_at, created_at
+        """,
+        int(user_id),
+        task_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=500, detail="开始专注失败")
+    return row
+
+
+async def _close_open_focus_log(conn: Any, user_id: int) -> dict[str, Any] | None:
+    open_row = await conn.fetchrow(
+        """
+        SELECT id, start_time
+        FROM focus_logs
+        WHERE user_id = $1 AND end_at IS NULL
+        """,
+        int(user_id),
+    )
+    if open_row is None:
+        return None
+    now = datetime.now(UTC)
+    dur = int((now - open_row["start_time"]).total_seconds())
+    if dur < 0:
+        dur = 0
+    closed_row = await conn.fetchrow(
+        """
+        UPDATE focus_logs
+        SET end_at = NOW(), duration = $1
+        WHERE id = $2
+        RETURNING task_id
+        """,
+        dur,
+        open_row["id"],
+    )
+    if closed_row is not None:
+        await conn.execute(
+            """
+            UPDATE tasks
+            SET actual_duration = actual_duration + $1, updated_at = NOW()
+            WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+            """,
+            dur,
+            closed_row["task_id"],
+            int(user_id),
+        )
+    return {"duration": dur, "task_id": closed_row["task_id"] if closed_row is not None else None}
+
+
+async def _set_workflow_waiting_for_task(conn: Any, workflow_id: UUID, phase_index: int, phase: dict[str, Any]) -> asyncpg.Record | None:
+    await conn.execute(
+        """
+        UPDATE focus_workflows
+        SET current_phase = $1,
+            current_phase_index = $2,
+            task_id = NULL,
+            runtime_task_id = NULL,
+            phase_started_at = NOW(),
+            phase_planned_duration = $3,
+            pending_confirmation = FALSE,
+            pending_task_selection = TRUE,
+            updated_at = NOW()
+        WHERE id = $4
+        """,
+        str(phase["phase_type"]),
+        int(phase_index),
+        int(phase["duration"]),
+        workflow_id,
+    )
+    return await conn.fetchrow(
+        """
+        SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                focus_duration, break_duration, current_phase, phase_started_at,
-               phase_planned_duration, pending_confirmation
+               phase_planned_duration, pending_confirmation, pending_task_selection
+        FROM focus_workflows
+        WHERE id = $1
+        """,
+        workflow_id,
+    )
+
+
+async def _set_workflow_current_phase(
+    conn: Any,
+    workflow_id: UUID,
+    *,
+    phase_index: int,
+    phase: dict[str, Any],
+    task_id: UUID | None,
+    runtime_task_id: UUID | None,
+    pending_task_selection: bool,
+) -> asyncpg.Record | None:
+    await conn.execute(
+        """
+        UPDATE focus_workflows
+        SET current_phase = $1,
+            current_phase_index = $2,
+            task_id = $3,
+            runtime_task_id = $4,
+            phase_started_at = NOW(),
+            phase_planned_duration = $5,
+            pending_confirmation = FALSE,
+            pending_task_selection = $6,
+            updated_at = NOW()
+        WHERE id = $7
+        """,
+        str(phase["phase_type"]),
+        int(phase_index),
+        task_id,
+        runtime_task_id,
+        int(phase["duration"]),
+        pending_task_selection,
+        workflow_id,
+    )
+    return await conn.fetchrow(
+        """
+        SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+               focus_duration, break_duration, current_phase, phase_started_at,
+               phase_planned_duration, pending_confirmation, pending_task_selection
+        FROM focus_workflows
+        WHERE id = $1
+        """,
+        workflow_id,
+    )
+
+
+async def _complete_focus_workflow(conn: Any, workflow_id: UUID, workflow_name: str) -> FocusWorkflowOut:
+    await conn.execute(
+        """
+        UPDATE focus_workflows
+        SET status = 'stopped', ended_at = NOW(), updated_at = NOW()
+        WHERE id = $1
+        """,
+        workflow_id,
+    )
+    return _row_to_focus_workflow(None, completed_workflow_name=workflow_name)
+
+
+async def _advance_focus_workflow_to_next_phase(
+    conn: Any,
+    workflow_row: Any,
+    user_id: int,
+    *,
+    skip_breaks: bool,
+) -> FocusWorkflowOut:
+    try:
+        phases = _normalize_workflow_phases(
+            workflow_row.get("phases") if hasattr(workflow_row, "get") else workflow_row["phases"],
+            fallback_focus_duration=int(workflow_row["focus_duration"]),
+            fallback_break_duration=int(workflow_row["break_duration"]),
+        )
+    except HTTPException:
+        phases = _build_default_phases(
+            int(workflow_row["focus_duration"]),
+            int(workflow_row["break_duration"]),
+        )
+    start_index = _safe_int(workflow_row.get("current_phase_index", 0) if hasattr(workflow_row, "get") else workflow_row["current_phase_index"], 0) + 1
+    workflow_id = workflow_row["id"]
+    workflow_name = str(workflow_row["workflow_name"] or "工作流")
+    current_task_title: str | None = None
+    current_task_id = (
+        (workflow_row.get("runtime_task_id") if hasattr(workflow_row, "get") else None)
+        or (workflow_row.get("task_id") if hasattr(workflow_row, "get") else workflow_row["task_id"])
+    )
+    if current_task_id is not None:
+        current_task_row = await _get_bindable_task(conn, user_id, current_task_id)
+        if current_task_row is not None:
+            current_task_title = str(current_task_row["title"])
+    for idx in range(start_index, len(phases)):
+        phase = phases[idx]
+        phase_type = str(phase["phase_type"])
+        if phase_type == "break":
+            if skip_breaks:
+                continue
+            next_row = await _set_workflow_current_phase(
+                conn,
+                workflow_id,
+                phase_index=idx,
+                phase=phase,
+                task_id=None,
+                runtime_task_id=None,
+                pending_task_selection=False,
+            )
+            return _row_to_focus_workflow(next_row, task_title=current_task_title)
+        phase_task_id = _phase_task_id_value(phase)
+        task_row = await _get_bindable_task(conn, user_id, phase_task_id)
+        if phase_task_id is not None and (task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done"):
+            continue
+        if phase_task_id is None:
+            next_row = await _set_workflow_waiting_for_task(conn, workflow_id, idx, phase)
+            return _row_to_focus_workflow(next_row, task_title=None)
+        next_row = await _set_workflow_current_phase(
+            conn,
+            workflow_id,
+            phase_index=idx,
+            phase=phase,
+            task_id=task_row["id"],
+            runtime_task_id=None,
+            pending_task_selection=False,
+        )
+        await _start_focus_log_for_task(conn, user_id, task_row["id"])
+        return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
+    return await _complete_focus_workflow(conn, workflow_id, workflow_name)
+
+
+async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record | None:
+    """同步活动工作流状态，包括 countup 上限、任务失效与待选任务状态。"""
+    row = await conn.fetchrow(
+        """
+        SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+               focus_duration, break_duration, current_phase, phase_started_at,
+               phase_planned_duration, pending_confirmation, pending_task_selection
         FROM focus_workflows
         WHERE user_id = $1 AND status = 'active'
         """,
@@ -690,6 +1043,37 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
     )
     if row is None:
         return None
+    if bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
+        return row
+    phases = _normalize_workflow_phases(
+        row.get("phases") if hasattr(row, "get") else row["phases"],
+        fallback_focus_duration=int(row["focus_duration"]),
+        fallback_break_duration=int(row["break_duration"]),
+    )
+    current_index_raw = row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"]
+    current_index = _safe_int(current_index_raw, 0)
+    current_phase = phases[current_index] if 0 <= current_index < len(phases) else None
+    if current_phase is None:
+        return None
+    if str(row["current_phase"]) == "focus":
+        runtime_task_id = row.get("runtime_task_id") if hasattr(row, "get") else None
+        effective_task_id = runtime_task_id or _phase_task_id_value(current_phase) or row["task_id"]
+        if effective_task_id is None:
+            return await _set_workflow_waiting_for_task(conn, row["id"], current_index, current_phase)
+        task_row = await _get_bindable_task(conn, user_id, effective_task_id)
+        if task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+            await _close_open_focus_log(conn, int(user_id))
+            advanced = await _advance_focus_workflow_to_next_phase(conn, row, int(user_id), skip_breaks=True)
+            return None if advanced.state == "normal" else await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection
+                FROM focus_workflows
+                WHERE user_id = $1 AND status = 'active'
+                """,
+                int(user_id),
+            )
     if bool(row["pending_confirmation"]):
         return row
     phase_started_at = row["phase_started_at"]
@@ -697,6 +1081,23 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
     if phase_started_at is None or phase_planned_duration <= 0:
         return row
     elapsed = int((datetime.now(UTC) - phase_started_at).total_seconds())
+    current_phase_type = str(row["current_phase"])
+    timer_mode = _phase_timer_mode_value(current_phase)
+    if current_phase_type == "focus" and timer_mode == "countup":
+        if elapsed < COUNTUP_PHASE_CAP_SECONDS:
+            return row
+        await _close_open_focus_log(conn, int(user_id))
+        advanced = await _advance_focus_workflow_to_next_phase(conn, row, int(user_id), skip_breaks=False)
+        return None if advanced.state == "normal" else await conn.fetchrow(
+            """
+            SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                   focus_duration, break_duration, current_phase, phase_started_at,
+                   phase_planned_duration, pending_confirmation, pending_task_selection
+            FROM focus_workflows
+            WHERE user_id = $1 AND status = 'active'
+            """,
+            int(user_id),
+        )
     if elapsed < phase_planned_duration:
         return row
     await conn.execute(
@@ -707,47 +1108,13 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
         """,
         row["id"],
     )
-    current_phase_type = str(row["current_phase"])
     if current_phase_type == "focus":
-        open_row = await conn.fetchrow(
-            """
-            SELECT id, start_time
-            FROM focus_logs
-            WHERE user_id = $1 AND end_at IS NULL
-            """,
-            int(user_id),
-        )
-        if open_row is not None:
-            now = datetime.now(UTC)
-            dur = int((now - open_row["start_time"]).total_seconds())
-            if dur < 0:
-                dur = 0
-            closed_row = await conn.fetchrow(
-                """
-                UPDATE focus_logs
-                SET end_at = NOW(), duration = $1
-                WHERE id = $2
-                RETURNING task_id
-                """,
-                dur,
-                open_row["id"],
-            )
-            if closed_row is not None:
-                await conn.execute(
-                    """
-                    UPDATE tasks
-                    SET actual_duration = actual_duration + $1, updated_at = NOW()
-                    WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
-                    """,
-                    dur,
-                    closed_row["task_id"],
-                    int(user_id),
-                )
+        await _close_open_focus_log(conn, int(user_id))
     return await conn.fetchrow(
         """
-        SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+        SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                focus_duration, break_duration, current_phase, phase_started_at,
-               phase_planned_duration, pending_confirmation
+               phase_planned_duration, pending_confirmation, pending_task_selection
         FROM focus_workflows
         WHERE id = $1
         """,
@@ -1368,13 +1735,14 @@ async def _create_workflow_with_focus_phase(
         await conn.execute(
             """
             INSERT INTO focus_workflows(
-                user_id, task_id, workflow_name, phases, current_phase_index,
+                user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                 focus_duration, break_duration, current_phase, phase_started_at,
-                phase_planned_duration, pending_confirmation, status
+                phase_planned_duration, pending_confirmation, pending_task_selection, status
             )
-            VALUES ($1, $2, $3, $4::jsonb, 0, $5, $6, $7, NOW(), $8, FALSE, 'active')
+            VALUES ($1, $2, $3, $4, $5::jsonb, 0, $6, $7, $8, NOW(), $9, FALSE, FALSE, 'active')
             """,
             int(user_id),
+            task_id,
             task_id,
             workflow_name,
             _to_jsonb_param(phases),
@@ -1408,7 +1776,7 @@ async def list_focus_workflow_presets(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+            SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
             FROM focus_workflow_presets
             WHERE user_id = $1
             ORDER BY is_default DESC, updated_at DESC
@@ -1438,18 +1806,21 @@ async def create_focus_workflow_preset(
                 body.phases,
                 fallback_focus_duration=int(body.focus_duration),
                 fallback_break_duration=int(body.break_duration),
+                default_focus_timer_mode=body.default_focus_timer_mode,
             )
+            phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
             row = await conn.fetchrow(
                 """
-                INSERT INTO focus_workflow_presets(user_id, name, focus_duration, break_duration, phases, is_default)
-                VALUES ($1, $2, $3, $4, $5::jsonb, $6)
-                RETURNING id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+                INSERT INTO focus_workflow_presets(user_id, name, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
                 """,
                 int(user.id),
                 body.name.strip(),
                 int(body.focus_duration),
                 int(body.break_duration),
                 _to_jsonb_param(phases),
+                body.default_focus_timer_mode,
                 should_default,
             )
     if row is None:
@@ -1472,7 +1843,7 @@ async def update_focus_workflow_preset(
         async with conn.transaction():
             target = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
                 FROM focus_workflow_presets
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1491,7 +1862,11 @@ async def update_focus_workflow_preset(
                     body.phases,
                     fallback_focus_duration=int(target["focus_duration"]),
                     fallback_break_duration=int(target["break_duration"]),
+                    default_focus_timer_mode=str(
+                        patch.get("default_focus_timer_mode") or target.get("default_focus_timer_mode", "countdown")
+                    ),
                 )
+                phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
             else:
                 phases = target["phases"]
             sets: list[str] = []
@@ -1508,6 +1883,9 @@ async def update_focus_workflow_preset(
             if "phases" in patch:
                 args.append(_to_jsonb_param(phases))
                 sets.append(f"phases = ${len(args)}::jsonb")
+            if "default_focus_timer_mode" in patch:
+                args.append(str(patch["default_focus_timer_mode"]))
+                sets.append(f"default_focus_timer_mode = ${len(args)}")
             if "is_default" in patch:
                 args.append(bool(patch["is_default"]))
                 sets.append(f"is_default = ${len(args)}")
@@ -1520,7 +1898,7 @@ async def update_focus_workflow_preset(
                 UPDATE focus_workflow_presets
                 SET {", ".join(sets)}, updated_at = NOW()
                 WHERE id = ${p_i} AND user_id = ${u_i}
-                RETURNING id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
                 """,
                 *args,
             )
@@ -1580,7 +1958,7 @@ async def set_default_focus_workflow_preset(
         async with conn.transaction():
             row = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
                 FROM focus_workflow_presets
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1598,7 +1976,7 @@ async def set_default_focus_workflow_preset(
                 UPDATE focus_workflow_presets
                 SET is_default = TRUE, updated_at = NOW()
                 WHERE id = $1 AND user_id = $2
-                RETURNING id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at
+                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
                 """,
                 preset_id,
                 int(user.id),
@@ -1634,6 +2012,9 @@ async def start_focus(
                     preset["phases"],
                     fallback_focus_duration=focus_duration,
                     fallback_break_duration=break_duration,
+                    default_focus_timer_mode=_normalize_timer_mode(
+                        preset.get("default_focus_timer_mode", "countdown") if hasattr(preset, "get") else "countdown"
+                    ),
                 )
                 workflow_name = str(preset["name"] or "默认工作流")
             else:
@@ -1685,9 +2066,9 @@ async def create_focus_workflow(
             )
             row = await conn.fetchrow(
                 """
-                SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                        focus_duration, break_duration, current_phase, phase_started_at,
-                       phase_planned_duration, pending_confirmation
+                       phase_planned_duration, pending_confirmation, pending_task_selection
                 FROM focus_workflows
                 WHERE user_id = $1 AND status = 'active'
                 """,
@@ -1744,9 +2125,9 @@ async def skip_focus_workflow_phase(
         async with conn.transaction():
             row = await conn.fetchrow(
                 """
-                SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                        focus_duration, break_duration, current_phase, phase_started_at,
-                       phase_planned_duration, pending_confirmation
+                       phase_planned_duration, pending_confirmation, pending_task_selection
                 FROM focus_workflows
                 WHERE user_id = $1 AND status = 'active'
                 """,
@@ -1754,6 +2135,8 @@ async def skip_focus_workflow_phase(
             )
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段需要先选择任务")
             if bool(row["pending_confirmation"]):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段已结束，请确认流转")
 
@@ -1768,36 +2151,14 @@ async def skip_focus_workflow_phase(
             )
             current_phase_type = str(row["current_phase"])
             if current_phase_type == "focus":
-                open_row = await conn.fetchrow(
-                    """
-                    SELECT id, start_time
-                    FROM focus_logs
-                    WHERE user_id = $1 AND end_at IS NULL
-                    """,
-                    int(user.id),
-                )
-                if open_row is not None:
-                    now = datetime.now(UTC)
-                    dur = int((now - open_row["start_time"]).total_seconds())
-                    if dur < 0:
-                        dur = 0
-                    await conn.execute(
-                        "UPDATE focus_logs SET end_at = NOW(), duration = $1 WHERE id = $2",
-                        dur,
-                        open_row["id"],
-                    )
-                    await conn.execute(
-                        "UPDATE tasks SET actual_duration = actual_duration + $1, updated_at = NOW() WHERE id = $2",
-                        dur,
-                        row["task_id"],
-                    )
+                await _close_open_focus_log(conn, int(user.id))
 
             # 重新获取以返回最新状态
             updated_row = await conn.fetchrow(
                 """
-                SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                        focus_duration, break_duration, current_phase, phase_started_at,
-                       phase_planned_duration, pending_confirmation
+                       phase_planned_duration, pending_confirmation, pending_task_selection
                 FROM focus_workflows
                 WHERE id = $1
                 """,
@@ -1825,75 +2186,55 @@ async def confirm_focus_workflow_transition(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
             if not bool(row["pending_confirmation"]):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段未结束，无需确认")
-            try:
-                phases = _normalize_workflow_phases(
-                    row.get("phases") if hasattr(row, "get") else row["phases"],
-                    fallback_focus_duration=int(row["focus_duration"]),
-                    fallback_break_duration=int(row["break_duration"]),
-                )
-            except HTTPException:
-                phases = _build_default_phases(
-                    int(row["focus_duration"]),
-                    int(row["break_duration"]),
-                )
-            current_index_raw = row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"]
-            current_index = _safe_int(current_index_raw, 0)
-            next_index = current_index + 1
-            if next_index >= len(phases):
-                await conn.execute(
-                    """
-                    UPDATE focus_workflows
-                    SET status = 'stopped', ended_at = NOW(), updated_at = NOW()
-                    WHERE id = $1
-                    """,
-                    row["id"],
-                )
-                return _row_to_focus_workflow(
-                    None,
-                    completed_workflow_name=str(row["workflow_name"] or "工作流"),
-                )
-            next_phase = phases[next_index]
-            await conn.execute(
+            return await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+
+
+@router.post("/focus/workflow/select-task", response_model=FocusWorkflowOut)
+async def select_focus_workflow_task(
+    request: Request,
+    body: FocusWorkflowSelectTaskRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
                 """
-                UPDATE focus_workflows
-                SET current_phase = $1,
-                    current_phase_index = $2,
-                    phase_started_at = NOW(),
-                    phase_planned_duration = $3,
-                    pending_confirmation = FALSE,
-                    updated_at = NOW()
-                WHERE id = $4
-                """,
-                next_phase["phase_type"],
-                next_index,
-                int(next_phase["duration"]),
-                row["id"],
-            )
-            if next_phase["phase_type"] == "focus":
-                await conn.execute(
-                    """
-                    INSERT INTO focus_logs(user_id, task_id, duration, start_time, end_at)
-                    VALUES ($1, $2, 0, NOW(), NULL)
-                    """,
-                    int(user.id),
-                    row["task_id"],
-                )
-            next_row = await conn.fetchrow(
-                """
-                SELECT id, user_id, task_id, workflow_name, phases, current_phase_index,
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                        focus_duration, break_duration, current_phase, phase_started_at,
-                       phase_planned_duration, pending_confirmation
+                       phase_planned_duration, pending_confirmation, pending_task_selection
                 FROM focus_workflows
-                WHERE id = $1
+                WHERE user_id = $1 AND status = 'active'
                 """,
-                row["id"],
-            )
-            task_row = await conn.fetchrow(
-                "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
-                row["task_id"],
                 int(user.id),
             )
-    return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]) if task_row else None)
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if not bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段无需选择任务")
+            phases = _normalize_workflow_phases(
+                row.get("phases") if hasattr(row, "get") else row["phases"],
+                fallback_focus_duration=int(row["focus_duration"]),
+                fallback_break_duration=int(row["break_duration"]),
+            )
+            current_index = _safe_int(row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"], 0)
+            phase = phases[current_index]
+            if str(phase["phase_type"]) != "focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
+            task_row = await _get_bindable_task(conn, int(user.id), body.task_id)
+            if task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="请选择未完成任务")
+            next_row = await _set_workflow_current_phase(
+                conn,
+                row["id"],
+                phase_index=current_index,
+                phase=phase,
+                task_id=task_row["id"],
+                runtime_task_id=task_row["id"],
+                pending_task_selection=False,
+            )
+            await _start_focus_log_for_task(conn, int(user.id), task_row["id"])
+    return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
 
 
 @router.post("/focus/stop", response_model=Any)

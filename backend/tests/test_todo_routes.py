@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -447,6 +447,15 @@ def test_delete_primary_event_leaves_no_primary(monkeypatch) -> None:
 class _WorkflowConn:
     def __init__(self) -> None:
         self.task_id = uuid4()
+        self.tasks = [
+            {
+                "id": self.task_id,
+                "user_id": 7,
+                "title": "Task A",
+                "status": "todo",
+                "is_deleted": False,
+            }
+        ]
         self.workflow = {
             "id": uuid4(),
             "user_id": 7,
@@ -460,21 +469,106 @@ class _WorkflowConn:
             "phase_started_at": datetime.now(UTC),
             "phase_planned_duration": 1500,
             "pending_confirmation": True,
+            "pending_task_selection": False,
+            "runtime_task_id": None,
+        }
+        self.inserted_focus_task_id: Any = None
+        self.open_focus_log = {
+            "id": uuid4(),
+            "task_id": self.task_id,
+            "start_time": datetime.now(UTC) - timedelta(minutes=10),
         }
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
         if "SELECT title FROM tasks" in sql:
-            return {"title": "Task A"}
+            task_id = args[0]
+            user_id = int(args[1])
+            task = next(
+                (item for item in self.tasks if item["id"] == task_id and int(item["user_id"]) == user_id and not item["is_deleted"]),
+                None,
+            )
+            if task is None:
+                return None
+            return {"title": task["title"]}
+        if "SELECT id, title, status FROM tasks" in sql:
+            task_id = args[0]
+            user_id = int(args[1])
+            return next(
+                (
+                    {
+                        "id": item["id"],
+                        "title": item["title"],
+                        "status": item["status"],
+                    }
+                    for item in self.tasks
+                    if item["id"] == task_id and int(item["user_id"]) == user_id and not item["is_deleted"]
+                ),
+                None,
+            )
+        if "FROM tasks" in sql and "is_deleted" in sql and "WHERE id = $1 AND user_id = $2" in sql:
+            task_id = args[0]
+            user_id = int(args[1])
+            return next(
+                (
+                    {
+                        "id": item["id"],
+                        "status": item["status"],
+                        "is_deleted": item["is_deleted"],
+                        "title": item["title"],
+                    }
+                    for item in self.tasks
+                    if item["id"] == task_id and int(item["user_id"]) == user_id
+                ),
+                None,
+            )
         if "FROM focus_workflows" in sql and "WHERE id = $1" in sql:
             return self.workflow
+        if "FROM focus_workflows" in sql and "status = 'active'" in sql:
+            return self.workflow
+        if "SELECT id, start_time" in sql and "FROM focus_logs" in sql:
+            return self.open_focus_log
+        if "UPDATE focus_logs" in sql and "RETURNING task_id" in sql:
+            return {"task_id": self.open_focus_log["task_id"]}
+        if "INSERT INTO focus_logs" in sql:
+            self.inserted_focus_task_id = args[1]
+            return {
+                "id": uuid4(),
+                "user_id": int(args[0]),
+                "task_id": args[1],
+                "duration": 0,
+                "start_time": datetime.now(UTC),
+                "end_at": None,
+                "created_at": datetime.now(UTC),
+            }
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
-        if "SET current_phase = $1" in sql:
+        if "SET current_phase = $1" in sql and "runtime_task_id = NULL" in sql and "pending_task_selection = TRUE" in sql:
             self.workflow["current_phase"] = str(args[0])
             self.workflow["current_phase_index"] = int(args[1])
+            self.workflow["task_id"] = None
+            self.workflow["runtime_task_id"] = None
             self.workflow["phase_planned_duration"] = int(args[2])
             self.workflow["pending_confirmation"] = False
+            self.workflow["phase_started_at"] = datetime.now(UTC)
+            self.workflow["pending_task_selection"] = True
+        elif "SET current_phase = $1" in sql:
+            self.workflow["current_phase"] = str(args[0])
+            self.workflow["current_phase_index"] = int(args[1])
+            self.workflow["task_id"] = args[2]
+            self.workflow["runtime_task_id"] = args[3]
+            self.workflow["phase_planned_duration"] = int(args[4])
+            self.workflow["pending_confirmation"] = False
+            self.workflow["phase_started_at"] = datetime.now(UTC)
+            self.workflow["pending_task_selection"] = bool(args[5])
+        if "SET pending_task_selection = TRUE" in sql:
+            self.workflow["pending_task_selection"] = True
+            self.workflow["runtime_task_id"] = None
+            self.workflow["task_id"] = None
+        if "SET runtime_task_id = $1" in sql:
+            self.workflow["runtime_task_id"] = args[0]
+            self.workflow["task_id"] = args[1]
+            self.workflow["pending_task_selection"] = False
             self.workflow["phase_started_at"] = datetime.now(UTC)
         return "UPDATE 1"
 
@@ -594,9 +688,76 @@ def test_confirm_focus_workflow_fallbacks_when_index_invalid(monkeypatch) -> Non
     assert data["current_phase_index"] == 1
 
 
+def test_get_focus_workflow_current_marks_pending_task_selection_for_unbound_focus(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow["pending_confirmation"] = False
+    conn.workflow["phases"] = [{"phase_type": "focus", "duration": 1500, "timer_mode": "countup", "task_id": None}]
+    conn.workflow["runtime_task_id"] = None
+    conn.workflow["task_id"] = None
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/focus/workflow/current")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["pending_task_selection"] is True
+    assert data["task_id"] is None
+
+def test_get_focus_workflow_current_finishes_countup_phase_at_two_hours(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow["pending_confirmation"] = False
+    conn.workflow["phases"] = [{"phase_type": "focus", "duration": 1500, "timer_mode": "countup", "task_id": str(conn.task_id)}]
+    conn.workflow["phase_started_at"] = datetime.now(UTC) - timedelta(hours=2, minutes=5)
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/focus/workflow/current")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "normal"
+
+
+def test_select_focus_workflow_task_starts_pending_phase(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    next_task_id = uuid4()
+    conn.tasks.append(
+        {
+            "id": next_task_id,
+            "user_id": 7,
+            "title": "Task B",
+            "status": "todo",
+            "is_deleted": False,
+        }
+    )
+    conn.workflow["pending_confirmation"] = False
+    conn.workflow["pending_task_selection"] = True
+    conn.workflow["phases"] = [{"phase_type": "focus", "duration": 1500, "timer_mode": "countup", "task_id": None}]
+    conn.workflow["runtime_task_id"] = None
+    conn.workflow["task_id"] = None
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/focus/workflow/select-task", json={"task_id": str(next_task_id)})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["task_id"] == str(next_task_id)
+    assert data["pending_task_selection"] is False
+    assert conn.inserted_focus_task_id == next_task_id
+
+
 class _WorkflowPresetConn:
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
+        self.tasks: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "FROM focus_workflow_presets" in sql and "ORDER BY is_default DESC" in sql:
@@ -609,6 +770,22 @@ class _WorkflowPresetConn:
         if "WHERE user_id = $1 AND is_default = TRUE" in sql:
             user_id = int(args[0])
             return next((row for row in self.rows if int(row["user_id"]) == user_id and bool(row["is_default"])), None)
+        if "FROM tasks" in sql and "is_deleted" in sql and "WHERE id = $1 AND user_id = $2" in sql:
+            task_id = args[0]
+            user_id = int(args[1])
+            return next(
+                (
+                    {
+                        "id": item["id"],
+                        "status": item["status"],
+                        "is_deleted": item["is_deleted"],
+                        "title": item["title"],
+                    }
+                    for item in self.tasks
+                    if item["id"] == task_id and int(item["user_id"]) == user_id
+                ),
+                None,
+            )
         if "INSERT INTO focus_workflow_presets" in sql:
             now = datetime.now(UTC)
             phases_arg = args[4]
@@ -620,7 +797,8 @@ class _WorkflowPresetConn:
                 "focus_duration": int(args[2]),
                 "break_duration": int(args[3]),
                 "phases": phases,
-                "is_default": bool(args[5]),
+                "default_focus_timer_mode": str(args[5]),
+                "is_default": bool(args[6]),
                 "created_at": now,
                 "updated_at": now,
             }
@@ -630,11 +808,19 @@ class _WorkflowPresetConn:
             preset_id = args[0]
             user_id = int(args[1])
             return next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
-        if "SELECT id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at" in sql and "WHERE id = $1 AND user_id = $2" in sql:
+        if "FROM focus_workflow_presets" in sql and "WHERE id = $1 AND user_id = $2" in sql and sql.strip().startswith("SELECT"):
             preset_id = args[0]
             user_id = int(args[1])
             return next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
-        if "UPDATE focus_workflow_presets" in sql and "RETURNING id, user_id, name, focus_duration, break_duration, phases, is_default, created_at, updated_at" in sql:
+        if (
+            "UPDATE focus_workflow_presets" in sql
+            and "RETURNING id, user_id, name, focus_duration, break_duration" in sql
+            and "default_focus_timer_mode" in sql
+            and "phases" in sql
+            and "is_default" in sql
+            and "created_at" in sql
+            and "updated_at" in sql
+        ):
             if "SET is_default = TRUE" in sql:
                 preset_id = args[0]
                 user_id = int(args[1])
@@ -659,6 +845,9 @@ class _WorkflowPresetConn:
             if "phases =" in sql:
                 phases_arg = args[-4] if "is_default =" in sql else args[-3]
                 target["phases"] = json.loads(phases_arg) if isinstance(phases_arg, str) else phases_arg
+            if "default_focus_timer_mode =" in sql:
+                mode_idx = len(args) - 4 if "is_default =" in sql else len(args) - 3
+                target["default_focus_timer_mode"] = str(args[mode_idx])
             if "is_default =" in sql:
                 target["is_default"] = bool(args[-3])
             target["updated_at"] = datetime.now(UTC)
@@ -709,6 +898,8 @@ class _WorkflowPresetPool:
 
 def test_create_and_list_focus_workflow_presets(monkeypatch) -> None:
     conn = _WorkflowPresetConn()
+    task_id = uuid4()
+    conn.tasks = [{"id": task_id, "user_id": 7, "status": "todo", "is_deleted": False, "title": "Task A"}]
     pool = _WorkflowPresetPool(conn)
     monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
     app = _build_app()
@@ -716,16 +907,51 @@ def test_create_and_list_focus_workflow_presets(monkeypatch) -> None:
 
     create_resp = client.post(
         "/todo/focus/workflows",
-        json={"name": "默认番茄", "focus_duration": 1500, "break_duration": 300, "is_default": True},
+        json={
+            "name": "默认番茄",
+            "focus_duration": 1500,
+            "break_duration": 300,
+            "default_focus_timer_mode": "countup",
+            "phases": [
+                {"phase_type": "focus", "duration": 1500, "timer_mode": "countup", "task_id": str(task_id)},
+                {"phase_type": "break", "duration": 300},
+            ],
+            "is_default": True,
+        },
     )
     assert create_resp.status_code == 200
     assert create_resp.json()["is_default"] is True
+    assert create_resp.json()["default_focus_timer_mode"] == "countup"
+    assert create_resp.json()["phases"][0]["timer_mode"] == "countup"
+    assert create_resp.json()["phases"][0]["task_id"] == str(task_id)
 
     list_resp = client.get("/todo/focus/workflows")
     assert list_resp.status_code == 200
     items = list_resp.json()
     assert len(items) == 1
     assert items[0]["name"] == "默认番茄"
+
+
+def test_create_focus_workflow_preset_rejects_completed_task_binding(monkeypatch) -> None:
+    conn = _WorkflowPresetConn()
+    task_id = uuid4()
+    conn.tasks = [{"id": task_id, "user_id": 7, "status": "done", "is_deleted": False, "title": "Done Task"}]
+    pool = _WorkflowPresetPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/focus/workflows",
+        json={
+            "name": "失败案例",
+            "focus_duration": 1500,
+            "break_duration": 300,
+            "phases": [{"phase_type": "focus", "duration": 1500, "task_id": str(task_id)}],
+        },
+    )
+
+    assert resp.status_code == 422
 
 
 def test_set_default_and_delete_focus_workflow_preset(monkeypatch) -> None:

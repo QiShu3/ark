@@ -42,6 +42,26 @@ describe('computeWorkflowProgress', () => {
     expect(metrics.percent).toBe(100);
   });
 
+  it('uses elapsed seconds for countup focus phases', () => {
+    const metrics = computeWorkflowProgress({
+      state: 'focus',
+      phases: [
+        { phase_type: 'focus', duration: 1500, timer_mode: 'countup', task_id: null },
+        { phase_type: 'break', duration: 300 },
+      ],
+      current_phase_index: 0,
+      pending_confirmation: false,
+      pending_task_selection: false,
+      remaining_seconds: null,
+      elapsed_seconds: 600,
+      phase_timer_mode: 'countup',
+    });
+
+    expect(metrics.totalSeconds).toBe(1800);
+    expect(metrics.elapsedSeconds).toBe(600);
+    expect(Math.round(metrics.percent)).toBe(33);
+  });
+
   it('returns zero metrics for invalid boundaries', () => {
     const metrics = computeWorkflowProgress({
       state: 'normal',
@@ -115,5 +135,25 @@ describe('WorkflowProgressBar', () => {
 
     const fill = container.querySelector('div[style*="transition: width 400ms linear"]');
     expect(fill).toBeInTheDocument();
+  });
+
+  it('renders countup focus phases with elapsed time and target hint', () => {
+    render(
+      <WorkflowProgressBar
+        workflow={{
+          state: 'focus',
+          phases: [{ phase_type: 'focus', duration: 1500, timer_mode: 'countup', task_id: null }],
+          current_phase_index: 0,
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: null,
+          elapsed_seconds: 600,
+          phase_timer_mode: 'countup',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('10:00')).toBeInTheDocument();
+    expect(screen.getByText('目标 25:00')).toBeInTheDocument();
   });
 });

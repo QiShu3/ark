@@ -1,7 +1,7 @@
 import React from 'react';
 
 import type { WorkflowSnapshot } from './workflowProgress';
-import { computeWorkflowProgress, phaseLabel } from './workflowProgress';
+import { computeWorkflowProgress, formatClockTime, getWorkflowPhaseTimerMode, phaseLabel } from './workflowProgress';
 
 type WorkflowProgressBarProps = {
   workflow: WorkflowSnapshot;
@@ -13,18 +13,19 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
   const metrics = computeWorkflowProgress(workflow);
   const showProgress = workflow.state !== 'normal' && phases.length > 0 && metrics.totalSeconds > 0;
 
-  // 格式化倒计时 MM:SS
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
   const currentPhase = phases[metrics.activePhaseIndex];
   const phaseType = currentPhase?.phase_type ?? 'focus';
+  const timerMode = getWorkflowPhaseTimerMode(workflow);
+  const isCountup = phaseType === 'focus' && timerMode === 'countup';
   const isFocus = phaseType === 'focus';
   const activeColorText = isFocus ? 'text-blue-400' : 'text-orange-400';
   const activeColorBg = isFocus ? 'bg-blue-400' : 'bg-orange-400';
+  const targetDuration = Math.max(0, Math.round(currentPhase?.duration ?? workflow.phase_planned_duration ?? 0));
+  const elapsedSeconds = Math.max(0, Math.round(workflow.elapsed_seconds ?? 0));
+  const timerText = workflow.pending_task_selection
+    ? '待选任务'
+    : formatClockTime(isCountup ? elapsedSeconds : Math.max(0, Math.round(workflow.remaining_seconds ?? 0)));
+  const targetHint = isCountup && targetDuration > 0 ? `目标 ${formatClockTime(targetDuration)}` : null;
 
   if (!showProgress) {
     return null;
@@ -48,8 +49,13 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
             {phaseLabel(phaseType)}阶段 {metrics.activePhaseIndex + 1}
           </span>
           <span className="font-mono text-sm text-white/90 font-medium bg-black/20 px-1.5 py-0.5 rounded">
-            {formatTime(workflow.remaining_seconds ?? 0)}
+            {timerText}
           </span>
+          {targetHint ? (
+            <span className="text-xs font-medium text-white/55 bg-white/5 px-2 py-0.5 rounded-full">
+              {targetHint}
+            </span>
+          ) : null}
         </div>
         <span className="text-xs font-bold text-white/40 tracking-wider">
           {Math.round(metrics.percent)}%
@@ -65,9 +71,15 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
           if (idx < metrics.activePhaseIndex) {
             fillPercent = 100;
           } else if (idx === metrics.activePhaseIndex) {
-            const currentRemaining = workflow.pending_confirmation ? 0 : Math.max(0, Math.round(workflow.remaining_seconds ?? 0));
-            const elapsed = Math.max(0, duration - currentRemaining);
-            fillPercent = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+            if (workflow.pending_task_selection) {
+              fillPercent = 0;
+            } else if (phase.phase_type === 'focus' && timerMode === 'countup') {
+              fillPercent = duration > 0 ? Math.min(100, (elapsedSeconds / duration) * 100) : 0;
+            } else {
+              const currentRemaining = workflow.pending_confirmation ? 0 : Math.max(0, Math.round(workflow.remaining_seconds ?? 0));
+              const elapsed = Math.max(0, duration - currentRemaining);
+              fillPercent = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+            }
           }
 
           const isFocusPhase = phase.phase_type === 'focus';

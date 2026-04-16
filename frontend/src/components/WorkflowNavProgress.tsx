@@ -1,6 +1,12 @@
 import React from 'react';
 
-import { computeWorkflowProgress, phaseLabel, WorkflowSnapshot } from './workflowProgress';
+import {
+  computeWorkflowProgress,
+  formatClockTime,
+  getWorkflowPhaseTimerMode,
+  phaseLabel,
+  WorkflowSnapshot,
+} from './workflowProgress';
 import { apiJson } from '../lib/api';
 
 type WorkflowNavProgressProps = {
@@ -17,7 +23,10 @@ type WorkflowConfirmResponse = WorkflowSnapshot & {
 const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) => {
   const [now, setNow] = React.useState(0);
   const [endTime, setEndTime] = React.useState<number | null>(null);
+  const [phaseStartTime, setPhaseStartTime] = React.useState<number | null>(null);
   const [confirming, setConfirming] = React.useState(false);
+  const timerMode = getWorkflowPhaseTimerMode(workflow);
+  const isCountup = workflow.state === 'focus' && timerMode === 'countup';
 
   const handleConfirm = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -42,7 +51,13 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   }, []);
 
   React.useEffect(() => {
-    if (workflow.state === 'normal' || workflow.pending_confirmation || !Number.isFinite(workflow.remaining_seconds ?? NaN)) {
+    if (
+      workflow.state === 'normal'
+      || workflow.pending_confirmation
+      || workflow.pending_task_selection
+      || isCountup
+      || !Number.isFinite(workflow.remaining_seconds ?? NaN)
+    ) {
       setEndTime(null);
       return;
     }
@@ -53,7 +68,26 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       if (Math.abs(nextEnd - prev) >= 3000) return nextEnd;
       return prev;
     });
-  }, [workflow]);
+  }, [workflow, isCountup]);
+
+  React.useEffect(() => {
+    if (
+      workflow.state !== 'focus'
+      || workflow.pending_confirmation
+      || workflow.pending_task_selection
+      || !isCountup
+      || !workflow.phase_started_at
+    ) {
+      setPhaseStartTime(null);
+      return;
+    }
+    const nextStart = new Date(workflow.phase_started_at).getTime();
+    if (!Number.isFinite(nextStart)) {
+      setPhaseStartTime(null);
+      return;
+    }
+    setPhaseStartTime(nextStart);
+  }, [workflow, isCountup]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
@@ -68,15 +102,27 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
     return Math.max(0, Math.round((endTime - now) / 1000));
   }, [workflow.pending_confirmation, workflow.state, endTime, now]);
 
+  const liveElapsed = React.useMemo(() => {
+    if (!isCountup || workflow.pending_confirmation || workflow.pending_task_selection) return null;
+    if (workflow.state !== 'focus' || phaseStartTime === null) return null;
+    return Math.max(0, Math.round((now - phaseStartTime) / 1000));
+  }, [workflow.pending_confirmation, workflow.pending_task_selection, workflow.state, isCountup, phaseStartTime, now]);
+
   const workflowForMetrics = React.useMemo<WorkflowSnapshot>(() => {
-    if (workflow.state === 'normal' || workflow.pending_confirmation || liveRemaining === null) {
+    if (workflow.state === 'normal' || workflow.pending_confirmation) {
       return workflow;
     }
-    if (workflow.remaining_seconds === liveRemaining) {
+    if (isCountup) {
+      if (liveElapsed === null || workflow.elapsed_seconds === liveElapsed) {
+        return workflow;
+      }
+      return { ...workflow, elapsed_seconds: liveElapsed };
+    }
+    if (liveRemaining === null || workflow.remaining_seconds === liveRemaining) {
       return workflow;
     }
     return { ...workflow, remaining_seconds: liveRemaining };
-  }, [workflow, liveRemaining]);
+  }, [workflow, liveRemaining, liveElapsed, isCountup]);
 
   const phases = Array.isArray(workflowForMetrics.phases) ? workflowForMetrics.phases : [];
   const metrics = computeWorkflowProgress(workflowForMetrics);
@@ -92,16 +138,13 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const activeColorText = isFocus ? 'text-blue-400' : 'text-orange-400';
   const activeColorBg = isFocus ? 'bg-blue-400' : 'bg-orange-400';
 
-  /**
-   * 将秒数格式化成 MM:SS。
-   */
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
+  const currentDuration = Math.max(0, Math.round(currentPhase?.duration ?? workflowForMetrics.phase_planned_duration ?? 0));
   const remaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
+  const elapsed = Math.max(0, Math.round(workflowForMetrics.elapsed_seconds ?? 0));
+  const timerText = workflowForMetrics.pending_task_selection
+    ? '待选任务'
+    : formatClockTime(isCountup ? elapsed : remaining);
+  const targetHint = isCountup && currentDuration > 0 ? `目标 ${formatClockTime(currentDuration)}` : null;
 
   return (
     <div
@@ -110,7 +153,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors max-w-[520px] w-full cursor-pointer"
       onClick={() => window.dispatchEvent(new Event('ark:open-workflow-modal'))}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.dispatchEvent(new Event('ark:open-workflow-modal')); }}
-      aria-label={`工作流进度：${phaseLabel(phaseType)}，剩余 ${formatTime(remaining)}`}
+      aria-label={`工作流进度：${phaseLabel(phaseType)}，${workflowForMetrics.pending_task_selection ? '等待选择任务' : `时间 ${timerText}`}`}
     >
       <span className={`w-2 h-2 rounded-full ${activeColorBg} animate-pulse shadow-[0_0_10px_currentColor] ${activeColorText}`} />
       
@@ -123,11 +166,16 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
         >
           {confirming ? '确认中...' : '▶ 继续'}
         </button>
+      ) : workflowForMetrics.pending_task_selection ? (
+        <span className={`text-xs font-bold whitespace-nowrap ${activeColorText}`}>
+          选择任务
+        </span>
       ) : (
         <span className={`text-xs font-bold whitespace-nowrap ${activeColorText}`}>
-          {isFocus ? '🧠' : '☕'} {formatTime(remaining)}
+          {isFocus ? '🧠' : '☕'} {timerText}
         </span>
       )}
+      {targetHint ? <span className="text-[10px] font-medium text-white/45 whitespace-nowrap">{targetHint}</span> : null}
 
       <div className="flex-1 flex gap-[3px] h-1.5">
         {phases.map((phase, idx) => {
@@ -137,9 +185,15 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           if (idx < metrics.activePhaseIndex) {
             fillPercent = 100;
           } else if (idx === metrics.activePhaseIndex) {
-            const currentRemaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
-            const elapsed = Math.max(0, duration - currentRemaining);
-            fillPercent = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+            if (workflowForMetrics.pending_task_selection) {
+              fillPercent = 0;
+            } else if (phase.phase_type === 'focus' && timerMode === 'countup') {
+              fillPercent = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+            } else {
+              const currentRemaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
+              const currentElapsed = Math.max(0, duration - currentRemaining);
+              fillPercent = duration > 0 ? Math.min(100, (currentElapsed / duration) * 100) : 0;
+            }
           }
 
           const isFocusPhase = phase.phase_type === 'focus';
