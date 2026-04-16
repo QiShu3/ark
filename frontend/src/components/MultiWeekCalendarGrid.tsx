@@ -1,6 +1,6 @@
 import React from 'react';
 import CalendarDayCell from './CalendarDayCell';
-import { CalendarTask, toDayKey } from './calendarUtils';
+import { CalendarTask, getTaskContinuationForDay, toDayKey } from './calendarUtils';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
@@ -30,14 +30,19 @@ const MultiWeekCalendarGrid: React.FC<MultiWeekCalendarGridProps> = ({
     <div className="grid grid-cols-7">
       {days.map((day) => {
         const key = toDayKey(day);
+        const tasks = groupedTasks[key] || [];
+        const taskContinuations = Object.fromEntries(
+          tasks.map((task) => [task.id, getTaskContinuationForDay(days, groupedTasks, day, task.id)]),
+        );
         return (
           <CalendarDayCell
             key={key}
             day={day}
-            tasks={groupedTasks[key] || []}
+            tasks={tasks}
             todayKey={todayKey}
             onDateClick={onDateClick}
             onTaskClick={onTaskClick}
+            taskContinuations={taskContinuations}
           />
         );
       })}

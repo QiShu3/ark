@@ -3,6 +3,10 @@ import type { Task } from './taskTypes';
 export type WeekCount = 2 | 3;
 
 export type CalendarTask = Task;
+export type CalendarTaskContinuation = {
+  continuesFromPrev: boolean;
+  continuesToNext: boolean;
+};
 
 export const CALENDAR_WEEK_COUNT_STORAGE_KEY = 'ark-calendar-week-count';
 
@@ -62,6 +66,29 @@ export function groupTasksByDay(tasks: CalendarTask[], days: Date[]): Record<str
     grouped[key] = tasks.filter((task) => taskAppearsOnDay(task, day)).sort(compareTasks);
   }
   return grouped;
+}
+
+export function getTaskContinuationForDay(
+  days: Date[],
+  groupedTasks: Record<string, CalendarTask[]>,
+  day: Date,
+  taskId: string,
+): CalendarTaskContinuation {
+  const index = days.findIndex((candidate) => toDayKey(candidate) === toDayKey(day));
+  if (index === -1) {
+    return {
+      continuesFromPrev: false,
+      continuesToNext: false,
+    };
+  }
+
+  const previousDay = index > 0 ? groupedTasks[toDayKey(days[index - 1])] || [] : [];
+  const nextDay = index < days.length - 1 ? groupedTasks[toDayKey(days[index + 1])] || [] : [];
+
+  return {
+    continuesFromPrev: previousDay.some((task) => task.id === taskId),
+    continuesToNext: nextDay.some((task) => task.id === taskId),
+  };
 }
 
 export function getStoredWeekCount(): WeekCount {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildVisibleDays,
+  getTaskContinuationForDay,
   getStoredWeekCount,
   groupTasksByDay,
   setStoredWeekCount,
@@ -92,5 +93,33 @@ describe('calendarUtils', () => {
     expect(getStoredWeekCount()).toBe(3);
     window.localStorage.setItem('ark-calendar-week-count', '6');
     expect(getStoredWeekCount()).toBe(2);
+  });
+
+  it('detects whether a multi-day task should visually continue into adjacent days', () => {
+    const days = buildVisibleDays(new Date('2026-04-16T12:00:00Z'), 2);
+    const grouped = groupTasksByDay(
+      [
+        baseTask({
+          id: 'range',
+          title: 'Range',
+          start_date: '2026-04-15T09:00:00+08:00',
+          due_date: '2026-04-18T18:00:00+08:00',
+        }),
+      ],
+      days,
+    );
+
+    expect(getTaskContinuationForDay(days, grouped, new Date('2026-04-15T12:00:00Z'), 'range')).toEqual({
+      continuesFromPrev: false,
+      continuesToNext: true,
+    });
+    expect(getTaskContinuationForDay(days, grouped, new Date('2026-04-16T12:00:00Z'), 'range')).toEqual({
+      continuesFromPrev: true,
+      continuesToNext: true,
+    });
+    expect(getTaskContinuationForDay(days, grouped, new Date('2026-04-18T12:00:00Z'), 'range')).toEqual({
+      continuesFromPrev: true,
+      continuesToNext: false,
+    });
   });
 });

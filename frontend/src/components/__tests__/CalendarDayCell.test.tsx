@@ -46,4 +46,22 @@ describe('CalendarDayCell', () => {
     expect(screen.getByTestId('calendar-day-cell').className).not.toContain('hover:bg-white/[0.04]');
     expect(screen.getByRole('button', { name: '准备工作汇报' })).toHaveClass('calendar-task-interactive');
   });
+
+  it('adds continuation classes so a multi-day task can visually connect across cells', () => {
+    render(
+      <CalendarDayCell
+        day={new Date('2026-04-16T12:00:00Z')}
+        tasks={[buildTask()]}
+        todayKey="2026-04-16"
+        onDateClick={() => {}}
+        onTaskClick={() => {}}
+        taskContinuations={{
+          'task-1': { continuesFromPrev: true, continuesToNext: true },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '准备工作汇报' })).toHaveClass('calendar-task-continued-prev');
+    expect(screen.getByRole('button', { name: '准备工作汇报' })).toHaveClass('calendar-task-continued-next');
+  });
 });

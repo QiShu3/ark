@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarTask, toDayKey } from './calendarUtils';
+import { CalendarTask, CalendarTaskContinuation, toDayKey } from './calendarUtils';
 
 const TASK_COLORS = ['sky', 'mint', 'lavender', 'pink', 'green', 'yellow', 'violet'] as const;
 
@@ -15,9 +15,10 @@ type CalendarDayCellProps = {
   todayKey: string;
   onDateClick: (day: Date) => void;
   onTaskClick?: (task: CalendarTask) => void;
+  taskContinuations?: Record<string, CalendarTaskContinuation>;
 };
 
-const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey, onDateClick, onTaskClick }) => {
+const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey, onDateClick, onTaskClick, taskContinuations = {} }) => {
   const key = toDayKey(day);
   const visibleTasks = tasks.slice(0, 4);
   const overflow = Math.max(0, tasks.length - visibleTasks.length);
@@ -28,7 +29,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
       type="button"
       data-testid="calendar-day-cell"
       onClick={() => onDateClick(day)}
-      className={`relative min-h-[236px] min-w-0 overflow-hidden border-r border-b border-white/[0.08] bg-white/[0.018] p-3 text-left transition-colors ${
+      className={`relative min-h-[236px] min-w-0 overflow-visible border-r border-b border-white/[0.08] bg-white/[0.018] p-3 text-left transition-colors ${
         isToday ? 'bg-cyan-300/[0.08]' : ''
       }`}
       aria-label={`${key}${isToday ? ' 今天' : ''}，${tasks.length} 项任务`}
@@ -45,28 +46,33 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
         <span className="text-xs font-semibold text-white/35">{tasks.length} 项</span>
       </div>
       <div className="relative z-10 flex flex-col gap-1.5">
-        {visibleTasks.map((task) => (
-          <span
-            key={task.id}
-            role="button"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              onTaskClick?.(task);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
+        {visibleTasks.map((task) => {
+          const continuation = taskContinuations[task.id];
+          return (
+            <span
+              key={task.id}
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
                 event.stopPropagation();
                 onTaskClick?.(task);
-              }
-            }}
-            className={`calendar-task-label calendar-task-interactive calendar-task-${taskColor(task)}`}
-          >
-            <span className="calendar-task-dot" />
-            <span className="truncate">{task.title}</span>
-          </span>
-        ))}
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onTaskClick?.(task);
+                }
+              }}
+              className={`calendar-task-label calendar-task-interactive calendar-task-${taskColor(task)} ${
+                continuation?.continuesFromPrev ? 'calendar-task-continued-prev' : ''
+              } ${continuation?.continuesToNext ? 'calendar-task-continued-next' : ''}`}
+            >
+              <span className="calendar-task-dot" />
+              <span className="truncate">{task.title}</span>
+            </span>
+          );
+        })}
         {overflow > 0 ? (
           <span
             role="button"
