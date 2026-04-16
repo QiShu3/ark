@@ -89,7 +89,7 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{ 
                   width: `${fillPercent}%`,
-                  transition: 'width 1s linear',
+                  transition: 'width 400ms linear',
                   background: fillGradient,
                   boxShadow: fillPercent > 0 ? boxShadow : 'none'
                 }}

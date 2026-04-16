@@ -37,16 +37,31 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
     if (!open) return;
     const start = visibleDays[0];
     const end = addDays(visibleDays[visibleDays.length - 1], 1);
-    setLoading(true);
-    setError(null);
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+    });
+
     apiJson<CalendarTask[]>(`/todo/tasks/calendar?start=${formatRangeParam(start)}&end=${formatRangeParam(end)}`)
-      .then(setTasks)
+      .then((nextTasks) => {
+        if (!cancelled) setTasks(nextTasks);
+      })
       .catch((err) => {
+        if (cancelled) return;
         console.error('Failed to load calendar tasks', err);
         setError(err instanceof Error ? err.message : '加载日历任务失败');
         setTasks([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, visibleDays]);
 
   if (!open) return null;
