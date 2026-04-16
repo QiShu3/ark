@@ -7,6 +7,14 @@ export type CalendarTaskContinuation = {
   continuesFromPrev: boolean;
   continuesToNext: boolean;
 };
+export type CalendarWeekSegment = {
+  task: CalendarTask;
+  startCol: number;
+  endCol: number;
+  lane: number;
+  clippedStart: boolean;
+  clippedEnd: boolean;
+};
 
 export const CALENDAR_WEEK_COUNT_STORAGE_KEY = 'ark-calendar-week-count';
 
@@ -91,6 +99,48 @@ export function getTaskContinuationForDay(
     continuesFromPrev: previousDay.some((task) => task.id === taskId),
     continuesToNext: nextDay.some((task) => task.id === taskId),
   };
+}
+
+export function buildCalendarWeekSegments(
+  weekDays: Date[],
+  groupedTasks: Record<string, CalendarTask[]>,
+): CalendarWeekSegment[] {
+  const seen = new Set<string>();
+  const orderedTasks: CalendarTask[] = [];
+
+  for (const day of weekDays) {
+    for (const task of groupedTasks[toDayKey(day)] || []) {
+      if (seen.has(task.id)) continue;
+      seen.add(task.id);
+      orderedTasks.push(task);
+    }
+  }
+
+  const laneEndCols: number[] = [];
+
+  return orderedTasks.map((task) => {
+    const coveredCols = weekDays
+      .map((day, index) => ((groupedTasks[toDayKey(day)] || []).some((candidate) => candidate.id === task.id) ? index : -1))
+      .filter((index) => index >= 0);
+
+    const startCol = coveredCols[0];
+    const endCol = coveredCols[coveredCols.length - 1];
+
+    let lane = 0;
+    while (laneEndCols[lane] !== undefined && laneEndCols[lane] >= startCol) {
+      lane += 1;
+    }
+    laneEndCols[lane] = endCol;
+
+    return {
+      task,
+      startCol,
+      endCol,
+      lane,
+      clippedStart: taskAppearsOnDay(task, addDays(weekDays[0], -1)),
+      clippedEnd: taskAppearsOnDay(task, addDays(weekDays[weekDays.length - 1], 1)),
+    };
+  });
 }
 
 export function getStoredWeekCount(): WeekCount {

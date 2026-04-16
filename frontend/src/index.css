@@ -86,19 +86,20 @@
   transform: translateY(-1px);
 }
 
-.calendar-task-continued-prev {
-  margin-left: calc(-0.75rem - 1px);
-  padding-left: calc(0.625rem + 0.75rem + 1px);
+.calendar-task-bar {
+  pointer-events: auto;
+  margin: 0 8px;
+}
+
+.calendar-task-bar-clipped-start {
+  margin-left: 0;
   border-bottom-left-radius: 0;
-  border-left: none;
   border-top-left-radius: 0;
 }
 
-.calendar-task-continued-next {
-  margin-right: calc(-0.75rem - 1px);
-  padding-right: calc(0.625rem + 0.75rem + 1px);
+.calendar-task-bar-clipped-end {
+  margin-right: 0;
   border-bottom-right-radius: 0;
-  border-right: none;
   border-top-right-radius: 0;
 }
 

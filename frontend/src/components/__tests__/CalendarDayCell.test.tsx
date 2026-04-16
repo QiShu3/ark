@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { describe, expect, it } from 'vitest';
 
 import CalendarDayCell from '../CalendarDayCell';
+import { CALENDAR_DAY_HEADER_HEIGHT } from '../calendarLayout';
 import type { CalendarTask } from '../calendarUtils';
 
 function buildTask(patch: Partial<CalendarTask> = {}): CalendarTask {
@@ -39,29 +40,51 @@ describe('CalendarDayCell', () => {
         tasks={[buildTask()]}
         todayKey="2026-04-16"
         onDateClick={() => {}}
-        onTaskClick={() => {}}
       />,
     );
 
     expect(screen.getByTestId('calendar-day-cell').className).not.toContain('hover:bg-white/[0.04]');
-    expect(screen.getByRole('button', { name: '准备工作汇报' })).toHaveClass('calendar-task-interactive');
+    expect(screen.getByText('1 项')).toBeInTheDocument();
   });
 
-  it('adds continuation classes so a multi-day task can visually connect across cells', () => {
+  it('reserves a fixed header zone for the date and count', () => {
     render(
       <CalendarDayCell
         day={new Date('2026-04-16T12:00:00Z')}
         tasks={[buildTask()]}
         todayKey="2026-04-16"
         onDateClick={() => {}}
-        onTaskClick={() => {}}
-        taskContinuations={{
-          'task-1': { continuesFromPrev: true, continuesToNext: true },
-        }}
       />,
     );
 
-    expect(screen.getByRole('button', { name: '准备工作汇报' })).toHaveClass('calendar-task-continued-prev');
-    expect(screen.getByRole('button', { name: '准备工作汇报' })).toHaveClass('calendar-task-continued-next');
+    expect(screen.getByText('1 项').parentElement).toHaveStyle({ minHeight: `${CALENDAR_DAY_HEADER_HEIGHT}px` });
+  });
+
+  it('uses a plain container for layout and a separate button for date clicks', () => {
+    render(
+      <CalendarDayCell
+        day={new Date('2026-04-16T12:00:00Z')}
+        tasks={[buildTask()]}
+        todayKey="2026-04-16"
+        onDateClick={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId('calendar-day-cell').tagName).toBe('DIV');
+    expect(screen.getByRole('button', { name: '2026-04-16 今天，1 项任务' })).toBeInTheDocument();
+  });
+
+  it('allows the week row to stretch the day cell height for stacked task bars', () => {
+    render(
+      <CalendarDayCell
+        day={new Date('2026-04-16T12:00:00Z')}
+        tasks={[buildTask()]}
+        todayKey="2026-04-16"
+        onDateClick={() => {}}
+        rowHeight={320}
+      />,
+    );
+
+    expect(screen.getByTestId('calendar-day-cell')).toHaveStyle({ minHeight: '320px' });
   });
 });

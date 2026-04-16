@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,15 +65,16 @@ describe('MultiWeekCalendarModal', () => {
     expect(window.localStorage.getItem('ark-calendar-week-count')).toBe('3');
   });
 
-  it('shows overflow and opens the date drawer from a busy day', async () => {
+  it('opens the date drawer from a busy day and shows all tasks for that date', async () => {
     const user = userEvent.setup();
     render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
 
     await screen.findByText('准备工作汇报');
-    await user.click(screen.getByRole('button', { name: '2026-04-16 还有 1 项任务，打开详情' }));
+    await user.click(screen.getByRole('button', { name: '2026-04-16 今天，5 项任务' }));
 
-    expect(screen.getByRole('complementary', { name: '2026-04-16 日期详情' })).toBeInTheDocument();
-    expect(screen.getByText('任务五')).toBeInTheDocument();
+    const drawer = screen.getByRole('complementary', { name: '2026-04-16 日期详情' });
+    expect(drawer).toBeInTheDocument();
+    expect(within(drawer).getByText('任务五')).toBeInTheDocument();
   });
 
   it('opens the full edit modal when a calendar task is clicked', async () => {
