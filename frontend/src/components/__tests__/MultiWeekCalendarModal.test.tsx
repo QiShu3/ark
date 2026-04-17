@@ -70,7 +70,7 @@ describe('MultiWeekCalendarModal', () => {
     render(<MultiWeekCalendarModal open onClose={() => {}} initialDate={new Date('2026-04-16T12:00:00Z')} />);
 
     await screen.findByText('准备工作汇报');
-    await user.click(screen.getByRole('button', { name: '2026-04-16 今天，5 项任务' }));
+    await user.click(screen.getByRole('button', { name: '2026-04-16，5 项任务' }));
 
     const drawer = screen.getByRole('complementary', { name: '2026-04-16 日期详情' });
     expect(drawer).toBeInTheDocument();

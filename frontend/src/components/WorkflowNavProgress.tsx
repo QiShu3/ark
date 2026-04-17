@@ -1,8 +1,8 @@
 import React from 'react';
 
 import {
-  computeWorkflowProgress,
   formatClockTime,
+  getActiveWorkflowPhase,
   getWorkflowPhaseTimerMode,
   phaseLabel,
   WorkflowSnapshot,
@@ -125,18 +125,20 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   }, [workflow, liveRemaining, liveElapsed, isCountup]);
 
   const phases = Array.isArray(workflowForMetrics.phases) ? workflowForMetrics.phases : [];
-  const metrics = computeWorkflowProgress(workflowForMetrics);
-  const showProgress = workflowForMetrics.state !== 'normal' && phases.length > 0 && metrics.totalSeconds > 0;
+  const showProgress = workflowForMetrics.state !== 'normal' && phases.length > 0;
 
   if (!showProgress) {
     return null;
   }
 
-  const currentPhase = phases[metrics.activePhaseIndex];
+  const currentPhase = getActiveWorkflowPhase(workflowForMetrics);
   const phaseType = currentPhase?.phase_type ?? 'focus';
   const isFocus = phaseType === 'focus';
-  const activeColorText = isFocus ? 'text-blue-400' : 'text-orange-400';
+  const activeColorText = isFocus ? 'text-blue-300' : 'text-orange-300';
   const activeColorBg = isFocus ? 'bg-blue-400' : 'bg-orange-400';
+  const pulseBgStrong = isFocus ? 'bg-blue-300/85' : 'bg-orange-300/85';
+  const pulseBgMid = isFocus ? 'bg-blue-300/25' : 'bg-orange-300/25';
+  const pulseBgWeak = isFocus ? 'bg-blue-300/12' : 'bg-orange-300/12';
 
   const currentDuration = Math.max(0, Math.round(currentPhase?.duration ?? workflowForMetrics.phase_planned_duration ?? 0));
   const remaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
@@ -145,18 +147,53 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
     ? '待选任务'
     : formatClockTime(isCountup ? elapsed : remaining);
   const targetHint = isCountup && currentDuration > 0 ? `目标 ${formatClockTime(currentDuration)}` : null;
+  const showPulse = !workflowForMetrics.pending_confirmation && !workflowForMetrics.pending_task_selection;
+  const titleText = workflowForMetrics.pending_task_selection ? '选择任务' : phaseLabel(phaseType);
+  const ariaText = workflowForMetrics.pending_confirmation
+    ? '等待确认继续'
+    : workflowForMetrics.pending_task_selection
+      ? '等待选择任务'
+      : `时间 ${timerText}`;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors max-w-[520px] w-full cursor-pointer"
+      className="hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors max-w-[520px] w-full cursor-pointer"
       onClick={() => window.dispatchEvent(new Event('ark:open-workflow-modal'))}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.dispatchEvent(new Event('ark:open-workflow-modal')); }}
-      aria-label={`工作流进度：${phaseLabel(phaseType)}，${workflowForMetrics.pending_task_selection ? '等待选择任务' : `时间 ${timerText}`}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          window.dispatchEvent(new Event('ark:open-workflow-modal'));
+        }
+      }}
+      aria-label={`工作流进度：${titleText}，${ariaText}`}
     >
-      <span className={`w-2 h-2 rounded-full ${activeColorBg} animate-pulse shadow-[0_0_10px_currentColor] ${activeColorText}`} />
-      
+      <span className={`h-2.5 w-2.5 rounded-full ${activeColorBg} shadow-[0_0_12px_currentColor] ${activeColorText}`} />
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Current</p>
+        <div className="flex items-baseline gap-2">
+          <span className={`text-sm font-semibold whitespace-nowrap ${activeColorText}`}>
+            {titleText}
+          </span>
+          {targetHint ? <span className="text-[10px] text-white/45 whitespace-nowrap">{targetHint}</span> : null}
+        </div>
+      </div>
+
+      {showPulse ? (
+        <div
+          data-testid="workflow-nav-pulse"
+          data-phase={phaseType}
+          aria-hidden="true"
+          className="flex items-center gap-1.5"
+        >
+          <span className={`h-2 w-4 rounded-full ${pulseBgStrong} animate-[workflow-pulse_1.4s_ease-in-out_infinite]`} />
+          <span className={`h-1.5 w-2.5 rounded-full ${pulseBgMid}`} />
+          <span className={`h-1.5 w-2 rounded-full ${pulseBgWeak}`} />
+        </div>
+      ) : null}
+
       {workflowForMetrics.pending_confirmation ? (
         <button
           type="button"
@@ -166,64 +203,11 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
         >
           {confirming ? '确认中...' : '▶ 继续'}
         </button>
-      ) : workflowForMetrics.pending_task_selection ? (
-        <span className={`text-xs font-bold whitespace-nowrap ${activeColorText}`}>
-          选择任务
-        </span>
       ) : (
-        <span className={`text-xs font-bold whitespace-nowrap ${activeColorText}`}>
-          {isFocus ? '🧠' : '☕'} {timerText}
+        <span className={`text-sm font-semibold whitespace-nowrap ${activeColorText}`}>
+          {timerText}
         </span>
       )}
-      {targetHint ? <span className="text-[10px] font-medium text-white/45 whitespace-nowrap">{targetHint}</span> : null}
-
-      <div className="flex-1 flex gap-[3px] h-1.5">
-        {phases.map((phase, idx) => {
-          const duration = Math.max(0, Math.round(phase.duration || 0));
-          
-          let fillPercent = 0;
-          if (idx < metrics.activePhaseIndex) {
-            fillPercent = 100;
-          } else if (idx === metrics.activePhaseIndex) {
-            if (workflowForMetrics.pending_task_selection) {
-              fillPercent = 0;
-            } else if (phase.phase_type === 'focus' && timerMode === 'countup') {
-              fillPercent = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
-            } else {
-              const currentRemaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
-              const currentElapsed = Math.max(0, duration - currentRemaining);
-              fillPercent = duration > 0 ? Math.min(100, (currentElapsed / duration) * 100) : 0;
-            }
-          }
-
-          const isFocusPhase = phase.phase_type === 'focus';
-          const trackBg = isFocusPhase ? 'bg-white/10' : 'bg-white/10';
-          const fillGradient = isFocusPhase 
-            ? 'linear-gradient(90deg, #60a5fa, #3b82f6)' 
-            : 'linear-gradient(90deg, #fb923c, #f97316)';
-
-          return (
-            <div
-              key={idx}
-              className={`relative h-full rounded-full overflow-hidden ${trackBg}`}
-              style={{ flexGrow: duration, flexBasis: 0 }}
-            >
-              <div
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{ 
-                  width: `${fillPercent}%`,
-                  transition: 'width 1000ms linear',
-                  background: fillGradient
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      <span className="text-[11px] font-bold text-white/40 whitespace-nowrap">
-        {metrics.activePhaseIndex + 1}/{phases.length}
-      </span>
     </div>
   );
 };

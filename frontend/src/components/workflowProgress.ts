@@ -61,6 +61,19 @@ export function getWorkflowPhaseTimerMode(workflow: WorkflowSnapshot): FocusTime
   return workflow.phase_timer_mode ?? phase?.timer_mode ?? 'countdown';
 }
 
+export function getActiveWorkflowPhase(workflow: WorkflowSnapshot): WorkflowPhase | null {
+  const phases = Array.isArray(workflow.phases) ? workflow.phases : [];
+  if (workflow.state === 'normal' || phases.length === 0) return null;
+
+  const activePhaseIndex = clamp(
+    Math.round(workflow.current_phase_index ?? 0),
+    0,
+    phases.length - 1,
+  );
+
+  return phases[activePhaseIndex] ?? null;
+}
+
 export function computeWorkflowProgress(workflow: WorkflowSnapshot): WorkflowProgressMetrics {
   const phases = Array.isArray(workflow.phases) ? workflow.phases : [];
   const safePhases = phases
