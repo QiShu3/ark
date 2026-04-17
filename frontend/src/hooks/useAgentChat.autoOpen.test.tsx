@@ -260,6 +260,104 @@ describe('useAgentChat auto open', () => {
     expect(MockWebSocket.instances[0].sent).toHaveLength(0);
   });
 
+  it('sends a run when the home MainAgent receives a workflow reminder event', async () => {
+    window.localStorage.setItem(
+      AUTO_OPEN_STORAGE_KEY,
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        source: 'home_auto_open',
+        profileKey: 'MainAgent',
+      }),
+    );
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.open();
+    });
+
+    await waitFor(() => {
+      expect(socket.readyState).toBe(MockWebSocket.OPEN);
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('ark:main-agent-workflow-notification', {
+          detail: {
+            key: 'workflow:focus_to_break:深度工作流:1:none',
+            prompt: '来源：workflow_notification\n事件类型：focus_to_break',
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(socket.sent).toHaveLength(1);
+    });
+
+    const sentPayload = JSON.parse(socket.sent[0]) as { type: string; content: string };
+    expect(sentPayload).toMatchObject({ type: 'run' });
+    expect(sentPayload.content).toContain('来源：workflow_notification');
+  });
+
+  it('queues workflow reminder events until the current run completes', async () => {
+    currentSessionStatus = 'running';
+    window.localStorage.setItem(
+      AUTO_OPEN_STORAGE_KEY,
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        source: 'home_auto_open',
+        profileKey: 'MainAgent',
+      }),
+    );
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.open();
+    });
+
+    await waitFor(() => {
+      expect(socket.readyState).toBe(MockWebSocket.OPEN);
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('ark:main-agent-workflow-notification', {
+          detail: {
+            key: 'workflow:pending_confirmation:深度工作流:0:task-1',
+            prompt: '来源：workflow_notification\n事件类型：pending_confirmation',
+          },
+        }),
+      );
+    });
+
+    expect(socket.sent).toHaveLength(0);
+
+    act(() => {
+      socket.emit({
+        type: 'run_completed',
+        session_id: 'session-main',
+      });
+    });
+
+    await waitFor(() => {
+      expect(socket.sent).toHaveLength(1);
+    });
+
+    expect(socket.sent[0]).toContain('pending_confirmation');
+  });
+
   it('waits for a restored running session to finish before auto opening', async () => {
     currentSessionStatus = 'running';
 

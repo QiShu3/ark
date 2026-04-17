@@ -37,8 +37,13 @@ const pageSessionRequests = new Map<string, Promise<SessionResponse>>();
 const AUTO_OPEN_COOLDOWN_MS = 60 * 60 * 1000;
 const AUTO_OPEN_STORAGE_KEY = 'ark:auto-open:MainAgent:last-run-started-at';
 const HOME_AUTO_OPEN_SOURCE = 'home_auto_open';
+const WORKFLOW_NOTIFICATION_EVENT = 'ark:main-agent-workflow-notification';
 
 type AutoOpenPhase = 'idle' | 'blocked' | 'ready' | 'sending' | 'confirmed' | 'done';
+type SystemRunDetail = {
+  key: string;
+  prompt: string;
+};
 
 function buildWebSocketUrl(sessionId: string, token: string) {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -176,6 +181,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   const streamingTimerRef = useRef<number | null>(null);
   const hasAutoOpenAttemptedRef = useRef(false);
   const autoOpenAwaitingAckRef = useRef(false);
+  const pendingSystemRunRef = useRef<SystemRunDetail | null>(null);
 
   const stopStreamingTimer = useCallback(() => {
     if (streamingTimerRef.current !== null) {
@@ -388,6 +394,47 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     return true;
   }, [isGenerating, resetStreamingText]);
 
+  const sendSystemRun = useCallback((detail: SystemRunDetail) => {
+    if (!detail.prompt.trim()) {
+      return false;
+    }
+    const sent = sendMessage(detail.prompt);
+    if (!sent) {
+      pendingSystemRunRef.current = detail;
+      return false;
+    }
+    pendingSystemRunRef.current = null;
+    return true;
+  }, [sendMessage]);
+
+  useEffect(() => {
+    if (!isHomeMainAgentScope(profileKey)) {
+      pendingSystemRunRef.current = null;
+      return;
+    }
+
+    const handleWorkflowNotification = (event: Event) => {
+      const detail = (event as CustomEvent<SystemRunDetail>).detail;
+      if (!detail?.key || !detail?.prompt) return;
+      void sendSystemRun(detail);
+    };
+
+    window.addEventListener(WORKFLOW_NOTIFICATION_EVENT, handleWorkflowNotification as EventListener);
+    return () => {
+      window.removeEventListener(WORKFLOW_NOTIFICATION_EVENT, handleWorkflowNotification as EventListener);
+    };
+  }, [profileKey, sendSystemRun]);
+
+  useEffect(() => {
+    if (!isHomeMainAgentScope(profileKey)) return;
+    if (socketState !== 'open' || isGenerating) return;
+    if (!pendingSystemRunRef.current) return;
+
+    const pendingDetail = pendingSystemRunRef.current;
+    pendingSystemRunRef.current = null;
+    void sendSystemRun(pendingDetail);
+  }, [isGenerating, profileKey, sendSystemRun, socketState]);
+
   useEffect(() => {
     if (!isHomeMainAgentScope(profileKey)) {
       return;
@@ -413,7 +460,10 @@ export function useAgentChat(profileKey: string = 'agent-console') {
 
     setAutoOpenPhase('ready');
     tts.ensureAutoPlayReady?.();
-    const sent = sendMessage(buildAutoOpenPrompt());
+    const sent = sendSystemRun({
+      key: HOME_AUTO_OPEN_SOURCE,
+      prompt: buildAutoOpenPrompt(),
+    });
     if (!sent) {
       setAutoOpenPhase('blocked');
       return;
@@ -422,7 +472,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     hasAutoOpenAttemptedRef.current = true;
     autoOpenAwaitingAckRef.current = true;
     setAutoOpenPhase('sending');
-  }, [autoOpenPhase, isGenerating, profileKey, sendMessage, session, socketState, tts]);
+  }, [autoOpenPhase, isGenerating, profileKey, sendSystemRun, session, socketState, tts]);
 
   useEffect(() => {
     if (autoOpenPhase !== 'confirmed') {
