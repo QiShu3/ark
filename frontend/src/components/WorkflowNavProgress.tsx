@@ -17,6 +17,21 @@ type WorkflowConfirmResponse = WorkflowSnapshot & {
   completed_workflow_name?: string | null;
 };
 
+function phaseStatusLabel(phaseType: 'focus' | 'break'): string {
+  return phaseType === 'focus' ? '专注中' : '休息中';
+}
+
+function resolveFeedbackCopy(
+  prevState: WorkflowSnapshot['state'],
+  nextState: WorkflowSnapshot['state'],
+): string | null {
+  if (prevState === 'focus' && nextState === 'break') return '开始休息';
+  if (prevState === 'break' && nextState === 'focus') return '继续专注';
+  if (prevState === 'focus' && nextState === 'focus') return '专注完成';
+  if (prevState === 'break' && nextState === 'break') return '休息结束';
+  return null;
+}
+
 /**
  * 导航栏中间的工作流进度条（紧凑版）。
  */
@@ -25,6 +40,9 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const [endTime, setEndTime] = React.useState<number | null>(null);
   const [phaseStartTime, setPhaseStartTime] = React.useState<number | null>(null);
   const [confirming, setConfirming] = React.useState(false);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [feedbackText, setFeedbackText] = React.useState<string | null>(null);
+  const previousPhaseRef = React.useRef<{ state: WorkflowSnapshot['state']; index: number | null } | null>(null);
   const timerMode = getWorkflowPhaseTimerMode(workflow);
   const isCountup = workflow.state === 'focus' && timerMode === 'countup';
 
@@ -124,6 +142,40 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
     return { ...workflow, remaining_seconds: liveRemaining };
   }, [workflow, liveRemaining, liveElapsed, isCountup]);
 
+  React.useEffect(() => {
+    const nextPhase = {
+      state: workflowForMetrics.state,
+      index: workflowForMetrics.current_phase_index ?? null,
+    };
+    const prevPhase = previousPhaseRef.current;
+
+    if (
+      prevPhase
+      && prevPhase.state !== 'normal'
+      && nextPhase.state !== 'normal'
+      && !workflowForMetrics.pending_confirmation
+      && !workflowForMetrics.pending_task_selection
+      && (prevPhase.state !== nextPhase.state || prevPhase.index !== nextPhase.index)
+    ) {
+      setFeedbackText(resolveFeedbackCopy(prevPhase.state, nextPhase.state));
+    }
+
+    previousPhaseRef.current = nextPhase;
+  }, [
+    workflowForMetrics.current_phase_index,
+    workflowForMetrics.pending_confirmation,
+    workflowForMetrics.pending_task_selection,
+    workflowForMetrics.state,
+  ]);
+
+  React.useEffect(() => {
+    if (!feedbackText) return;
+    const timer = window.setTimeout(() => {
+      setFeedbackText(null);
+    }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [feedbackText]);
+
   const phases = Array.isArray(workflowForMetrics.phases) ? workflowForMetrics.phases : [];
   const showProgress = workflowForMetrics.state !== 'normal' && phases.length > 0;
 
@@ -147,20 +199,47 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
     ? '待选任务'
     : formatClockTime(isCountup ? elapsed : remaining);
   const targetHint = isCountup && currentDuration > 0 ? `目标 ${formatClockTime(currentDuration)}` : null;
+  const hasTaskTitle = Boolean(workflowForMetrics.task_title?.trim());
+  const isInteractiveFocus = workflowForMetrics.state === 'focus'
+    && !workflowForMetrics.pending_confirmation
+    && !workflowForMetrics.pending_task_selection;
+  const showFeedback = Boolean(feedbackText)
+    && !workflowForMetrics.pending_confirmation
+    && !workflowForMetrics.pending_task_selection;
+  const showHoverTask = isInteractiveFocus && isHovered && hasTaskTitle && !showFeedback;
+  const layoutMode: 'compact' | 'hover' | 'feedback' = showFeedback
+    ? 'feedback'
+    : showHoverTask
+      ? 'hover'
+      : 'compact';
   const showPulse = !workflowForMetrics.pending_confirmation && !workflowForMetrics.pending_task_selection;
-  const titleText = workflowForMetrics.pending_task_selection ? '选择任务' : phaseLabel(phaseType);
+  const titleText = showFeedback
+    ? feedbackText!
+    : workflowForMetrics.pending_task_selection
+      ? '选择任务'
+      : workflowForMetrics.pending_confirmation
+        ? '等待继续'
+        : phaseStatusLabel(phaseType);
   const ariaText = workflowForMetrics.pending_confirmation
     ? '等待确认继续'
     : workflowForMetrics.pending_task_selection
       ? '等待选择任务'
       : `时间 ${timerText}`;
+  const widthClass = layoutMode === 'compact'
+    ? 'w-[320px]'
+    : layoutMode === 'hover'
+      ? 'w-[460px]'
+      : 'w-[500px]';
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className="hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors max-w-[520px] w-full cursor-pointer"
+      data-layout={layoutMode}
+      className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-[width,padding,background-color] duration-300 cursor-pointer overflow-hidden ${widthClass}`}
       onClick={() => window.dispatchEvent(new Event('ark:open-workflow-modal'))}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -173,10 +252,15 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
 
       <div className="min-w-0 flex-1">
         <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Current</p>
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2 min-w-0">
           <span className={`text-sm font-semibold whitespace-nowrap ${activeColorText}`}>
             {titleText}
           </span>
+          {showHoverTask ? (
+            <span className="min-w-0 truncate text-xs text-white/55">
+              {workflowForMetrics.task_title}
+            </span>
+          ) : null}
           {targetHint ? <span className="text-[10px] text-white/45 whitespace-nowrap">{targetHint}</span> : null}
         </div>
       </div>
@@ -186,7 +270,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           data-testid="workflow-nav-pulse"
           data-phase={phaseType}
           aria-hidden="true"
-          className="flex items-center gap-1.5"
+          className={`flex items-center gap-1.5 transition-transform duration-300 ${layoutMode === 'feedback' ? 'scale-110' : ''}`}
         >
           <span className={`h-2 w-4 rounded-full ${pulseBgStrong} animate-[workflow-pulse_1.4s_ease-in-out_infinite]`} />
           <span className={`h-1.5 w-2.5 rounded-full ${pulseBgMid}`} />

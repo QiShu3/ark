@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
@@ -35,8 +35,9 @@ describe('WorkflowNavProgress', () => {
   it('renders a running focus chip with pulse motif and no phase count', () => {
     render(<WorkflowNavProgress workflow={makeWorkflow()} />);
 
-    expect(screen.getByText('专注阶段')).toBeInTheDocument();
+    expect(screen.getByText('专注中')).toBeInTheDocument();
     expect(screen.getByText('12:34')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /工作流进度/i })).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByTestId('workflow-nav-pulse')).toHaveAttribute('data-phase', 'focus');
     expect(screen.queryByText('1/2')).not.toBeInTheDocument();
   });
@@ -52,8 +53,9 @@ describe('WorkflowNavProgress', () => {
       />,
     );
 
-    expect(screen.getByText('休息阶段')).toBeInTheDocument();
+    expect(screen.getByText('休息中')).toBeInTheDocument();
     expect(screen.getByText('02:00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /工作流进度/i })).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByTestId('workflow-nav-pulse')).toHaveAttribute('data-phase', 'break');
   });
 
@@ -117,5 +119,106 @@ describe('WorkflowNavProgress', () => {
 
     expect(openSpy).toHaveBeenCalledTimes(1);
     window.removeEventListener('ark:open-workflow-modal', openSpy);
+  });
+
+  it('keeps the resting focus chip compact and hides the task title by default', () => {
+    render(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          task_title: '撰写周报',
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    expect(chip).toHaveAttribute('data-layout', 'compact');
+    expect(screen.getByText('专注中')).toBeInTheDocument();
+    expect(screen.queryByText('撰写周报')).not.toBeInTheDocument();
+    expect(screen.getByText('12:34')).toBeInTheDocument();
+  });
+
+  it('expands on hover during focus and reveals the current task title', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          task_title: '撰写周报',
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    await user.hover(chip);
+
+    expect(chip).toHaveAttribute('data-layout', 'hover');
+    expect(screen.getByText('撰写周报')).toBeInTheDocument();
+    expect(screen.getByText('12:34')).toBeInTheDocument();
+
+    await user.unhover(chip);
+    expect(chip).toHaveAttribute('data-layout', 'compact');
+    expect(screen.queryByText('撰写周报')).not.toBeInTheDocument();
+  });
+
+  it('does not expand on hover outside focus mode', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          state: 'break',
+          current_phase_index: 1,
+          remaining_seconds: 120,
+          task_title: '撰写周报',
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    await user.hover(chip);
+
+    expect(chip).toHaveAttribute('data-layout', 'compact');
+    expect(screen.queryByText('撰写周报')).not.toBeInTheDocument();
+  });
+
+  it('expands into transition feedback when the phase changes and keeps the timer visible', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<WorkflowNavProgress workflow={makeWorkflow()} />);
+
+    rerender(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          state: 'break',
+          current_phase_index: 1,
+          remaining_seconds: 296,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    expect(chip).toHaveAttribute('data-layout', 'feedback');
+    expect(screen.getByText('开始休息')).toBeInTheDocument();
+    expect(screen.getByText('04:56')).toBeInTheDocument();
+  });
+
+  it('returns to the compact state after the feedback timeout', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<WorkflowNavProgress workflow={makeWorkflow()} />);
+
+    rerender(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          state: 'break',
+          current_phase_index: 1,
+          remaining_seconds: 296,
+        })}
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1800);
+    });
+
+    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    expect(chip).toHaveAttribute('data-layout', 'compact');
+    expect(screen.getByText('休息中')).toBeInTheDocument();
   });
 });
