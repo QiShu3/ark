@@ -11,6 +11,7 @@ __all__ = [
     "BashTool",
     "SessionNoteTool",
     "RecallNoteTool",
+    "PublishImageTool",
 ]
 
 
@@ -39,4 +40,8 @@ def __getattr__(name: str):
         from .note_tool import RecallNoteTool
 
         return RecallNoteTool
+    if name == "PublishImageTool":
+        from .publish_image_tool import PublishImageTool
+
+        return PublishImageTool
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
