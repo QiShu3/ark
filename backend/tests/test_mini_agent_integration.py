@@ -196,6 +196,10 @@ def test_web_filtered_chat_script_exposes_tool_timeline_hooks() -> None:
     assert "function parsePublishedImageAsset(item)" in script_response.text
     assert "function renderToolCardImagePreview(asset)" in script_response.text
     assert "function renderRawEventImagePreview(event)" in script_response.text
+    assert "async function resolveProtectedImagePreviewUrl(assetUrl)" in script_response.text
+    assert "function hydrateProtectedImagePreviews(container)" in script_response.text
+    assert "data-auth-src" in script_response.text
+    assert "headers.Authorization = `Bearer ${token}`;" in script_response.text
     assert "publish_image" in script_response.text
 
     styles_response = client.get("/static/styles.css")

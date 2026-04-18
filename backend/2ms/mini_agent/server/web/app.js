@@ -25,6 +25,8 @@ let editingMcpServerId = null;
 let resolvedProfilePromptsById = {};
 let resolvedPromptLoadingByProfileId = {};
 let resolvedPromptErrorByProfileId = {};
+let protectedImagePreviewUrls = new Map();
+let protectedImagePreviewRequests = new Map();
 let ttsState = {
     enabled: false,
     auto_play: false,
@@ -453,6 +455,82 @@ async function api(endpoint, options = {}) {
     }
 
     return response.json();
+}
+
+async function resolveProtectedImagePreviewUrl(assetUrl) {
+    if (!assetUrl) {
+        return '';
+    }
+    if (protectedImagePreviewUrls.has(assetUrl)) {
+        return protectedImagePreviewUrls.get(assetUrl);
+    }
+    if (protectedImagePreviewRequests.has(assetUrl)) {
+        return protectedImagePreviewRequests.get(assetUrl);
+    }
+
+    const request = (async () => {
+        const token = localStorage.getItem('token');
+        const headers = {};
+
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
+
+        const response = await fetch(assetUrl, { headers });
+        if (response.status === 401) {
+            logout();
+            throw new Error('Unauthorized');
+        }
+        if (!response.ok) {
+            throw new Error(`Image request failed: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        protectedImagePreviewUrls.set(assetUrl, objectUrl);
+        return objectUrl;
+    })().finally(() => {
+        protectedImagePreviewRequests.delete(assetUrl);
+    });
+
+    protectedImagePreviewRequests.set(assetUrl, request);
+    return request;
+}
+
+function hydrateProtectedImagePreviews(container) {
+    if (!container) {
+        return;
+    }
+
+    container.querySelectorAll('img[data-auth-src]').forEach((img) => {
+        if (img.dataset.protectedReady === 'true' || img.dataset.protectedLoading === 'true') {
+            return;
+        }
+
+        const assetUrl = img.dataset.authSrc;
+        if (!assetUrl) {
+            return;
+        }
+
+        img.dataset.protectedLoading = 'true';
+        resolveProtectedImagePreviewUrl(assetUrl)
+            .then((objectUrl) => {
+                if (!img.isConnected) {
+                    return;
+                }
+                img.src = objectUrl;
+                img.dataset.protectedReady = 'true';
+                delete img.dataset.protectedLoading;
+                img.closest('figure')?.classList.remove('image-preview-error');
+            })
+            .catch(() => {
+                if (!img.isConnected) {
+                    return;
+                }
+                delete img.dataset.protectedLoading;
+                img.closest('figure')?.classList.add('image-preview-error');
+            });
+    });
 }
 
 async function login() {
@@ -1278,6 +1356,7 @@ function renderPane(container, html, { forceScroll = false, emptyTitle, emptyDes
     const shouldStick = forceScroll || shouldAutoScroll(container);
     const bottomOffset = container.scrollHeight - container.scrollTop;
     container.innerHTML = html || renderEmptyPaneState(emptyTitle, emptyDescription);
+    hydrateProtectedImagePreviews(container);
     requestAnimationFrame(() => {
         if (shouldStick) {
             scrollContainerToBottom(container);
@@ -1643,7 +1722,7 @@ function renderToolCardImagePreview(asset) {
         <figure class="tool-card-image-preview">
             <a href="${escapeHtml(asset.url)}" target="_blank" rel="noopener noreferrer">
                 <img
-                    src="${escapeHtml(asset.url)}"
+                    data-auth-src="${escapeHtml(asset.url)}"
                     alt="${escapeHtml(asset.alt || label || 'Published image')}"
                     loading="lazy"
                     onerror="this.closest('figure').classList.add('image-preview-error')"
@@ -1724,7 +1803,7 @@ function renderRawEventImagePreview(event) {
         <figure class="raw-event-image-preview">
             <a href="${escapeHtml(String(asset.url))}" target="_blank" rel="noopener noreferrer">
                 <img
-                    src="${escapeHtml(String(asset.url))}"
+                    data-auth-src="${escapeHtml(String(asset.url))}"
                     alt="${escapeHtml(String(asset.alt || label || 'Published image'))}"
                     loading="lazy"
                     onerror="this.closest('figure').classList.add('image-preview-error')"
