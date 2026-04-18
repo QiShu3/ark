@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Annotated
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import FileResponse
 
+from mini_agent.assets import image_asset_media_type, image_asset_path
 from mini_agent.server.auth import CurrentUser, get_current_user, get_current_user_ws
 from mini_agent.server.repository import (
     create_message,
@@ -108,6 +111,27 @@ async def route_get_session(
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.get("/{session_id}/assets/{asset_id}")
+async def route_get_session_asset(
+    session_id: str,
+    asset_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    pool: Annotated[asyncpg.Pool, Depends(_pool_dep)],
+):
+    session = await get_session(pool, current_user.id, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.workspace_path:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    media_type = image_asset_media_type(asset_id)
+    asset_file = image_asset_path(session.workspace_path, asset_id)
+    if media_type is None or asset_file is None or not asset_file.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    return FileResponse(Path(asset_file), media_type=media_type)
 
 
 @router.put("/{session_id}", response_model=SessionResponse)
