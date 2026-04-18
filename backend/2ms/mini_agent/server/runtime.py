@@ -36,6 +36,7 @@ from mini_agent.tools.base import Tool
 from mini_agent.tools.bash_tool import BashTool
 from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
 from mini_agent.tools.note_tool import RecallNoteTool, SessionNoteTool
+from mini_agent.tools.publish_image_tool import PublishImageTool
 from mini_agent.tools.skill_tool import create_skill_tools
 from mini_agent.tts import TTSManager, TTSSettings, create_tts_provider, provider_supports_streaming
 
@@ -375,6 +376,7 @@ def build_run_snapshot(
 async def build_agent_tools(
     config: Config,
     workspace_dir: Path,
+    session_id: str,
     profile_mcp_config: dict[str, Any] | None = None,
 ) -> tuple[list[Tool], Any]:
     """Build agent tools for a web session."""
@@ -398,6 +400,7 @@ async def build_agent_tools(
                 ReadTool(workspace_dir=str(workspace_dir)),
                 WriteTool(workspace_dir=str(workspace_dir)),
                 EditTool(workspace_dir=str(workspace_dir)),
+                PublishImageTool(workspace_dir=str(workspace_dir), session_id=session_id),
             ]
         )
 
@@ -732,7 +735,12 @@ class WebAgentRuntimeManager:
             workspace_dir = resolve_workspace_path(session, config)
             bound_mcp_servers = await list_mcp_servers_for_profile(pool, user_id, profile.id)
             profile_mcp_config = build_profile_bound_mcp_config(bound_mcp_servers) or profile.mcp_config_json
-            tools, skill_loader = await build_agent_tools(config, workspace_dir, profile_mcp_config)
+            tools, skill_loader = await build_agent_tools(
+                config,
+                workspace_dir,
+                session_id=session.id,
+                profile_mcp_config=profile_mcp_config,
+            )
             skills_metadata = skill_loader.get_skills_metadata_prompt() if skill_loader else ""
             system_prompt = apply_runtime_tool_availability(
                 resolve_system_prompt(profile, config, skills_metadata=skills_metadata),

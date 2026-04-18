@@ -715,7 +715,8 @@ def test_running_session_cannot_be_updated(web_client, monkeypatch):
     client, session_factory, tmp_path = web_client
     monkeypatch.setattr(runtime, "LLMClient", FakeSlowLLMClient)
 
-    async def fake_build_agent_tools(config, workspace_dir, profile_mcp_config=None):
+    async def fake_build_agent_tools(config, workspace_dir, session_id, profile_mcp_config=None):
+        del session_id
         return [SlowTool()], None
 
     monkeypatch.setattr(runtime, "build_agent_tools", fake_build_agent_tools)
@@ -945,7 +946,8 @@ def test_websocket_cancel_and_serialization(web_client, monkeypatch):
     client, session_factory, tmp_path = web_client
     monkeypatch.setattr(runtime, "LLMClient", FakeSlowLLMClient)
 
-    async def fake_build_agent_tools(config, workspace_dir, profile_mcp_config=None):
+    async def fake_build_agent_tools(config, workspace_dir, session_id, profile_mcp_config=None):
+        del session_id
         return [SlowTool()], None
 
     monkeypatch.setattr(runtime, "build_agent_tools", fake_build_agent_tools)
