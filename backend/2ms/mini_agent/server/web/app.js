@@ -1389,6 +1389,7 @@ function renderFilteredToolCard(item) {
     const toolName = getToolCardName(item);
     const status = getToolCardStatus(item);
     const summary = buildToolCardSummary(item);
+    const imagePreviewHtml = renderToolCardImagePreview(parsePublishedImageAsset(item));
     const detailsHtml = renderToolCardDetails(item);
     const title = toolName === '工具' ? 'Agent 使用工具' : `Agent 使用 ${toolName}`;
 
@@ -1399,6 +1400,7 @@ function renderFilteredToolCard(item) {
                 <span class="tool-status-badge ${escapeHtml(status.className)}">${escapeHtml(status.label)}</span>
             </div>
             <p class="tool-card-summary">${escapeHtml(summary)}</p>
+            ${imagePreviewHtml}
             ${detailsHtml}
         </article>
     `;
@@ -1432,6 +1434,47 @@ function getToolResultMetadata(item) {
         : {};
 }
 
+function parseJsonObject(value) {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+function parseToolResultPayload(item) {
+    const metadata = getToolResultMetadata(item);
+    return parseJsonObject(metadata.content) || parseJsonObject(item.resultEvent?.content || '');
+}
+
+function parsePublishedImageAsset(item) {
+    if (getToolCardName(item) !== 'publish_image' || !item.resultEvent) {
+        return null;
+    }
+
+    const payload = parseToolResultPayload(item);
+    const asset = payload?.asset;
+    if (!asset || asset.type !== 'image' || !asset.url || !asset.asset_id) {
+        return null;
+    }
+
+    return {
+        url: String(asset.url),
+        assetId: String(asset.asset_id),
+        mimeType: asset.mime_type ? String(asset.mime_type) : '',
+        sourcePath: asset.source_path ? String(asset.source_path) : '',
+        alt: asset.alt ? String(asset.alt) : '',
+        caption: asset.caption ? String(asset.caption) : '',
+        filename: asset.filename ? String(asset.filename) : '',
+        sizeBytes: Number.isFinite(Number(asset.size_bytes)) ? Number(asset.size_bytes) : null,
+    };
+}
+
 function getToolCardStatus(item) {
     if (!item.resultEvent) {
         return { label: '执行中', className: 'running' };
@@ -1455,6 +1498,15 @@ function buildToolCardSummary(item) {
     const args = getToolCallArguments(item);
     const command = typeof args.command === 'string' ? args.command.trim() : '';
     const path = typeof args.path === 'string' ? args.path.trim() : '';
+
+    if (toolName === 'publish_image') {
+        const asset = parsePublishedImageAsset(item);
+        const sourcePath = path || asset?.sourcePath || asset?.filename || '';
+        if (sourcePath) {
+            return `发布图片：${truncateText(sourcePath, 140)}`;
+        }
+        return '发布图片';
+    }
 
     if (toolName === 'bash' && command) {
         return `命令：${truncateText(command, 140)}`;
@@ -1581,6 +1633,28 @@ function renderToolCardDetailBlock(label, value, isError = false) {
     `;
 }
 
+function renderToolCardImagePreview(asset) {
+    if (!asset) {
+        return '';
+    }
+
+    const label = asset.caption || asset.alt || asset.filename || asset.assetId;
+    return `
+        <figure class="tool-card-image-preview">
+            <a href="${escapeHtml(asset.url)}" target="_blank" rel="noopener noreferrer">
+                <img
+                    src="${escapeHtml(asset.url)}"
+                    alt="${escapeHtml(asset.alt || label || 'Published image')}"
+                    loading="lazy"
+                    onerror="this.closest('figure').classList.add('image-preview-error')"
+                >
+            </a>
+            ${label ? `<figcaption class="tool-card-image-caption">${escapeHtml(label)}</figcaption>` : ''}
+            <div class="image-preview-error-message">图片预览加载失败，可在详情里查看 asset URL。</div>
+        </figure>
+    `;
+}
+
 function renderStreamingMessageCard() {
     if (!streamingAssistantMessage) {
         return '';
@@ -1628,7 +1702,37 @@ function renderRawEventCard(event) {
             </div>
             ${event.content ? renderRawBlock('content', event.content) : ''}
             ${metadata ? renderRawBlock('metadata_json', prettyJson(metadata), true) : ''}
+            ${renderRawEventImagePreview(event)}
         </article>
+    `;
+}
+
+function renderRawEventImagePreview(event) {
+    const eventType = event.event_type || event.role;
+    if (eventType !== 'tool_result' || event.name !== 'publish_image') {
+        return '';
+    }
+
+    const payload = parseJsonObject(event.metadata_json?.content) || parseJsonObject(event.content || '');
+    const asset = payload?.asset;
+    if (!asset || asset.type !== 'image' || !asset.url) {
+        return '';
+    }
+
+    const label = asset.caption || asset.alt || asset.filename || asset.asset_id || '';
+    return `
+        <figure class="raw-event-image-preview">
+            <a href="${escapeHtml(String(asset.url))}" target="_blank" rel="noopener noreferrer">
+                <img
+                    src="${escapeHtml(String(asset.url))}"
+                    alt="${escapeHtml(String(asset.alt || label || 'Published image'))}"
+                    loading="lazy"
+                    onerror="this.closest('figure').classList.add('image-preview-error')"
+                >
+            </a>
+            ${label ? `<figcaption class="tool-card-image-caption">${escapeHtml(String(label))}</figcaption>` : ''}
+            <div class="image-preview-error-message">图片预览加载失败，可在详情里查看 asset URL。</div>
+        </figure>
     `;
 }
 

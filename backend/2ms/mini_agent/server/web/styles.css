@@ -788,6 +788,56 @@ header h1 {
     color: #7f1d1d;
 }
 
+.tool-card-image-preview,
+.raw-event-image-preview {
+    margin: 12px 0 0;
+    border: 1px solid rgba(45, 55, 72, 0.14);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+    overflow: hidden;
+}
+
+.tool-card-image-preview a,
+.raw-event-image-preview a {
+    display: block;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.1));
+}
+
+.tool-card-image-preview img,
+.raw-event-image-preview img {
+    display: block;
+    width: 100%;
+    max-height: 260px;
+    object-fit: contain;
+}
+
+.raw-event-image-preview img {
+    max-height: 180px;
+}
+
+.tool-card-image-caption {
+    padding: 9px 12px 11px;
+    color: #475569;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.image-preview-error img {
+    display: none;
+}
+
+.image-preview-error-message {
+    display: none;
+    padding: 12px;
+    color: #991b1b;
+    background: rgba(254, 226, 226, 0.72);
+    font-size: 0.82rem;
+}
+
+.image-preview-error .image-preview-error-message {
+    display: block;
+}
+
 .message.run_started,
 .message.run_completed,
 .message.run_failed,
