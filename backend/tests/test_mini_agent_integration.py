@@ -180,6 +180,39 @@ def test_web_export_script_exposes_log_builders() -> None:
     assert "function buildClientDebugPayload(session, runs, messages)" in response.text
 
 
+def test_web_filtered_chat_script_exposes_tool_timeline_hooks() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    script_response = client.get("/static/app.js")
+
+    assert script_response.status_code == 200
+    assert "function buildFilteredTimelineItems(events)" in script_response.text
+    assert "function renderFilteredTimelineItem(item)" in script_response.text
+    assert "function renderFilteredToolCard(item)" in script_response.text
+    assert "function getToolCardStatus(item)" in script_response.text
+    assert "function renderToolCardDetails(item)" in script_response.text
+
+    styles_response = client.get("/static/styles.css")
+
+    assert styles_response.status_code == 200
+    assert ".message.tool-card" in styles_response.text
+    assert ".tool-status-badge" in styles_response.text
+    assert ".tool-card-details" in styles_response.text
+
+
+def test_web_filtered_chat_script_no_longer_references_legacy_filter_helper() -> None:
+    app = FastAPI()
+    register_mini_agent(app)
+    client = TestClient(app)
+
+    response = client.get("/static/app.js")
+
+    assert response.status_code == 200
+    assert "isFilteredChatEvent(" not in response.text
+
+
 def test_web_export_script_exposes_resolved_prompt_helpers() -> None:
     app = FastAPI()
     register_mini_agent(app)

@@ -657,6 +657,137 @@ header h1 {
     border-color: #bfd6ff;
 }
 
+.message.tool-card {
+    margin-right: 14%;
+    background:
+        linear-gradient(180deg, rgba(18, 99, 191, 0.05), rgba(18, 99, 191, 0.01)),
+        #f8fbff;
+    border-color: #c7daf8;
+}
+
+.message.tool-card.running {
+    border-color: #bfd6ff;
+    background:
+        linear-gradient(180deg, rgba(58, 123, 213, 0.08), rgba(58, 123, 213, 0.02)),
+        #f7faff;
+}
+
+.message.tool-card.success {
+    border-color: #b7dfc4;
+    background:
+        linear-gradient(180deg, rgba(53, 143, 81, 0.08), rgba(53, 143, 81, 0.02)),
+        #f6fbf7;
+}
+
+.message.tool-card.failed {
+    border-color: #f2b3be;
+    background:
+        linear-gradient(180deg, rgba(189, 65, 88, 0.1), rgba(189, 65, 88, 0.03)),
+        #fff7f8;
+}
+
+.message.tool-card.no-output {
+    border-color: #d7dce5;
+    background:
+        linear-gradient(180deg, rgba(100, 116, 139, 0.06), rgba(100, 116, 139, 0.02)),
+        #fafbfd;
+}
+
+.tool-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.tool-card-title {
+    margin-bottom: 0;
+}
+
+.tool-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.tool-status-badge.running {
+    color: #235db2;
+}
+
+.tool-status-badge.success {
+    color: #2e7d4b;
+}
+
+.tool-status-badge.failed {
+    color: #b13d55;
+}
+
+.tool-status-badge.no-output {
+    color: #64748b;
+}
+
+.tool-card-summary {
+    color: #1e293b;
+}
+
+.tool-card-details {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(100, 116, 139, 0.28);
+}
+
+.tool-card-details summary {
+    cursor: pointer;
+    color: #235db2;
+    font-size: 13px;
+    font-weight: 600;
+    user-select: none;
+}
+
+.tool-card-details[open] summary {
+    margin-bottom: 10px;
+}
+
+.tool-card-section + .tool-card-section {
+    margin-top: 10px;
+}
+
+.tool-card-section-label {
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.tool-card-pre {
+    margin: 0;
+    padding: 12px;
+    overflow-x: auto;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    color: #0f172a;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.tool-card-section.error .tool-card-pre {
+    border-color: rgba(189, 65, 88, 0.2);
+    background: rgba(255, 236, 240, 0.78);
+    color: #7f1d1d;
+}
+
 .message.run_started,
 .message.run_completed,
 .message.run_failed,

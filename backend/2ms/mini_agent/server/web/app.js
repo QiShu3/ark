@@ -1244,11 +1244,9 @@ function syncStreamingAssistantMessage(event) {
 }
 
 function renderMessageViews({ forceScroll = false } = {}) {
-    const filteredEvents = currentSessionEvents
-        .filter((event) => isFilteredChatEvent(event))
-        .filter((event) => !shouldHidePersistedAssistantEvent(event));
+    const filteredTimelineItems = buildFilteredTimelineItems(currentSessionEvents);
     const filteredHtml = [
-        ...filteredEvents.map((event) => renderFilteredMessageCard(event)),
+        ...filteredTimelineItems.map((item) => renderFilteredTimelineItem(item)),
         renderStreamingMessageCard(),
     ].filter(Boolean).join('');
 
@@ -1310,8 +1308,70 @@ function renderEmptyPaneState(title, description) {
     `;
 }
 
-function isFilteredChatEvent(event) {
-    return ['user', 'assistant_message'].includes(event.event_type || event.role);
+function buildFilteredTimelineItems(events) {
+    const items = [];
+    const toolItemIndexesByCallId = new Map();
+
+    events.forEach((event) => {
+        if (shouldHidePersistedAssistantEvent(event)) {
+            return;
+        }
+
+        const eventType = event.event_type || event.role;
+        if (['user', 'assistant_message'].includes(eventType)) {
+            items.push({ kind: 'message', event });
+            return;
+        }
+
+        if (eventType === 'tool_call') {
+            const item = {
+                kind: 'tool',
+                toolCallId: event.tool_call_id || null,
+                callEvent: event,
+                resultEvent: null,
+            };
+            items.push(item);
+            if (item.toolCallId) {
+                toolItemIndexesByCallId.set(item.toolCallId, items.length - 1);
+            }
+            return;
+        }
+
+        if (eventType === 'tool_result') {
+            const toolCallId = event.tool_call_id || null;
+            if (toolCallId && toolItemIndexesByCallId.has(toolCallId)) {
+                const itemIndex = toolItemIndexesByCallId.get(toolCallId);
+                const existingItem = itemIndex !== undefined ? items[itemIndex] : null;
+                if (existingItem?.kind === 'tool' && !existingItem.resultEvent) {
+                    existingItem.resultEvent = event;
+                    return;
+                }
+            }
+
+            items.push({
+                kind: 'tool',
+                toolCallId,
+                callEvent: null,
+                resultEvent: event,
+            });
+        }
+    });
+
+    return items;
+}
+
+function countFilteredTimelineItems(events) {
+    return buildFilteredTimelineItems(events).length;
+}
+
+function renderFilteredTimelineItem(item) {
+    if (item.kind === 'message') {
+        return renderFilteredMessageCard(item.event);
+    }
+    if (item.kind === 'tool') {
+        return renderFilteredToolCard(item);
+    }
+    return '';
 }
 
 function renderFilteredMessageCard(event) {
@@ -1322,6 +1382,202 @@ function renderFilteredMessageCard(event) {
             <strong>${escapeHtml(label)}</strong>
             <p>${escapeHtml(event.content || '')}</p>
         </div>
+    `;
+}
+
+function renderFilteredToolCard(item) {
+    const toolName = getToolCardName(item);
+    const status = getToolCardStatus(item);
+    const summary = buildToolCardSummary(item);
+    const detailsHtml = renderToolCardDetails(item);
+    const title = toolName === '工具' ? 'Agent 使用工具' : `Agent 使用 ${toolName}`;
+
+    return `
+        <article class="message tool-card ${escapeHtml(status.className)}">
+            <div class="tool-card-header">
+                <strong class="tool-card-title">${escapeHtml(title)}</strong>
+                <span class="tool-status-badge ${escapeHtml(status.className)}">${escapeHtml(status.label)}</span>
+            </div>
+            <p class="tool-card-summary">${escapeHtml(summary)}</p>
+            ${detailsHtml}
+        </article>
+    `;
+}
+
+function getToolCardName(item) {
+    return item.callEvent?.name || item.resultEvent?.name || '工具';
+}
+
+function getToolCallArguments(item) {
+    const metadataArguments = item.callEvent?.metadata_json?.arguments;
+    if (metadataArguments && typeof metadataArguments === 'object') {
+        return metadataArguments;
+    }
+
+    if (!item.callEvent?.content) {
+        return {};
+    }
+
+    try {
+        const parsed = JSON.parse(item.callEvent.content);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function getToolResultMetadata(item) {
+    return item.resultEvent?.metadata_json && typeof item.resultEvent.metadata_json === 'object'
+        ? item.resultEvent.metadata_json
+        : {};
+}
+
+function getToolCardStatus(item) {
+    if (!item.resultEvent) {
+        return { label: '执行中', className: 'running' };
+    }
+
+    const metadata = getToolResultMetadata(item);
+    if (metadata.success === false || (metadata.error && String(metadata.error).trim())) {
+        return { label: '失败', className: 'failed' };
+    }
+
+    const resultContent = getToolResultText(item);
+    if (resultContent) {
+        return { label: '成功', className: 'success' };
+    }
+
+    return { label: '无输出', className: 'no-output' };
+}
+
+function buildToolCardSummary(item) {
+    const toolName = getToolCardName(item);
+    const args = getToolCallArguments(item);
+    const command = typeof args.command === 'string' ? args.command.trim() : '';
+    const path = typeof args.path === 'string' ? args.path.trim() : '';
+
+    if (toolName === 'bash' && command) {
+        return `命令：${truncateText(command, 140)}`;
+    }
+
+    if (toolName === 'read_file' && path) {
+        return `读取文件：${truncateText(path, 140)}`;
+    }
+
+    if (toolName === 'write_file' && path) {
+        return `写入文件：${truncateText(path, 140)}`;
+    }
+
+    if (toolName === 'edit_file' && path) {
+        return `编辑文件：${truncateText(path, 140)}`;
+    }
+
+    const argumentPreview = buildToolArgumentPreview(args);
+    if (argumentPreview) {
+        return `参数：${argumentPreview}`;
+    }
+
+    if (item.resultEvent && !item.callEvent) {
+        return '已收到工具结果，但缺少对应的调用事件。';
+    }
+
+    return '等待工具参数...';
+}
+
+function buildToolArgumentPreview(argumentsObject) {
+    const entries = Object.entries(argumentsObject || {});
+    if (entries.length === 0) {
+        return '';
+    }
+
+    return entries
+        .slice(0, 2)
+        .map(([key, value]) => `${key}=${truncateText(formatInlineValue(value), 48)}`)
+        .join(' · ');
+}
+
+function formatInlineValue(value) {
+    if (value === null || value === undefined) {
+        return String(value);
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
+}
+
+function truncateText(value, maxLength = 120) {
+    const text = String(value || '');
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return `${text.slice(0, maxLength - 1)}…`;
+}
+
+function getToolResultText(item) {
+    if (!item.resultEvent) {
+        return '';
+    }
+
+    const metadata = getToolResultMetadata(item);
+    if (metadata.success === false || (metadata.error && String(metadata.error).trim())) {
+        return '';
+    }
+
+    const content = typeof metadata.content === 'string' ? metadata.content : item.resultEvent.content || '';
+    return typeof content === 'string' ? content.trim() : '';
+}
+
+function getToolErrorText(item) {
+    const metadata = getToolResultMetadata(item);
+    const error = metadata.error;
+    return typeof error === 'string' ? error.trim() : '';
+}
+
+function renderToolCardDetails(item) {
+    const argumentsObject = getToolCallArguments(item);
+    const resultText = getToolResultText(item);
+    const errorText = getToolErrorText(item);
+    const detailBlocks = [];
+
+    if (Object.keys(argumentsObject).length > 0) {
+        detailBlocks.push(renderToolCardDetailBlock('参数', prettyJson(argumentsObject)));
+    }
+
+    if (resultText) {
+        detailBlocks.push(renderToolCardDetailBlock('结果', resultText));
+    }
+
+    if (errorText) {
+        detailBlocks.push(renderToolCardDetailBlock('错误', errorText, true));
+    }
+
+    if (detailBlocks.length === 0) {
+        return '';
+    }
+
+    return `
+        <details class="tool-card-details">
+            <summary>查看详情</summary>
+            ${detailBlocks.join('')}
+        </details>
+    `;
+}
+
+function renderToolCardDetailBlock(label, value, isError = false) {
+    return `
+        <section class="tool-card-section ${isError ? 'error' : ''}">
+            <div class="tool-card-section-label">${escapeHtml(label)}</div>
+            <pre class="tool-card-pre">${escapeHtml(value)}</pre>
+        </section>
     `;
 }
 
@@ -1554,7 +1810,7 @@ function buildLogExportSummary(session, profile, runs, messages) {
         counts: {
             runs: runs.length,
             events: messages.length,
-            filtered_chat_events: messages.filter((message) => isFilteredChatEvent(message)).length,
+            filtered_chat_events: countFilteredTimelineItems(messages),
             tts_debug_entries: ttsDebug.detailedLogs.length,
         },
         latest_run_id: runs.length > 0 ? runs[runs.length - 1].id : null,
@@ -1592,7 +1848,7 @@ function buildClientDebugPayload(session, runs, messages) {
         ui_state: {
             run_in_progress: runInProgress,
             raw_event_count: currentSessionEvents.length,
-            filtered_event_count: currentSessionEvents.filter((event) => isFilteredChatEvent(event)).length,
+            filtered_event_count: countFilteredTimelineItems(currentSessionEvents),
             persisted_event_count: messages.length,
             streaming: buildCurrentStreamingDebugState(),
         },
@@ -1726,7 +1982,7 @@ function renderSessionOverview() {
     const promptSource = latestRunPrompt
         ? '最近一次 Run 的已解析 System Prompt'
         : (resolvedProfilePrompt?.source_label || (profilePrompt ? '当前 Profile 的原始 System Prompt' : '暂无可用 Prompt'));
-    const filteredEventsCount = currentSessionEvents.filter((event) => isFilteredChatEvent(event)).length;
+    const filteredEventsCount = countFilteredTimelineItems(currentSessionEvents);
     const latestEvent = currentSessionEvents[currentSessionEvents.length - 1];
     const details = [
         ['会话名称', currentSession.name || `会话 ${currentSession.id.slice(0, 8)}`, false],
