@@ -17,6 +17,9 @@ UTC = getattr(timezone, "utc")
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
 TaskType = Literal["focus", "checkin"]
+AppointmentStoredStatus = Literal["pending", "attended", "missed", "cancelled"]
+AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed", "cancelled"]
+AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break"]
 FocusTimerMode = Literal["countdown", "countup"]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
@@ -77,6 +80,41 @@ class TaskOut(BaseModel):
     actual_duration: int
     start_date: datetime | None
     due_date: datetime | None
+    is_deleted: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AppointmentCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    content: str | None = None
+    status: AppointmentStoredStatus = "pending"
+    starts_at: datetime | None = None
+    ends_at: datetime
+    repeat_rule: str | None = Field(default=None, max_length=120)
+    linked_task_id: UUID | None = None
+
+
+class AppointmentUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    content: str | None = None
+    status: AppointmentStoredStatus | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    repeat_rule: str | None = Field(default=None, max_length=120)
+    linked_task_id: UUID | None = None
+
+
+class AppointmentOut(BaseModel):
+    id: UUID
+    user_id: int
+    title: str
+    content: str | None
+    status: AppointmentStatus
+    starts_at: datetime | None
+    ends_at: datetime
+    repeat_rule: str | None
+    linked_task_id: UUID | None
     is_deleted: bool
     created_at: datetime
     updated_at: datetime
@@ -302,6 +340,44 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS appointments (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              title VARCHAR(255) NOT NULL,
+              content TEXT NULL,
+              status VARCHAR(20) NOT NULL DEFAULT 'pending',
+              starts_at TIMESTAMPTZ NULL,
+              ends_at TIMESTAMPTZ NOT NULL,
+              repeat_rule VARCHAR(120) NULL,
+              linked_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL,
+              is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_appointments_status CHECK (status IN ('pending', 'attended', 'missed', 'cancelled'))
+            );
+            """
+        )
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS content TEXT NULL;")
+        await conn.execute(
+            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending';"
+        )
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ NULL;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS ends_at TIMESTAMPTZ;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS repeat_rule VARCHAR(120) NULL;")
+        await conn.execute(
+            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS linked_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;"
+        )
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
+        await conn.execute("ALTER TABLE appointments DROP CONSTRAINT IF EXISTS chk_appointments_status;")
+        await conn.execute(
+            "ALTER TABLE appointments ADD CONSTRAINT chk_appointments_status CHECK (status IN ('pending', 'attended', 'missed', 'cancelled'));"
+        )
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_user_ends_at ON appointments(user_id, ends_at ASC);")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_user_status ON appointments(user_id, status);")
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS focus_logs (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
@@ -473,6 +549,35 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
     )
 
 
+def _appointment_status_for_display(status: AppointmentStoredStatus | str, ends_at: datetime) -> AppointmentStatus:
+    if status == "pending" and ends_at <= datetime.now(UTC):
+        return "needs_confirmation"
+    if status == "attended":
+        return "attended"
+    if status == "missed":
+        return "missed"
+    if status == "cancelled":
+        return "cancelled"
+    return "pending"
+
+
+def _row_to_appointment(row: asyncpg.Record) -> AppointmentOut:
+    return AppointmentOut(
+        id=row["id"],
+        user_id=int(row["user_id"]),
+        title=str(row["title"]),
+        content=row["content"],
+        status=_appointment_status_for_display(str(row["status"]), row["ends_at"]),
+        starts_at=row["starts_at"],
+        ends_at=row["ends_at"],
+        repeat_rule=row["repeat_rule"],
+        linked_task_id=row["linked_task_id"],
+        is_deleted=bool(row["is_deleted"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
 def _row_to_event(row: asyncpg.Record) -> EventOut:
     """将 asyncpg.Record 转为 EventOut。"""
     return EventOut(
@@ -591,6 +696,14 @@ def _to_jsonb_param(value: Any) -> str:
     if isinstance(value, str):
         return value
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _validate_appointment_times(starts_at: datetime | None, ends_at: datetime) -> None:
+    if starts_at is not None and starts_at > ends_at:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="starts_at must be before or equal to ends_at",
+        )
 
 
 def _build_default_phases(focus_duration: int, break_duration: int) -> list[dict[str, Any]]:
@@ -1394,6 +1507,182 @@ async def delete_task(
         )
     if not tag.startswith("UPDATE ") or tag.endswith(" 0"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    return {"ok": True}
+
+
+@router.post("/appointments", response_model=AppointmentOut)
+async def create_appointment(
+    request: Request,
+    body: AppointmentCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """创建日程。"""
+    _validate_appointment_times(body.starts_at, body.ends_at)
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO appointments(
+                user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                      is_deleted, created_at, updated_at
+            """,
+            int(user.id),
+            body.title,
+            body.content,
+            body.status,
+            body.starts_at,
+            body.ends_at,
+            body.repeat_rule,
+            body.linked_task_id,
+        )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建日程失败")
+    return _row_to_appointment(row)
+
+
+@router.get("/appointments", response_model=list[AppointmentOut])
+async def list_appointments(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    view: AppointmentListView = Query(default="all"),
+) -> list[AppointmentOut]:
+    """列出日程。"""
+    pool = _pool_from_request(request)
+    where_clauses = ["user_id = $1", "is_deleted = FALSE"]
+    sql_comment = ""
+    args: list[Any] = [int(user.id)]
+
+    if view == "today":
+        sql_comment = "-- today filter"
+        where_clauses.append("DATE(ends_at AT TIME ZONE 'UTC') = DATE(NOW() AT TIME ZONE 'UTC')")
+    elif view == "needs_confirmation":
+        sql_comment = "-- needs_confirmation filter"
+        where_clauses.append("status = 'pending' AND ends_at <= NOW()")
+    elif view == "repeating":
+        sql_comment = "-- repeat filter"
+        where_clauses.append("repeat_rule IS NOT NULL")
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""
+            {sql_comment}
+            SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                   is_deleted, created_at, updated_at
+            FROM appointments
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY ends_at ASC, created_at ASC
+            """,
+            *args,
+        )
+    return [_row_to_appointment(row) for row in rows]
+
+
+@router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
+async def get_appointment(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """获取单个日程。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                   is_deleted, created_at, updated_at
+            FROM appointments
+            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+            """,
+            appointment_id,
+            int(user.id),
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+    return _row_to_appointment(row)
+
+
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
+async def update_appointment(
+    request: Request,
+    appointment_id: UUID,
+    body: AppointmentUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """更新日程。"""
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        return await get_appointment(request, appointment_id, user)
+
+    pool = _pool_from_request(request)
+    current = await get_appointment(request, appointment_id, user)
+    next_starts_at = patch.get("starts_at", current.starts_at)
+    next_ends_at = patch.get("ends_at", current.ends_at)
+    _validate_appointment_times(next_starts_at, next_ends_at)
+
+    allowed_cols = {
+        "title": "title",
+        "content": "content",
+        "status": "status",
+        "starts_at": "starts_at",
+        "ends_at": "ends_at",
+        "repeat_rule": "repeat_rule",
+        "linked_task_id": "linked_task_id",
+    }
+    sets: list[str] = []
+    args: list[Any] = []
+    for key, value in patch.items():
+        col = allowed_cols.get(key)
+        if col is None:
+            continue
+        args.append(value)
+        sets.append(f"{col} = ${len(args)}")
+    if not sets:
+        return current
+
+    args.append(appointment_id)
+    appointment_i = len(args)
+    args.append(int(user.id))
+    user_i = len(args)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"""
+            UPDATE appointments
+            SET {", ".join(sets)}, updated_at = NOW()
+            WHERE id = ${appointment_i} AND user_id = ${user_i} AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                      is_deleted, created_at, updated_at
+            """,
+            *args,
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+    return _row_to_appointment(row)
+
+
+@router.delete("/appointments/{appointment_id}")
+async def delete_appointment(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    """软删除日程。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        tag = await conn.execute(
+            """
+            UPDATE appointments
+            SET is_deleted = TRUE, updated_at = NOW()
+            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+            """,
+            appointment_id,
+            int(user.id),
+        )
+    if not tag.startswith("UPDATE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
     return {"ok": True}
 
 

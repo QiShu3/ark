@@ -42,6 +42,7 @@ class _FakeTodoConn:
         self.stats_rows: list[dict[str, Any]] = []
         self.events: list[dict[str, Any]] = []
         self.tasks: list[dict[str, Any]] = []
+        self.appointments: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -79,6 +80,28 @@ class _FakeTodoConn:
                     task["updated_at"],
                 ),
             )
+        if "FROM appointments" in sql and "ORDER BY ends_at ASC" in sql:
+            user_id = args[0]
+            only_needs_confirmation = "needs_confirmation filter" in sql
+            only_repeating = "repeat filter" in sql
+            only_today = "today filter" in sql
+            now = datetime.now(UTC)
+            today = now.date()
+            rows = []
+            for appointment in self.appointments:
+                if appointment["user_id"] != user_id or appointment["is_deleted"]:
+                    continue
+                ends_at = appointment["ends_at"]
+                stored_status = appointment["status"]
+                derived_status = "needs_confirmation" if stored_status == "pending" and ends_at <= now else stored_status
+                if only_needs_confirmation and derived_status != "needs_confirmation":
+                    continue
+                if only_repeating and appointment["repeat_rule"] is None:
+                    continue
+                if only_today and ends_at.date() != today:
+                    continue
+                rows.append(appointment)
+            return sorted(rows, key=lambda appointment: (appointment["ends_at"], appointment["created_at"]))
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -123,6 +146,83 @@ class _FakeTodoConn:
                 event["is_primary"] = args[0]
             event["updated_at"] = datetime.now(UTC)
             return event
+        if "INSERT INTO appointments" in sql:
+            appointment_id = uuid4()
+            now = datetime.now(UTC)
+            row = {
+                "id": appointment_id,
+                "user_id": args[0],
+                "title": args[1],
+                "content": args[2],
+                "status": args[3],
+                "starts_at": args[4],
+                "ends_at": args[5],
+                "repeat_rule": args[6],
+                "linked_task_id": args[7],
+                "is_deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.appointments.append(row)
+            return row
+        if "FROM appointments" in sql and "WHERE id = $1 AND user_id = $2" in sql:
+            appointment_id, user_id = args[0], args[1]
+            return next(
+                (
+                    appointment
+                    for appointment in self.appointments
+                    if appointment["id"] == appointment_id and appointment["user_id"] == user_id and not appointment["is_deleted"]
+                ),
+                None,
+            )
+        if "UPDATE appointments" in sql and "RETURNING id, user_id, title, content, status" in sql:
+            appointment_id, user_id = args[-2], args[-1]
+            appointment = next(
+                (
+                    item
+                    for item in self.appointments
+                    if item["id"] == appointment_id and item["user_id"] == user_id and not item["is_deleted"]
+                ),
+                None,
+            )
+            if appointment is None:
+                return None
+            if "title = $1" in sql:
+                appointment["title"] = args[0]
+            if "content = $2" in sql:
+                appointment["content"] = args[1]
+            if "status = $3" in sql:
+                appointment["status"] = args[2]
+            elif "status = $2" in sql:
+                appointment["status"] = args[1]
+            elif "status = $1" in sql:
+                appointment["status"] = args[0]
+            if "starts_at = $4" in sql:
+                appointment["starts_at"] = args[3]
+            elif "starts_at = $3" in sql:
+                appointment["starts_at"] = args[2]
+            elif "starts_at = $2" in sql:
+                appointment["starts_at"] = args[1]
+            if "ends_at = $5" in sql:
+                appointment["ends_at"] = args[4]
+            elif "ends_at = $4" in sql:
+                appointment["ends_at"] = args[3]
+            elif "ends_at = $3" in sql:
+                appointment["ends_at"] = args[2]
+            if "repeat_rule = $6" in sql:
+                appointment["repeat_rule"] = args[5]
+            elif "repeat_rule = $5" in sql:
+                appointment["repeat_rule"] = args[4]
+            elif "repeat_rule = $4" in sql:
+                appointment["repeat_rule"] = args[3]
+            if "linked_task_id = $7" in sql:
+                appointment["linked_task_id"] = args[6]
+            elif "linked_task_id = $6" in sql:
+                appointment["linked_task_id"] = args[5]
+            elif "linked_task_id = $5" in sql:
+                appointment["linked_task_id"] = args[4]
+            appointment["updated_at"] = datetime.now(UTC)
+            return appointment
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
@@ -142,6 +242,15 @@ class _FakeTodoConn:
             ]
             deleted = before - len(self.events)
             return f"DELETE {deleted}"
+        if "UPDATE appointments" in sql and "SET is_deleted = TRUE" in sql:
+            appointment_id, user_id = args
+            updated = 0
+            for appointment in self.appointments:
+                if appointment["id"] == appointment_id and appointment["user_id"] == user_id and not appointment["is_deleted"]:
+                    appointment["is_deleted"] = True
+                    appointment["updated_at"] = datetime.now(UTC)
+                    updated += 1
+            return f"UPDATE {updated}"
         return "UPDATE 1"
 
     def transaction(self):
@@ -197,6 +306,128 @@ def _task_row(
         "created_at": now,
         "updated_at": now,
     }
+
+
+def _appointment_row(
+    *,
+    user_id: int = 7,
+    title: str = "Appointment",
+    status: str = "pending",
+    starts_at: datetime | None = None,
+    ends_at: datetime | None = None,
+    repeat_rule: str | None = None,
+    linked_task_id: Any = None,
+    is_deleted: bool = False,
+) -> dict[str, Any]:
+    now = datetime(2026, 4, 16, tzinfo=UTC)
+    return {
+        "id": uuid4(),
+        "user_id": user_id,
+        "title": title,
+        "content": None,
+        "status": status,
+        "starts_at": starts_at,
+        "ends_at": ends_at or datetime(2026, 4, 16, 18, tzinfo=UTC),
+        "repeat_rule": repeat_rule,
+        "linked_task_id": linked_task_id,
+        "is_deleted": is_deleted,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def test_create_appointment_requires_end_time_and_defaults_to_pending(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/appointments",
+        json={"title": "Standup", "ends_at": "2026-04-20T10:30:00Z"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["title"] == "Standup"
+    assert data["status"] == "pending"
+    assert len(conn.appointments) == 1
+
+
+def test_list_appointments_derives_needs_confirmation(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    conn.appointments = [
+        _appointment_row(title="Past", ends_at=datetime.now(UTC) - timedelta(hours=2)),
+        _appointment_row(title="Future", ends_at=datetime.now(UTC) + timedelta(hours=2)),
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/appointments")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    statuses = {item["title"]: item["status"] for item in data}
+    assert statuses["Past"] == "needs_confirmation"
+    assert statuses["Future"] == "pending"
+
+
+def test_list_appointments_supports_needs_confirmation_filter(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    conn.appointments = [
+        _appointment_row(title="Past", ends_at=datetime.now(UTC) - timedelta(hours=2)),
+        _appointment_row(title="Future", ends_at=datetime.now(UTC) + timedelta(hours=2)),
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/appointments?view=needs_confirmation")
+
+    assert resp.status_code == 200
+    assert [item["title"] for item in resp.json()] == ["Past"]
+
+
+def test_update_appointment_can_confirm_result(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    appointment = _appointment_row(title="Exam", ends_at=datetime.now(UTC) - timedelta(hours=1))
+    conn.appointments = [appointment]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.patch(f"/todo/appointments/{appointment['id']}", json={"status": "attended"})
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "attended"
+    assert conn.appointments[0]["status"] == "attended"
+
+
+def test_list_appointments_supports_repeating_filter(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    conn.appointments = [
+        _appointment_row(title="Weekly", repeat_rule="weekly"),
+        _appointment_row(title="One off", repeat_rule=None),
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/appointments?view=repeating")
+
+    assert resp.status_code == 200
+    assert [item["title"] for item in resp.json()] == ["Weekly"]
 
 
 def test_get_focus_stats_today(monkeypatch) -> None:

@@ -1,16 +1,27 @@
 import React from 'react';
 import { CALENDAR_DAY_HEADER_HEIGHT } from './calendarLayout';
-import { CalendarTask, toDayKey } from './calendarUtils';
+import { CalendarDot, toDayKey } from './calendarUtils';
 
 type CalendarDayCellProps = {
   day: Date;
-  tasks: CalendarTask[];
+  itemCount: number;
+  dotItems: CalendarDot[];
   todayKey: string;
   onDateClick: (day: Date) => void;
+  onDotClick?: (item: CalendarDot) => void;
   rowHeight?: number;
 };
 
-const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey, onDateClick, rowHeight }) => {
+function dotClassName(item: CalendarDot): string {
+  if (item.kind === 'appointment') {
+    if (item.status === 'needs_confirmation') return 'bg-amber-300 ring-2 ring-amber-300/30';
+    if (item.status === 'cancelled') return 'bg-white/35';
+    return 'bg-fuchsia-300';
+  }
+  return item.status === 'done' ? 'bg-emerald-300/70' : 'bg-cyan-300';
+}
+
+const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotItems, todayKey, onDateClick, onDotClick, rowHeight }) => {
   const key = toDayKey(day);
   const isToday = key === todayKey;
 
@@ -26,7 +37,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
         type="button"
         onClick={() => onDateClick(day)}
         className="absolute inset-0 z-0 cursor-default"
-        aria-label={`${key}${isToday ? ' 今天' : ''}，${tasks.length} 项任务`}
+        aria-label={`${key}${isToday ? ' 今天' : ''}，${itemCount} 项安排`}
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent" />
       <div
@@ -40,12 +51,35 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, tasks, todayKey,
         >
           {day.getDate()}
         </span>
-        <span className="text-xs font-semibold text-white/35">{tasks.length} 项</span>
+        <span className="text-xs font-semibold text-white/35">{itemCount} 项</span>
       </div>
-      {tasks.length > 0 ? (
+      {dotItems.length ? (
+        <div className="relative z-20 mt-3 flex flex-col items-end gap-1.5">
+          {dotItems.slice(0, 6).map((item) => (
+            <button
+              key={`${item.kind}-${item.id}`}
+              type="button"
+              aria-label={`打开${item.kind === 'appointment' ? '日程' : '任务'} ${item.title}`}
+              title={item.title}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDotClick?.(item);
+              }}
+              className="flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-medium text-white/72 shadow-sm transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClassName(item)}`} />
+              <span className="min-w-0 max-w-[7.5rem] truncate">{item.title}</span>
+            </button>
+          ))}
+          {dotItems.length > 6 ? (
+            <span className="text-[10px] font-semibold text-white/45">+{dotItems.length - 6}</span>
+          ) : null}
+        </div>
+      ) : null}
+      {itemCount > 0 ? (
         <span
           className={`absolute inset-x-0 bottom-0 h-0.5 ${
-            tasks.length > 4
+            itemCount > 4
               ? 'bg-gradient-to-r from-rose-400/50 to-amber-300/50'
               : 'bg-gradient-to-r from-cyan-300/40 to-emerald-300/40'
           }`}

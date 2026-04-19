@@ -21,3 +21,21 @@ export interface Task {
   created_at: string;
   updated_at: string;
 }
+
+export type AppointmentStoredStatus = 'pending' | 'attended' | 'missed' | 'cancelled';
+export type AppointmentStatus = AppointmentStoredStatus | 'needs_confirmation';
+
+export interface Appointment {
+  id: string;
+  user_id: number;
+  title: string;
+  content: string | null;
+  status: AppointmentStatus;
+  starts_at: string | null;
+  ends_at: string;
+  repeat_rule: string | null;
+  linked_task_id: string | null;
+  is_deleted: boolean;
+  created_at: string;
+  updated_at: string;
+}

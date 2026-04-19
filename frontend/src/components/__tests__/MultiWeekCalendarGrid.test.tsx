@@ -51,6 +51,8 @@ describe('MultiWeekCalendarGrid', () => {
       <MultiWeekCalendarGrid
         days={days}
         groupedTasks={groupedTasks}
+        groupedDots={{}}
+        itemCounts={{}}
         todayKey="2026-04-23"
         onDateClick={() => {}}
         onTaskClick={() => {}}

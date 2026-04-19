@@ -2,14 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiJson } from '../lib/api';
 import CalendarDateDrawer from './CalendarDateDrawer';
 import MultiWeekCalendarGrid from './MultiWeekCalendarGrid';
+import AppointmentEditModal from './AppointmentEditModal';
 import TaskEditModal from './TaskEditModal';
 import {
   addDays,
   buildVisibleDays,
+  CalendarAppointment,
+  CalendarDot,
   CalendarTask,
   formatRangeParam,
   getStoredWeekCount,
+  groupAppointmentsByDay,
+  groupCalendarDotsByDay,
+  groupCalendarTaskItemsByDay,
   groupTasksByDay,
+  isScheduledCalendarTask,
   setStoredWeekCount,
   toDayKey,
   WeekCount,
@@ -25,18 +32,31 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   const [anchorDate, setAnchorDate] = useState(() => initialDate || new Date());
   const [weekCount, setWeekCount] = useState<WeekCount>(() => getStoredWeekCount());
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
+  const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [editingTask, setEditingTask] = useState<CalendarTask | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<CalendarAppointment | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => (initialDate || new Date()).getFullYear());
   const [reloadVersion, setReloadVersion] = useState(0);
 
   const visibleDays = useMemo(() => buildVisibleDays(anchorDate, weekCount), [anchorDate, weekCount]);
-  const groupedTasks = useMemo(() => groupTasksByDay(tasks, visibleDays), [tasks, visibleDays]);
+  const scheduledTasks = useMemo(() => tasks.filter(isScheduledCalendarTask), [tasks]);
+  const groupedTasks = useMemo(() => groupTasksByDay(scheduledTasks, visibleDays), [scheduledTasks, visibleDays]);
+  const groupedTaskItems = useMemo(() => groupCalendarTaskItemsByDay(tasks, visibleDays), [tasks, visibleDays]);
+  const groupedAppointments = useMemo(() => groupAppointmentsByDay(appointments, visibleDays), [appointments, visibleDays]);
+  const groupedDots = useMemo(() => groupCalendarDotsByDay(tasks, appointments, visibleDays), [tasks, appointments, visibleDays]);
+  const itemCounts = useMemo(() => (
+    Object.fromEntries(visibleDays.map((day) => {
+      const key = toDayKey(day);
+      return [key, (groupedTaskItems[key] || []).length + (groupedAppointments[key] || []).length];
+    }))
+  ), [groupedAppointments, groupedTaskItems, visibleDays]);
   const todayKey = toDayKey(new Date());
-  const selectedTasks = selectedDate ? groupedTasks[toDayKey(selectedDate)] || [] : [];
+  const selectedTasks = selectedDate ? groupedTaskItems[toDayKey(selectedDate)] || [] : [];
+  const selectedAppointments = selectedDate ? groupedAppointments[toDayKey(selectedDate)] || [] : [];
 
   useEffect(() => {
     if (!open) return;
@@ -50,15 +70,24 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
       setError(null);
     });
 
-    apiJson<CalendarTask[]>(`/todo/tasks/calendar?start=${formatRangeParam(start)}&end=${formatRangeParam(end)}`)
-      .then((nextTasks) => {
-        if (!cancelled) setTasks(nextTasks);
+    Promise.all([
+      apiJson<CalendarTask[]>(`/todo/tasks/calendar?start=${formatRangeParam(start)}&end=${formatRangeParam(end)}`),
+      apiJson<CalendarAppointment[]>('/todo/appointments?view=all'),
+    ])
+      .then(([nextTasks, nextAppointments]) => {
+        if (cancelled) return;
+        setTasks(nextTasks);
+        setAppointments(nextAppointments.filter((appointment) => {
+          const endsAt = new Date(appointment.ends_at);
+          return endsAt >= start && endsAt < end;
+        }));
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error('Failed to load calendar tasks', err);
-        setError(err instanceof Error ? err.message : '加载日历任务失败');
+        console.error('Failed to load calendar arrangements', err);
+        setError(err instanceof Error ? err.message : '加载安排日历失败');
         setTasks([]);
+        setAppointments([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -92,7 +121,7 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   }
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" role="dialog" aria-label="多周任务日历">
+    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" role="dialog" aria-label="多周安排日历">
       <div className="flex h-[86vh] w-[92vw] max-w-[1500px] overflow-hidden rounded-[2rem] border border-white/15 bg-slate-950/75 text-white shadow-2xl backdrop-blur-2xl">
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="relative z-20 flex h-20 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-white/[0.03] px-6">
@@ -201,19 +230,46 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
             <MultiWeekCalendarGrid
               days={visibleDays}
               groupedTasks={groupedTasks}
+              groupedDots={groupedDots}
+              itemCounts={itemCounts}
               todayKey={todayKey}
               onDateClick={setSelectedDate}
               onTaskClick={setEditingTask}
+              onDotClick={(item: CalendarDot) => {
+                if (item.kind === 'appointment' && item.appointment) {
+                  setEditingAppointment(item.appointment);
+                  return;
+                }
+                if (item.task) {
+                  setEditingTask(item.task);
+                }
+              }}
             />
           </div>
         </div>
-        <CalendarDateDrawer date={selectedDate} tasks={selectedTasks} onClose={() => setSelectedDate(null)} />
+        <CalendarDateDrawer
+          date={selectedDate}
+          tasks={selectedTasks}
+          appointments={selectedAppointments}
+          onClose={() => setSelectedDate(null)}
+          onTaskClick={setEditingTask}
+          onAppointmentClick={setEditingAppointment}
+        />
         <TaskEditModal
           open={Boolean(editingTask)}
           task={editingTask}
           onClose={() => setEditingTask(null)}
           onChanged={() => {
             setEditingTask(null);
+            setReloadVersion((value) => value + 1);
+          }}
+        />
+        <AppointmentEditModal
+          open={Boolean(editingAppointment)}
+          appointment={editingAppointment}
+          onClose={() => setEditingAppointment(null)}
+          onChanged={() => {
+            setEditingAppointment(null);
             setReloadVersion((value) => value + 1);
           }}
         />

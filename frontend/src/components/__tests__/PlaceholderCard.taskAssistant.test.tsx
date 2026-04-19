@@ -44,7 +44,7 @@ function defaultApiResponse(path: string) {
 }
 
 async function openTaskAssistant(user: ReturnType<typeof userEvent.setup>, container: HTMLElement) {
-  const quickCreateButton = screen.queryByRole('button', { name: '快捷创建任务' })
+  const quickCreateButton = screen.queryByRole('button', { name: '快捷创建安排' })
     ?? container.querySelector('button.absolute.bottom-2.right-2');
   expect(quickCreateButton).toBeInTheDocument();
   await user.click(quickCreateButton as HTMLButtonElement);
@@ -86,12 +86,12 @@ describe('PlaceholderCard task assistant', () => {
 
     await openTaskAssistant(user, container);
     await user.type(
-      screen.getByPlaceholderText('请输入任务目标、截止时间、优先级等信息，助手会自动帮你填充任务参数'),
+      screen.getByPlaceholderText('请输入安排目标、截止时间、优先级等信息，助手会自动帮你判断任务或日程'),
       '各位同学：请预习课文，并拍摄朗读视频，下周提交。',
     );
-    await user.click(screen.getByRole('button', { name: '快捷生成任务' }));
+    await user.click(screen.getByRole('button', { name: '快捷生成安排' }));
 
-    expect(await screen.findByText('识别到 2 个任务草稿')).toBeInTheDocument();
+    expect(await screen.findByText('识别到 2 个安排草稿')).toBeInTheDocument();
     expect(screen.getByText('预习课文')).toBeInTheDocument();
     expect(screen.getByText('拍摄视频')).toBeInTheDocument();
     expect(screen.queryByText('AI 返回格式无法识别')).not.toBeInTheDocument();
@@ -128,20 +128,20 @@ describe('PlaceholderCard task assistant', () => {
 
     await openTaskAssistant(user, container);
     await user.type(
-      screen.getByPlaceholderText('请输入任务目标、截止时间、优先级等信息，助手会自动帮你填充任务参数'),
+      screen.getByPlaceholderText('请输入安排目标、截止时间、优先级等信息，助手会自动帮你判断任务或日程'),
       '请预习课文、拍摄朗读视频。',
     );
-    await user.click(screen.getByRole('button', { name: '快捷生成任务' }));
+    await user.click(screen.getByRole('button', { name: '快捷生成安排' }));
     await user.click(await screen.findByRole('button', { name: '创建“预习课文”' }));
 
-    expect(screen.getByRole('heading', { name: '创建任务' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '创建安排' })).toBeInTheDocument();
     expect(screen.getByLabelText('标题')).toHaveValue('预习课文');
     expect(screen.getByLabelText('目标时长（分钟）')).toHaveValue(35);
     expect(screen.getByLabelText('截止日期')).toHaveValue('2026-04-20T10:00');
     expect(screen.getByLabelText('标签')).toHaveValue('语文');
 
     await waitFor(() => {
-      expect(screen.queryByText('任务解析助手')).not.toBeInTheDocument();
+      expect(screen.queryByText('安排解析助手')).not.toBeInTheDocument();
     });
   });
 
@@ -164,15 +164,88 @@ describe('PlaceholderCard task assistant', () => {
 
     await openTaskAssistant(user, container);
     await user.type(
-      screen.getByPlaceholderText('请输入任务目标、截止时间、优先级等信息，助手会自动帮你填充任务参数'),
+      screen.getByPlaceholderText('请输入安排目标、截止时间、优先级等信息，助手会自动帮你判断任务或日程'),
       '明天下班前完成周报。',
     );
-    await user.click(screen.getByRole('button', { name: '快捷生成任务' }));
+    await user.click(screen.getByRole('button', { name: '快捷生成安排' }));
 
-    expect(screen.queryByText(/任务草稿/)).not.toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: '创建任务' })).toBeInTheDocument();
+    expect(screen.queryByText(/安排草稿/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '创建安排' })).toBeInTheDocument();
     expect(screen.getByLabelText('标题')).toHaveValue('完成周报');
     expect(screen.getByLabelText('目标时长（分钟）')).toHaveValue(45);
     expect(screen.getByLabelText('标签')).toHaveValue('工作');
+  });
+
+  it('opens the appointment create flow when assistant identifies a schedule item', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/api/chat') {
+        return Promise.resolve({
+          reply: JSON.stringify({
+            kind: 'appointment',
+            title: '参加站会',
+            content: '周一晨会',
+            startsAt: '2026-04-21T10:00:00+08:00',
+            endsAt: '2026-04-21T10:30:00+08:00',
+          }),
+        });
+      }
+      return defaultApiResponse(path);
+    });
+    const { container } = renderTaskCard();
+
+    await openTaskAssistant(user, container);
+    await user.type(
+      screen.getByPlaceholderText('请输入安排目标、截止时间、优先级等信息，助手会自动帮你判断任务或日程'),
+      '周二上午十点开站会。',
+    );
+    await user.click(screen.getByRole('button', { name: '快捷生成安排' }));
+
+    expect(await screen.findByRole('heading', { name: '创建安排' })).toBeInTheDocument();
+    expect(screen.getByLabelText('安排类型')).toHaveValue('appointment');
+    expect(screen.getByLabelText('标题')).toHaveValue('参加站会');
+    expect(screen.getByLabelText('结束时间')).toHaveValue('2026-04-21T10:30');
+  });
+
+  it('shows arrangement kind and time metadata for mixed task and appointment drafts', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/api/chat') {
+        return Promise.resolve({
+          reply: JSON.stringify({
+            mode: 'multiple',
+            tasks: [
+              {
+                kind: 'appointment',
+                title: '参加站会',
+                content: '周会同步进度',
+                endsAt: '2026-04-22T10:30:00+08:00',
+              },
+              {
+                title: '整理周报',
+                content: '汇总本周进展',
+                targetMinutes: 45,
+                dueDate: '2026-04-22T18:00:00+08:00',
+              },
+            ],
+          }),
+        });
+      }
+      return defaultApiResponse(path);
+    });
+    const { container } = renderTaskCard();
+
+    await openTaskAssistant(user, container);
+    await user.type(
+      screen.getByPlaceholderText('请输入安排目标、截止时间、优先级等信息，助手会自动帮你判断任务或日程'),
+      '周二上午十点半参加站会，晚上六点前整理周报。',
+    );
+    await user.click(screen.getByRole('button', { name: '快捷生成安排' }));
+
+    expect(await screen.findByText('识别到 2 个安排草稿')).toBeInTheDocument();
+    expect(screen.getByText('日程')).toBeInTheDocument();
+    expect(screen.getByText('任务')).toBeInTheDocument();
+    expect(screen.getByText('结束：2026-04-22 10:30')).toBeInTheDocument();
+    expect(screen.getByText('截止：2026-04-22 18:00')).toBeInTheDocument();
   });
 });

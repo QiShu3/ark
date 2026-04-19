@@ -8,17 +8,29 @@ import {
   CALENDAR_TASK_LAYER_TOP,
   CALENDAR_TASK_ROW_HEIGHT,
 } from './calendarLayout';
-import { buildCalendarWeekSegments, CalendarTask, toDayKey } from './calendarUtils';
+import { buildCalendarWeekSegments, CalendarDot, CalendarTask, toDayKey } from './calendarUtils';
 
 type CalendarWeekRowProps = {
   weekDays: Date[];
   groupedTasks: Record<string, CalendarTask[]>;
+  groupedDots: Record<string, CalendarDot[]>;
+  itemCounts: Record<string, number>;
   todayKey: string;
   onDateClick: (day: Date) => void;
   onTaskClick?: (task: CalendarTask) => void;
+  onDotClick?: (item: CalendarDot) => void;
 };
 
-const CalendarWeekRow: React.FC<CalendarWeekRowProps> = ({ weekDays, groupedTasks, todayKey, onDateClick, onTaskClick }) => {
+const CalendarWeekRow: React.FC<CalendarWeekRowProps> = ({
+  weekDays,
+  groupedTasks,
+  groupedDots,
+  itemCounts,
+  todayKey,
+  onDateClick,
+  onTaskClick,
+  onDotClick,
+}) => {
   const segments = buildCalendarWeekSegments(weekDays, groupedTasks);
   const laneCount = segments.reduce((max, segment) => Math.max(max, segment.lane + 1), 0);
   const rowHeight = Math.max(
@@ -35,9 +47,11 @@ const CalendarWeekRow: React.FC<CalendarWeekRowProps> = ({ weekDays, groupedTask
             <CalendarDayCell
               key={key}
               day={day}
-              tasks={groupedTasks[key] || []}
+              itemCount={itemCounts[key] || 0}
+              dotItems={groupedDots[key] || []}
               todayKey={todayKey}
               onDateClick={onDateClick}
+              onDotClick={onDotClick}
               rowHeight={rowHeight}
             />
           );

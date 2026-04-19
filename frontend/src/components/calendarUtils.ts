@@ -1,8 +1,17 @@
-import type { Task } from './taskTypes';
+import type { Appointment, Task } from './taskTypes';
 
 export type WeekCount = 2 | 3;
 
 export type CalendarTask = Task;
+export type CalendarAppointment = Appointment;
+export type CalendarDot = {
+  id: string;
+  title: string;
+  kind: 'task' | 'appointment';
+  task?: CalendarTask;
+  appointment?: CalendarAppointment;
+  status: string;
+};
 export type CalendarTaskContinuation = {
   continuesFromPrev: boolean;
   continuesToNext: boolean;
@@ -56,6 +65,113 @@ function taskAppearsOnDay(task: CalendarTask, day: Date): boolean {
   if (start) return start >= dayStart && start < dayEnd;
   if (due) return due >= dayStart && due < dayEnd;
   return false;
+}
+
+function sameDay(value: string | null, day: Date): boolean {
+  if (!value) return false;
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return false;
+  const dayStart = startOfDay(day);
+  const dayEnd = addDays(dayStart, 1);
+  return target >= dayStart && target < dayEnd;
+}
+
+export function isScheduledCalendarTask(task: CalendarTask): boolean {
+  return Boolean(task.start_date && task.due_date);
+}
+
+export function groupCalendarTaskItemsByDay(tasks: CalendarTask[], days: Date[]): Record<string, CalendarTask[]> {
+  const grouped = Object.fromEntries(days.map((day) => [toDayKey(day), [] as CalendarTask[]]));
+
+  for (const task of tasks) {
+    if (isScheduledCalendarTask(task)) {
+      for (const day of days) {
+        if (taskAppearsOnDay(task, day)) {
+          grouped[toDayKey(day)].push(task);
+        }
+      }
+      continue;
+    }
+
+    const anchor = task.due_date ?? task.start_date;
+    if (!anchor) continue;
+    for (const day of days) {
+      if (sameDay(anchor, day)) {
+        grouped[toDayKey(day)].push(task);
+      }
+    }
+  }
+
+  for (const day of days) {
+    grouped[toDayKey(day)] = grouped[toDayKey(day)].sort(compareTasks);
+  }
+
+  return grouped;
+}
+
+export function groupAppointmentsByDay(appointments: CalendarAppointment[], days: Date[]): Record<string, CalendarAppointment[]> {
+  const grouped = Object.fromEntries(days.map((day) => [toDayKey(day), [] as CalendarAppointment[]]));
+
+  for (const appointment of appointments) {
+    for (const day of days) {
+      if (sameDay(appointment.ends_at, day)) {
+        grouped[toDayKey(day)].push(appointment);
+      }
+    }
+  }
+
+  for (const day of days) {
+    grouped[toDayKey(day)] = grouped[toDayKey(day)].sort((a, b) => (
+      new Date(a.ends_at).getTime() - new Date(b.ends_at).getTime()
+    ));
+  }
+
+  return grouped;
+}
+
+export function groupCalendarDotsByDay(
+  tasks: CalendarTask[],
+  appointments: CalendarAppointment[],
+  days: Date[],
+): Record<string, CalendarDot[]> {
+  const grouped = Object.fromEntries(days.map((day) => [toDayKey(day), [] as CalendarDot[]]));
+
+  for (const task of tasks) {
+    if (isScheduledCalendarTask(task)) continue;
+    const anchor = task.due_date ?? task.start_date;
+    if (!anchor) continue;
+    for (const day of days) {
+      if (sameDay(anchor, day)) {
+        grouped[toDayKey(day)].push({
+          id: task.id,
+          title: task.title,
+          kind: 'task',
+          task,
+          status: task.status,
+        });
+      }
+    }
+  }
+
+  for (const appointment of appointments) {
+    for (const day of days) {
+      if (sameDay(appointment.ends_at, day)) {
+        grouped[toDayKey(day)].push({
+          id: appointment.id,
+          title: appointment.title,
+          kind: 'appointment',
+          appointment,
+          status: appointment.status,
+        });
+      }
+    }
+  }
+
+  for (const day of days) {
+    grouped[toDayKey(day)] = grouped[toDayKey(day)].sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+  }
+
+  return grouped;
 }
 
 function compareTasks(a: CalendarTask, b: CalendarTask): number {
