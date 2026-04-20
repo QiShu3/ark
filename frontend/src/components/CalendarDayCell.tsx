@@ -54,7 +54,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
         <span className="text-xs font-semibold text-white/35">{itemCount} 项</span>
       </div>
       {dotItems.length ? (
-        <div className="relative z-20 mt-3 flex flex-col items-end gap-1.5">
+        <div className="relative z-20 mt-3 flex flex-col gap-1.5">
           {dotItems.slice(0, 6).map((item) => (
             <button
               key={`${item.kind}-${item.id}`}
@@ -65,10 +65,10 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
                 event.stopPropagation();
                 onDotClick?.(item);
               }}
-              className="flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-medium text-white/72 shadow-sm transition-colors hover:bg-white/10 hover:text-white"
+              className="flex w-full items-center justify-start gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-medium text-white/72 shadow-sm transition-colors hover:bg-white/10 hover:text-white"
             >
               <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClassName(item)}`} />
-              <span className="min-w-0 max-w-[7.5rem] truncate">{item.title}</span>
+              <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
             </button>
           ))}
           {dotItems.length > 6 ? (

@@ -131,4 +131,20 @@ describe('CalendarDayCell', () => {
     expect(screen.getByText('睡前阅读')).toBeInTheDocument();
     expect(screen.getByText('参加站会')).toBeInTheDocument();
   });
+
+  it('stretches each dot pill across almost the full cell width', () => {
+    render(
+      <CalendarDayCell
+        day={new Date('2026-04-21T12:00:00Z')}
+        itemCount={1}
+        dotItems={[
+          { id: 'dot-appointment', title: '参加考试', kind: 'appointment', status: 'pending' },
+        ]}
+        todayKey="2026-04-16"
+        onDateClick={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '打开日程 参加考试' })).toHaveClass('w-full');
+  });
 });
