@@ -7,7 +7,7 @@ import CalendarWidget from './CalendarWidget';
 import PhoneSimulator from './PhoneSimulator';
 import TaskEditModal from './TaskEditModal';
 import AppointmentEditModal from './AppointmentEditModal';
-import type { Appointment, Task } from './taskTypes';
+import type { Appointment, CompletionPeriodType, Task } from './taskTypes';
 import {
   buildWorkflowNotificationPrompt,
   deriveWorkflowNotification,
@@ -64,6 +64,16 @@ interface WorkflowPreset {
   updated_at: string;
 }
 
+interface EventItem {
+  id: string;
+  user_id: number;
+  name: string;
+  due_at: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 type WorkflowFormPhase = {
   phase_type: 'focus' | 'break';
   duration: number;
@@ -95,11 +105,14 @@ type CreateTaskForm = {
   content: string;
   priority: 0 | 1 | 2 | 3;
   targetMinutes: number;
-  targetCycleCount: number;
-  cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
-  customCycleDays: number;
   event: string;
-  eventIds: string[];
+  eventId: string;
+  periodType: CompletionPeriodType;
+  customPeriodDays: number;
+  maxCompletionsPerPeriod: number;
+  weekdayOnly: boolean;
+  timeInheritsFromEvent: boolean;
+  timeOverridden: boolean;
   taskType: 'focus' | 'checkin';
   tagsText: string;
   startDate: string;
@@ -114,6 +127,14 @@ type CreateAppointmentForm = {
   startsAt: string;
   endsAt: string;
   repeatRule: string;
+  event: string;
+  eventId: string;
+  periodType: CompletionPeriodType;
+  customPeriodDays: number;
+  maxCompletionsPerPeriod: number;
+  weekdayOnly: boolean;
+  timeInheritsFromEvent: boolean;
+  timeOverridden: boolean;
 };
 
 type CreateArrangementPreset = Partial<CreateTaskForm & CreateAppointmentForm> & {
@@ -133,11 +154,14 @@ const CREATE_TASK_FORM_DEFAULTS: CreateTaskForm = {
   content: '',
   priority: 0,
   targetMinutes: 25,
-  targetCycleCount: 1,
-  cyclePeriod: 'daily',
-  customCycleDays: 1,
   event: '',
-  eventIds: [],
+  eventId: '',
+  periodType: 'once',
+  customPeriodDays: 1,
+  maxCompletionsPerPeriod: 1,
+  weekdayOnly: false,
+  timeInheritsFromEvent: false,
+  timeOverridden: false,
   taskType: 'focus',
   tagsText: '',
   startDate: '',
@@ -150,6 +174,14 @@ const CREATE_APPOINTMENT_FORM_DEFAULTS: CreateAppointmentForm = {
   startsAt: '',
   endsAt: '',
   repeatRule: '',
+  event: '',
+  eventId: '',
+  periodType: 'once',
+  customPeriodDays: 1,
+  maxCompletionsPerPeriod: 1,
+  weekdayOnly: false,
+  timeInheritsFromEvent: false,
+  timeOverridden: false,
 };
 
 /**
@@ -162,7 +194,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [showTaskAssistantModal, setShowTaskAssistantModal] = useState(false);
   const [showPhoneSimulator, setShowPhoneSimulator] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'daily' | 'weekly' | 'periodic' | 'custom' | 'all'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'all'>('today');
   const [activeArrangementTab, setActiveArrangementTab] = useState<'tasks' | 'appointments'>('tasks');
   const [activeAppointmentTab, setActiveAppointmentTab] = useState<'all' | 'today' | 'needs_confirmation' | 'repeating'>('all');
   const navigate = useNavigate();
@@ -208,6 +240,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [arrangementEvents, setArrangementEvents] = useState<EventItem[]>([]);
 
   useEffect(() => {
     _loadTasks();
@@ -428,6 +461,69 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
   }, [tasks, focusTargetTaskId]);
 
+  useEffect(() => {
+    if (!showCreateTaskModal) return;
+    void _loadArrangementEvents();
+  }, [showCreateTaskModal]);
+
+  function _getPrimaryArrangementEvent(events: EventItem[]): EventItem | null {
+    return events.find((event) => event.is_primary) ?? null;
+  }
+
+  function _syncTaskEventSelection(
+    prev: CreateTaskForm,
+    eventId: string,
+    events: EventItem[],
+  ): CreateTaskForm {
+    const selectedEvent = events.find((event) => event.id === eventId) ?? null;
+    if (!selectedEvent) {
+      return {
+        ...prev,
+        eventId: '',
+        event: '',
+        timeInheritsFromEvent: false,
+        timeOverridden: false,
+      };
+    }
+    const eventDueLocal = _toDateTimeLocal(selectedEvent.due_at);
+    const shouldFollowEvent = !prev.timeOverridden || !prev.dueDate;
+    return {
+      ...prev,
+      eventId: selectedEvent.id,
+      event: selectedEvent.name,
+      dueDate: shouldFollowEvent ? eventDueLocal : prev.dueDate,
+      timeInheritsFromEvent: true,
+      timeOverridden: shouldFollowEvent ? false : prev.timeOverridden,
+    };
+  }
+
+  function _syncAppointmentEventSelection(
+    prev: CreateAppointmentForm,
+    eventId: string,
+    events: EventItem[],
+  ): CreateAppointmentForm {
+    const selectedEvent = events.find((event) => event.id === eventId) ?? null;
+    if (!selectedEvent) {
+      return {
+        ...prev,
+        eventId: '',
+        event: '',
+        timeInheritsFromEvent: false,
+        timeOverridden: false,
+      };
+    }
+    const eventDueLocal = _toDateTimeLocal(selectedEvent.due_at);
+    const shouldFollowEvent = !prev.timeOverridden || !prev.endsAt;
+    return {
+      ...prev,
+      eventId: selectedEvent.id,
+      event: selectedEvent.name,
+      endsAt: shouldFollowEvent ? eventDueLocal : prev.endsAt,
+      timeInheritsFromEvent: true,
+      timeOverridden: shouldFollowEvent ? false : prev.timeOverridden,
+    };
+  }
+
 
   function _resetCreateTaskForm(): void {
     setCreateTaskSubmitting(false);
@@ -444,17 +540,37 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     const localNow = new Date(nowDate.getTime() - nowDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     const kind = preset?.kind === 'appointment' ? 'appointment' : 'task';
     const nextStartDate = typeof preset?.startDate === 'string' && preset.startDate.trim() ? preset.startDate : localNow;
+    const primaryEvent = _getPrimaryArrangementEvent(arrangementEvents);
     setCreateTaskError(null);
     setShowCreateTaskMoreFields(false);
     setCreateArrangementKind(kind);
-    setCreateTaskForm({ ...CREATE_TASK_FORM_DEFAULTS, ...(preset || {}), startDate: nextStartDate });
+    const nextTaskForm = _syncTaskEventSelection(
+      {
+        ...CREATE_TASK_FORM_DEFAULTS,
+        ...(preset || {}),
+        startDate: nextStartDate,
+      },
+      typeof (preset as { eventId?: unknown } | undefined)?.eventId === 'string' && (preset as { eventId?: string }).eventId
+        ? (preset as { eventId: string }).eventId
+        : primaryEvent?.id ?? '',
+      arrangementEvents,
+    );
+    setCreateTaskForm(nextTaskForm);
     setCreateAppointmentForm({
-      ...CREATE_APPOINTMENT_FORM_DEFAULTS,
-      title: typeof preset?.title === 'string' ? preset.title : '',
-      content: typeof preset?.content === 'string' ? preset.content : '',
-      startsAt: typeof preset?.startsAt === 'string' ? preset.startsAt : '',
-      endsAt: typeof preset?.endsAt === 'string' ? preset.endsAt : '',
-      repeatRule: typeof preset?.repeatRule === 'string' ? preset.repeatRule : '',
+      ..._syncAppointmentEventSelection(
+        {
+          ...CREATE_APPOINTMENT_FORM_DEFAULTS,
+          title: typeof preset?.title === 'string' ? preset.title : '',
+          content: typeof preset?.content === 'string' ? preset.content : '',
+          startsAt: typeof preset?.startsAt === 'string' ? preset.startsAt : '',
+          endsAt: typeof preset?.endsAt === 'string' ? preset.endsAt : '',
+          repeatRule: typeof preset?.repeatRule === 'string' ? preset.repeatRule : '',
+        },
+        typeof (preset as { eventId?: unknown } | undefined)?.eventId === 'string' && (preset as { eventId?: string }).eventId
+          ? (preset as { eventId: string }).eventId
+          : primaryEvent?.id ?? '',
+        arrangementEvents,
+      ),
     });
     setShowCreateTaskModal(true);
   }
@@ -540,9 +656,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       : (typeof draft.description === 'string' ? draft.description : '');
     const priorityRaw = Number(draft.priority);
     const targetMinutesRaw = Number(draft.targetMinutes);
-    const targetCycleCountRaw = Number(draft.targetCycleCount);
-    const customCycleDaysRaw = Number(draft.customCycleDays);
-    const cyclePeriodRaw = typeof draft.cyclePeriod === 'string' ? draft.cyclePeriod : '';
+    const periodTypeRaw = typeof draft.periodType === 'string'
+      ? draft.periodType
+      : (typeof draft.period_type === 'string' ? draft.period_type : '');
+    const customPeriodDaysRaw = Number(draft.customPeriodDays ?? draft.custom_period_days);
+    const maxCompletionsRaw = Number(draft.maxCompletionsPerPeriod ?? draft.max_completions_per_period);
+    const weekdayOnlyRaw = typeof draft.weekdayOnly === 'boolean'
+      ? draft.weekdayOnly
+      : (typeof draft.weekday_only === 'boolean' ? draft.weekday_only : false);
     const taskTypeRaw = typeof draft.taskType === 'string' ? draft.taskType : (typeof draft.task_type === 'string' ? draft.task_type : 'focus');
     const tagsValue = Array.isArray(draft.tags)
       ? draft.tags.filter((x): x is string => typeof x === 'string').join(', ')
@@ -552,13 +673,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       content,
       priority: (Number.isFinite(priorityRaw) ? Math.min(3, Math.max(0, Math.round(priorityRaw))) : 0) as 0 | 1 | 2 | 3,
       targetMinutes: Number.isFinite(targetMinutesRaw) && targetMinutesRaw >= 0 ? Math.round(targetMinutesRaw) : 25,
-      targetCycleCount: Number.isFinite(targetCycleCountRaw) && targetCycleCountRaw >= 0 ? Math.round(targetCycleCountRaw) : 1,
-      cyclePeriod: cyclePeriodRaw === 'daily' || cyclePeriodRaw === 'weekly' || cyclePeriodRaw === 'monthly' || cyclePeriodRaw === 'custom'
-        ? cyclePeriodRaw
-        : 'daily',
-      customCycleDays: Number.isFinite(customCycleDaysRaw) && customCycleDaysRaw >= 1 ? Math.round(customCycleDaysRaw) : 1,
       event: typeof draft.event === 'string' ? draft.event : '',
-      eventIds: [],
+      periodType: periodTypeRaw === 'daily' || periodTypeRaw === 'weekly' || periodTypeRaw === 'monthly' || periodTypeRaw === 'custom_days'
+        ? periodTypeRaw
+        : 'once',
+      customPeriodDays: Number.isFinite(customPeriodDaysRaw) && customPeriodDaysRaw >= 1 ? Math.round(customPeriodDaysRaw) : 1,
+      maxCompletionsPerPeriod: Number.isFinite(maxCompletionsRaw) && maxCompletionsRaw >= 1 ? Math.round(maxCompletionsRaw) : 1,
+      weekdayOnly: weekdayOnlyRaw,
       taskType: (taskTypeRaw === 'checkin' ? 'checkin' : 'focus') as 'focus' | 'checkin',
       tagsText: tagsValue,
       startDate: _toDateTimeLocal(draft.startDate),
@@ -674,7 +795,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `请判断以下原始通知文本包含一个还是多个“安排”，并仅返回 JSON，不要返回其他文字。返回格式为：{"mode":"single"|"multiple","tasks":[{"kind":"task|appointment","title":"不超过10个字的简练标题","content":"保留必要上下文和要求","priority":0-3,"targetMinutes":25,"targetCycleCount":1,"cyclePeriod":"daily|weekly|monthly|custom","customCycleDays":1,"event":"","tags":["字符串标签"],"startDate":"","dueDate":"","startsAt":"","endsAt":"","repeatRule":"","sourceText":"来自原文的依据片段"}]}。需要专注投入的事项标记为 task；只需出席或到点确认的事项标记为 appointment。task 使用 targetMinutes/startDate/dueDate 等字段；appointment 使用 startsAt/endsAt/repeatRule 等字段。如果只有一个事项，tasks 只放一项；如果有多个独立事项，必须拆成多个安排草稿，不要合并。原始通知文本：${text}`,
+          message: `请判断以下原始通知文本包含一个还是多个“安排”，并仅返回 JSON，不要返回其他文字。返回格式为：{"mode":"single"|"multiple","tasks":[{"kind":"task|appointment","title":"不超过10个字的简练标题","content":"保留必要上下文和要求","priority":0-3,"targetMinutes":25,"periodType":"once|daily|weekly|monthly|custom_days","customPeriodDays":1,"maxCompletionsPerPeriod":1,"weekdayOnly":false,"event":"","tags":["字符串标签"],"startDate":"","dueDate":"","startsAt":"","endsAt":"","repeatRule":"","sourceText":"来自原文的依据片段"}]}。需要专注投入的事项标记为 task；只需出席或到点确认的事项标记为 appointment。task 使用 targetMinutes/startDate/dueDate/periodType 等字段；appointment 使用 startsAt/endsAt/repeatRule 等字段。如果只有一个事项，tasks 只放一项；如果有多个独立事项，必须拆成多个安排草稿，不要合并。原始通知文本：${text}`,
           history: [],
           scope: 'general',
         }),
@@ -732,6 +853,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       setAppointments([]);
     } finally {
       setAppointmentsLoading(false);
+    }
+  }
+
+  async function _loadArrangementEvents() {
+    try {
+      const res = await apiJson('/todo/events');
+      const nextEvents = Array.isArray(res) ? res as EventItem[] : [];
+      setArrangementEvents(nextEvents);
+      const primaryEvent = _getPrimaryArrangementEvent(nextEvents);
+      if (!primaryEvent) return;
+      setCreateTaskForm((prev) => (prev.eventId ? prev : _syncTaskEventSelection(prev, primaryEvent.id, nextEvents)));
+      setCreateAppointmentForm((prev) => (prev.eventId ? prev : _syncAppointmentEventSelection(prev, primaryEvent.id, nextEvents)));
+    } catch (e) {
+      console.error('Failed to load arrangement events', e);
+      setArrangementEvents([]);
     }
   }
 
@@ -1044,6 +1180,44 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     return `${date.getMonth() + 1}/${date.getDate()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }
 
+  function _isTaskHiddenFromActionList(task: Task): boolean {
+    return task.completion_state?.hidden_from_action_list === true;
+  }
+
+  function _isAppointmentHiddenFromActionList(appointment: Appointment): boolean {
+    return appointment.completion_state?.hidden_from_action_list === true;
+  }
+
+  function _isTaskCompletable(task: Task): boolean {
+    if (task.status === 'done') return false;
+    return task.completion_state?.is_completable_now ?? true;
+  }
+
+  function _isTaskCompletedForArrangementView(task: Task): boolean {
+    if (task.status === 'done') return true;
+    const state = task.completion_state?.completion_state;
+    return state === 'period_complete' || state === 'permanent';
+  }
+
+  function _taskCompletionStatusLabel(task: Task): string | null {
+    if (task.completion_state?.completion_state === 'period_complete') return '本周期已完成';
+    if (task.status === 'done' || task.completion_state?.completion_state === 'permanent') return '已完成';
+    return null;
+  }
+
+  function _matchesTaskArrangementTab(task: Task, tab: 'today' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'all'): boolean {
+    if (tab === 'all' || tab === 'today') return true;
+    if (tab === 'daily') return task.period_type === 'daily';
+    if (tab === 'weekly') return task.period_type === 'weekly';
+    if (tab === 'monthly') return task.period_type === 'monthly';
+    return task.period_type === 'custom_days';
+  }
+
+  function _isAppointmentCompletable(appointment: Appointment): boolean {
+    if (appointment.status === 'cancelled' || appointment.status === 'needs_confirmation') return false;
+    return appointment.completion_state?.is_completable_now ?? true;
+  }
+
   async function _handleDeleteTask(e: React.MouseEvent, task: Task) {
     e.stopPropagation();
     if (!window.confirm(`确定要删除任务「${task.title}」吗？`)) return;
@@ -1062,17 +1236,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   async function _handleCompleteTask(e: React.MouseEvent, task: Task) {
     e.stopPropagation();
     try {
-      setTasks(tasks.map(t => t.id === task.id ? { ...t, status: 'done' } : t));
-      await apiJson(`/todo/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'done' })
+      const updatedTask = await apiJson(`/todo/tasks/${task.id}/complete`, {
+        method: 'POST',
       });
-      _loadTasks();
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? updatedTask as Task : item)));
+      await _loadTasks();
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (e) {
       console.error('Failed to complete task', e);
-      _loadTasks();
+      await _loadTasks();
     }
   }
 
@@ -1094,6 +1266,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   }
 
   function _renderSmallTaskCard(task: Task, draggable: boolean, summaryEntry = false) {
+    const isCompletedLike = _isTaskCompletedForArrangementView(task);
+    const completionStatusLabel = _taskCompletionStatusLabel(task);
     return (
       <div
         key={task.id}
@@ -1109,9 +1283,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-1">
             <div className={`w-1.5 h-1.5 shrink-0 rounded-full ${
-              task.status === 'done' ? 'bg-green-500/50' : (task.task_type === 'checkin' ? 'bg-emerald-500/70' : 'bg-blue-400/50')
+              isCompletedLike ? 'bg-green-500/50' : (task.task_type === 'checkin' ? 'bg-emerald-500/70' : 'bg-blue-400/50')
             }`} />
-            <span className={`font-medium text-sm line-clamp-1 ${task.status === 'done' ? 'text-white/40 line-through decoration-white/30' : 'text-white/90'}`}>
+            <span className={`font-medium text-sm line-clamp-1 ${isCompletedLike ? 'text-white/40 line-through decoration-white/30' : 'text-white/90'}`}>
               {task.title}
             </span>
           </div>
@@ -1131,7 +1305,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               </span>
             ) : (
               <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                {task.status !== 'done' && (
+                {_isTaskCompletable(task) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
                     className="p-1 rounded hover:bg-green-500/20 text-white/40 hover:text-green-400"
@@ -1170,6 +1344,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             )}
           </div>
         </div>
+        {completionStatusLabel && (
+          <div className="pl-3.5 text-[11px] text-emerald-200/55">
+            {completionStatusLabel}
+          </div>
+        )}
       </div>
     );
   }
@@ -1198,15 +1377,43 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               {appointment.title}
             </span>
           </div>
-          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-white/5 border-white/10 text-white/45">
-            {_formatShortDateTime(appointment.ends_at)}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[10px] px-1.5 py-0.5 rounded border bg-white/5 border-white/10 text-white/45">
+              {_formatShortDateTime(appointment.ends_at)}
+            </span>
+            {_isAppointmentCompletable(appointment) && (
+              <button
+                onClick={(e) => { e.stopPropagation(); _handleCompleteAppointment(e, appointment); }}
+                className="p-1 rounded hover:bg-green-500/20 text-white/40 hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="完成日程"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         <div className="pl-3.5 text-[11px] text-white/40">
           {isNeedsConfirmation ? '待确认' : isCancelled ? '已取消' : '截止时间'}
         </div>
       </div>
     );
+  }
+
+  async function _handleCompleteAppointment(e: React.MouseEvent, appointment: Appointment) {
+    e.stopPropagation();
+    try {
+      const updatedAppointment = await apiJson(`/todo/appointments/${appointment.id}/complete`, {
+        method: 'POST',
+      });
+      setAppointments((prev) => prev.map((item) => (item.id === appointment.id ? updatedAppointment as Appointment : item)));
+      await _loadAppointments();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (error) {
+      console.error('Failed to complete appointment', error);
+      await _loadAppointments();
+    }
   }
 
   function _renderFilteredTasksPane() {
@@ -1219,15 +1426,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
     
     let filtered = tasks;
-    if (activeTab === 'daily') filtered = tasks.filter(t => t.cycle_period === 'daily');
-    else if (activeTab === 'weekly') filtered = tasks.filter(t => t.cycle_period === 'weekly');
-    else if (activeTab === 'periodic') filtered = tasks.filter(t => t.cycle_period === 'monthly');
-    else if (activeTab === 'custom') filtered = tasks.filter(t => t.cycle_period === 'custom');
+    if (activeTab !== 'all' && activeTab !== 'today') {
+      filtered = tasks.filter((task) => _matchesTaskArrangementTab(task, activeTab));
+    }
 
-    const activeTasks = filtered.filter(t => t.status !== 'done');
-    const completedTasks = filtered.filter(t => t.status === 'done');
+    const activeTasks = filtered.filter((task) => !_isTaskCompletedForArrangementView(task) && !_isTaskHiddenFromActionList(task));
+    const completedTasks = filtered.filter((task) => _isTaskCompletedForArrangementView(task));
 
-    if (filtered.length === 0) {
+    if (activeTasks.length === 0 && completedTasks.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-white/30">
           <span className="text-sm">暂无任务</span>
@@ -1279,6 +1485,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     } else if (activeAppointmentTab === 'repeating') {
       filtered = appointments.filter((appointment) => !!appointment.repeat_rule);
     }
+    filtered = filtered.filter((appointment) => !_isAppointmentHiddenFromActionList(appointment));
 
     if (filtered.length === 0) {
       return (
@@ -1299,7 +1506,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     if (!tasks.length) return null;
     try {
       if (focusTargetTaskId) {
-        const picked = tasks.find((t) => t.id === focusTargetTaskId && t.status !== 'done');
+        const picked = tasks.find((t) => t.id === focusTargetTaskId && !_isTaskHiddenFromActionList(t) && t.status !== 'done');
         if (picked) return picked;
       }
       const now = new Date();
@@ -1308,6 +1515,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
 
       const candidates = tasks.filter(t => {
         if (t.status === 'done') return false;
+        if (_isTaskHiddenFromActionList(t)) return false;
         const start = t.start_date ? new Date(t.start_date) : null;
         const end = t.due_date ? new Date(t.due_date) : null;
         
@@ -1415,10 +1623,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
     setFocusQuickActionBusy(true);
     try {
-      await apiJson(`/todo/tasks/${targetTaskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'done' }),
+      await apiJson(`/todo/tasks/${targetTaskId}/complete`, {
+        method: 'POST',
       });
       if (currentFocus?.task_id === targetTaskId) {
         await apiJson('/todo/focus/stop', { method: 'POST' });
@@ -1458,6 +1664,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     setCreateTaskError(null);
     try {
       if (createArrangementKind === 'appointment') {
+        const customPeriodDays = createAppointmentForm.periodType === 'custom_days'
+          ? Math.max(1, Math.floor(createAppointmentForm.customPeriodDays || 1))
+          : null;
         await apiJson('/todo/appointments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1467,6 +1676,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             starts_at: createAppointmentForm.startsAt ? new Date(createAppointmentForm.startsAt).toISOString() : null,
             ends_at: new Date(createAppointmentForm.endsAt).toISOString(),
             repeat_rule: createAppointmentForm.repeatRule.trim() || null,
+            event_id: createAppointmentForm.eventId || null,
+            is_recurring: createAppointmentForm.periodType !== 'once',
+            period_type: createAppointmentForm.periodType,
+            custom_period_days: customPeriodDays,
+            max_completions_per_period: Math.max(1, Math.floor(createAppointmentForm.maxCompletionsPerPeriod || 1)),
+            weekday_only: createAppointmentForm.weekdayOnly,
+            time_inherits_from_event: createAppointmentForm.timeInheritsFromEvent,
+            time_overridden: createAppointmentForm.timeOverridden,
           }),
         });
         setShowCreateTaskModal(false);
@@ -1477,7 +1694,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       }
       const startDate = createTaskForm.startDate ? new Date(createTaskForm.startDate).toISOString() : null;
       const dueDate = createTaskForm.dueDate ? new Date(createTaskForm.dueDate).toISOString() : null;
-      const cycleEveryDays = createTaskForm.cyclePeriod === 'custom' ? Math.max(1, Math.floor(createTaskForm.customCycleDays || 1)) : null;
+      const customPeriodDays = createTaskForm.periodType === 'custom_days'
+        ? Math.max(1, Math.floor(createTaskForm.customPeriodDays || 1))
+        : null;
       const tags = createTaskForm.tagsText
         .split(',')
         .map((tag) => tag.trim())
@@ -1491,12 +1710,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           status: 'todo',
           priority: createTaskForm.priority,
           target_duration: Math.round(targetMinutes * 60),
-          current_cycle_count: 0,
-          target_cycle_count: Math.max(0, Math.floor(createTaskForm.targetCycleCount || 0)),
-          cycle_period: createTaskForm.cyclePeriod,
-          cycle_every_days: cycleEveryDays,
           event: createTaskForm.event.trim(),
-          event_ids: createTaskForm.eventIds,
+          event_id: createTaskForm.eventId || null,
+          is_recurring: createTaskForm.periodType !== 'once',
+          period_type: createTaskForm.periodType,
+          custom_period_days: customPeriodDays,
+          max_completions_per_period: Math.max(1, Math.floor(createTaskForm.maxCompletionsPerPeriod || 1)),
+          weekday_only: createTaskForm.weekdayOnly,
+          time_inherits_from_event: createTaskForm.timeInheritsFromEvent,
+          time_overridden: createTaskForm.timeOverridden,
           task_type: createTaskForm.taskType,
           tags,
           start_date: startDate,
@@ -1699,7 +1921,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 </button>
               </div>
               <div className="p-4 overflow-y-auto max-h-[calc(72vh-56px)] flex flex-col gap-2">
-                {tasks.filter((task) => task.status !== 'done').map((task) => (
+                {tasks.filter((task) => task.status !== 'done' && !_isTaskHiddenFromActionList(task)).map((task) => (
                   <button
                     key={task.id}
                     onClick={() => _switchFocusTarget(task)}
@@ -1716,7 +1938,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                     </div>
                   </button>
                 ))}
-                {tasks.filter((task) => task.status !== 'done').length === 0 && (
+                {tasks.filter((task) => task.status !== 'done' && !_isTaskHiddenFromActionList(task)).length === 0 && (
                   <div className="text-center text-white/35 py-6">暂无任务</div>
                 )}
               </div>
@@ -1907,7 +2129,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                                 className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                               >
                                 <option value="">运行时选择任务</option>
-                                {tasks.filter((task) => task.status !== 'done').map((task) => (
+                                {tasks.filter((task) => task.status !== 'done' && !_isTaskHiddenFromActionList(task)).map((task) => (
                                   <option key={task.id} value={task.id}>{task.title}</option>
                                 ))}
                               </select>
@@ -2079,6 +2301,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
                     {(() => {
                       const todayTasks = tasks.filter(t => {
+                        if (_isTaskHiddenFromActionList(t)) return false;
                         const now = new Date();
                         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                         const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -2091,8 +2314,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                       
                       const activeTodayTasks = todayTasks.filter(t => t.status !== 'done');
                       const dones = todayTasks.filter(t => t.status === 'done');
-                      const todayAppointments = appointments.filter((appointment) => appointment.status !== 'needs_confirmation' && _isToday(appointment.ends_at));
-                      const needsConfirmationAppointments = appointments.filter((appointment) => appointment.status === 'needs_confirmation');
+                      const todayAppointments = appointments.filter((appointment) => (
+                        appointment.status !== 'needs_confirmation'
+                        && !_isAppointmentHiddenFromActionList(appointment)
+                        && _isToday(appointment.ends_at)
+                      ));
+                      const needsConfirmationAppointments = appointments.filter((appointment) => (
+                        appointment.status === 'needs_confirmation'
+                        && !_isAppointmentHiddenFromActionList(appointment)
+                      ));
                       
                       return (
                         <>
@@ -2188,12 +2418,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                         { id: 'all', label: '全部' },
                         { id: 'daily', label: '每日' },
                         { id: 'weekly', label: '每周' },
-                        { id: 'periodic', label: '周期' },
+                        { id: 'monthly', label: '每月' },
                         { id: 'custom', label: '自定义' },
                       ].map((tab) => (
                         <button
                           key={tab.id}
-                          onClick={() => setActiveTab(tab.id as 'all' | 'daily' | 'weekly' | 'periodic' | 'custom')}
+                          onClick={() => setActiveTab(tab.id as 'all' | 'daily' | 'weekly' | 'monthly' | 'custom')}
                           className={`h-full relative px-1 text-xs transition-colors ${
                             activeTab === tab.id ? 'text-white font-bold' : 'text-white/35 hover:text-white/60'
                           }`}
@@ -2279,6 +2509,30 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   />
                 </div>
 
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-white/70">关联事件</label>
+                  <select
+                    aria-label="关联事件"
+                    value={createArrangementKind === 'appointment' ? createAppointmentForm.eventId : createTaskForm.eventId}
+                    onChange={(e) => {
+                      const nextEventId = e.target.value;
+                      if (createArrangementKind === 'appointment') {
+                        setCreateAppointmentForm((s) => _syncAppointmentEventSelection(s, nextEventId, arrangementEvents));
+                        return;
+                      }
+                      setCreateTaskForm((s) => _syncTaskEventSelection(s, nextEventId, arrangementEvents));
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    <option value="">不绑定事件</option>
+                    {arrangementEvents.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.is_primary ? `当前事件：${event.name}` : event.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {createArrangementKind === 'appointment' ? (
                   <>
                     <div className="flex flex-col gap-2">
@@ -2307,7 +2561,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                           aria-label="结束时间"
                           type="datetime-local"
                           value={createAppointmentForm.endsAt}
-                          onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, endsAt: e.target.value }))}
+                          onChange={(e) => setCreateAppointmentForm((s) => {
+                            const nextValue = e.target.value;
+                            const selectedEvent = arrangementEvents.find((event) => event.id === s.eventId) ?? null;
+                            const inheritedValue = selectedEvent ? _toDateTimeLocal(selectedEvent.due_at) : '';
+                            return {
+                              ...s,
+                              endsAt: nextValue,
+                              timeOverridden: !!selectedEvent && nextValue !== inheritedValue,
+                              timeInheritsFromEvent: !!selectedEvent,
+                            };
+                          })}
                           className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
@@ -2322,6 +2586,60 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                         className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">完成周期</label>
+                        <select
+                          aria-label="完成周期"
+                          value={createAppointmentForm.periodType}
+                          onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, periodType: e.target.value as CompletionPeriodType }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                          <option value="once">一次性</option>
+                          <option value="daily">每天</option>
+                          <option value="weekly">每周</option>
+                          <option value="monthly">每月</option>
+                          <option value="custom_days">自定义天数</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">单周期最多完成次数</label>
+                        <input
+                          aria-label="单周期最多完成次数"
+                          type="number"
+                          min={1}
+                          value={createAppointmentForm.maxCompletionsPerPeriod}
+                          onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, maxCompletionsPerPeriod: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                    </div>
+
+                    {createAppointmentForm.periodType === 'custom_days' && (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">自定义完成周期（天）</label>
+                        <input
+                          aria-label="自定义完成周期（天）"
+                          type="number"
+                          min={1}
+                          value={createAppointmentForm.customPeriodDays}
+                          onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, customPeriodDays: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                    )}
+
+                    <label className="flex items-center gap-3 text-sm text-white/80">
+                      <input
+                        aria-label="仅工作日可完成"
+                        type="checkbox"
+                        checked={createAppointmentForm.weekdayOnly}
+                        onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, weekdayOnly: e.target.checked }))}
+                        className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+                      />
+                      仅工作日可完成
+                    </label>
                   </>
                 ) : (
                   <>
@@ -2343,7 +2661,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                           aria-label="截止日期"
                           type="datetime-local"
                           value={createTaskForm.dueDate}
-                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, dueDate: e.target.value }))}
+                          onChange={(e) => setCreateTaskForm((s) => {
+                            const nextValue = e.target.value;
+                            const selectedEvent = arrangementEvents.find((event) => event.id === s.eventId) ?? null;
+                            const inheritedValue = selectedEvent ? _toDateTimeLocal(selectedEvent.due_at) : '';
+                            return {
+                              ...s,
+                              dueDate: nextValue,
+                              timeOverridden: !!selectedEvent && nextValue !== inheritedValue,
+                              timeInheritsFromEvent: !!selectedEvent,
+                            };
+                          })}
                           className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
@@ -2359,6 +2687,60 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                         className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">完成周期</label>
+                        <select
+                          aria-label="完成周期"
+                          value={createTaskForm.periodType}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, periodType: e.target.value as CompletionPeriodType }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                          <option value="once">一次性</option>
+                          <option value="daily">每天</option>
+                          <option value="weekly">每周</option>
+                          <option value="monthly">每月</option>
+                          <option value="custom_days">自定义天数</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">单周期最多完成次数</label>
+                        <input
+                          aria-label="单周期最多完成次数"
+                          type="number"
+                          min={1}
+                          value={createTaskForm.maxCompletionsPerPeriod}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, maxCompletionsPerPeriod: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                    </div>
+
+                    {createTaskForm.periodType === 'custom_days' && (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">自定义完成周期（天）</label>
+                        <input
+                          aria-label="自定义完成周期（天）"
+                          type="number"
+                          min={1}
+                          value={createTaskForm.customPeriodDays}
+                          onChange={(e) => setCreateTaskForm((s) => ({ ...s, customPeriodDays: Number(e.target.value) }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                    )}
+
+                    <label className="flex items-center gap-3 text-sm text-white/80">
+                      <input
+                        aria-label="仅工作日可完成"
+                        type="checkbox"
+                        checked={createTaskForm.weekdayOnly}
+                        onChange={(e) => setCreateTaskForm((s) => ({ ...s, weekdayOnly: e.target.checked }))}
+                        className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+                      />
+                      仅工作日可完成
+                    </label>
                     {showCreateTaskMoreFields && (
                       <>
                         <div className="grid grid-cols-2 gap-3">
@@ -2386,19 +2768,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                               <option value={3}>3 高</option>
                             </select>
                           </div>
-                          <div className="flex flex-col gap-2">
-                            <label className="text-sm text-white/70">循环周期</label>
-                            <select
-                              value={createTaskForm.cyclePeriod}
-                              onChange={(e) => setCreateTaskForm((s) => ({ ...s, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                            >
-                              <option value="daily">每日</option>
-                              <option value="weekly">每周</option>
-                              <option value="monthly">每月</option>
-                              <option value="custom">自定义</option>
-                            </select>
-                          </div>
                         </div>
 
                         <div className="flex flex-col gap-2">
@@ -2411,30 +2780,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                           />
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                          <label className="text-sm text-white/70">目的循环次数</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={createTaskForm.targetCycleCount}
-                            onChange={(e) => setCreateTaskForm((s) => ({ ...s, targetCycleCount: Number(e.target.value) }))}
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                          />
-                        </div>
-
-                        {createTaskForm.cyclePeriod === 'custom' && (
-                          <div className="flex flex-col gap-2">
-                            <label className="text-sm text-white/70">自定义间隔（天）</label>
-                            <input
-                              type="number"
-                              min={1}
-                              value={createTaskForm.customCycleDays}
-                              onChange={(e) => setCreateTaskForm((s) => ({ ...s, customCycleDays: Number(e.target.value) }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                            />
-                          </div>
-                        )}
-
                         <div className="grid grid-cols-2 gap-3">
                           <div className="flex flex-col gap-2">
                             <label className="text-sm text-white/70">开始日期</label>
@@ -2443,15 +2788,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                               value={createTaskForm.startDate}
                               onChange={(e) => setCreateTaskForm((s) => ({ ...s, startDate: e.target.value }))}
                               className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                            />
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <label className="text-sm text-white/70">事件</label>
-                            <input
-                              value={createTaskForm.event}
-                              onChange={(e) => setCreateTaskForm((s) => ({ ...s, event: e.target.value }))}
-                              placeholder="例如：晨间阅读"
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             />
                           </div>
                         </div>

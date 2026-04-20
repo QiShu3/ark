@@ -18,12 +18,24 @@ UTC = getattr(timezone, "utc")
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
 TaskType = Literal["focus", "checkin"]
+CompletionPeriodType = Literal["once", "daily", "weekly", "monthly", "custom_days"]
 AppointmentStoredStatus = Literal["pending", "attended", "missed", "cancelled"]
 AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed", "cancelled"]
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break"]
 FocusTimerMode = Literal["countdown", "countup"]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
+
+
+class CompletionStateOut(BaseModel):
+    completion_state: Literal["permanent", "available", "period_complete", "blocked"]
+    is_completable_now: bool
+    completed_count_in_period: int
+    remaining_completions_in_period: int
+    current_period_start: datetime | None
+    current_period_end: datetime | None
+    blocked_reason: Literal["period_limit_reached", "not_workday", "already_completed_once"] | None
+    hidden_from_action_list: bool
 
 
 class TaskCreateRequest(BaseModel):
@@ -38,6 +50,14 @@ class TaskCreateRequest(BaseModel):
     cycle_every_days: int | None = Field(default=None, ge=1)
     event: str = ""
     event_ids: list[UUID] = Field(default_factory=list)
+    event_id: UUID | None = None
+    is_recurring: bool = False
+    period_type: CompletionPeriodType = "once"
+    custom_period_days: int | None = Field(default=None, ge=1)
+    max_completions_per_period: int = Field(default=1, ge=1)
+    weekday_only: bool = False
+    time_inherits_from_event: bool = False
+    time_overridden: bool = False
     task_type: TaskType = "focus"
     tags: list[str] = Field(default_factory=list)
     start_date: datetime | None = None
@@ -56,6 +76,14 @@ class TaskUpdateRequest(BaseModel):
     cycle_every_days: int | None = Field(default=None, ge=1)
     event: str | None = None
     event_ids: list[UUID] | None = None
+    event_id: UUID | None = None
+    is_recurring: bool | None = None
+    period_type: CompletionPeriodType | None = None
+    custom_period_days: int | None = Field(default=None, ge=1)
+    max_completions_per_period: int | None = Field(default=None, ge=1)
+    weekday_only: bool | None = None
+    time_inherits_from_event: bool | None = None
+    time_overridden: bool | None = None
     task_type: TaskType | None = None
     tags: list[str] | None = None
     start_date: datetime | None = None
@@ -76,6 +104,14 @@ class TaskOut(BaseModel):
     cycle_every_days: int | None
     event: str
     event_ids: list[UUID]
+    event_id: UUID | None
+    is_recurring: bool
+    period_type: CompletionPeriodType
+    custom_period_days: int | None
+    max_completions_per_period: int
+    weekday_only: bool
+    time_inherits_from_event: bool
+    time_overridden: bool
     task_type: TaskType
     tags: list[str]
     actual_duration: int
@@ -84,6 +120,7 @@ class TaskOut(BaseModel):
     is_deleted: bool
     created_at: datetime
     updated_at: datetime
+    completion_state: CompletionStateOut | None = None
 
 
 class AppointmentCreateRequest(BaseModel):
@@ -94,6 +131,14 @@ class AppointmentCreateRequest(BaseModel):
     ends_at: datetime
     repeat_rule: str | None = Field(default=None, max_length=120)
     linked_task_id: UUID | None = None
+    event_id: UUID | None = None
+    is_recurring: bool = False
+    period_type: CompletionPeriodType = "once"
+    custom_period_days: int | None = Field(default=None, ge=1)
+    max_completions_per_period: int = Field(default=1, ge=1)
+    weekday_only: bool = False
+    time_inherits_from_event: bool = False
+    time_overridden: bool = False
 
 
 class AppointmentUpdateRequest(BaseModel):
@@ -104,6 +149,14 @@ class AppointmentUpdateRequest(BaseModel):
     ends_at: datetime | None = None
     repeat_rule: str | None = Field(default=None, max_length=120)
     linked_task_id: UUID | None = None
+    event_id: UUID | None = None
+    is_recurring: bool | None = None
+    period_type: CompletionPeriodType | None = None
+    custom_period_days: int | None = Field(default=None, ge=1)
+    max_completions_per_period: int | None = Field(default=None, ge=1)
+    weekday_only: bool | None = None
+    time_inherits_from_event: bool | None = None
+    time_overridden: bool | None = None
 
 
 class AppointmentOut(BaseModel):
@@ -116,9 +169,18 @@ class AppointmentOut(BaseModel):
     ends_at: datetime
     repeat_rule: str | None
     linked_task_id: UUID | None
+    event_id: UUID | None
+    is_recurring: bool
+    period_type: CompletionPeriodType
+    custom_period_days: int | None
+    max_completions_per_period: int
+    weekday_only: bool
+    time_inherits_from_event: bool
+    time_overridden: bool
     is_deleted: bool
     created_at: datetime
     updated_at: datetime
+    completion_state: CompletionStateOut | None = None
 
 
 class AppointmentOccurrenceOut(BaseModel):
@@ -321,6 +383,14 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cycle_every_days INTEGER NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS event TEXT NOT NULL DEFAULT '';")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS event_ids UUID[] NOT NULL DEFAULT '{}';")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS event_id UUID NULL REFERENCES events(id) ON DELETE SET NULL;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS period_type VARCHAR(20) NOT NULL DEFAULT 'once';")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS custom_period_days INTEGER NULL;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS max_completions_per_period INTEGER NOT NULL DEFAULT 1;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS weekday_only BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_inherits_from_event BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_overridden BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
         await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin'));")
@@ -381,6 +451,14 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS linked_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;"
         )
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS event_id UUID NULL REFERENCES events(id) ON DELETE SET NULL;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS period_type VARCHAR(20) NOT NULL DEFAULT 'once';")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS custom_period_days INTEGER NULL;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS max_completions_per_period INTEGER NOT NULL DEFAULT 1;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS weekday_only BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS time_inherits_from_event BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS time_overridden BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
         await conn.execute("ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
@@ -415,6 +493,27 @@ async def init_todo(app: Any) -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_appointment_occurrence_results_lookup
             ON appointment_occurrence_results(appointment_id, occurrence_ends_at ASC);
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS completion_records (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              subject_type VARCHAR(20) NOT NULL,
+              subject_id UUID NOT NULL,
+              completed_at TIMESTAMPTZ NOT NULL,
+              counted_period_start TIMESTAMPTZ NULL,
+              counted_period_end TIMESTAMPTZ NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_completion_records_subject_type CHECK (subject_type IN ('task', 'appointment'))
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_completion_records_subject_lookup
+            ON completion_records(user_id, subject_type, subject_id, completed_at DESC);
             """
         )
         await conn.execute(
@@ -579,6 +678,14 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         cycle_every_days=row["cycle_every_days"],
         event=str(row["event"] or ""),
         event_ids=list(row["event_ids"] or []),
+        event_id=row["event_id"],
+        is_recurring=bool(row["is_recurring"]),
+        period_type=row["period_type"],
+        custom_period_days=row["custom_period_days"],
+        max_completions_per_period=int(row["max_completions_per_period"]),
+        weekday_only=bool(row["weekday_only"]),
+        time_inherits_from_event=bool(row["time_inherits_from_event"]),
+        time_overridden=bool(row["time_overridden"]),
         task_type=_normalize_task_type(row["task_type"]),
         tags=[str(x) for x in (row["tags"] or [])],
         actual_duration=int(row["actual_duration"]),
@@ -613,6 +720,14 @@ def _row_to_appointment(row: asyncpg.Record) -> AppointmentOut:
         ends_at=row["ends_at"],
         repeat_rule=row["repeat_rule"],
         linked_task_id=row["linked_task_id"],
+        event_id=row["event_id"],
+        is_recurring=bool(row["is_recurring"]),
+        period_type=row["period_type"],
+        custom_period_days=row["custom_period_days"],
+        max_completions_per_period=int(row["max_completions_per_period"]),
+        weekday_only=bool(row["weekday_only"]),
+        time_inherits_from_event=bool(row["time_inherits_from_event"]),
+        time_overridden=bool(row["time_overridden"]),
         is_deleted=bool(row["is_deleted"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -774,6 +889,317 @@ def _row_to_event(row: asyncpg.Record) -> EventOut:
         is_primary=bool(row["is_primary"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+    )
+
+
+async def _get_event_for_user(conn: Any, *, user_id: int, event_id: UUID | None) -> dict[str, Any] | None:
+    if event_id is None:
+        return None
+    row = await conn.fetchrow(
+        """
+        SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+        FROM events
+        WHERE id = $1 AND user_id = $2
+        """,
+        event_id,
+        user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+    return row
+
+
+def _normalize_completion_settings(
+    *,
+    is_recurring: bool,
+    period_type: CompletionPeriodType,
+    custom_period_days: int | None,
+    max_completions_per_period: int,
+) -> tuple[bool, CompletionPeriodType, int | None, int]:
+    normalized_period_type: CompletionPeriodType = period_type
+    normalized_custom_period_days = custom_period_days
+    normalized_max = max(1, int(max_completions_per_period))
+    normalized_recurring = bool(is_recurring)
+    if normalized_period_type == "once":
+        normalized_recurring = False
+        normalized_custom_period_days = None
+    else:
+        normalized_recurring = True
+    if normalized_period_type != "custom_days":
+        normalized_custom_period_days = None
+    else:
+        normalized_custom_period_days = max(1, int(normalized_custom_period_days or 1))
+    return normalized_recurring, normalized_period_type, normalized_custom_period_days, normalized_max
+
+
+def _resolve_task_due_date(
+    *,
+    event_row: dict[str, Any] | None,
+    due_date: datetime | None,
+    time_inherits_from_event: bool,
+    time_overridden: bool,
+) -> datetime | None:
+    if event_row is not None and time_inherits_from_event and not time_overridden:
+        return event_row["due_at"]
+    return due_date
+
+
+def _resolve_appointment_ends_at(
+    *,
+    event_row: dict[str, Any] | None,
+    ends_at: datetime | None,
+    time_inherits_from_event: bool,
+    time_overridden: bool,
+) -> datetime | None:
+    if event_row is not None and time_inherits_from_event and not time_overridden:
+        return event_row["due_at"]
+    return ends_at
+
+
+def _period_bounds(*, now: datetime, period_type: CompletionPeriodType, custom_period_days: int | None) -> tuple[datetime | None, datetime | None]:
+    if period_type == "once":
+        return None, None
+    if period_type == "daily":
+        start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+        return start, start + timedelta(days=1)
+    if period_type == "weekly":
+        start = datetime(now.year, now.month, now.day, tzinfo=UTC) - timedelta(days=now.weekday())
+        return start, start + timedelta(days=7)
+    if period_type == "monthly":
+        start = datetime(now.year, now.month, 1, tzinfo=UTC)
+        if now.month == 12:
+            end = datetime(now.year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end = datetime(now.year, now.month + 1, 1, tzinfo=UTC)
+        return start, end
+    days = max(1, int(custom_period_days or 1))
+    return now - timedelta(days=days), now
+
+
+async def _count_completion_records(
+    conn: Any,
+    *,
+    user_id: int,
+    subject_type: str,
+    subject_id: UUID,
+    period_start: datetime | None,
+    period_end: datetime | None,
+) -> int:
+    if period_start is None or period_end is None:
+        rows = await conn.fetch(
+            """
+            SELECT id, completed_at
+            FROM completion_records
+            WHERE user_id = $1 AND subject_type = $2 AND subject_id = $3
+            ORDER BY completed_at ASC
+            """,
+            user_id,
+            subject_type,
+            subject_id,
+        )
+        return len(rows)
+    rows = await conn.fetch(
+        """
+        SELECT id, completed_at
+        FROM completion_records
+        WHERE user_id = $1
+          AND subject_type = $2
+          AND subject_id = $3
+          AND completed_at >= $4
+          AND completed_at < $5
+        ORDER BY completed_at ASC
+        """,
+        user_id,
+        subject_type,
+        subject_id,
+        period_start,
+        period_end,
+    )
+    return len(rows)
+
+
+async def _build_completion_state(
+    conn: Any,
+    *,
+    user_id: int,
+    subject_type: str,
+    subject_id: UUID,
+    is_recurring: bool,
+    period_type: CompletionPeriodType,
+    custom_period_days: int | None,
+    max_completions_per_period: int,
+    weekday_only: bool,
+    permanent_done: bool,
+    now: datetime | None = None,
+) -> CompletionStateOut:
+    current = now or datetime.now(UTC)
+    if not is_recurring or period_type == "once":
+        if permanent_done:
+            return CompletionStateOut(
+                completion_state="permanent",
+                is_completable_now=False,
+                completed_count_in_period=1,
+                remaining_completions_in_period=0,
+                current_period_start=None,
+                current_period_end=None,
+                blocked_reason="already_completed_once",
+                hidden_from_action_list=True,
+            )
+        return CompletionStateOut(
+            completion_state="available",
+            is_completable_now=True,
+            completed_count_in_period=0,
+            remaining_completions_in_period=1,
+            current_period_start=None,
+            current_period_end=None,
+            blocked_reason=None,
+            hidden_from_action_list=False,
+        )
+
+    period_start, period_end = _period_bounds(now=current, period_type=period_type, custom_period_days=custom_period_days)
+    completed_count = await _count_completion_records(
+        conn,
+        user_id=user_id,
+        subject_type=subject_type,
+        subject_id=subject_id,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    remaining = max(0, max_completions_per_period - completed_count)
+    if weekday_only and current.weekday() >= 5:
+        return CompletionStateOut(
+            completion_state="blocked",
+            is_completable_now=False,
+            completed_count_in_period=completed_count,
+            remaining_completions_in_period=remaining,
+            current_period_start=period_start,
+            current_period_end=period_end,
+            blocked_reason="not_workday",
+            hidden_from_action_list=True,
+        )
+    if remaining <= 0:
+        return CompletionStateOut(
+            completion_state="period_complete",
+            is_completable_now=False,
+            completed_count_in_period=completed_count,
+            remaining_completions_in_period=0,
+            current_period_start=period_start,
+            current_period_end=period_end,
+            blocked_reason="period_limit_reached",
+            hidden_from_action_list=True,
+        )
+    return CompletionStateOut(
+        completion_state="available",
+        is_completable_now=True,
+        completed_count_in_period=completed_count,
+        remaining_completions_in_period=remaining,
+        current_period_start=period_start,
+        current_period_end=period_end,
+        blocked_reason=None,
+        hidden_from_action_list=False,
+    )
+
+
+async def _task_with_completion(conn: Any, row: asyncpg.Record | dict[str, Any], *, now: datetime | None = None) -> TaskOut:
+    task = _row_to_task(row)
+    task.completion_state = await _build_completion_state(
+        conn,
+        user_id=task.user_id,
+        subject_type="task",
+        subject_id=task.id,
+        is_recurring=task.is_recurring,
+        period_type=task.period_type,
+        custom_period_days=task.custom_period_days,
+        max_completions_per_period=task.max_completions_per_period,
+        weekday_only=task.weekday_only,
+        permanent_done=task.status == "done",
+        now=now,
+    )
+    return task
+
+
+async def _appointment_with_completion(conn: Any, row: asyncpg.Record | dict[str, Any], *, now: datetime | None = None) -> AppointmentOut:
+    appointment = _row_to_appointment(row)
+    appointment.completion_state = await _build_completion_state(
+        conn,
+        user_id=appointment.user_id,
+        subject_type="appointment",
+        subject_id=appointment.id,
+        is_recurring=appointment.is_recurring,
+        period_type=appointment.period_type,
+        custom_period_days=appointment.custom_period_days,
+        max_completions_per_period=appointment.max_completions_per_period,
+        weekday_only=appointment.weekday_only,
+        permanent_done=appointment.status in {"attended", "missed", "cancelled"} and not appointment.is_recurring,
+        now=now,
+    )
+    return appointment
+
+
+async def _insert_completion_record(
+    conn: Any,
+    *,
+    user_id: int,
+    subject_type: str,
+    subject_id: UUID,
+    completed_at: datetime,
+    counted_period_start: datetime | None,
+    counted_period_end: datetime | None,
+) -> None:
+    await conn.execute(
+        """
+        INSERT INTO completion_records(user_id, subject_type, subject_id, completed_at, counted_period_start, counted_period_end)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """,
+        user_id,
+        subject_type,
+        subject_id,
+        completed_at,
+        counted_period_start,
+        counted_period_end,
+    )
+
+
+def _raise_if_completion_blocked(state: CompletionStateOut, *, noun: str) -> None:
+    if state.is_completable_now:
+        return
+    if state.blocked_reason == "period_limit_reached":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前周期已达完成上限")
+    if state.blocked_reason == "not_workday":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前仅工作日可完成")
+    if state.blocked_reason == "already_completed_once":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"该{noun}已完成")
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"当前不可完成该{noun}")
+
+
+async def _propagate_event_due_at(conn: Any, *, user_id: int, event_id: UUID, due_at: datetime) -> None:
+    await conn.execute(
+        """
+        UPDATE tasks
+        SET due_date = $1, updated_at = NOW()
+        WHERE user_id = $2
+          AND event_id = $3
+          AND time_inherits_from_event = TRUE
+          AND time_overridden = FALSE
+          AND is_deleted = FALSE
+        """,
+        due_at,
+        user_id,
+        event_id,
+    )
+    await conn.execute(
+        """
+        UPDATE appointments
+        SET ends_at = $1, updated_at = NOW()
+        WHERE user_id = $2
+          AND event_id = $3
+          AND time_inherits_from_event = TRUE
+          AND time_overridden = FALSE
+          AND is_deleted = FALSE
+        """,
+        due_at,
+        user_id,
+        event_id,
     )
 
 
@@ -1474,16 +1900,33 @@ async def create_task(
     """创建任务。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
+        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = _normalize_completion_settings(
+            is_recurring=body.is_recurring,
+            period_type=body.period_type,
+            custom_period_days=body.custom_period_days,
+            max_completions_per_period=body.max_completions_per_period,
+        )
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+        due_date = _resolve_task_due_date(
+            event_row=event_row,
+            due_date=body.due_date,
+            time_inherits_from_event=body.time_inherits_from_event,
+            time_overridden=body.time_overridden,
+        )
         row = await conn.fetchrow(
             """
             INSERT INTO tasks(
                 user_id, title, content, status, priority, target_duration,
-                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
                 start_date, due_date
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
             RETURNING id, user_id, title, content, status, priority, target_duration,
-                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             int(user.id),
@@ -1498,14 +1941,23 @@ async def create_task(
             body.cycle_every_days,
             body.event,
             body.event_ids,
+            body.event_id,
+            normalized_is_recurring,
+            normalized_period_type,
+            normalized_custom_period_days,
+            normalized_max,
+            body.weekday_only,
+            body.time_inherits_from_event,
+            body.time_overridden,
             body.task_type,
             body.tags,
             body.start_date,
-            body.due_date,
+            due_date,
         )
     if row is None:
         raise HTTPException(status_code=500, detail="创建任务失败")
-    return _row_to_task(row)
+    async with pool.acquire() as conn:
+        return await _task_with_completion(conn, row)
 
 
 @router.get("/tasks", response_model=list[TaskOut])
@@ -1541,7 +1993,9 @@ async def list_tasks(
     where_sql = " AND ".join(clauses)
     sql = f"""
         SELECT id, user_id, title, content, status, priority, target_duration,
-               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+               weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
                actual_duration, start_date, due_date, is_deleted, created_at, updated_at
         FROM tasks
         WHERE {where_sql}
@@ -1551,7 +2005,7 @@ async def list_tasks(
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, *args)
-    return [_row_to_task(r) for r in rows]
+        return [await _task_with_completion(conn, r) for r in rows]
 
 
 @router.get("/tasks/calendar", response_model=list[TaskOut])
@@ -1574,7 +2028,9 @@ async def list_calendar_tasks(
             """
             -- calendar range endpoint
             SELECT id, user_id, title, content, status, priority, target_duration,
-                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
                    actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             FROM tasks
             WHERE user_id = $1
@@ -1595,7 +2051,7 @@ async def list_calendar_tasks(
             range_start,
             range_end,
         )
-    return [_row_to_task(r) for r in rows]
+        return [await _task_with_completion(conn, r) for r in rows]
 
 
 @router.get("/tasks/{task_id}", response_model=TaskOut)
@@ -1611,7 +2067,9 @@ async def get_task(
         row = await conn.fetchrow(
             """
             SELECT id, user_id, title, content, status, priority, target_duration,
-                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
                    actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             FROM tasks
             WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
@@ -1620,9 +2078,9 @@ async def get_task(
             int(user.id),
             include_deleted,
         )
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
-    return _row_to_task(row)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskOut)
@@ -1637,6 +2095,9 @@ async def update_task(
     if not patch:
         return await get_task(request, task_id, user)
 
+    pool = _pool_from_request(request)
+    current = await get_task(request, task_id, user)
+
     allowed_cols: dict[str, str] = {
         "title": "title",
         "content": "content",
@@ -1649,44 +2110,69 @@ async def update_task(
         "cycle_every_days": "cycle_every_days",
         "event": "event",
         "event_ids": "event_ids",
+        "event_id": "event_id",
+        "is_recurring": "is_recurring",
+        "period_type": "period_type",
+        "custom_period_days": "custom_period_days",
+        "max_completions_per_period": "max_completions_per_period",
+        "weekday_only": "weekday_only",
+        "time_inherits_from_event": "time_inherits_from_event",
+        "time_overridden": "time_overridden",
         "task_type": "task_type",
         "tags": "tags",
         "start_date": "start_date",
         "due_date": "due_date",
     }
 
-    sets: list[str] = []
-    args: list[Any] = []
-    for k, v in patch.items():
-        col = allowed_cols.get(k)
-        if col is None:
-            continue
-        args.append(v)
-        sets.append(f"{col} = ${len(args)}")
-
-    if not sets:
-        return await get_task(request, task_id, user)
-
-    args.append(task_id)
-    task_i = len(args)
-    args.append(int(user.id))
-    user_i = len(args)
-
-    sql = f"""
-        UPDATE tasks
-        SET {", ".join(sets)}, updated_at = NOW()
-        WHERE id = ${task_i} AND user_id = ${user_i} AND is_deleted = FALSE
-        RETURNING id, user_id, title, content, status, priority, target_duration,
-                  current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
-                  actual_duration, start_date, due_date, is_deleted, created_at, updated_at
-    """
-
-    pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(sql, *args)
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
-    return _row_to_task(row)
+        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = _normalize_completion_settings(
+            is_recurring=patch.get("is_recurring", current.is_recurring),
+            period_type=patch.get("period_type", current.period_type),
+            custom_period_days=patch.get("custom_period_days", current.custom_period_days),
+            max_completions_per_period=patch.get("max_completions_per_period", current.max_completions_per_period),
+        )
+        patch["is_recurring"] = normalized_is_recurring
+        patch["period_type"] = normalized_period_type
+        patch["custom_period_days"] = normalized_custom_period_days
+        patch["max_completions_per_period"] = normalized_max
+
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=patch.get("event_id", current.event_id))
+        patch["due_date"] = _resolve_task_due_date(
+            event_row=event_row,
+            due_date=patch.get("due_date", current.due_date),
+            time_inherits_from_event=patch.get("time_inherits_from_event", current.time_inherits_from_event),
+            time_overridden=patch.get("time_overridden", current.time_overridden),
+        )
+
+        sets: list[str] = []
+        args: list[Any] = []
+        for key, value in patch.items():
+            col = allowed_cols.get(key)
+            if col is None:
+                continue
+            args.append(value)
+            sets.append(f"{col} = ${len(args)}")
+        if not sets:
+            return current
+
+        row = await conn.fetchrow(
+            f"""
+            UPDATE tasks
+            SET {", ".join(sets)}, updated_at = NOW()
+            WHERE id = ${len(args) + 1} AND user_id = ${len(args) + 2} AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            *args,
+            task_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
 
 
 @router.patch("/tasks/{task_id}/move-to-today", response_model=TaskOut)
@@ -1705,16 +2191,92 @@ async def move_task_to_today(
             SET due_date = $1, start_date = CASE WHEN start_date > $1 THEN $1 ELSE start_date END, updated_at = NOW()
             WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
             RETURNING id, user_id, title, content, status, priority, target_duration,
-                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids, task_type, tags,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             now,
             task_id,
             int(user.id),
         )
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
-    return _row_to_task(row)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
+
+
+@router.post("/tasks/{task_id}/complete", response_model=TaskOut)
+async def complete_task(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """完成任务；重复任务仅记录一次完成，不直接改为 done。"""
+    pool = _pool_from_request(request)
+    completed_at = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, title, content, status, priority, target_duration,
+                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                       weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                FROM tasks
+                WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
+                """,
+                task_id,
+                int(user.id),
+                False,
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+            completion_state = await _build_completion_state(
+                conn,
+                user_id=int(user.id),
+                subject_type="task",
+                subject_id=task_id,
+                is_recurring=bool(row["is_recurring"]),
+                period_type=row["period_type"],
+                custom_period_days=row["custom_period_days"],
+                max_completions_per_period=int(row["max_completions_per_period"]),
+                weekday_only=bool(row["weekday_only"]),
+                permanent_done=str(row["status"]) == "done",
+                now=completed_at,
+            )
+            _raise_if_completion_blocked(completion_state, noun="任务")
+            await _insert_completion_record(
+                conn,
+                user_id=int(user.id),
+                subject_type="task",
+                subject_id=task_id,
+                completed_at=completed_at,
+                counted_period_start=completion_state.current_period_start,
+                counted_period_end=completion_state.current_period_end,
+            )
+
+            if not bool(row["is_recurring"]) or row["period_type"] == "once":
+                row = await conn.fetchrow(
+                    """
+                    UPDATE tasks
+                    SET status = $1, updated_at = NOW()
+                    WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                    RETURNING id, user_id, title, content, status, priority, target_duration,
+                              current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                              event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                              weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                              actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                    """,
+                    "done",
+                    task_id,
+                    int(user.id),
+                )
+                if row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+        return await _task_with_completion(conn, row, now=completed_at)
 
 
 @router.delete("/tasks/{task_id}")
@@ -1747,9 +2309,22 @@ async def create_appointment(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> AppointmentOut:
     """创建日程。"""
-    _validate_appointment_times(body.starts_at, body.ends_at)
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
+        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = _normalize_completion_settings(
+            is_recurring=body.is_recurring,
+            period_type=body.period_type,
+            custom_period_days=body.custom_period_days,
+            max_completions_per_period=body.max_completions_per_period,
+        )
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+        resolved_ends_at = _resolve_appointment_ends_at(
+            event_row=event_row,
+            ends_at=body.ends_at,
+            time_inherits_from_event=body.time_inherits_from_event,
+            time_overridden=body.time_overridden,
+        )
+        _validate_appointment_times(body.starts_at, resolved_ends_at)
         await _validate_linked_task(
             conn,
             user_id=int(user.id),
@@ -1758,10 +2333,14 @@ async def create_appointment(
         row = await conn.fetchrow(
             """
             INSERT INTO appointments(
-                user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id
+                user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                weekday_only, time_inherits_from_event, time_overridden
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden,
                       is_deleted, created_at, updated_at
             """,
             int(user.id),
@@ -1769,13 +2348,22 @@ async def create_appointment(
             body.content,
             body.status,
             body.starts_at,
-            body.ends_at,
+            resolved_ends_at,
             body.repeat_rule,
             body.linked_task_id,
+            body.event_id,
+            normalized_is_recurring,
+            normalized_period_type,
+            normalized_custom_period_days,
+            normalized_max,
+            body.weekday_only,
+            body.time_inherits_from_event,
+            body.time_overridden,
         )
     if row is None:
         raise HTTPException(status_code=500, detail="创建日程失败")
-    return _row_to_appointment(row)
+    async with pool.acquire() as conn:
+        return await _appointment_with_completion(conn, row)
 
 
 @router.get("/appointments", response_model=list[AppointmentOut])
@@ -1805,6 +2393,8 @@ async def list_appointments(
             f"""
             {sql_comment}
             SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden,
                    is_deleted, created_at, updated_at
             FROM appointments
             WHERE {" AND ".join(where_clauses)}
@@ -1812,7 +2402,7 @@ async def list_appointments(
             """,
             *args,
         )
-    return [_row_to_appointment(row) for row in rows]
+        return [await _appointment_with_completion(conn, row) for row in rows]
 
 
 @router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
@@ -1827,6 +2417,8 @@ async def get_appointment(
         row = await conn.fetchrow(
             """
             SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden,
                    is_deleted, created_at, updated_at
             FROM appointments
             WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
@@ -1834,9 +2426,9 @@ async def get_appointment(
             appointment_id,
             int(user.id),
         )
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
-    return _row_to_appointment(row)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+        return await _appointment_with_completion(conn, row)
 
 
 @router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
@@ -1854,8 +2446,6 @@ async def update_appointment(
     pool = _pool_from_request(request)
     current = await get_appointment(request, appointment_id, user)
     next_starts_at = patch.get("starts_at", current.starts_at)
-    next_ends_at = patch.get("ends_at", current.ends_at)
-    _validate_appointment_times(next_starts_at, next_ends_at)
     next_linked_task_id = patch.get("linked_task_id", current.linked_task_id)
 
     allowed_cols = {
@@ -1866,6 +2456,14 @@ async def update_appointment(
         "ends_at": "ends_at",
         "repeat_rule": "repeat_rule",
         "linked_task_id": "linked_task_id",
+        "event_id": "event_id",
+        "is_recurring": "is_recurring",
+        "period_type": "period_type",
+        "custom_period_days": "custom_period_days",
+        "max_completions_per_period": "max_completions_per_period",
+        "weekday_only": "weekday_only",
+        "time_inherits_from_event": "time_inherits_from_event",
+        "time_overridden": "time_overridden",
     }
     sets: list[str] = []
     args: list[Any] = []
@@ -1878,12 +2476,34 @@ async def update_appointment(
     if not sets:
         return current
 
-    args.append(appointment_id)
-    appointment_i = len(args)
-    args.append(int(user.id))
-    user_i = len(args)
-
     async with pool.acquire() as conn:
+        merged_is_recurring, merged_period_type, merged_custom_period_days, merged_max = _normalize_completion_settings(
+            is_recurring=patch.get("is_recurring", current.is_recurring),
+            period_type=patch.get("period_type", current.period_type),
+            custom_period_days=patch.get("custom_period_days", current.custom_period_days),
+            max_completions_per_period=patch.get("max_completions_per_period", current.max_completions_per_period),
+        )
+        patch["is_recurring"] = merged_is_recurring
+        patch["period_type"] = merged_period_type
+        patch["custom_period_days"] = merged_custom_period_days
+        patch["max_completions_per_period"] = merged_max
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=patch.get("event_id", current.event_id))
+        next_ends_at = _resolve_appointment_ends_at(
+            event_row=event_row,
+            ends_at=patch.get("ends_at", current.ends_at),
+            time_inherits_from_event=patch.get("time_inherits_from_event", current.time_inherits_from_event),
+            time_overridden=patch.get("time_overridden", current.time_overridden),
+        )
+        patch["ends_at"] = next_ends_at
+        _validate_appointment_times(next_starts_at, next_ends_at)
+        sets = []
+        args = []
+        for key, value in patch.items():
+            col = allowed_cols.get(key)
+            if col is None:
+                continue
+            args.append(value)
+            sets.append(f"{col} = ${len(args)}")
         await _validate_linked_task(
             conn,
             user_id=int(user.id),
@@ -1894,15 +2514,90 @@ async def update_appointment(
             f"""
             UPDATE appointments
             SET {", ".join(sets)}, updated_at = NOW()
-            WHERE id = ${appointment_i} AND user_id = ${user_i} AND is_deleted = FALSE
+            WHERE id = ${len(args) + 1} AND user_id = ${len(args) + 2} AND is_deleted = FALSE
             RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden,
                       is_deleted, created_at, updated_at
             """,
             *args,
+            appointment_id,
+            int(user.id),
         )
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
-    return _row_to_appointment(row)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+        return await _appointment_with_completion(conn, row)
+
+
+@router.post("/appointments/{appointment_id}/complete", response_model=AppointmentOut)
+async def complete_appointment(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """完成日程；重复日程仅记录一次完成，不直接改为 attended。"""
+    pool = _pool_from_request(request)
+    completed_at = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                       weekday_only, time_inherits_from_event, time_overridden,
+                       is_deleted, created_at, updated_at
+                FROM appointments
+                WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+                """,
+                appointment_id,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+
+            completion_state = await _build_completion_state(
+                conn,
+                user_id=int(user.id),
+                subject_type="appointment",
+                subject_id=appointment_id,
+                is_recurring=bool(row["is_recurring"]),
+                period_type=row["period_type"],
+                custom_period_days=row["custom_period_days"],
+                max_completions_per_period=int(row["max_completions_per_period"]),
+                weekday_only=bool(row["weekday_only"]),
+                permanent_done=str(row["status"]) in {"attended", "missed", "cancelled"} and not bool(row["is_recurring"]),
+                now=completed_at,
+            )
+            _raise_if_completion_blocked(completion_state, noun="日程")
+            await _insert_completion_record(
+                conn,
+                user_id=int(user.id),
+                subject_type="appointment",
+                subject_id=appointment_id,
+                completed_at=completed_at,
+                counted_period_start=completion_state.current_period_start,
+                counted_period_end=completion_state.current_period_end,
+            )
+
+            if not bool(row["is_recurring"]) or row["period_type"] == "once":
+                row = await conn.fetchrow(
+                    """
+                    UPDATE appointments
+                    SET status = $1, updated_at = NOW()
+                    WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                    RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                              event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                              weekday_only, time_inherits_from_event, time_overridden,
+                              is_deleted, created_at, updated_at
+                    """,
+                    "attended",
+                    appointment_id,
+                    int(user.id),
+                )
+                if row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+
+        return await _appointment_with_completion(conn, row, now=completed_at)
 
 
 @router.get("/appointments/{appointment_id}/occurrences", response_model=list[AppointmentOccurrenceOut])
@@ -2140,6 +2835,8 @@ async def update_event(
                     event_id,
                 )
             row = await conn.fetchrow(sql, *args)
+            if row is not None and patch.get("due_at") is not None:
+                await _propagate_event_due_at(conn, user_id=int(user.id), event_id=event_id, due_at=row["due_at"])
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
     return _row_to_event(row)

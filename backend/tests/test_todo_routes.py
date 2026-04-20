@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -44,6 +45,7 @@ class _FakeTodoConn:
         self.tasks: list[dict[str, Any]] = []
         self.appointments: list[dict[str, Any]] = []
         self.appointment_occurrence_results: list[dict[str, Any]] = []
+        self.completion_records: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -111,6 +113,20 @@ class _FakeTodoConn:
                 if row["appointment_id"] == appointment_id and range_start <= row["occurrence_ends_at"] < range_end
             ]
             return sorted(rows, key=lambda row: row["occurrence_ends_at"])
+        if "FROM completion_records" in sql and "subject_type = $2" in sql:
+            user_id, subject_type, subject_id = args[0], args[1], args[2]
+            range_start = args[3] if len(args) > 3 else None
+            range_end = args[4] if len(args) > 4 else None
+            rows = [
+                row
+                for row in self.completion_records
+                if row["user_id"] == user_id
+                and row["subject_type"] == subject_type
+                and row["subject_id"] == subject_id
+                and (range_start is None or row["completed_at"] >= range_start)
+                and (range_end is None or row["completed_at"] < range_end)
+            ]
+            return sorted(rows, key=lambda row: row["completed_at"])
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -147,6 +163,99 @@ class _FakeTodoConn:
                 None,
             )
             return {"id": task["id"]} if task is not None else None
+        if "INSERT INTO tasks" in sql:
+            task_id = uuid4()
+            now = datetime.now(UTC)
+            row = {
+                "id": task_id,
+                "user_id": args[0],
+                "title": args[1],
+                "content": args[2],
+                "status": args[3],
+                "priority": args[4],
+                "target_duration": args[5],
+                "current_cycle_count": args[6],
+                "target_cycle_count": args[7],
+                "cycle_period": args[8],
+                "cycle_every_days": args[9],
+                "event": args[10],
+                "event_ids": args[11],
+                "event_id": args[12],
+                "is_recurring": args[13],
+                "period_type": args[14],
+                "custom_period_days": args[15],
+                "max_completions_per_period": args[16],
+                "weekday_only": args[17],
+                "time_inherits_from_event": args[18],
+                "time_overridden": args[19],
+                "task_type": args[20],
+                "tags": args[21],
+                "start_date": args[22],
+                "due_date": args[23],
+                "actual_duration": 0,
+                "is_deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.tasks.append(row)
+            return row
+        if "FROM tasks" in sql and "WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)" in sql:
+            task_id, user_id = args[0], args[1]
+            include_deleted = args[2]
+            return next(
+                (
+                    task
+                    for task in self.tasks
+                    if task["id"] == task_id and task["user_id"] == user_id and (include_deleted or not task["is_deleted"])
+                ),
+                None,
+            )
+        if "UPDATE tasks" in sql and "RETURNING id, user_id, title, content, status" in sql:
+            task_id, user_id = args[-2], args[-1]
+            task = next(
+                (
+                    item
+                    for item in self.tasks
+                    if item["id"] == task_id and item["user_id"] == user_id and not item["is_deleted"]
+                ),
+                None,
+            )
+            if task is None:
+                return None
+            field_order = [
+                "title",
+                "content",
+                "status",
+                "priority",
+                "target_duration",
+                "current_cycle_count",
+                "target_cycle_count",
+                "cycle_period",
+                "cycle_every_days",
+                "event",
+                "event_ids",
+                "event_id",
+                "is_recurring",
+                "period_type",
+                "custom_period_days",
+                "max_completions_per_period",
+                "weekday_only",
+                "time_inherits_from_event",
+                "time_overridden",
+                "task_type",
+                "tags",
+                "start_date",
+                "due_date",
+            ]
+            sql_fields = []
+            for field in field_order:
+                match = re.search(rf"{field} = \$(\d+)", sql)
+                if match is not None:
+                    sql_fields.append((int(match.group(1)), field))
+            for position, field in sorted(sql_fields):
+                task[field] = args[position - 1]
+            task["updated_at"] = datetime.now(UTC)
+            return task
         if "FROM appointments" in sql and "linked_task_id = $2" in sql:
             user_id, linked_task_id = args[0], args[1]
             exclude_appointment_id = args[2] if len(args) > 2 else None
@@ -194,6 +303,14 @@ class _FakeTodoConn:
                 "ends_at": args[5],
                 "repeat_rule": args[6],
                 "linked_task_id": args[7],
+                "event_id": args[8],
+                "is_recurring": args[9],
+                "period_type": args[10],
+                "custom_period_days": args[11],
+                "max_completions_per_period": args[12],
+                "weekday_only": args[13],
+                "time_inherits_from_event": args[14],
+                "time_overridden": args[15],
                 "is_deleted": False,
                 "created_at": now,
                 "updated_at": now,
@@ -222,40 +339,30 @@ class _FakeTodoConn:
             )
             if appointment is None:
                 return None
-            if "title = $1" in sql:
-                appointment["title"] = args[0]
-            if "content = $2" in sql:
-                appointment["content"] = args[1]
-            if "status = $3" in sql:
-                appointment["status"] = args[2]
-            elif "status = $2" in sql:
-                appointment["status"] = args[1]
-            elif "status = $1" in sql:
-                appointment["status"] = args[0]
-            if "starts_at = $4" in sql:
-                appointment["starts_at"] = args[3]
-            elif "starts_at = $3" in sql:
-                appointment["starts_at"] = args[2]
-            elif "starts_at = $2" in sql:
-                appointment["starts_at"] = args[1]
-            if "ends_at = $5" in sql:
-                appointment["ends_at"] = args[4]
-            elif "ends_at = $4" in sql:
-                appointment["ends_at"] = args[3]
-            elif "ends_at = $3" in sql:
-                appointment["ends_at"] = args[2]
-            if "repeat_rule = $6" in sql:
-                appointment["repeat_rule"] = args[5]
-            elif "repeat_rule = $5" in sql:
-                appointment["repeat_rule"] = args[4]
-            elif "repeat_rule = $4" in sql:
-                appointment["repeat_rule"] = args[3]
-            if "linked_task_id = $7" in sql:
-                appointment["linked_task_id"] = args[6]
-            elif "linked_task_id = $6" in sql:
-                appointment["linked_task_id"] = args[5]
-            elif "linked_task_id = $5" in sql:
-                appointment["linked_task_id"] = args[4]
+            field_order = [
+                "title",
+                "content",
+                "status",
+                "starts_at",
+                "ends_at",
+                "repeat_rule",
+                "linked_task_id",
+                "event_id",
+                "is_recurring",
+                "period_type",
+                "custom_period_days",
+                "max_completions_per_period",
+                "weekday_only",
+                "time_inherits_from_event",
+                "time_overridden",
+            ]
+            sql_fields = []
+            for field in field_order:
+                match = re.search(rf"{field} = \$(\d+)", sql)
+                if match is not None:
+                    sql_fields.append((int(match.group(1)), field))
+            for position, field in sorted(sql_fields):
+                appointment[field] = args[position - 1]
             appointment["updated_at"] = datetime.now(UTC)
             return appointment
         if "INSERT INTO appointment_occurrence_results" in sql:
@@ -293,6 +400,51 @@ class _FakeTodoConn:
                     event["is_primary"] = False
                     event["updated_at"] = datetime.now(UTC)
             return "UPDATE 1"
+        if "INSERT INTO completion_records" in sql:
+            now = datetime.now(UTC)
+            self.completion_records.append(
+                {
+                    "id": uuid4(),
+                    "user_id": args[0],
+                    "subject_type": args[1],
+                    "subject_id": args[2],
+                    "completed_at": args[3],
+                    "counted_period_start": args[4],
+                    "counted_period_end": args[5],
+                    "created_at": now,
+                }
+            )
+            return "INSERT 1"
+        if "UPDATE tasks" in sql and "SET due_date = $1, updated_at = NOW()" in sql:
+            due_date, user_id, event_id = args
+            updated = 0
+            for task in self.tasks:
+                if (
+                    task["user_id"] == user_id
+                    and task["event_id"] == event_id
+                    and task["time_inherits_from_event"]
+                    and not task["time_overridden"]
+                    and not task["is_deleted"]
+                ):
+                    task["due_date"] = due_date
+                    task["updated_at"] = datetime.now(UTC)
+                    updated += 1
+            return f"UPDATE {updated}"
+        if "UPDATE appointments" in sql and "SET ends_at = $1, updated_at = NOW()" in sql:
+            ends_at, user_id, event_id = args
+            updated = 0
+            for appointment in self.appointments:
+                if (
+                    appointment["user_id"] == user_id
+                    and appointment["event_id"] == event_id
+                    and appointment["time_inherits_from_event"]
+                    and not appointment["time_overridden"]
+                    and not appointment["is_deleted"]
+                ):
+                    appointment["ends_at"] = ends_at
+                    appointment["updated_at"] = datetime.now(UTC)
+                    updated += 1
+            return f"UPDATE {updated}"
         if sql.startswith("DELETE FROM events"):
             event_id, user_id = args
             before = len(self.events)
@@ -356,6 +508,14 @@ def _task_row(
         "cycle_every_days": None,
         "event": "",
         "event_ids": [],
+        "event_id": None,
+        "is_recurring": False,
+        "period_type": "once",
+        "custom_period_days": None,
+        "max_completions_per_period": 1,
+        "weekday_only": False,
+        "time_inherits_from_event": False,
+        "time_overridden": False,
         "task_type": "focus",
         "tags": [],
         "actual_duration": 0,
@@ -389,9 +549,37 @@ def _appointment_row(
         "ends_at": ends_at or datetime(2026, 4, 16, 18, tzinfo=UTC),
         "repeat_rule": repeat_rule,
         "linked_task_id": linked_task_id,
+        "event_id": None,
+        "is_recurring": False,
+        "period_type": "once",
+        "custom_period_days": None,
+        "max_completions_per_period": 1,
+        "weekday_only": False,
+        "time_inherits_from_event": False,
+        "time_overridden": False,
         "is_deleted": is_deleted,
         "created_at": now,
         "updated_at": now,
+    }
+
+
+def _completion_record(
+    *,
+    subject_type: str,
+    subject_id: Any,
+    completed_at: datetime,
+    counted_period_start: datetime | None,
+    counted_period_end: datetime | None,
+) -> dict[str, Any]:
+    return {
+        "id": uuid4(),
+        "user_id": 7,
+        "subject_type": subject_type,
+        "subject_id": subject_id,
+        "completed_at": completed_at,
+        "counted_period_start": counted_period_start,
+        "counted_period_end": counted_period_end,
+        "created_at": completed_at,
     }
 
 
@@ -710,6 +898,64 @@ def test_list_calendar_tasks_excludes_deleted_and_other_users(monkeypatch) -> No
     assert [task["title"] for task in resp.json()] == ["Mine"]
 
 
+def test_create_task_inherits_due_date_from_event_when_not_overridden(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    event_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "DDL",
+            "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/tasks",
+        json={
+            "title": "Write abstract",
+            "event_id": str(event_id),
+            "time_inherits_from_event": True,
+            "time_overridden": False,
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["due_date"] == "2026-04-25T12:00:00Z"
+
+
+def test_create_task_insert_sql_includes_all_placeholders(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    captured: dict[str, str] = {}
+    original_fetchrow = conn.fetchrow
+
+    async def fetchrow_with_capture(sql: str, *args: Any) -> dict[str, Any] | None:
+        if "INSERT INTO tasks" in sql:
+            captured["sql"] = sql
+        return await original_fetchrow(sql, *args)
+
+    conn.fetchrow = fetchrow_with_capture  # type: ignore[method-assign]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/tasks", json={"title": "Check placeholders"})
+
+    assert resp.status_code == 200
+    assert "$24" in captured["sql"]
+
+
 def test_create_event_can_be_primary(monkeypatch) -> None:
     conn = _FakeTodoConn()
     pool = _FakePool(conn)
@@ -802,6 +1048,64 @@ def test_update_event_primary_clears_previous_primary(monkeypatch) -> None:
     assert next(event for event in conn.events if event["id"] == second_id)["is_primary"] is True
 
 
+def test_update_event_propagates_due_at_only_to_non_overridden_arrangements(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    event_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "DDL",
+            "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    conn.tasks = [
+        {
+            **_task_row(title="Synced", due_date=datetime(2026, 4, 25, 12, tzinfo=UTC)),
+            "event_id": event_id,
+            "time_inherits_from_event": True,
+            "time_overridden": False,
+        },
+        {
+            **_task_row(title="Override", due_date=datetime(2026, 4, 24, 8, tzinfo=UTC)),
+            "event_id": event_id,
+            "time_inherits_from_event": True,
+            "time_overridden": True,
+        },
+    ]
+    conn.appointments = [
+        {
+            **_appointment_row(title="Synced appt", ends_at=datetime(2026, 4, 25, 12, tzinfo=UTC)),
+            "event_id": event_id,
+            "time_inherits_from_event": True,
+            "time_overridden": False,
+        },
+        {
+            **_appointment_row(title="Override appt", ends_at=datetime(2026, 4, 24, 8, tzinfo=UTC)),
+            "event_id": event_id,
+            "time_inherits_from_event": True,
+            "time_overridden": True,
+        },
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.patch(f"/todo/events/{event_id}", json={"due_at": "2026-04-28T09:00:00Z"})
+
+    assert resp.status_code == 200
+    assert conn.tasks[0]["due_date"] == datetime(2026, 4, 28, 9, tzinfo=UTC)
+    assert conn.tasks[1]["due_date"] == datetime(2026, 4, 24, 8, tzinfo=UTC)
+    assert conn.appointments[0]["ends_at"] == datetime(2026, 4, 28, 9, tzinfo=UTC)
+    assert conn.appointments[1]["ends_at"] == datetime(2026, 4, 24, 8, tzinfo=UTC)
+
+
 def test_get_primary_event_returns_404_when_missing(monkeypatch) -> None:
     conn = _FakeTodoConn()
     pool = _FakePool(conn)
@@ -840,6 +1144,118 @@ def test_delete_primary_event_leaves_no_primary(monkeypatch) -> None:
 
     primary_resp = client.get("/todo/events/primary")
     assert primary_resp.status_code == 404
+
+
+def test_complete_repeating_task_records_completion_without_marking_done(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    task = {
+        **_task_row(title="Practice piano", due_date=datetime(2026, 4, 20, 12, tzinfo=UTC)),
+        "is_recurring": True,
+        "period_type": "daily",
+        "max_completions_per_period": 2,
+    }
+    conn.tasks = [task]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/tasks/{task['id']}/complete")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "todo"
+    assert resp.json()["completion_state"]["completed_count_in_period"] == 1
+    assert len(conn.completion_records) == 1
+
+
+def test_complete_one_time_task_marks_done_and_records_completion(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    task = _task_row(title="Submit form")
+    conn.tasks = [task]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/tasks/{task['id']}/complete")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "done"
+    assert resp.json()["completion_state"]["completion_state"] == "permanent"
+    assert len(conn.completion_records) == 1
+
+
+def test_complete_repeating_task_rejects_after_period_limit(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    task = {
+        **_task_row(title="Stretch"),
+        "is_recurring": True,
+        "period_type": "daily",
+        "max_completions_per_period": 1,
+    }
+    conn.tasks = [task]
+    conn.completion_records = [
+        _completion_record(
+            subject_type="task",
+            subject_id=task["id"],
+            completed_at=datetime.now(UTC) - timedelta(hours=1),
+            counted_period_start=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0),
+            counted_period_end=(datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)),
+        )
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/tasks/{task['id']}/complete")
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "当前周期已达完成上限"
+
+
+def test_complete_repeating_appointment_records_completion_without_marking_attended(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    appointment = {
+        **_appointment_row(title="Daily walk", ends_at=datetime(2026, 4, 20, 18, tzinfo=UTC)),
+        "is_recurring": True,
+        "period_type": "daily",
+        "max_completions_per_period": 2,
+    }
+    conn.appointments = [appointment]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/appointments/{appointment['id']}/complete")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "pending"
+    assert resp.json()["completion_state"]["completed_count_in_period"] == 1
+    assert len(conn.completion_records) == 1
+
+
+def test_complete_one_time_appointment_marks_attended_and_records_completion(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    appointment = _appointment_row(title="Dentist", ends_at=datetime.now(UTC) + timedelta(hours=2))
+    conn.appointments = [appointment]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/appointments/{appointment['id']}/complete")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "attended"
+    assert resp.json()["completion_state"]["completion_state"] == "permanent"
+    assert len(conn.completion_records) == 1
 
 
 class _WorkflowConn:

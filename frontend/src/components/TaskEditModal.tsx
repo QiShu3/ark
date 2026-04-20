@@ -1,18 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { apiJson } from '../lib/api';
-import type { Task } from './taskTypes';
+import type { CompletionPeriodType, Task } from './taskTypes';
+
+type EventItem = {
+  id: string;
+  user_id: number;
+  name: string;
+  due_at: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 type TaskEditFormState = {
   title: string;
   content: string;
   priority: 0 | 1 | 2 | 3;
   targetMinutes: number;
-  currentCycleCount: number;
-  targetCycleCount: number;
-  cyclePeriod: 'daily' | 'weekly' | 'monthly' | 'custom';
-  customCycleDays: number;
   event: string;
-  eventIds: string[];
+  eventId: string;
+  periodType: CompletionPeriodType;
+  customPeriodDays: number;
+  maxCompletionsPerPeriod: number;
+  weekdayOnly: boolean;
+  timeInheritsFromEvent: boolean;
+  timeOverridden: boolean;
   taskType: 'focus' | 'checkin';
   tagsText: string;
   startDate: string;
@@ -24,12 +36,14 @@ const EMPTY_FORM: TaskEditFormState = {
   content: '',
   priority: 0,
   targetMinutes: 0,
-  currentCycleCount: 0,
-  targetCycleCount: 1,
-  cyclePeriod: 'daily',
-  customCycleDays: 1,
   event: '',
-  eventIds: [],
+  eventId: '',
+  periodType: 'once',
+  customPeriodDays: 1,
+  maxCompletionsPerPeriod: 1,
+  weekdayOnly: false,
+  timeInheritsFromEvent: false,
+  timeOverridden: false,
   taskType: 'focus',
   tagsText: '',
   startDate: '',
@@ -55,12 +69,14 @@ function buildEditForm(task: Task): TaskEditFormState {
     content: task.content || '',
     priority: task.priority as 0 | 1 | 2 | 3,
     targetMinutes: Math.round(task.target_duration / 60),
-    currentCycleCount: task.current_cycle_count,
-    targetCycleCount: task.target_cycle_count,
-    cyclePeriod: task.cycle_period,
-    customCycleDays: task.cycle_every_days ?? 1,
     event: task.event || '',
-    eventIds: task.event_ids || [],
+    eventId: task.event_id ?? '',
+    periodType: task.period_type ?? 'once',
+    customPeriodDays: task.custom_period_days ?? 1,
+    maxCompletionsPerPeriod: task.max_completions_per_period ?? 1,
+    weekdayOnly: task.weekday_only ?? false,
+    timeInheritsFromEvent: task.time_inherits_from_event ?? false,
+    timeOverridden: task.time_overridden ?? false,
     taskType: task.task_type || 'focus',
     tagsText: task.tags.join(', '),
     startDate: toLocalDateTimeValue(task.start_date),
@@ -68,8 +84,32 @@ function buildEditForm(task: Task): TaskEditFormState {
   };
 }
 
+function syncTaskEventSelection(form: TaskEditFormState, eventId: string, events: EventItem[]): TaskEditFormState {
+  const selectedEvent = events.find((event) => event.id === eventId) ?? null;
+  if (!selectedEvent) {
+    return {
+      ...form,
+      eventId: '',
+      event: '',
+      timeInheritsFromEvent: false,
+      timeOverridden: false,
+    };
+  }
+  const nextDueDate = toLocalDateTimeValue(selectedEvent.due_at);
+  const shouldFollowEvent = !form.timeOverridden || !form.dueDate;
+  return {
+    ...form,
+    eventId: selectedEvent.id,
+    event: selectedEvent.name,
+    dueDate: shouldFollowEvent ? nextDueDate : form.dueDate,
+    timeInheritsFromEvent: true,
+    timeOverridden: shouldFollowEvent ? false : form.timeOverridden,
+  };
+}
+
 const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onChanged }) => {
   const [form, setForm] = useState<TaskEditFormState>(EMPTY_FORM);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +124,27 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
     setSubmitting(false);
     setError(null);
   }, [open, task]);
+
+  useEffect(() => {
+    if (!open) {
+      setEvents([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiJson<EventItem[]>('/todo/events');
+        if (cancelled) return;
+        setEvents(Array.isArray(res) ? res : []);
+      } catch {
+        if (cancelled) return;
+        setEvents([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   if (!open || !task) return null;
 
@@ -100,7 +161,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
     try {
       const startDate = form.startDate ? new Date(form.startDate).toISOString() : null;
       const dueDate = form.dueDate ? new Date(form.dueDate).toISOString() : null;
-      const cycleEveryDays = form.cyclePeriod === 'custom' ? Math.max(1, Math.floor(form.customCycleDays || 1)) : null;
+      const customPeriodDays = form.periodType === 'custom_days' ? Math.max(1, Math.floor(form.customPeriodDays || 1)) : null;
       const tags = form.tagsText
         .split(',')
         .map((tag) => tag.trim())
@@ -114,12 +175,15 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
           content: form.content.trim() || null,
           priority: form.priority,
           target_duration: Math.round(form.targetMinutes * 60),
-          current_cycle_count: Math.max(0, Math.floor(form.currentCycleCount || 0)),
-          target_cycle_count: Math.max(0, Math.floor(form.targetCycleCount || 0)),
-          cycle_period: form.cyclePeriod,
-          cycle_every_days: cycleEveryDays,
           event: form.event.trim(),
-          event_ids: form.eventIds,
+          event_id: form.eventId || null,
+          is_recurring: form.periodType !== 'once',
+          period_type: form.periodType,
+          custom_period_days: customPeriodDays,
+          max_completions_per_period: Math.max(1, Math.floor(form.maxCompletionsPerPeriod || 1)),
+          weekday_only: form.weekdayOnly,
+          time_inherits_from_event: form.timeInheritsFromEvent,
+          time_overridden: form.timeOverridden,
           task_type: form.taskType,
           tags,
           start_date: startDate,
@@ -179,6 +243,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
           <div className="flex flex-col gap-2">
             <label className="text-sm text-white/70">标题</label>
             <input
+              aria-label="标题"
               value={form.title}
               onChange={(e) => setForm((state) => ({ ...state, title: e.target.value }))}
               placeholder="例如：完成周报"
@@ -190,6 +255,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
             <div className="flex flex-col gap-2">
               <label className="text-sm text-white/70">任务类型</label>
               <select
+                aria-label="任务类型"
                 value={form.taskType}
                 onChange={(e) => setForm((state) => ({ ...state, taskType: e.target.value as 'focus' | 'checkin' }))}
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -201,6 +267,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
             <div className="flex flex-col gap-2">
               <label className="text-sm text-white/70">优先级</label>
               <select
+                aria-label="优先级"
                 value={form.priority}
                 onChange={(e) => setForm((state) => ({ ...state, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
@@ -216,6 +283,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
           <div className="flex flex-col gap-2">
             <label className="text-sm text-white/70">备注</label>
             <textarea
+              aria-label="备注"
               value={form.content}
               onChange={(e) => setForm((state) => ({ ...state, content: e.target.value }))}
               placeholder="可选：补充描述/拆解步骤"
@@ -227,6 +295,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
             <div className="flex flex-col gap-2">
               <label className="text-sm text-white/70">目标时长（分钟）</label>
               <input
+                aria-label="目标时长（分钟）"
                 type="number"
                 min={0}
                 value={form.targetMinutes}
@@ -235,60 +304,9 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">循环周期</label>
-              <select
-                value={form.cyclePeriod}
-                onChange={(e) => setForm((state) => ({ ...state, cyclePeriod: e.target.value as 'daily' | 'weekly' | 'monthly' | 'custom' }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              >
-                <option value="daily">每日</option>
-                <option value="weekly">每周</option>
-                <option value="monthly">每月</option>
-                <option value="custom">自定义</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">当前循环次数</label>
-              <input
-                type="number"
-                min={0}
-                value={form.currentCycleCount}
-                onChange={(e) => setForm((state) => ({ ...state, currentCycleCount: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">目的循环次数</label>
-              <input
-                type="number"
-                min={0}
-                value={form.targetCycleCount}
-                onChange={(e) => setForm((state) => ({ ...state, targetCycleCount: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-          </div>
-
-          {form.cyclePeriod === 'custom' ? (
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">自定义间隔（天）</label>
-              <input
-                type="number"
-                min={1}
-                value={form.customCycleDays}
-                onChange={(e) => setForm((state) => ({ ...state, customCycleDays: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
               <label className="text-sm text-white/70">开始日期</label>
               <input
+                aria-label="开始日期"
                 type="datetime-local"
                 value={form.startDate}
                 onChange={(e) => setForm((state) => ({ ...state, startDate: e.target.value }))}
@@ -298,33 +316,105 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
             <div className="flex flex-col gap-2">
               <label className="text-sm text-white/70">截止日期</label>
               <input
+                aria-label="截止日期"
                 type="datetime-local"
                 value={form.dueDate}
-                onChange={(e) => setForm((state) => ({ ...state, dueDate: e.target.value }))}
+                onChange={(e) => setForm((state) => {
+                  const nextValue = e.target.value;
+                  const selectedEvent = events.find((event) => event.id === state.eventId) ?? null;
+                  const inheritedValue = selectedEvent ? toLocalDateTimeValue(selectedEvent.due_at) : '';
+                  return {
+                    ...state,
+                    dueDate: nextValue,
+                    timeOverridden: !!selectedEvent && nextValue !== inheritedValue,
+                    timeInheritsFromEvent: !!selectedEvent,
+                  };
+                })}
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
           </div>
 
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-white/70">关联事件</label>
+            <select
+              aria-label="关联事件"
+              value={form.eventId}
+              onChange={(e) => setForm((state) => syncTaskEventSelection(state, e.target.value, events))}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value="">不绑定事件</option>
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.is_primary ? `当前事件：${event.name}` : event.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">事件</label>
-              <input
-                value={form.event}
-                onChange={(e) => setForm((state) => ({ ...state, event: e.target.value }))}
-                placeholder="例如：晨间阅读"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
+              <label className="text-sm text-white/70">完成周期</label>
+              <select
+                aria-label="完成周期"
+                value={form.periodType}
+                onChange={(e) => setForm((state) => ({ ...state, periodType: e.target.value as CompletionPeriodType }))}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                <option value="once">一次性</option>
+                <option value="daily">每天</option>
+                <option value="weekly">每周</option>
+                <option value="monthly">每月</option>
+                <option value="custom_days">自定义天数</option>
+              </select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">标签</label>
+              <label className="text-sm text-white/70">单周期最多完成次数</label>
               <input
-                value={form.tagsText}
-                onChange={(e) => setForm((state) => ({ ...state, tagsText: e.target.value }))}
-                placeholder="逗号分隔，例如：学习,arxiv"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                aria-label="单周期最多完成次数"
+                type="number"
+                min={1}
+                value={form.maxCompletionsPerPeriod}
+                onChange={(e) => setForm((state) => ({ ...state, maxCompletionsPerPeriod: Number(e.target.value) }))}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
+          </div>
+
+          {form.periodType === 'custom_days' ? (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-white/70">自定义完成周期（天）</label>
+              <input
+                aria-label="自定义完成周期（天）"
+                type="number"
+                min={1}
+                value={form.customPeriodDays}
+                onChange={(e) => setForm((state) => ({ ...state, customPeriodDays: Number(e.target.value) }))}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+            </div>
+          ) : null}
+
+          <label className="flex items-center gap-3 text-sm text-white/80">
+            <input
+              aria-label="仅工作日可完成"
+              type="checkbox"
+              checked={form.weekdayOnly}
+              onChange={(e) => setForm((state) => ({ ...state, weekdayOnly: e.target.checked }))}
+              className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+            />
+            仅工作日可完成
+          </label>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-white/70">标签</label>
+            <input
+              aria-label="标签"
+              value={form.tagsText}
+              onChange={(e) => setForm((state) => ({ ...state, tagsText: e.target.value }))}
+              placeholder="逗号分隔，例如：学习,arxiv"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
           </div>
 
           {error ? <div className="text-sm text-red-400">{error}</div> : null}

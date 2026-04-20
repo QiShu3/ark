@@ -207,6 +207,114 @@ describe('PlaceholderCard task assistant', () => {
     expect(screen.getByLabelText('结束时间')).toHaveValue('2026-04-21T10:30');
   });
 
+  it('defaults the custom create form to the current primary event for both tasks and appointments', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/events') {
+        return Promise.resolve([
+          {
+            id: 'event-primary',
+            user_id: 7,
+            name: '论文投稿',
+            due_at: '2026-04-30T10:00:00Z',
+            is_primary: true,
+            created_at: '2026-04-20T00:00:00Z',
+            updated_at: '2026-04-20T00:00:00Z',
+          },
+          {
+            id: 'event-other',
+            user_id: 7,
+            name: '答辩',
+            due_at: '2026-05-03T10:00:00Z',
+            is_primary: false,
+            created_at: '2026-04-20T00:00:00Z',
+            updated_at: '2026-04-20T00:00:00Z',
+          },
+        ]);
+      }
+      return defaultApiResponse(path);
+    });
+    const { container } = renderTaskCard();
+
+    await openTaskAssistant(user, container);
+    await user.click(screen.getByRole('button', { name: '自定义安排' }));
+
+    expect(await screen.findByRole('heading', { name: '创建安排' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('关联事件')).toHaveValue('event-primary');
+    });
+
+    await user.selectOptions(screen.getByLabelText('安排类型'), 'appointment');
+    await waitFor(() => {
+      expect(screen.getByLabelText('关联事件')).toHaveValue('event-primary');
+    });
+  });
+
+  it('submits task creation with selected event binding and repeat completion settings', async () => {
+    const user = userEvent.setup();
+    const calls: Array<{ path: string; options?: RequestInit }> = [];
+    mockApiJson.mockImplementation((path: string, options?: RequestInit) => {
+      calls.push({ path, options });
+      if (path === '/todo/events') {
+        return Promise.resolve([
+          {
+            id: 'event-primary',
+            user_id: 7,
+            name: '论文投稿',
+            due_at: '2026-04-30T10:00:00Z',
+            is_primary: true,
+            created_at: '2026-04-20T00:00:00Z',
+            updated_at: '2026-04-20T00:00:00Z',
+          },
+        ]);
+      }
+      if (path === '/todo/tasks' && options?.body) {
+        return Promise.resolve({});
+      }
+      return defaultApiResponse(path);
+    });
+    const { container } = renderTaskCard();
+
+    await openTaskAssistant(user, container);
+    await user.click(screen.getByRole('button', { name: '自定义安排' }));
+
+    expect(await screen.findByRole('heading', { name: '创建安排' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('标题'), '完成初稿');
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('关联事件')).toHaveValue('event-primary');
+    });
+    expect(screen.queryByText('循环周期')).not.toBeInTheDocument();
+    expect(screen.queryByText('目的循环次数')).not.toBeInTheDocument();
+    expect(screen.queryByText('自定义间隔（天）')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('完成周期'), 'weekly');
+    await user.clear(screen.getByLabelText('单周期最多完成次数'));
+    await user.type(screen.getByLabelText('单周期最多完成次数'), '3');
+    await user.click(screen.getByLabelText('仅工作日可完成'));
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      expect(calls.some(({ path }) => path === '/todo/tasks')).toBe(true);
+    });
+
+    const submitCall = [...calls].reverse().find(({ path }) => path === '/todo/tasks');
+    expect(submitCall?.options?.body).toBeTruthy();
+    const payload = JSON.parse(String(submitCall?.options?.body));
+    expect(payload.event_id).toBe('event-primary');
+    expect(payload.event).toBe('论文投稿');
+    expect(payload.time_inherits_from_event).toBe(true);
+    expect(payload.time_overridden).toBe(false);
+    expect(payload.is_recurring).toBe(true);
+    expect(payload.period_type).toBe('weekly');
+    expect(payload.max_completions_per_period).toBe(3);
+    expect(payload.weekday_only).toBe(true);
+    expect(payload).not.toHaveProperty('target_cycle_count');
+    expect(payload).not.toHaveProperty('cycle_period');
+    expect(payload).not.toHaveProperty('cycle_every_days');
+    expect(payload).not.toHaveProperty('event_ids');
+  });
+
   it('shows arrangement kind and time metadata for mixed task and appointment drafts', async () => {
     const user = userEvent.setup();
     mockApiJson.mockImplementation((path: string) => {
