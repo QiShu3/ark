@@ -1213,6 +1213,56 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     return task.period_type === 'custom_days';
   }
 
+  function _isLastDayOfMonth(date: Date): boolean {
+    const tomorrow = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+    return tomorrow.getMonth() !== date.getMonth();
+  }
+
+  function _isTaskAtTodayBoundary(task: Task): boolean {
+    const now = new Date();
+    if (_isToday(task.due_date)) return true;
+    if (task.time_inherits_from_event && !task.time_overridden && _isToday(task.due_date)) return true;
+    if (!task.is_recurring || task.period_type === 'once') return false;
+    if (task.period_type === 'daily') return true;
+    if (task.period_type === 'weekly') return now.getDay() === 0;
+    if (task.period_type === 'monthly') return _isLastDayOfMonth(now);
+    if (task.period_type === 'custom_days') {
+      const periodEnd = task.completion_state?.current_period_end;
+      return periodEnd ? _isToday(periodEnd) : _isToday(task.due_date);
+    }
+    return false;
+  }
+
+  async function _moveTaskOutOfToday(task: Task) {
+    if (_isTaskAtTodayBoundary(task)) {
+      const confirmed = window.confirm(`今天是该任务当前周期的截止边界。将「${task.title}」移回右侧后，本周期今日将不再出现在今日任务中，确认继续吗？`);
+      if (!confirmed) return;
+    }
+
+    try {
+      const updatedTask = await apiJson(`/todo/tasks/${task.id}/move-out-of-today`, { method: 'PATCH' });
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? updatedTask as Task : item)));
+      await _loadTasks();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (error) {
+      console.error('Move out of today failed', error);
+      await _loadTasks();
+    }
+  }
+
+  async function _handleDropTaskIntoRepository(e: React.DragEvent<HTMLDivElement>) {
+    if (activeArrangementTab !== 'tasks') return;
+    e.preventDefault();
+    e.currentTarget.style.backgroundColor = '';
+    const source = e.dataTransfer.getData('application/x-ark-task-source');
+    if (source !== 'today') return;
+    const taskId = e.dataTransfer.getData('application/x-ark-task-id') || e.dataTransfer.getData('text/plain');
+    if (!taskId) return;
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task || _isTaskCompletedForArrangementView(task)) return;
+    await _moveTaskOutOfToday(task);
+  }
+
   function _isAppointmentCompletable(appointment: Appointment): boolean {
     if (appointment.status === 'cancelled' || appointment.status === 'needs_confirmation') return false;
     return appointment.completion_state?.is_completable_now ?? true;
@@ -1271,9 +1321,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     return (
       <div
         key={task.id}
+        aria-label={summaryEntry ? `今日任务：${task.title}` : `任务：${task.title}`}
         draggable={draggable}
         onDragStart={(e) => {
           if (draggable) {
+            e.dataTransfer.setData('application/x-ark-task-id', task.id);
+            e.dataTransfer.setData('application/x-ark-task-source', summaryEntry ? 'today' : 'repository');
             e.dataTransfer.setData('text/plain', task.id);
           }
         }}
@@ -2254,7 +2307,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   onDrop={async (e) => {
                     e.preventDefault();
                     e.currentTarget.style.backgroundColor = '';
-                    const taskId = e.dataTransfer.getData('text/plain');
+                    const source = e.dataTransfer.getData('application/x-ark-task-source');
+                    if (source === 'today') return;
+                    const taskId = e.dataTransfer.getData('application/x-ark-task-id') || e.dataTransfer.getData('text/plain');
                     if (!taskId) return;
                     
                     const taskToMove = tasks.find(t => t.id === taskId);
@@ -2340,7 +2395,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                                 </h4>
                               </div>
                               <div className="flex flex-col gap-2">
-                                {activeTodayTasks.map(t => _renderSmallTaskCard(t, false, true))}
+                                {activeTodayTasks.map(t => _renderSmallTaskCard(t, true, true))}
                               </div>
                             </div>
                           ) : (
@@ -2449,7 +2504,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                       ))}
                     </div>
                   </div>
-                  <div className="flex-1 p-6 overflow-y-auto w-full max-w-[500px] xl:max-w-none">
+                  <div
+                    aria-label={activeArrangementTab === 'tasks' ? '任务安排仓库' : '日程安排仓库'}
+                    className="flex-1 p-6 overflow-y-auto w-full max-w-[500px] xl:max-w-none transition-colors"
+                    onDragOver={(e) => {
+                      if (activeArrangementTab !== 'tasks') return;
+                      e.preventDefault();
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                    }}
+                    onDragLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '';
+                    }}
+                    onDrop={_handleDropTaskIntoRepository}
+                  >
                     {activeArrangementTab === 'tasks' ? _renderFilteredTasksPane() : _renderFilteredAppointmentsPane()}
                   </div>
                 </div>

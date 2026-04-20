@@ -1,5 +1,5 @@
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -113,6 +113,18 @@ function buildAppointment(overrides: Partial<Record<string, unknown>> = {}) {
       hidden_from_action_list: false,
     },
     ...overrides,
+  };
+}
+
+function createDataTransfer() {
+  const store = new Map<string, string>();
+  return {
+    setData: vi.fn((type: string, value: string) => {
+      store.set(type, value);
+    }),
+    getData: vi.fn((type: string) => store.get(type) ?? ''),
+    effectAllowed: 'all',
+    dropEffect: 'move',
   };
 }
 
@@ -371,5 +383,88 @@ describe('PlaceholderCard arrangements', () => {
 
     await screen.findByText('暂无日程');
     expect(mockApiJson).toHaveBeenCalledWith('/todo/appointments/appt-1/complete', { method: 'POST' });
+  });
+
+  it('drags a today task back to the task repository without changing its period', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const now = new Date();
+    const todayDue = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 30).toISOString();
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0).toISOString();
+    mockApiJson.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/todo/tasks?limit=100') {
+        return Promise.resolve([
+          buildTask({
+            id: 'task-daily',
+            title: '每日复盘',
+            is_recurring: true,
+            period_type: 'daily',
+            due_date: todayDue,
+          }),
+        ]);
+      }
+      if (path === '/todo/tasks/task-daily/move-out-of-today') {
+        return Promise.resolve(buildTask({
+          id: 'task-daily',
+          title: '每日复盘',
+          is_recurring: true,
+          period_type: 'daily',
+          start_date: tomorrowStart,
+          due_date: tomorrowStart,
+        }));
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderArrangementCard();
+    await user.click(screen.getByText('安排'));
+
+    const todayTask = await screen.findByLabelText('今日任务：每日复盘');
+    const repository = screen.getByLabelText('任务安排仓库');
+    const dataTransfer = createDataTransfer();
+    fireEvent.dragStart(todayTask, { dataTransfer });
+    fireEvent.dragOver(repository, { dataTransfer });
+    fireEvent.drop(repository, { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/tasks/task-daily/move-out-of-today', { method: 'PATCH' });
+    });
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('今天是该任务当前周期的截止边界'));
+    expect(mockApiJson).not.toHaveBeenCalledWith('/todo/tasks/task-daily', expect.objectContaining({
+      body: expect.stringContaining('"period_type"'),
+    }));
+    confirmSpy.mockRestore();
+  });
+
+  it('does not move a boundary today task out when the user cancels the warning', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/tasks?limit=100') {
+        return Promise.resolve([
+          buildTask({
+            id: 'task-daily',
+            title: '每日复盘',
+            is_recurring: true,
+            period_type: 'daily',
+            due_date: new Date().toISOString(),
+          }),
+        ]);
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderArrangementCard();
+    await user.click(screen.getByText('安排'));
+
+    const todayTask = await screen.findByLabelText('今日任务：每日复盘');
+    const repository = screen.getByLabelText('任务安排仓库');
+    const dataTransfer = createDataTransfer();
+    fireEvent.dragStart(todayTask, { dataTransfer });
+    fireEvent.drop(repository, { dataTransfer });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockApiJson).not.toHaveBeenCalledWith('/todo/tasks/task-daily/move-out-of-today', { method: 'PATCH' });
+    confirmSpy.mockRestore();
   });
 });

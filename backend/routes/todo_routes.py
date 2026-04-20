@@ -976,6 +976,75 @@ def _period_bounds(*, now: datetime, period_type: CompletionPeriodType, custom_p
     return now - timedelta(days=days), now
 
 
+def _days_in_month(year: int, month: int) -> int:
+    if month == 12:
+        next_month = datetime(year + 1, 1, 1, tzinfo=UTC)
+    else:
+        next_month = datetime(year, month + 1, 1, tzinfo=UTC)
+    return (next_month - timedelta(days=1)).day
+
+
+def _add_months(value: datetime, months: int) -> datetime:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, _days_in_month(year, month))
+    return value.replace(year=year, month=month, day=day)
+
+
+def _copy_time_to_day(day_start: datetime, source: datetime | None) -> datetime:
+    if source is None:
+        return day_start
+    return day_start.replace(
+        hour=source.hour,
+        minute=source.minute,
+        second=source.second,
+        microsecond=source.microsecond,
+    )
+
+
+def _task_field(task: Any, key: str) -> Any:
+    if isinstance(task, dict):
+        return task.get(key)
+    return getattr(task, key)
+
+
+def _next_task_window_after_today(task: Any, *, now: datetime | None = None) -> tuple[datetime, datetime]:
+    current = now or datetime.now(UTC)
+    today_start = datetime(current.year, current.month, current.day, tzinfo=UTC)
+    due_date = _task_field(task, "due_date")
+    period_type = _task_field(task, "period_type")
+    custom_period_days = _task_field(task, "custom_period_days")
+    is_recurring = bool(_task_field(task, "is_recurring"))
+
+    if not is_recurring or period_type == "once":
+        next_start = today_start + timedelta(days=1)
+        if due_date is not None and due_date >= next_start:
+            return next_start, due_date
+        return next_start, _copy_time_to_day(next_start, due_date)
+
+    if period_type == "daily":
+        next_start = today_start + timedelta(days=1)
+        return next_start, _copy_time_to_day(next_start, due_date)
+
+    if period_type == "weekly":
+        _, period_end = _period_bounds(now=current, period_type="weekly", custom_period_days=None)
+        next_start = period_end or (today_start + timedelta(days=7))
+        next_due = due_date + timedelta(days=7) if due_date is not None else next_start
+        return next_start, max(next_due, next_start)
+
+    if period_type == "monthly":
+        _, period_end = _period_bounds(now=current, period_type="monthly", custom_period_days=None)
+        next_start = period_end or _add_months(datetime(current.year, current.month, 1, tzinfo=UTC), 1)
+        next_due = _add_months(due_date, 1) if due_date is not None else next_start
+        return next_start, max(next_due, next_start)
+
+    days = max(1, int(custom_period_days or 1))
+    next_start = today_start + timedelta(days=days)
+    next_due = due_date + timedelta(days=days) if due_date is not None else next_start
+    return next_start, max(next_due, next_start)
+
+
 async def _count_completion_records(
     conn: Any,
     *,
@@ -2197,6 +2266,41 @@ async def move_task_to_today(
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             now,
+            task_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
+
+
+@router.patch("/tasks/{task_id}/move-out-of-today", response_model=TaskOut)
+async def move_task_out_of_today(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """将今日任务移回安排仓库，不改变任务完成周期。"""
+    pool = _pool_from_request(request)
+    current = await get_task(request, task_id, user)
+    next_start, next_due = _next_task_window_after_today(current)
+    time_overridden = bool(current.time_overridden or (current.event_id is not None and current.time_inherits_from_event))
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE tasks
+            SET start_date = $1, due_date = $2, time_overridden = $3, updated_at = NOW()
+            WHERE id = $4 AND user_id = $5 AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            next_start,
+            next_due,
+            time_overridden,
             task_id,
             int(user.id),
         )

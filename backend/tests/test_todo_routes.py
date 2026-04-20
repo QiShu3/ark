@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routes.auth_routes import get_current_user
-from routes.todo_routes import router
+from routes.todo_routes import _next_task_window_after_today, router
 
 
 @dataclass
@@ -1256,6 +1256,57 @@ def test_complete_one_time_appointment_marks_attended_and_records_completion(mon
     assert resp.json()["status"] == "attended"
     assert resp.json()["completion_state"]["completion_state"] == "permanent"
     assert len(conn.completion_records) == 1
+
+
+def test_next_task_window_after_today_keeps_period_and_skips_daily_to_tomorrow() -> None:
+    now = datetime(2026, 4, 20, 9, tzinfo=UTC)
+    task = {
+        **_task_row(
+            title="Daily review",
+            start_date=datetime(2026, 4, 20, 0, tzinfo=UTC),
+            due_date=datetime(2026, 4, 20, 18, 30, tzinfo=UTC),
+        ),
+        "is_recurring": True,
+        "period_type": "daily",
+    }
+
+    next_start, next_due = _next_task_window_after_today(task, now=now)
+
+    assert task["period_type"] == "daily"
+    assert next_start == datetime(2026, 4, 21, 0, tzinfo=UTC)
+    assert next_due == datetime(2026, 4, 21, 18, 30, tzinfo=UTC)
+
+
+def test_move_task_out_of_today_keeps_period_and_overrides_inherited_event_time(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    task = {
+        **_task_row(
+            title="Daily review",
+            start_date=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0),
+            due_date=datetime.now(UTC).replace(hour=18, minute=30, second=0, microsecond=0),
+        ),
+        "is_recurring": True,
+        "period_type": "daily",
+        "event_id": uuid4(),
+        "time_inherits_from_event": True,
+        "time_overridden": False,
+    }
+    conn.tasks = [task]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.patch(f"/todo/tasks/{task['id']}/move-out-of-today")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["period_type"] == "daily"
+    assert data["time_overridden"] is True
+    assert datetime.fromisoformat(data["start_date"].replace("Z", "+00:00")) > datetime.now(UTC)
+    assert conn.tasks[0]["period_type"] == "daily"
+    assert conn.tasks[0]["time_overridden"] is True
 
 
 class _WorkflowConn:
