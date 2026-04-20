@@ -46,6 +46,7 @@ class _FakeTodoConn:
         self.appointments: list[dict[str, Any]] = []
         self.appointment_occurrence_results: list[dict[str, Any]] = []
         self.completion_records: list[dict[str, Any]] = []
+        self.focus_logs: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -57,6 +58,20 @@ class _FakeTodoConn:
             user_id = args[0]
             rows = [event for event in self.events if event["user_id"] == user_id]
             return sorted(rows, key=lambda event: (event["due_at"], -event["created_at"].timestamp()))
+        if "SELECT id FROM tasks WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE" in sql:
+            user_id, event_id = args
+            return [
+                {"id": task["id"]}
+                for task in self.tasks
+                if task["user_id"] == user_id and task["event_id"] == event_id and not task["is_deleted"]
+            ]
+        if "SELECT id FROM appointments WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE" in sql:
+            user_id, event_id = args
+            return [
+                {"id": appointment["id"]}
+                for appointment in self.appointments
+                if appointment["user_id"] == user_id and appointment["event_id"] == event_id and not appointment["is_deleted"]
+            ]
         if "FROM tasks" in sql and "calendar range endpoint" in sql:
             user_id, range_start, range_end = args
             rows = []
@@ -113,6 +128,14 @@ class _FakeTodoConn:
                 if row["appointment_id"] == appointment_id and range_start <= row["occurrence_ends_at"] < range_end
             ]
             return sorted(rows, key=lambda row: row["occurrence_ends_at"])
+        if "SELECT DISTINCT subject_id" in sql and "FROM completion_records" in sql:
+            user_id, subject_type = args
+            subject_ids = {
+                row["subject_id"]
+                for row in self.completion_records
+                if row["user_id"] == user_id and row["subject_type"] == subject_type
+            }
+            return [{"subject_id": subject_id} for subject_id in subject_ids]
         if "FROM completion_records" in sql and "subject_type = $2" in sql:
             user_id, subject_type, subject_id = args[0], args[1], args[2]
             range_start = args[3] if len(args) > 3 else None
@@ -395,6 +418,23 @@ class _FakeTodoConn:
             existing["status"] = status
             existing["updated_at"] = now
             return existing
+        if "SELECT COALESCE(SUM(fl.duration), 0)::BIGINT AS seconds" in sql and "JOIN tasks t ON t.id = fl.task_id" in sql:
+            user_id, event_id = args
+            seconds = sum(
+                int(log["duration"])
+                for log in self.focus_logs
+                for task in self.tasks
+                if log["user_id"] == user_id
+                and task["id"] == log["task_id"]
+                and task["user_id"] == user_id
+                and task["event_id"] == event_id
+                and not task["is_deleted"]
+            )
+            return {"seconds": seconds}
+        if "SELECT COALESCE(SUM(duration), 0)::BIGINT AS seconds" in sql and "FROM focus_logs" in sql:
+            user_id = args[0]
+            seconds = sum(int(log["duration"]) for log in self.focus_logs if log["user_id"] == user_id)
+            return {"seconds": seconds}
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
@@ -597,10 +637,11 @@ def test_create_appointment_requires_end_time_and_defaults_to_pending(monkeypatc
 
     app = _build_app()
     client = TestClient(app)
+    future_end = (datetime.now(UTC) + timedelta(hours=2)).replace(microsecond=0)
 
     resp = client.post(
         "/todo/appointments",
-        json={"title": "Standup", "ends_at": "2026-04-20T10:30:00Z"},
+        json={"title": "Standup", "ends_at": future_end.isoformat().replace("+00:00", "Z")},
     )
 
     assert resp.status_code == 200
@@ -1151,6 +1192,146 @@ def test_delete_primary_event_leaves_no_primary(monkeypatch) -> None:
 
     primary_resp = client.get("/todo/events/primary")
     assert primary_resp.status_code == 404
+
+
+def test_achievement_summary_without_primary_event_still_returns_global(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/achievements/summary")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["active_event"] is None
+    assert data["event_achievements"] is None
+    assert data["global_achievements"]["title"] == "全局成就"
+
+
+def test_achievement_summary_defaults_to_primary_event(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    event_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "论文投稿",
+            "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/achievements/summary")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["active_event"]["id"] == str(event_id)
+    assert data["event_achievements"]["title"] == "事件成就"
+    assert data["global_achievements"]["title"] == "全局成就"
+
+
+def test_achievement_summary_filters_event_completions_and_focus(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    event_id = uuid4()
+    other_event_id = uuid4()
+    task_id = uuid4()
+    other_task_id = uuid4()
+    appointment_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "论文投稿",
+            "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": other_event_id,
+            "user_id": 7,
+            "name": "期末考试",
+            "due_at": datetime(2026, 4, 30, 12, tzinfo=UTC),
+            "is_primary": False,
+            "created_at": now,
+            "updated_at": now,
+        },
+    ]
+    conn.tasks = [
+        {**_task_row(title="Draft"), "id": task_id, "event_id": event_id},
+        {**_task_row(title="Review"), "id": other_task_id, "event_id": other_event_id},
+    ]
+    conn.appointments = [
+        {**_appointment_row(title="Advisor check"), "id": appointment_id, "event_id": event_id},
+    ]
+    conn.completion_records = [
+        _completion_record(
+            subject_type="task",
+            subject_id=task_id,
+            completed_at=now,
+            counted_period_start=None,
+            counted_period_end=None,
+        ),
+        _completion_record(
+            subject_type="task",
+            subject_id=other_task_id,
+            completed_at=now,
+            counted_period_start=None,
+            counted_period_end=None,
+        ),
+        _completion_record(
+            subject_type="appointment",
+            subject_id=appointment_id,
+            completed_at=now,
+            counted_period_start=None,
+            counted_period_end=None,
+        ),
+    ]
+    conn.focus_logs = [
+        {
+            "id": uuid4(),
+            "user_id": 7,
+            "task_id": task_id,
+            "duration": 7200,
+            "start_time": now - timedelta(hours=2),
+            "end_at": now,
+            "created_at": now,
+        },
+        {
+            "id": uuid4(),
+            "user_id": 7,
+            "task_id": other_task_id,
+            "duration": 1800,
+            "start_time": now - timedelta(minutes=30),
+            "end_at": now,
+            "created_at": now,
+        },
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get(f"/todo/achievements/summary?event_id={event_id}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["event_achievements"]["stats"]["primary_metric_value"] == 7200
+    assert data["global_achievements"]["stats"]["primary_metric_value"] == 9000
+    assert any(item["title"] == "首次推进" for item in data["event_achievements"]["latest_unlocked"])
 
 
 def test_complete_repeating_task_records_completion_without_marking_done(monkeypatch) -> None:

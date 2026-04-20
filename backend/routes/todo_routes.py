@@ -219,6 +219,40 @@ class EventOut(BaseModel):
     updated_at: datetime
 
 
+AchievementStatus = Literal["unlocked", "in_progress", "locked"]
+
+
+class AchievementItemOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    status: AchievementStatus
+    current_value: int | None = None
+    target_value: int | None = None
+    progress_text: str | None = None
+
+
+class AchievementSectionStatsOut(BaseModel):
+    unlocked_count: int
+    in_progress_count: int
+    primary_metric_value: int | None = None
+    primary_metric_label: str | None = None
+
+
+class AchievementSectionOut(BaseModel):
+    title: str
+    summary_text: str | None = None
+    stats: AchievementSectionStatsOut
+    latest_unlocked: list[AchievementItemOut]
+    upcoming: list[AchievementItemOut]
+
+
+class AchievementSummaryOut(BaseModel):
+    active_event: EventOut | None
+    event_achievements: AchievementSectionOut | None
+    global_achievements: AchievementSectionOut
+
+
 class FocusLogCreateRequest(BaseModel):
     duration: int = Field(gt=0)
     start_time: datetime
@@ -911,6 +945,118 @@ async def _get_event_for_user(conn: Any, *, user_id: int, event_id: UUID | None)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
     return row
+
+
+def _empty_achievement_section(title: str) -> AchievementSectionOut:
+    return AchievementSectionOut(
+        title=title,
+        summary_text=None,
+        stats=AchievementSectionStatsOut(
+            unlocked_count=0,
+            in_progress_count=0,
+            primary_metric_value=0,
+            primary_metric_label=None,
+        ),
+        latest_unlocked=[],
+        upcoming=[],
+    )
+
+
+async def _completed_subject_ids(
+    conn: Any,
+    *,
+    user_id: int,
+    subject_type: Literal["task", "appointment"],
+) -> set[UUID]:
+    rows = await conn.fetch(
+        """
+        SELECT DISTINCT subject_id
+        FROM completion_records
+        WHERE user_id = $1 AND subject_type = $2
+        """,
+        user_id,
+        subject_type,
+    )
+    return {row["subject_id"] for row in rows}
+
+
+async def _event_focus_seconds(conn: Any, *, user_id: int, event_id: UUID) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT COALESCE(SUM(fl.duration), 0)::BIGINT AS seconds
+        FROM focus_logs fl
+        JOIN tasks t ON t.id = fl.task_id
+        WHERE fl.user_id = $1
+          AND t.user_id = $1
+          AND t.event_id = $2
+          AND t.is_deleted = FALSE
+        """,
+        user_id,
+        event_id,
+    )
+    return int((row or {}).get("seconds") or 0)
+
+
+async def _global_focus_seconds(conn: Any, *, user_id: int) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT COALESCE(SUM(duration), 0)::BIGINT AS seconds
+        FROM focus_logs
+        WHERE user_id = $1
+        """,
+        user_id,
+    )
+    return int((row or {}).get("seconds") or 0)
+
+
+def _achievement_item(
+    *,
+    item_id: str,
+    title: str,
+    description: str,
+    current_value: int,
+    target_value: int,
+) -> AchievementItemOut:
+    if current_value >= target_value:
+        status: AchievementStatus = "unlocked"
+    elif current_value > 0:
+        status = "in_progress"
+    else:
+        status = "locked"
+    progress_text = None if status == "unlocked" else f"{current_value} / {target_value}"
+    return AchievementItemOut(
+        id=item_id,
+        title=title,
+        description=description,
+        status=status,
+        current_value=current_value,
+        target_value=target_value,
+        progress_text=progress_text,
+    )
+
+
+def _section_from_items(
+    *,
+    title: str,
+    summary_text: str | None,
+    primary_metric_value: int,
+    primary_metric_label: str,
+    items: list[AchievementItemOut],
+) -> AchievementSectionOut:
+    unlocked = [item for item in items if item.status == "unlocked"]
+    upcoming = [item for item in items if item.status != "unlocked"]
+    return AchievementSectionOut(
+        title=title,
+        summary_text=summary_text,
+        stats=AchievementSectionStatsOut(
+            unlocked_count=len(unlocked),
+            in_progress_count=len([item for item in items if item.status == "in_progress"]),
+            primary_metric_value=primary_metric_value,
+            primary_metric_label=primary_metric_label,
+        ),
+        latest_unlocked=unlocked[:3],
+        upcoming=upcoming[:3],
+    )
 
 
 def _normalize_completion_settings(
@@ -2798,6 +2944,107 @@ async def delete_appointment(
     if not tag.startswith("UPDATE ") or tag.endswith(" 0"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
     return {"ok": True}
+
+
+@router.get("/achievements/summary", response_model=AchievementSummaryOut)
+async def get_achievement_summary(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    event_id: UUID | None = Query(default=None),
+) -> AchievementSummaryOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+        if event_row is None:
+            event_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+                FROM events
+                WHERE user_id = $1 AND is_primary = TRUE
+                """,
+                int(user.id),
+            )
+        selected_event = _row_to_event(event_row) if event_row is not None else None
+        completed_task_ids = await _completed_subject_ids(conn, user_id=int(user.id), subject_type="task")
+        completed_appointment_ids = await _completed_subject_ids(conn, user_id=int(user.id), subject_type="appointment")
+        global_focus_seconds = await _global_focus_seconds(conn, user_id=int(user.id))
+
+        event_section: AchievementSectionOut | None = None
+        if event_row is not None:
+            event_task_ids = {
+                row["id"]
+                for row in await conn.fetch(
+                    "SELECT id FROM tasks WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE",
+                    int(user.id),
+                    event_row["id"],
+                )
+            }
+            event_appointment_ids = {
+                row["id"]
+                for row in await conn.fetch(
+                    "SELECT id FROM appointments WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE",
+                    int(user.id),
+                    event_row["id"],
+                )
+            }
+            event_completed_count = len(event_task_ids & completed_task_ids) + len(event_appointment_ids & completed_appointment_ids)
+            event_focus_seconds = await _event_focus_seconds(conn, user_id=int(user.id), event_id=event_row["id"])
+            event_items = [
+                _achievement_item(
+                    item_id="event-first-push",
+                    title="首次推进",
+                    description="第一次完成绑定到该事件的任务或日程。",
+                    current_value=1 if event_completed_count > 0 else 0,
+                    target_value=1,
+                ),
+                _achievement_item(
+                    item_id="event-focus-2h",
+                    title="进入状态",
+                    description="围绕该事件累计专注 2 小时。",
+                    current_value=event_focus_seconds,
+                    target_value=2 * 60 * 60,
+                ),
+                _achievement_item(
+                    item_id="event-complete-5",
+                    title="推进不停",
+                    description="完成 5 个绑定安排。",
+                    current_value=event_completed_count,
+                    target_value=5,
+                ),
+            ]
+            event_section = _section_from_items(
+                title="事件成就",
+                summary_text=f"{event_row['name']} 的当前进展",
+                primary_metric_value=event_focus_seconds,
+                primary_metric_label="事件专注秒数",
+                items=event_items,
+            )
+    return AchievementSummaryOut(
+        active_event=selected_event,
+        event_achievements=event_section,
+        global_achievements=_section_from_items(
+            title="全局成就",
+            summary_text="始终显示的长期累计进度",
+            primary_metric_value=global_focus_seconds,
+            primary_metric_label="总专注秒数",
+            items=[
+                _achievement_item(
+                    item_id="global-focus-10h",
+                    title="总专注 10 小时",
+                    description="跨所有事件累计专注 10 小时。",
+                    current_value=global_focus_seconds,
+                    target_value=10 * 60 * 60,
+                ),
+                _achievement_item(
+                    item_id="global-focus-50h",
+                    title="总专注 50 小时",
+                    description="跨所有事件累计专注 50 小时。",
+                    current_value=global_focus_seconds,
+                    target_value=50 * 60 * 60,
+                ),
+            ],
+        ),
+    )
 
 
 @router.post("/events", response_model=EventOut)
