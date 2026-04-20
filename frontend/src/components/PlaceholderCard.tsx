@@ -1173,6 +1173,41 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       && date.getDate() === now.getDate();
   }
 
+  function _todayBounds() {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    return { todayStart, tomorrowStart };
+  }
+
+  function _weekBounds() {
+    const now = new Date();
+    const daysSinceMonday = (now.getDay() + 6) % 7;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+    const nextWeekStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
+    return { weekStart, nextWeekStart };
+  }
+
+  function _isTaskDateMatchedToday(task: Task): boolean {
+    const { todayStart, tomorrowStart } = _todayBounds();
+    const start = task.start_date ? new Date(task.start_date) : null;
+    const end = task.due_date ? new Date(task.due_date) : null;
+    const okStart = start ? start < tomorrowStart : true;
+    const okEnd = end ? end >= todayStart : true;
+    return okStart && okEnd;
+  }
+
+  function _isAppointmentDueThisWeek(appointment: Appointment): boolean {
+    const end = new Date(appointment.ends_at);
+    if (Number.isNaN(end.getTime())) return false;
+    const { weekStart, nextWeekStart } = _weekBounds();
+    return end >= weekStart && end < nextWeekStart;
+  }
+
+  function _isAppointmentUnfinished(appointment: Appointment): boolean {
+    return !['attended', 'missed', 'cancelled'].includes(appointment.status);
+  }
+
   function _formatShortDateTime(value: string | null): string {
     if (!value) return '无时间';
     const date = new Date(value);
@@ -2301,6 +2336,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               <div className="flex-1 flex overflow-hidden">
                 {/* 左栏：安排总览 */}
                 <div 
+                  aria-label="安排总览面板"
                   className="w-[360px] min-w-[360px] border-r border-white/10 bg-black/20 flex flex-col transition-colors z-10"
                   onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; }}
                   onDragLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
@@ -2336,7 +2372,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                           return {
                             ...t,
                             due_date: nowIso,
-                            start_date: t.start_date && new Date(t.start_date) > new Date() ? nowIso : t.start_date
+                            start_date: t.start_date && new Date(t.start_date) > new Date() ? nowIso : t.start_date,
+                            manually_scheduled_for_today: true,
                           };
                         }
                         return t;
@@ -2357,26 +2394,23 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                     {(() => {
                       const todayTasks = tasks.filter(t => {
                         if (_isTaskHiddenFromActionList(t)) return false;
-                        const now = new Date();
-                        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                        const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-                        const start = t.start_date ? new Date(t.start_date) : null;
-                        const end = t.due_date ? new Date(t.due_date) : null;
-                        const okStart = start ? start < tomorrowStart : true;
-                        const okEnd = end ? end >= todayStart : true;
-                        return okStart && okEnd;
+                        if (!_isTaskDateMatchedToday(t)) return false;
+                        if (t.period_type === 'daily') return true;
+                        if (t.manually_scheduled_for_today) return true;
+                        return false;
                       });
                       
                       const activeTodayTasks = todayTasks.filter(t => t.status !== 'done');
                       const dones = todayTasks.filter(t => t.status === 'done');
-                      const todayAppointments = appointments.filter((appointment) => (
-                        appointment.status !== 'needs_confirmation'
+                      const weekAppointments = appointments.filter((appointment) => (
+                        _isAppointmentUnfinished(appointment)
                         && !_isAppointmentHiddenFromActionList(appointment)
-                        && _isToday(appointment.ends_at)
+                        && _isAppointmentDueThisWeek(appointment)
                       ));
                       const needsConfirmationAppointments = appointments.filter((appointment) => (
                         appointment.status === 'needs_confirmation'
                         && !_isAppointmentHiddenFromActionList(appointment)
+                        && !weekAppointments.some((weekAppointment) => weekAppointment.id === appointment.id)
                       ));
                       
                       return (
@@ -2404,13 +2438,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                             </div>
                           )}
 
-                          {todayAppointments.length > 0 && (
+                          {weekAppointments.length > 0 && (
                             <div className="flex flex-col gap-2">
                               <h4 className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest px-1 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
-                                今日日程
+                                本周日程
                               </h4>
-                              {todayAppointments.map((appointment) => _renderSmallAppointmentCard(appointment))}
+                              {weekAppointments.map((appointment) => _renderSmallAppointmentCard(appointment))}
                             </div>
                           )}
 

@@ -33,6 +33,7 @@ export interface Task {
   weekday_only?: boolean;
   time_inherits_from_event?: boolean;
   time_overridden?: boolean;
+  manually_scheduled_for_today?: boolean;
   task_type: 'focus' | 'checkin';
   tags: string[];
   actual_duration: number;

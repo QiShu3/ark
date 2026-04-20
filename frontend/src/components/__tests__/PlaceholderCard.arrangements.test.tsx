@@ -128,6 +128,27 @@ function createDataTransfer() {
   };
 }
 
+function dateAtOffset(days: number, hour = 10) {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, hour, 0, 0, 0).toISOString();
+}
+
+function startOfThisWeek() {
+  const now = new Date();
+  const mondayOffset = (now.getDay() + 6) % 7;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset, 0, 0, 0, 0);
+}
+
+function dateInThisWeek(dayOffset: number, hour = 10) {
+  const start = startOfThisWeek();
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + dayOffset, hour, 0, 0, 0).toISOString();
+}
+
+function dateInNextWeek(dayOffset: number, hour = 10) {
+  const start = startOfThisWeek();
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7 + dayOffset, hour, 0, 0, 0).toISOString();
+}
+
 describe('PlaceholderCard arrangements', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -184,8 +205,8 @@ describe('PlaceholderCard arrangements', () => {
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/tasks?limit=100') {
         return Promise.resolve([
-          buildTask({ id: 'task-focus', title: '写周报', task_type: 'focus' }),
-          buildTask({ id: 'task-checkin', title: '吃维生素', task_type: 'checkin' }),
+          buildTask({ id: 'task-focus', title: '写周报', task_type: 'focus', is_recurring: true, period_type: 'daily' }),
+          buildTask({ id: 'task-checkin', title: '吃维生素', task_type: 'checkin', is_recurring: true, period_type: 'daily' }),
         ]);
       }
       return defaultApiResponse(path);
@@ -197,6 +218,104 @@ describe('PlaceholderCard arrangements', () => {
     expect(await screen.findByText('今日任务')).toBeInTheDocument();
     expect(screen.queryByText('专注任务')).not.toBeInTheDocument();
     expect(screen.getAllByText('进入任务')).toHaveLength(2);
+  });
+
+  it('shows only date-matched daily tasks in the arrangement summary', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/tasks?limit=100') {
+        return Promise.resolve([
+          buildTask({
+            id: 'task-daily-hit',
+            title: '每日命中',
+            is_recurring: true,
+            period_type: 'daily',
+            due_date: dateAtOffset(0, 18),
+          }),
+          buildTask({
+            id: 'task-weekly-hit',
+            title: '每周命中但不显示',
+            is_recurring: true,
+            period_type: 'weekly',
+            due_date: dateAtOffset(0, 18),
+          }),
+          buildTask({
+            id: 'task-weekly-manual',
+            title: '手动安排的周任务',
+            is_recurring: true,
+            period_type: 'weekly',
+            due_date: dateAtOffset(0, 18),
+            manually_scheduled_for_today: true,
+          }),
+          buildTask({
+            id: 'task-daily-future',
+            title: '每日未来不显示',
+            is_recurring: true,
+            period_type: 'daily',
+            start_date: dateAtOffset(1, 9),
+            due_date: dateAtOffset(1, 18),
+          }),
+          buildTask({
+            id: 'task-daily-hidden',
+            title: '工作日限制不显示',
+            is_recurring: true,
+            period_type: 'daily',
+            due_date: dateAtOffset(0, 18),
+            weekday_only: true,
+            completion_state: {
+              completion_state: 'blocked',
+              is_completable_now: false,
+              completed_count_in_period: 0,
+              remaining_completions_in_period: 1,
+              current_period_start: null,
+              current_period_end: null,
+              blocked_reason: 'not_workday',
+              hidden_from_action_list: true,
+            },
+          }),
+        ]);
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderArrangementCard();
+    await user.click(screen.getByText('安排'));
+
+    const summaryPane = await screen.findByLabelText('安排总览面板');
+    expect(await within(summaryPane).findByText('每日命中')).toBeInTheDocument();
+    expect(within(summaryPane).getByText('手动安排的周任务')).toBeInTheDocument();
+    expect(within(summaryPane).queryByText('每周命中但不显示')).not.toBeInTheDocument();
+    expect(within(summaryPane).queryByText('每日未来不显示')).not.toBeInTheDocument();
+    expect(within(summaryPane).queryByText('工作日限制不显示')).not.toBeInTheDocument();
+  });
+
+  it('shows unfinished appointments due this week in the arrangement summary', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/appointments') {
+        return Promise.resolve([
+          buildAppointment({ id: 'appt-this-week', title: '本周汇报', status: 'pending', ends_at: dateInThisWeek(2, 16) }),
+          buildAppointment({ id: 'appt-confirm', title: '本周待确认', status: 'needs_confirmation', ends_at: dateInThisWeek(3, 10) }),
+          buildAppointment({ id: 'appt-next-week', title: '下周会议', status: 'pending', ends_at: dateInNextWeek(1, 10) }),
+          buildAppointment({ id: 'appt-attended', title: '已完成会议', status: 'attended', ends_at: dateInThisWeek(1, 10) }),
+          buildAppointment({ id: 'appt-missed', title: '已错过会议', status: 'missed', ends_at: dateInThisWeek(1, 11) }),
+          buildAppointment({ id: 'appt-cancelled', title: '已取消会议', status: 'cancelled', ends_at: dateInThisWeek(1, 12) }),
+        ]);
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderArrangementCard();
+    await user.click(screen.getByText('安排'));
+
+    const summaryPane = await screen.findByLabelText('安排总览面板');
+    expect(await within(summaryPane).findByText('本周日程')).toBeInTheDocument();
+    expect(within(summaryPane).getByText('本周汇报')).toBeInTheDocument();
+    expect(within(summaryPane).getByText('本周待确认')).toBeInTheDocument();
+    expect(within(summaryPane).queryByText('下周会议')).not.toBeInTheDocument();
+    expect(within(summaryPane).queryByText('已完成会议')).not.toBeInTheDocument();
+    expect(within(summaryPane).queryByText('已错过会议')).not.toBeInTheDocument();
+    expect(within(summaryPane).queryByText('已取消会议')).not.toBeInTheDocument();
   });
 
   it('filters task tabs by completion period_type instead of legacy cycle_period', async () => {

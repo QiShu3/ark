@@ -112,6 +112,7 @@ class TaskOut(BaseModel):
     weekday_only: bool
     time_inherits_from_event: bool
     time_overridden: bool
+    manually_scheduled_for_today: bool
     task_type: TaskType
     tags: list[str]
     actual_duration: int
@@ -355,6 +356,7 @@ async def init_todo(app: Any) -> None:
               actual_duration INTEGER NOT NULL DEFAULT 0,
               start_date TIMESTAMPTZ NULL,
               due_date TIMESTAMPTZ NULL,
+              manually_scheduled_for_today BOOLEAN NOT NULL DEFAULT FALSE,
               is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -391,6 +393,7 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS weekday_only BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_inherits_from_event BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_overridden BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS manually_scheduled_for_today BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
         await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin'));")
@@ -686,6 +689,7 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         weekday_only=bool(row["weekday_only"]),
         time_inherits_from_event=bool(row["time_inherits_from_event"]),
         time_overridden=bool(row["time_overridden"]),
+        manually_scheduled_for_today=bool(row["manually_scheduled_for_today"]),
         task_type=_normalize_task_type(row["task_type"]),
         tags=[str(x) for x in (row["tags"] or [])],
         actual_duration=int(row["actual_duration"]),
@@ -1988,14 +1992,14 @@ async def create_task(
                 user_id, title, content, status, priority, target_duration,
                 current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                 event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                 start_date, due_date
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
             RETURNING id, user_id, title, content, status, priority, target_duration,
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             int(user.id),
@@ -2018,6 +2022,7 @@ async def create_task(
             body.weekday_only,
             body.time_inherits_from_event,
             body.time_overridden,
+            False,
             body.task_type,
             body.tags,
             body.start_date,
@@ -2064,7 +2069,7 @@ async def list_tasks(
         SELECT id, user_id, title, content, status, priority, target_duration,
                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-               weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+               weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                actual_duration, start_date, due_date, is_deleted, created_at, updated_at
         FROM tasks
         WHERE {where_sql}
@@ -2099,7 +2104,7 @@ async def list_calendar_tasks(
             SELECT id, user_id, title, content, status, priority, target_duration,
                    current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                    event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                   weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                   weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                    actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             FROM tasks
             WHERE user_id = $1
@@ -2138,7 +2143,7 @@ async def get_task(
             SELECT id, user_id, title, content, status, priority, target_duration,
                    current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                    event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                   weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                   weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                    actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             FROM tasks
             WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
@@ -2232,7 +2237,7 @@ async def update_task(
             RETURNING id, user_id, title, content, status, priority, target_duration,
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             *args,
@@ -2257,12 +2262,15 @@ async def move_task_to_today(
         row = await conn.fetchrow(
             """
             UPDATE tasks
-            SET due_date = $1, start_date = CASE WHEN start_date > $1 THEN $1 ELSE start_date END, updated_at = NOW()
+            SET due_date = $1,
+                start_date = CASE WHEN start_date > $1 THEN $1 ELSE start_date END,
+                manually_scheduled_for_today = TRUE,
+                updated_at = NOW()
             WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
             RETURNING id, user_id, title, content, status, priority, target_duration,
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             now,
@@ -2290,12 +2298,12 @@ async def move_task_out_of_today(
         row = await conn.fetchrow(
             """
             UPDATE tasks
-            SET start_date = $1, due_date = $2, time_overridden = $3, updated_at = NOW()
+            SET start_date = $1, due_date = $2, time_overridden = $3, manually_scheduled_for_today = FALSE, updated_at = NOW()
             WHERE id = $4 AND user_id = $5 AND is_deleted = FALSE
             RETURNING id, user_id, title, content, status, priority, target_duration,
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                      weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
             """,
             next_start,
@@ -2325,7 +2333,7 @@ async def complete_task(
                 SELECT id, user_id, title, content, status, priority, target_duration,
                        current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                        event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                       weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                       weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                        actual_duration, start_date, due_date, is_deleted, created_at, updated_at
                 FROM tasks
                 WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
@@ -2370,7 +2378,7 @@ async def complete_task(
                     RETURNING id, user_id, title, content, status, priority, target_duration,
                               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                              weekday_only, time_inherits_from_event, time_overridden, task_type, tags,
+                              weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
                               actual_duration, start_date, due_date, is_deleted, created_at, updated_at
                     """,
                     "done",

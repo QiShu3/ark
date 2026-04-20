@@ -188,10 +188,11 @@ class _FakeTodoConn:
                 "weekday_only": args[17],
                 "time_inherits_from_event": args[18],
                 "time_overridden": args[19],
-                "task_type": args[20],
-                "tags": args[21],
-                "start_date": args[22],
-                "due_date": args[23],
+                "manually_scheduled_for_today": args[20],
+                "task_type": args[21],
+                "tags": args[22],
+                "start_date": args[23],
+                "due_date": args[24],
                 "actual_duration": 0,
                 "is_deleted": False,
                 "created_at": now,
@@ -242,6 +243,7 @@ class _FakeTodoConn:
                 "weekday_only",
                 "time_inherits_from_event",
                 "time_overridden",
+                "manually_scheduled_for_today",
                 "task_type",
                 "tags",
                 "start_date",
@@ -254,6 +256,10 @@ class _FakeTodoConn:
                     sql_fields.append((int(match.group(1)), field))
             for position, field in sorted(sql_fields):
                 task[field] = args[position - 1]
+            if "manually_scheduled_for_today = TRUE" in sql:
+                task["manually_scheduled_for_today"] = True
+            if "manually_scheduled_for_today = FALSE" in sql:
+                task["manually_scheduled_for_today"] = False
             task["updated_at"] = datetime.now(UTC)
             return task
         if "FROM appointments" in sql and "linked_task_id = $2" in sql:
@@ -516,6 +522,7 @@ def _task_row(
         "weekday_only": False,
         "time_inherits_from_event": False,
         "time_overridden": False,
+        "manually_scheduled_for_today": False,
         "task_type": "focus",
         "tags": [],
         "actual_duration": 0,
@@ -1277,6 +1284,30 @@ def test_next_task_window_after_today_keeps_period_and_skips_daily_to_tomorrow()
     assert next_due == datetime(2026, 4, 21, 18, 30, tzinfo=UTC)
 
 
+def test_move_task_to_today_marks_manual_today_without_changing_period(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    task = {
+        **_task_row(title="Weekly review", due_date=datetime.now(UTC) + timedelta(days=3)),
+        "is_recurring": True,
+        "period_type": "weekly",
+    }
+    conn.tasks = [task]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.patch(f"/todo/tasks/{task['id']}/move-to-today")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["period_type"] == "weekly"
+    assert data["manually_scheduled_for_today"] is True
+    assert conn.tasks[0]["period_type"] == "weekly"
+    assert conn.tasks[0]["manually_scheduled_for_today"] is True
+
+
 def test_move_task_out_of_today_keeps_period_and_overrides_inherited_event_time(monkeypatch) -> None:
     conn = _FakeTodoConn()
     task = {
@@ -1290,6 +1321,7 @@ def test_move_task_out_of_today_keeps_period_and_overrides_inherited_event_time(
         "event_id": uuid4(),
         "time_inherits_from_event": True,
         "time_overridden": False,
+        "manually_scheduled_for_today": True,
     }
     conn.tasks = [task]
     pool = _FakePool(conn)
@@ -1307,6 +1339,7 @@ def test_move_task_out_of_today_keeps_period_and_overrides_inherited_event_time(
     assert datetime.fromisoformat(data["start_date"].replace("Z", "+00:00")) > datetime.now(UTC)
     assert conn.tasks[0]["period_type"] == "daily"
     assert conn.tasks[0]["time_overridden"] is True
+    assert conn.tasks[0]["manually_scheduled_for_today"] is False
 
 
 class _WorkflowConn:
