@@ -7,6 +7,7 @@ import CalendarWidget from './CalendarWidget';
 import PhoneSimulator from './PhoneSimulator';
 import TaskEditModal from './TaskEditModal';
 import AppointmentEditModal from './AppointmentEditModal';
+import AchievementCard from './AchievementCard';
 import type { Appointment, CompletionPeriodType, Task } from './taskTypes';
 import {
   buildWorkflowNotificationPrompt,
@@ -3119,7 +3120,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               ) : index === 3 && subIndex === 1 ? (
                 <span className="text-white/80 font-medium">应用中心</span>
               ) : index === 3 && subIndex === 0 ? (
-                <span className="text-white/80 font-medium">成就</span>
+                <AchievementCard />
               ) : mergePlaceholders ? (
                 <div className="flex w-full h-full rounded-lg overflow-hidden border border-white/10 group shadow-lg">
                   {/* 左侧：一键运行 */}

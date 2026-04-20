@@ -7,6 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PlaceholderCard from '../PlaceholderCard';
 import { apiJson } from '../../lib/api';
 
+vi.mock('../AchievementCard', () => ({
+  default: () => <div data-testid="achievement-card">Achievement Card</div>,
+}));
+
 const mockApiJson = vi.mocked(apiJson);
 
 function buildTask(overrides: Partial<Record<string, unknown>> = {}) {
@@ -125,6 +129,16 @@ describe('PlaceholderCard workflow UI', () => {
         task_id: task.id,
       });
     });
+  });
+
+  it('renders AchievementCard in the right-panel achievement slot', () => {
+    render(
+      <MemoryRouter>
+        <PlaceholderCard index={3} split={3} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('achievement-card')).toBeInTheDocument();
   });
 
   it('hides the duration input for countup focus phases but still submits a default target duration', async () => {
