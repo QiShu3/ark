@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Any, Literal
@@ -118,6 +119,19 @@ class AppointmentOut(BaseModel):
     is_deleted: bool
     created_at: datetime
     updated_at: datetime
+
+
+class AppointmentOccurrenceOut(BaseModel):
+    appointment_id: UUID
+    occurrence_starts_at: datetime | None
+    occurrence_ends_at: datetime
+    status: AppointmentStatus
+    linked_task_id: UUID | None
+
+
+class AppointmentOccurrenceConfirmRequest(BaseModel):
+    occurrence_ends_at: datetime
+    status: Literal["attended", "missed", "cancelled"]
 
 
 class EventCreateRequest(BaseModel):
@@ -378,6 +392,33 @@ async def init_todo(app: Any) -> None:
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_appointments_user_status ON appointments(user_id, status);")
         await conn.execute(
             """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_linked_task_unique
+            ON appointments(linked_task_id)
+            WHERE linked_task_id IS NOT NULL AND is_deleted = FALSE;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS appointment_occurrence_results (
+              appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+              occurrence_ends_at TIMESTAMPTZ NOT NULL,
+              status VARCHAR(20) NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              PRIMARY KEY (appointment_id, occurrence_ends_at),
+              CONSTRAINT chk_appointment_occurrence_results_status
+                CHECK (status IN ('attended', 'missed', 'cancelled'))
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_appointment_occurrence_results_lookup
+            ON appointment_occurrence_results(appointment_id, occurrence_ends_at ASC);
+            """
+        )
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS focus_logs (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
@@ -578,6 +619,151 @@ def _row_to_appointment(row: asyncpg.Record) -> AppointmentOut:
     )
 
 
+def _build_appointment_occurrence(
+    appointment: AppointmentOut,
+    *,
+    occurrence_starts_at: datetime | None,
+    occurrence_ends_at: datetime,
+    stored_status: AppointmentStoredStatus | str,
+) -> AppointmentOccurrenceOut:
+    return AppointmentOccurrenceOut(
+        appointment_id=appointment.id,
+        occurrence_starts_at=occurrence_starts_at,
+        occurrence_ends_at=occurrence_ends_at,
+        status=_appointment_status_for_display(stored_status, occurrence_ends_at),
+        linked_task_id=appointment.linked_task_id,
+    )
+
+
+def _repeat_delta(repeat_rule: str | None) -> timedelta | None:
+    rule = str(repeat_rule or "").strip().lower()
+    if rule == "daily":
+        return timedelta(days=1)
+    if rule == "weekly":
+        return timedelta(weeks=1)
+    return None
+
+
+def _add_months(moment: datetime, months: int) -> datetime:
+    month_index = (moment.month - 1) + months
+    year = moment.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(moment.day, calendar.monthrange(year, month)[1])
+    return moment.replace(year=year, month=month, day=day)
+
+
+def _appointment_occurrence_bounds(
+    appointment: AppointmentOut,
+    occurrence_ends_at: datetime,
+) -> tuple[datetime | None, datetime]:
+    if appointment.starts_at is None:
+        return None, occurrence_ends_at
+    duration = appointment.ends_at - appointment.starts_at
+    return occurrence_ends_at - duration, occurrence_ends_at
+
+
+def _expand_appointment_occurrence_ends(
+    appointment: AppointmentOut,
+    *,
+    range_start: datetime,
+    range_end: datetime,
+) -> list[datetime]:
+    base_end = appointment.ends_at
+    if range_end <= range_start:
+        return []
+
+    if appointment.repeat_rule is None:
+        return [base_end] if range_start <= base_end < range_end else []
+
+    repeat_delta = _repeat_delta(appointment.repeat_rule)
+    occurrences: list[datetime] = []
+    if repeat_delta is not None:
+        current = base_end
+        while current < range_start:
+            current += repeat_delta
+        while current < range_end:
+            occurrences.append(current)
+            current += repeat_delta
+        return occurrences
+
+    if str(appointment.repeat_rule).strip().lower() == "monthly":
+        current = base_end
+        while current < range_start:
+            current = _add_months(current, 1)
+        while current < range_end:
+            occurrences.append(current)
+            current = _add_months(current, 1)
+        return occurrences
+
+    return [base_end] if range_start <= base_end < range_end else []
+
+
+async def _validate_linked_task(
+    conn: Any,
+    *,
+    user_id: int,
+    linked_task_id: UUID | None,
+    exclude_appointment_id: UUID | None = None,
+) -> None:
+    if linked_task_id is None:
+        return
+
+    task_row = await conn.fetchrow(
+        "SELECT id FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+        linked_task_id,
+        user_id,
+    )
+    if task_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联任务不存在")
+
+    if exclude_appointment_id is None:
+        linked_row = await conn.fetchrow(
+            """
+            SELECT id
+            FROM appointments
+            WHERE user_id = $1 AND linked_task_id = $2 AND is_deleted = FALSE
+            LIMIT 1
+            """,
+            user_id,
+            linked_task_id,
+        )
+    else:
+        linked_row = await conn.fetchrow(
+            """
+            SELECT id
+            FROM appointments
+            WHERE user_id = $1 AND linked_task_id = $2 AND is_deleted = FALSE AND id <> $3
+            LIMIT 1
+            """,
+            user_id,
+            linked_task_id,
+            exclude_appointment_id,
+        )
+    if linked_row is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该任务已关联其他日程")
+
+
+async def _list_occurrence_status_rows(
+    conn: Any,
+    *,
+    appointment_id: UUID,
+    range_start: datetime,
+    range_end: datetime,
+) -> dict[datetime, str]:
+    rows = await conn.fetch(
+        """
+        SELECT appointment_id, occurrence_ends_at, status, created_at, updated_at
+        FROM appointment_occurrence_results
+        WHERE appointment_id = $1 AND occurrence_ends_at >= $2 AND occurrence_ends_at < $3
+        ORDER BY occurrence_ends_at ASC
+        """,
+        appointment_id,
+        range_start,
+        range_end,
+    )
+    return {row["occurrence_ends_at"]: str(row["status"]) for row in rows}
+
+
 def _row_to_event(row: asyncpg.Record) -> EventOut:
     """将 asyncpg.Record 转为 EventOut。"""
     return EventOut(
@@ -704,6 +890,50 @@ def _validate_appointment_times(starts_at: datetime | None, ends_at: datetime) -
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="starts_at must be before or equal to ends_at",
         )
+
+
+async def _resolve_appointment_occurrences(
+    conn: Any,
+    *,
+    appointment: AppointmentOut,
+    range_start: datetime,
+    range_end: datetime,
+) -> list[AppointmentOccurrenceOut]:
+    occurrence_ends = _expand_appointment_occurrence_ends(
+        appointment,
+        range_start=range_start,
+        range_end=range_end,
+    )
+    if not occurrence_ends:
+        return []
+
+    occurrence_statuses = await _list_occurrence_status_rows(
+        conn,
+        appointment_id=appointment.id,
+        range_start=range_start,
+        range_end=range_end,
+    )
+    rows: list[AppointmentOccurrenceOut] = []
+    base_stored_status = "cancelled" if appointment.status == "cancelled" else "pending"
+    for occurrence_ends_at in occurrence_ends:
+        occurrence_starts_at, occurrence_ends_at = _appointment_occurrence_bounds(appointment, occurrence_ends_at)
+        stored_status = occurrence_statuses.get(occurrence_ends_at)
+        if stored_status is None:
+            if appointment.status == "cancelled":
+                stored_status = "cancelled"
+            elif occurrence_ends_at == appointment.ends_at and appointment.status in {"attended", "missed"}:
+                stored_status = appointment.status
+            else:
+                stored_status = base_stored_status
+        rows.append(
+            _build_appointment_occurrence(
+                appointment,
+                occurrence_starts_at=occurrence_starts_at,
+                occurrence_ends_at=occurrence_ends_at,
+                stored_status=stored_status,
+            )
+        )
+    return rows
 
 
 def _build_default_phases(focus_duration: int, break_duration: int) -> list[dict[str, Any]]:
@@ -1520,6 +1750,11 @@ async def create_appointment(
     _validate_appointment_times(body.starts_at, body.ends_at)
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
+        await _validate_linked_task(
+            conn,
+            user_id=int(user.id),
+            linked_task_id=body.linked_task_id,
+        )
         row = await conn.fetchrow(
             """
             INSERT INTO appointments(
@@ -1621,6 +1856,7 @@ async def update_appointment(
     next_starts_at = patch.get("starts_at", current.starts_at)
     next_ends_at = patch.get("ends_at", current.ends_at)
     _validate_appointment_times(next_starts_at, next_ends_at)
+    next_linked_task_id = patch.get("linked_task_id", current.linked_task_id)
 
     allowed_cols = {
         "title": "title",
@@ -1648,6 +1884,12 @@ async def update_appointment(
     user_i = len(args)
 
     async with pool.acquire() as conn:
+        await _validate_linked_task(
+            conn,
+            user_id=int(user.id),
+            linked_task_id=next_linked_task_id,
+            exclude_appointment_id=appointment_id,
+        )
         row = await conn.fetchrow(
             f"""
             UPDATE appointments
@@ -1661,6 +1903,71 @@ async def update_appointment(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
     return _row_to_appointment(row)
+
+
+@router.get("/appointments/{appointment_id}/occurrences", response_model=list[AppointmentOccurrenceOut])
+async def list_appointment_occurrences(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+    start: date = Query(...),
+    end: date = Query(...),
+) -> list[AppointmentOccurrenceOut]:
+    """列出日程在给定区间内的 occurrence。"""
+    if end <= start:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end must be after start")
+
+    appointment = await get_appointment(request, appointment_id, user)
+    range_start = datetime.combine(start, datetime.min.time(), tzinfo=UTC)
+    range_end = datetime.combine(end, datetime.min.time(), tzinfo=UTC)
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        return await _resolve_appointment_occurrences(
+            conn,
+            appointment=appointment,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+
+@router.post("/appointments/{appointment_id}/occurrences/confirm", response_model=AppointmentOccurrenceOut)
+async def confirm_appointment_occurrence(
+    request: Request,
+    appointment_id: UUID,
+    body: AppointmentOccurrenceConfirmRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOccurrenceOut:
+    """独立确认某一次日程 occurrence。"""
+    appointment = await get_appointment(request, appointment_id, user)
+    occurrence_starts_at, occurrence_ends_at = _appointment_occurrence_bounds(appointment, body.occurrence_ends_at)
+
+    if appointment.repeat_rule is None and body.occurrence_ends_at != appointment.ends_at:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="单次日程只能确认原始 occurrence")
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO appointment_occurrence_results(appointment_id, occurrence_ends_at, status)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (appointment_id, occurrence_ends_at)
+            DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()
+            RETURNING appointment_id, occurrence_ends_at, status, created_at, updated_at
+            """,
+            appointment.id,
+            occurrence_ends_at,
+            body.status,
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认日程 occurrence 失败")
+
+    return _build_appointment_occurrence(
+        appointment,
+        occurrence_starts_at=occurrence_starts_at,
+        occurrence_ends_at=row["occurrence_ends_at"],
+        stored_status=row["status"],
+    )
 
 
 @router.delete("/appointments/{appointment_id}")

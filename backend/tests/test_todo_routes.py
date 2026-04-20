@@ -43,6 +43,7 @@ class _FakeTodoConn:
         self.events: list[dict[str, Any]] = []
         self.tasks: list[dict[str, Any]] = []
         self.appointments: list[dict[str, Any]] = []
+        self.appointment_occurrence_results: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -102,6 +103,14 @@ class _FakeTodoConn:
                     continue
                 rows.append(appointment)
             return sorted(rows, key=lambda appointment: (appointment["ends_at"], appointment["created_at"]))
+        if "FROM appointment_occurrence_results" in sql and "ORDER BY occurrence_ends_at ASC" in sql:
+            appointment_id, range_start, range_end = args
+            rows = [
+                row
+                for row in self.appointment_occurrence_results
+                if row["appointment_id"] == appointment_id and range_start <= row["occurrence_ends_at"] < range_end
+            ]
+            return sorted(rows, key=lambda row: row["occurrence_ends_at"])
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -127,6 +136,32 @@ class _FakeTodoConn:
             return next(
                 (event for event in self.events if event["id"] == event_id and event["user_id"] == user_id), None
             )
+        if "SELECT id FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE" in sql:
+            task_id, user_id = args[0], args[1]
+            task = next(
+                (
+                    item
+                    for item in self.tasks
+                    if item["id"] == task_id and item["user_id"] == user_id and not item["is_deleted"]
+                ),
+                None,
+            )
+            return {"id": task["id"]} if task is not None else None
+        if "FROM appointments" in sql and "linked_task_id = $2" in sql:
+            user_id, linked_task_id = args[0], args[1]
+            exclude_appointment_id = args[2] if len(args) > 2 else None
+            appointment = next(
+                (
+                    item
+                    for item in self.appointments
+                    if item["user_id"] == user_id
+                    and item["linked_task_id"] == linked_task_id
+                    and not item["is_deleted"]
+                    and item["id"] != exclude_appointment_id
+                ),
+                None,
+            )
+            return {"id": appointment["id"]} if appointment is not None else None
         if "UPDATE events" in sql and "RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at" in sql:
             event_id, user_id = args[-2], args[-1]
             event = next((item for item in self.events if item["id"] == event_id and item["user_id"] == user_id), None)
@@ -223,6 +258,30 @@ class _FakeTodoConn:
                 appointment["linked_task_id"] = args[4]
             appointment["updated_at"] = datetime.now(UTC)
             return appointment
+        if "INSERT INTO appointment_occurrence_results" in sql:
+            appointment_id, occurrence_ends_at, status = args[0], args[1], args[2]
+            now = datetime.now(UTC)
+            existing = next(
+                (
+                    item
+                    for item in self.appointment_occurrence_results
+                    if item["appointment_id"] == appointment_id and item["occurrence_ends_at"] == occurrence_ends_at
+                ),
+                None,
+            )
+            if existing is None:
+                row = {
+                    "appointment_id": appointment_id,
+                    "occurrence_ends_at": occurrence_ends_at,
+                    "status": status,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                self.appointment_occurrence_results.append(row)
+                return row
+            existing["status"] = status
+            existing["updated_at"] = now
+            return existing
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
@@ -428,6 +487,114 @@ def test_list_appointments_supports_repeating_filter(monkeypatch) -> None:
 
     assert resp.status_code == 200
     assert [item["title"] for item in resp.json()] == ["Weekly"]
+
+
+def test_create_appointment_rejects_task_link_already_used(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    linked_task = _task_row(title="Prepare materials")
+    conn.tasks = [linked_task]
+    conn.appointments = [
+        _appointment_row(title="Existing", linked_task_id=linked_task["id"]),
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/appointments",
+        json={
+            "title": "Another appointment",
+            "ends_at": "2026-04-20T10:30:00Z",
+            "linked_task_id": str(linked_task["id"]),
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "该任务已关联其他日程"
+
+
+def test_update_appointment_rejects_missing_or_deleted_linked_task(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    appointment = _appointment_row(title="Exam")
+    deleted_task = _task_row(title="Old prep", is_deleted=True)
+    conn.appointments = [appointment]
+    conn.tasks = [deleted_task]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.patch(
+        f"/todo/appointments/{appointment['id']}",
+        json={"linked_task_id": str(deleted_task["id"])},
+    )
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "关联任务不存在"
+
+
+def test_list_appointment_occurrences_merges_independent_confirmation(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    appointment = _appointment_row(
+        title="Weekly sync",
+        starts_at=datetime.now(UTC) - timedelta(days=14, hours=1),
+        ends_at=datetime.now(UTC) - timedelta(days=14),
+        repeat_rule="weekly",
+    )
+    conn.appointments = [appointment]
+    conn.appointment_occurrence_results = [
+        {
+            "appointment_id": appointment["id"],
+            "occurrence_ends_at": appointment["ends_at"] + timedelta(days=7),
+            "status": "attended",
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    start = (datetime.now(UTC) - timedelta(days=15)).date().isoformat()
+    end = (datetime.now(UTC) + timedelta(days=8)).date().isoformat()
+    resp = client.get(f"/todo/appointments/{appointment['id']}/occurrences?start={start}&end={end}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert [item["status"] for item in data] == ["needs_confirmation", "attended", "needs_confirmation", "pending"]
+
+
+def test_confirm_appointment_occurrence_only_updates_target_occurrence(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    appointment = _appointment_row(
+        title="Weekly sync",
+        starts_at=datetime(2026, 4, 1, 8, tzinfo=UTC),
+        ends_at=datetime(2026, 4, 1, 9, tzinfo=UTC),
+        repeat_rule="weekly",
+    )
+    conn.appointments = [appointment]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    occurrence_ends_at = "2026-04-15T09:00:00Z"
+    resp = client.post(
+        f"/todo/appointments/{appointment['id']}/occurrences/confirm",
+        json={"occurrence_ends_at": occurrence_ends_at, "status": "missed"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "missed"
+    assert len(conn.appointment_occurrence_results) == 1
+    assert conn.appointment_occurrence_results[0]["occurrence_ends_at"] == datetime(2026, 4, 15, 9, tzinfo=UTC)
+    assert conn.appointment_occurrence_results[0]["status"] == "missed"
 
 
 def test_get_focus_stats_today(monkeypatch) -> None:
