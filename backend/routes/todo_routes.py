@@ -2185,6 +2185,21 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
             """,
             int(user_id),
         )
+    if current_phase_type == "focus" and timer_mode == "countdown":
+        if elapsed < phase_planned_duration:
+            return row
+        await _close_open_focus_log(conn, int(user_id))
+        advanced = await _advance_focus_workflow_to_next_phase(conn, row, int(user_id), skip_breaks=False)
+        return None if advanced.state == "normal" else await conn.fetchrow(
+            """
+            SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                   focus_duration, break_duration, current_phase, phase_started_at,
+                   phase_planned_duration, pending_confirmation, pending_task_selection
+            FROM focus_workflows
+            WHERE user_id = $1 AND status = 'active'
+            """,
+            int(user_id),
+        )
     if elapsed < phase_planned_duration:
         return row
     await conn.execute(

@@ -3,7 +3,8 @@ import '@testing-library/jest-dom';
 import { describe, expect, it } from 'vitest';
 
 import MultiWeekCalendarGrid from '../MultiWeekCalendarGrid';
-import { buildVisibleDays, groupTasksByDay, type CalendarTask } from '../calendarUtils';
+import { CALENDAR_TASK_LAYER_TOP } from '../calendarLayout';
+import { buildVisibleDays, groupTasksByDay, type CalendarDot, type CalendarTask } from '../calendarUtils';
 
 function buildTask(patch: Partial<CalendarTask> = {}): CalendarTask {
   return {
@@ -61,5 +62,31 @@ describe('MultiWeekCalendarGrid', () => {
 
     expect(screen.getAllByText('跨天任务')).toHaveLength(1);
     expect(screen.getAllByText('第二个任务')).toHaveLength(1);
+  });
+
+  it('pushes task bars below dot items when a week contains both layouts', () => {
+    const days = buildVisibleDays(new Date('2026-04-23T12:00:00Z'), 2);
+    const groupedTasks = groupTasksByDay([buildTask()], days);
+    const groupedDots: Record<string, CalendarDot[]> = {
+      '2026-04-21': [
+        { id: 'appt-1', title: '参加考试', kind: 'appointment', status: 'pending' },
+        { id: 'appt-2', title: '写好简历', kind: 'appointment', status: 'pending' },
+      ],
+    };
+
+    render(
+      <MultiWeekCalendarGrid
+        days={days}
+        groupedTasks={groupedTasks}
+        groupedDots={groupedDots}
+        itemCounts={{ '2026-04-21': 2 }}
+        todayKey="2026-04-23"
+        onDateClick={() => {}}
+        onTaskClick={() => {}}
+      />,
+    );
+
+    const taskLayer = screen.getByTestId('calendar-task-bar-task-1').parentElement?.parentElement;
+    expect(Number.parseInt(taskLayer?.style.top || '0', 10)).toBeGreaterThan(CALENDAR_TASK_LAYER_TOP);
   });
 });

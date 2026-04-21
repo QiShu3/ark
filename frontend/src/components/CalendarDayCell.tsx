@@ -1,5 +1,11 @@
 import React from 'react';
-import { CALENDAR_DAY_HEADER_HEIGHT } from './calendarLayout';
+import {
+  CALENDAR_DAY_HEADER_HEIGHT,
+  CALENDAR_DOT_ROW_GAP,
+  CALENDAR_DOT_ROW_HEIGHT,
+  CALENDAR_DOT_STACK_TOP_GAP,
+  CALENDAR_MAX_VISIBLE_DOTS,
+} from './calendarLayout';
 import { CalendarDot, toDayKey } from './calendarUtils';
 
 type CalendarDayCellProps = {
@@ -54,8 +60,11 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
         <span className="text-xs font-semibold text-white/35">{itemCount} 项</span>
       </div>
       {dotItems.length ? (
-        <div className="relative z-20 mt-3 flex flex-col gap-1.5">
-          {dotItems.slice(0, 6).map((item) => (
+        <div
+          className="relative z-20 flex flex-col"
+          style={{ gap: CALENDAR_DOT_ROW_GAP, marginTop: CALENDAR_DOT_STACK_TOP_GAP }}
+        >
+          {dotItems.slice(0, CALENDAR_MAX_VISIBLE_DOTS).map((item) => (
             <button
               key={`${item.kind}-${item.id}`}
               type="button"
@@ -65,14 +74,15 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
                 event.stopPropagation();
                 onDotClick?.(item);
               }}
-              className="flex w-full items-center justify-start gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-medium text-white/72 shadow-sm transition-colors hover:bg-white/10 hover:text-white"
+              className="flex w-full items-center justify-start gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 text-[11px] font-medium text-white/72 shadow-sm transition-colors hover:bg-white/10 hover:text-white"
+              style={{ height: CALENDAR_DOT_ROW_HEIGHT }}
             >
               <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClassName(item)}`} />
               <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
             </button>
           ))}
-          {dotItems.length > 6 ? (
-            <span className="text-[10px] font-semibold text-white/45">+{dotItems.length - 6}</span>
+          {dotItems.length > CALENDAR_MAX_VISIBLE_DOTS ? (
+            <span className="text-[10px] font-semibold text-white/45">+{dotItems.length - CALENDAR_MAX_VISIBLE_DOTS}</span>
           ) : null}
         </div>
       ) : null}

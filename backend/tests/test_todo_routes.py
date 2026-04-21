@@ -1976,6 +1976,28 @@ def test_get_focus_workflow_current_finishes_countup_phase_at_two_hours(monkeypa
     assert data["state"] == "normal"
 
 
+def test_get_focus_workflow_current_auto_advances_expired_countdown_focus_to_break(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow["pending_confirmation"] = False
+    conn.workflow["phases"] = [
+        {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)},
+        {"phase_type": "break", "duration": 300},
+    ]
+    conn.workflow["phase_started_at"] = datetime.now(UTC) - timedelta(minutes=26)
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/focus/workflow/current")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["state"] == "break"
+    assert data["current_phase_index"] == 1
+    assert data["pending_confirmation"] is False
+
+
 def test_select_focus_workflow_task_starts_pending_phase(monkeypatch) -> None:
     conn = _WorkflowConn()
     next_task_id = uuid4()

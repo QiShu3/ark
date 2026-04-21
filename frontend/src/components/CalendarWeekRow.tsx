@@ -7,6 +7,7 @@ import {
   CALENDAR_TASK_FOOTER_PADDING,
   CALENDAR_TASK_LAYER_TOP,
   CALENDAR_TASK_ROW_HEIGHT,
+  getCalendarDotStackHeight,
 } from './calendarLayout';
 import { buildCalendarWeekSegments, CalendarDot, CalendarTask, toDayKey } from './calendarUtils';
 
@@ -33,9 +34,13 @@ const CalendarWeekRow: React.FC<CalendarWeekRowProps> = ({
 }) => {
   const segments = buildCalendarWeekSegments(weekDays, groupedTasks);
   const laneCount = segments.reduce((max, segment) => Math.max(max, segment.lane + 1), 0);
+  const dotStackHeight = weekDays.reduce((max, day) => (
+    Math.max(max, getCalendarDotStackHeight((groupedDots[toDayKey(day)] || []).length))
+  ), 0);
+  const taskLayerTop = CALENDAR_TASK_LAYER_TOP + dotStackHeight;
   const rowHeight = Math.max(
     CALENDAR_MIN_CELL_HEIGHT,
-    CALENDAR_TASK_LAYER_TOP + Math.max(laneCount, 1) * CALENDAR_TASK_ROW_HEIGHT + CALENDAR_TASK_FOOTER_PADDING,
+    taskLayerTop + Math.max(laneCount, 1) * CALENDAR_TASK_ROW_HEIGHT + CALENDAR_TASK_FOOTER_PADDING,
   );
 
   return (
@@ -61,7 +66,7 @@ const CalendarWeekRow: React.FC<CalendarWeekRowProps> = ({
         <div
           className="pointer-events-none absolute inset-x-0"
           style={{
-            top: CALENDAR_TASK_LAYER_TOP,
+            top: taskLayerTop,
           }}
         >
           <div
