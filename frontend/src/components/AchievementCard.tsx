@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { apiJson } from '../lib/api';
 import AchievementModal from './AchievementModal';
@@ -8,6 +8,7 @@ export default function AchievementCard() {
   const [summary, setSummary] = useState<AchievementSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -28,6 +29,7 @@ export default function AchievementCard() {
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         aria-label="成就"
         onClick={() => setIsOpen(true)}
@@ -59,6 +61,7 @@ export default function AchievementCard() {
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         initialSummary={summary}
+        returnFocusRef={triggerRef}
       />
     </>
   );

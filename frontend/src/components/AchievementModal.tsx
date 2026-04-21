@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import { apiJson } from '../lib/api';
@@ -9,12 +9,24 @@ type AchievementModalProps = {
   isOpen: boolean;
   onClose: () => void;
   initialSummary: AchievementSummary | null;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 };
 
-export default function AchievementModal({ isOpen, onClose, initialSummary }: AchievementModalProps) {
+function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return [];
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex !== -1);
+}
+
+export default function AchievementModal({ isOpen, onClose, initialSummary, returnFocusRef }: AchievementModalProps) {
   const [events, setEvents] = useState<AchievementEventItem[]>([]);
   const [summary, setSummary] = useState<AchievementSummary | null>(initialSummary);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -44,6 +56,54 @@ export default function AchievementModal({ isOpen, onClose, initialSummary }: Ac
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements(dialogRef.current);
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey) {
+        if (activeElement === firstElement || !dialogRef.current?.contains(activeElement)) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (activeElement === lastElement || !dialogRef.current?.contains(activeElement)) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+
+      const target = returnFocusRef?.current ?? previousActive;
+      if (target) {
+        target.focus();
+      }
+    };
+  }, [isOpen, onClose, returnFocusRef]);
+
   async function handleSelectEvent(eventId: string): Promise<void> {
     try {
       const nextSummary = await apiJson<AchievementSummary>(`/todo/achievements/summary?event_id=${eventId}`);
@@ -65,6 +125,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary }: Ac
       aria-label="成就弹窗"
     >
       <div
+        ref={dialogRef}
         className="w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5"
         onClick={(event) => event.stopPropagation()}
       >
@@ -76,6 +137,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary }: Ac
             <p className="mt-2 text-sm text-white/55">上半部分跟随事件切换，下半部分的全局成就始终显示。</p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"

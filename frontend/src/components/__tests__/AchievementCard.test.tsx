@@ -69,4 +69,36 @@ describe('AchievementCard', () => {
     expect(within(screen.getByTestId('right-panel-shell')).queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
     expect(screen.getByText('全局成就')).toBeInTheDocument();
   });
+
+  it('moves focus into the modal and restores it to the card after Escape closes the modal', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock)
+      .mockResolvedValueOnce({
+        active_event: null,
+        event_achievements: null,
+        global_achievements: {
+          title: '全局成就',
+          summary_text: null,
+          stats: { unlocked_count: 0, in_progress_count: 0, primary_metric_value: 0, primary_metric_label: '总专注秒数' },
+          latest_unlocked: [],
+          upcoming: [],
+        },
+      })
+      .mockResolvedValueOnce([]);
+
+    render(<AchievementCard />);
+
+    const trigger = await screen.findByRole('button', { name: '成就' });
+    expect(trigger).not.toHaveFocus();
+
+    await user.click(trigger);
+
+    const closeButton = await screen.findByRole('button', { name: '关闭成就弹窗' });
+    expect(closeButton).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });
