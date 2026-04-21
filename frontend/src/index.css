@@ -159,3 +159,33 @@
 .calendar-task-lavender {
   --task-rgb: 129, 140, 248;
 }
+
+@keyframes achievement-modal-overlay-exit {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes achievement-modal-surface-exit {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(14px);
+  }
+}
+
+.achievement-modal-overlay-exit {
+  animation: achievement-modal-overlay-exit 0.2s ease-in forwards;
+}
+
+.achievement-modal-surface-exit {
+  animation: achievement-modal-surface-exit 0.2s ease-in forwards;
+}

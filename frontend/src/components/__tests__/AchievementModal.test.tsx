@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import AchievementModal from '../AchievementModal';
 import { apiJson } from '../../lib/api';
@@ -15,6 +15,10 @@ describe('AchievementModal', () => {
     vi.clearAllMocks();
     document.body.style.overflow = '';
     document.documentElement.style.overflow = '';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('keeps global achievements visible while switching events', async () => {
@@ -73,7 +77,7 @@ describe('AchievementModal', () => {
   });
 
   it('locks page scroll while open and restores previous styles after closing', async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers();
     document.body.style.overflow = 'auto';
     document.documentElement.style.overflow = 'clip';
 
@@ -101,11 +105,21 @@ describe('AchievementModal', () => {
 
     render(<ModalHarness />);
 
-    await screen.findByRole('dialog', { name: '成就弹窗' });
+    expect(screen.getByRole('dialog', { name: '成就弹窗' })).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
     expect(document.documentElement.style.overflow).toBe('hidden');
 
-    await user.click(screen.getByRole('dialog', { name: '成就弹窗' }));
+    await act(async () => {
+      screen.getByRole('dialog', { name: '成就弹窗' }).click();
+    });
+
+    expect(screen.getByRole('dialog', { name: '成就弹窗' })).toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
 
     expect(screen.queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
     expect(document.body.style.overflow).toBe('auto');
@@ -137,5 +151,55 @@ describe('AchievementModal', () => {
 
     expect(overlay).toHaveClass('animate-in', 'fade-in', 'duration-200');
     expect(surface).toHaveClass('animate-in', 'zoom-in-95', 'duration-200');
+  });
+
+  it('keeps the modal mounted during exit animation before unmounting', async () => {
+    vi.useFakeTimers();
+
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events') {
+        return [];
+      }
+      return {
+        active_event: null,
+        event_achievements: null,
+        global_achievements: {
+          title: '全局成就',
+          summary_text: null,
+          stats: { unlocked_count: 0, in_progress_count: 0, primary_metric_value: 0, primary_metric_label: '总专注秒数' },
+          latest_unlocked: [],
+          upcoming: [],
+        },
+      };
+    });
+
+    function ModalHarness() {
+      const [open, setOpen] = useState(true);
+      return <AchievementModal isOpen={open} onClose={() => setOpen(false)} initialSummary={null} />;
+    }
+
+    render(<ModalHarness />);
+
+    const closeButton = screen.getByRole('button', { name: '关闭成就弹窗' });
+
+    await act(async () => {
+      closeButton.click();
+    });
+
+    const overlay = screen.getByRole('dialog', { name: '成就弹窗' });
+    const surface = screen.getByRole('button', { name: '关闭成就弹窗' }).closest('div[class*="rounded-3xl"]');
+
+    expect(overlay).toHaveClass('achievement-modal-overlay-exit');
+    expect(surface).toHaveClass('achievement-modal-surface-exit');
+
+    await act(async () => {
+      vi.advanceTimersByTime(199);
+    });
+    expect(screen.getByRole('dialog', { name: '成就弹窗' })).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
   });
 });

@@ -5,6 +5,8 @@ import { apiJson } from '../lib/api';
 import AchievementBadgeCard from './AchievementBadgeCard';
 import type { AchievementEventItem, AchievementSummary } from './achievementTypes';
 
+const EXIT_ANIMATION_MS = 200;
+
 type AchievementModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -25,8 +27,38 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
   const [events, setEvents] = useState<AchievementEventItem[]>([]);
   const [summary, setSummary] = useState<AchievementSummary | null>(initialSummary);
   const [error, setError] = useState<string | null>(null);
+  const [isRendered, setIsRendered] = useState(isOpen);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (isOpen) {
+      if (closeTimeoutRef.current !== null) {
+        window.clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      setIsRendered(true);
+      return;
+    }
+
+    if (!isRendered) return;
+
+    closeTimeoutRef.current = window.setTimeout(() => {
+      setIsRendered(false);
+      closeTimeoutRef.current = null;
+    }, EXIT_ANIMATION_MS);
+
+    return () => {
+      if (closeTimeoutRef.current !== null) {
+        window.clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+    };
+  }, [isOpen, isRendered]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -46,7 +78,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
   }, [initialSummary, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isRendered) return;
 
     const { overflow: bodyOverflow } = document.body.style;
     const { overflow: htmlOverflow } = document.documentElement.style;
@@ -57,10 +89,10 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
       document.body.style.overflow = bodyOverflow;
       document.documentElement.style.overflow = htmlOverflow;
     };
-  }, [isOpen]);
+  }, [isRendered]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isRendered) return;
 
     const previousActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeButtonRef.current?.focus();
@@ -68,7 +100,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -105,7 +137,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
         target.focus();
       }
     };
-  }, [isOpen, onClose, returnFocusRef]);
+  }, [isRendered, returnFocusRef]);
 
   async function handleSelectEvent(eventId: string): Promise<void> {
     try {
@@ -117,11 +149,14 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
     }
   }
 
-  if (!isOpen) return null;
+  if (!isRendered) return null;
+
+  const overlayAnimationClass = isOpen ? 'animate-in fade-in duration-200' : 'achievement-modal-overlay-exit';
+  const surfaceAnimationClass = isOpen ? 'animate-in zoom-in-95 duration-200' : 'achievement-modal-surface-exit';
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm animate-in fade-in duration-200 md:items-center md:px-6 md:py-6"
+      className={`fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm ${overlayAnimationClass} md:items-center md:px-6 md:py-6`}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -129,7 +164,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
     >
       <div
         ref={dialogRef}
-        className="w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5 animate-in zoom-in-95 duration-200"
+        className={`w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5 ${surfaceAnimationClass}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">

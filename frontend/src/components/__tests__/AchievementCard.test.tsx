@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import AchievementCard from '../AchievementCard';
 import { apiJson } from '../../lib/api';
@@ -12,6 +12,10 @@ vi.mock('../../lib/api', () => ({
 describe('AchievementCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders event and global summaries together in card state', async () => {
@@ -71,9 +75,12 @@ describe('AchievementCard', () => {
   });
 
   it('moves focus into the modal and restores it to the card after Escape closes the modal', async () => {
-    const user = userEvent.setup();
-    (apiJson as Mock)
-      .mockResolvedValueOnce({
+    vi.useFakeTimers();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events') {
+        return [];
+      }
+      return {
         active_event: null,
         event_achievements: null,
         global_achievements: {
@@ -83,20 +90,30 @@ describe('AchievementCard', () => {
           latest_unlocked: [],
           upcoming: [],
         },
-      })
-      .mockResolvedValueOnce([]);
+      };
+    });
 
     render(<AchievementCard />);
 
-    const trigger = await screen.findByRole('button', { name: '成就' });
+    const trigger = screen.getByRole('button', { name: '成就' });
     expect(trigger).not.toHaveFocus();
 
-    await user.click(trigger);
+    await act(async () => {
+      trigger.click();
+    });
 
-    const closeButton = await screen.findByRole('button', { name: '关闭成就弹窗' });
+    const closeButton = screen.getByRole('button', { name: '关闭成就弹窗' });
     expect(closeButton).toHaveFocus();
 
-    await user.keyboard('{Escape}');
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(screen.getByRole('dialog', { name: '成就弹窗' })).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
 
     expect(screen.queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
