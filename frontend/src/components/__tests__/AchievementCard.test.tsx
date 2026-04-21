@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -56,10 +56,17 @@ describe('AchievementCard', () => {
       })
       .mockResolvedValueOnce([]);
 
-    render(<AchievementCard />);
+    render(
+      <div data-testid="right-panel-shell" className="overflow-hidden">
+        <AchievementCard />
+      </div>,
+    );
 
     await user.click(await screen.findByRole('button', { name: '成就' }));
 
-    expect(await screen.findByText('全局成就')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: '成就弹窗' });
+    expect(dialog).toBeInTheDocument();
+    expect(within(screen.getByTestId('right-panel-shell')).queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
+    expect(screen.getByText('全局成就')).toBeInTheDocument();
   });
 });

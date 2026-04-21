@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { apiJson } from '../lib/api';
 import AchievementBadgeCard from './AchievementBadgeCard';
@@ -32,6 +33,17 @@ export default function AchievementModal({ isOpen, onClose, initialSummary }: Ac
     })();
   }, [initialSummary, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [isOpen]);
+
   async function handleSelectEvent(eventId: string): Promise<void> {
     try {
       const nextSummary = await apiJson<AchievementSummary>(`/todo/achievements/summary?event_id=${eventId}`);
@@ -44,10 +56,16 @@ export default function AchievementModal({ isOpen, onClose, initialSummary }: Ac
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm md:items-center md:px-6 md:py-6"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="成就弹窗"
+    >
       <div
-        className="w-[920px] max-w-[94vw] max-h-[84vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5"
+        className="w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -122,6 +140,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary }: Ac
           </div>
         </section>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
