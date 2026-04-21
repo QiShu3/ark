@@ -136,6 +136,10 @@ class _FakeTodoConn:
                 if row["user_id"] == user_id and row["subject_type"] == subject_type
             }
             return [{"subject_id": subject_id} for subject_id in subject_ids]
+        if "SELECT subject_type, subject_id, completed_at" in sql and "FROM completion_records" in sql:
+            user_id = args[0]
+            rows = [row for row in self.completion_records if row["user_id"] == user_id]
+            return sorted(rows, key=lambda row: row["completed_at"])
         if "FROM completion_records" in sql and "subject_type = $2" in sql:
             user_id, subject_type, subject_id = args[0], args[1], args[2]
             range_start = args[3] if len(args) > 3 else None
@@ -150,6 +154,10 @@ class _FakeTodoConn:
                 and (range_end is None or row["completed_at"] < range_end)
             ]
             return sorted(rows, key=lambda row: row["completed_at"])
+        if "SELECT start_time" in sql and "FROM focus_logs" in sql:
+            user_id = args[0]
+            rows = [{"start_time": row["start_time"]} for row in self.focus_logs if row["user_id"] == user_id]
+            return sorted(rows, key=lambda row: row["start_time"])
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
@@ -435,6 +443,19 @@ class _FakeTodoConn:
             user_id = args[0]
             seconds = sum(int(log["duration"]) for log in self.focus_logs if log["user_id"] == user_id)
             return {"seconds": seconds}
+        if "SELECT COUNT(*)::BIGINT AS count" in sql and "FROM appointment_occurrence_results aor" in sql:
+            user_id, event_id = args
+            event_appointment_ids = {
+                appointment["id"]
+                for appointment in self.appointments
+                if appointment["user_id"] == user_id and appointment["event_id"] == event_id and not appointment["is_deleted"]
+            }
+            count = sum(
+                1
+                for row in self.appointment_occurrence_results
+                if row["appointment_id"] in event_appointment_ids and row["status"] == "attended"
+            )
+            return {"count": count}
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
@@ -1332,6 +1353,159 @@ def test_achievement_summary_filters_event_completions_and_focus(monkeypatch) ->
     assert data["event_achievements"]["stats"]["primary_metric_value"] == 7200
     assert data["global_achievements"]["stats"]["primary_metric_value"] == 9000
     assert any(item["title"] == "首次推进" for item in data["event_achievements"]["latest_unlocked"])
+
+
+def test_achievement_summary_includes_full_first_version_pool(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    due_at = datetime(2026, 4, 25, 12, tzinfo=UTC)
+    event_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "论文投稿",
+            "due_at": due_at,
+            "is_primary": True,
+            "created_at": datetime(2026, 4, 16, tzinfo=UTC),
+            "updated_at": datetime(2026, 4, 16, tzinfo=UTC),
+        }
+    ]
+    task_ids = [uuid4() for _ in range(5)]
+    appointment_ids = [uuid4() for _ in range(3)]
+    conn.tasks = [
+        {
+            **_task_row(title=f"Task {index}", due_date=due_at - timedelta(days=1)),
+            "id": task_id,
+            "event_id": event_id,
+        }
+        for index, task_id in enumerate(task_ids)
+    ]
+    conn.appointments = [
+        {
+            **_appointment_row(title=f"Appointment {index}", status="attended", ends_at=due_at - timedelta(days=2)),
+            "id": appointment_id,
+            "event_id": event_id,
+        }
+        for index, appointment_id in enumerate(appointment_ids)
+    ]
+    event_completion_dates = [
+        datetime(2026, 4, 18, 9, tzinfo=UTC),
+        datetime(2026, 4, 19, 9, tzinfo=UTC),
+        datetime(2026, 4, 20, 9, tzinfo=UTC),
+        datetime(2026, 4, 24, 18, tzinfo=UTC),
+        datetime(2026, 4, 24, 20, tzinfo=UTC),
+    ]
+    conn.completion_records = [
+        _completion_record(
+            subject_type="task",
+            subject_id=task_id,
+            completed_at=completed_at,
+            counted_period_start=None,
+            counted_period_end=None,
+        )
+        for task_id, completed_at in zip(task_ids, event_completion_dates, strict=True)
+    ]
+    conn.completion_records.extend(
+        _completion_record(
+            subject_type="appointment",
+            subject_id=appointment_id,
+            completed_at=datetime(2026, 4, 21 + index, 10, tzinfo=UTC),
+            counted_period_start=None,
+            counted_period_end=None,
+        )
+        for index, appointment_id in enumerate(appointment_ids)
+    )
+    conn.completion_records.extend(
+        _completion_record(
+            subject_type="task",
+            subject_id=uuid4(),
+            completed_at=datetime(2026, 4, 1, 8, tzinfo=UTC) + timedelta(hours=index),
+            counted_period_start=None,
+            counted_period_end=None,
+        )
+        for index in range(92)
+    )
+    conn.focus_logs = [
+        {
+            "id": uuid4(),
+            "user_id": 7,
+            "task_id": task_ids[0],
+            "duration": 60,
+            "start_time": datetime(2026, 4, 14 + index, 8, tzinfo=UTC),
+            "end_at": datetime(2026, 4, 14 + index, 8, 1, tzinfo=UTC),
+            "created_at": datetime(2026, 4, 14 + index, 8, 1, tzinfo=UTC),
+        }
+        for index in range(7)
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get(f"/todo/achievements/summary?event_id={event_id}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    event_titles = {
+        item["title"]
+        for item in data["event_achievements"]["latest_unlocked"] + data["event_achievements"]["upcoming"]
+    }
+    global_titles = {
+        item["title"]
+        for item in data["global_achievements"]["latest_unlocked"] + data["global_achievements"]["upcoming"]
+    }
+    assert {"连续推进 3 天", "守住关键节点", "交付前夜"}.issubset(event_titles)
+    assert {"累计完成 100 项安排", "连续使用 7 天"}.issubset(global_titles)
+
+
+def test_achievement_summary_counts_confirmed_appointment_occurrences(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime(2026, 4, 20, 9, tzinfo=UTC)
+    event_id = uuid4()
+    appointment_ids = [uuid4() for _ in range(3)]
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "论文投稿",
+            "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    conn.appointments = [
+        {
+            **_appointment_row(title=f"Appointment {index}", ends_at=now + timedelta(days=index)),
+            "id": appointment_id,
+            "event_id": event_id,
+        }
+        for index, appointment_id in enumerate(appointment_ids)
+    ]
+    conn.appointment_occurrence_results = [
+        {
+            "appointment_id": appointment_id,
+            "occurrence_ends_at": now + timedelta(days=index),
+            "status": "attended",
+            "created_at": now + timedelta(days=index),
+            "updated_at": now + timedelta(days=index),
+        }
+        for index, appointment_id in enumerate(appointment_ids)
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get(f"/todo/achievements/summary?event_id={event_id}")
+
+    assert resp.status_code == 200
+    event_items = resp.json()["event_achievements"]["latest_unlocked"] + resp.json()["event_achievements"]["upcoming"]
+    guarded_node = next(item for item in event_items if item["title"] == "守住关键节点")
+    assert guarded_node["status"] == "unlocked"
+    assert guarded_node["current_value"] == 3
 
 
 def test_complete_repeating_task_records_completion_without_marking_done(monkeypatch) -> None:

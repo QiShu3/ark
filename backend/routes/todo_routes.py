@@ -1009,6 +1009,105 @@ async def _global_focus_seconds(conn: Any, *, user_id: int) -> int:
     return int((row or {}).get("seconds") or 0)
 
 
+async def _completion_records_for_user(conn: Any, *, user_id: int) -> list[dict[str, Any]]:
+    rows = await conn.fetch(
+        """
+        SELECT subject_type, subject_id, completed_at
+        FROM completion_records
+        WHERE user_id = $1
+        ORDER BY completed_at ASC
+        """,
+        user_id,
+    )
+    return [dict(row) for row in rows]
+
+
+async def _focus_activity_dates(conn: Any, *, user_id: int) -> set[date]:
+    rows = await conn.fetch(
+        """
+        SELECT start_time
+        FROM focus_logs
+        WHERE user_id = $1
+        ORDER BY start_time ASC
+        """,
+        user_id,
+    )
+    return {row["start_time"].date() for row in rows if row["start_time"] is not None}
+
+
+async def _event_confirmed_appointment_occurrence_count(conn: Any, *, user_id: int, event_id: UUID) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT COUNT(*)::BIGINT AS count
+        FROM appointment_occurrence_results aor
+        JOIN appointments a ON a.id = aor.appointment_id
+        WHERE a.user_id = $1
+          AND a.event_id = $2
+          AND a.is_deleted = FALSE
+          AND aor.status = 'attended'
+        """,
+        user_id,
+        event_id,
+    )
+    return int((row or {}).get("count") or 0)
+
+
+def _max_consecutive_day_count(days: set[date]) -> int:
+    if not days:
+        return 0
+    longest = 0
+    current = 0
+    previous: date | None = None
+    for day in sorted(days):
+        if previous is not None and day == previous + timedelta(days=1):
+            current += 1
+        else:
+            current = 1
+        longest = max(longest, current)
+        previous = day
+    return longest
+
+
+def _event_completion_records(
+    completion_records: list[dict[str, Any]],
+    *,
+    task_ids: set[UUID],
+    appointment_ids: set[UUID],
+) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in completion_records
+        if (record["subject_type"] == "task" and record["subject_id"] in task_ids)
+        or (record["subject_type"] == "appointment" and record["subject_id"] in appointment_ids)
+    ]
+
+
+def _delivery_eve_completed(
+    *,
+    completion_records: list[dict[str, Any]],
+    event_due_at: datetime,
+    task_ids: set[UUID],
+    appointment_ids: set[UUID],
+) -> bool:
+    all_subjects = {("task", subject_id) for subject_id in task_ids} | {
+        ("appointment", subject_id) for subject_id in appointment_ids
+    }
+    if not all_subjects:
+        return False
+
+    final_window_start = event_due_at - timedelta(hours=24)
+    completed_subjects: set[tuple[str, UUID]] = set()
+    for record in sorted(completion_records, key=lambda item: item["completed_at"]):
+        subject = (record["subject_type"], record["subject_id"])
+        if subject not in all_subjects:
+            continue
+        completed_subjects.add(subject)
+        completed_at = record["completed_at"]
+        if final_window_start <= completed_at <= event_due_at and completed_subjects >= all_subjects:
+            return True
+    return False
+
+
 def _achievement_item(
     *,
     item_id: str,
@@ -1054,8 +1153,8 @@ def _section_from_items(
             primary_metric_value=primary_metric_value,
             primary_metric_label=primary_metric_label,
         ),
-        latest_unlocked=unlocked[:3],
-        upcoming=upcoming[:3],
+        latest_unlocked=unlocked,
+        upcoming=upcoming,
     )
 
 
@@ -2965,9 +3064,18 @@ async def get_achievement_summary(
                 int(user.id),
             )
         selected_event = _row_to_event(event_row) if event_row is not None else None
-        completed_task_ids = await _completed_subject_ids(conn, user_id=int(user.id), subject_type="task")
-        completed_appointment_ids = await _completed_subject_ids(conn, user_id=int(user.id), subject_type="appointment")
+        all_completion_records = await _completion_records_for_user(conn, user_id=int(user.id))
+        completed_task_ids = {
+            record["subject_id"] for record in all_completion_records if record["subject_type"] == "task"
+        }
+        completed_appointment_ids = {
+            record["subject_id"] for record in all_completion_records if record["subject_type"] == "appointment"
+        }
         global_focus_seconds = await _global_focus_seconds(conn, user_id=int(user.id))
+        global_completion_count = len(all_completion_records)
+        global_activity_days = {record["completed_at"].date() for record in all_completion_records}
+        global_activity_days.update(await _focus_activity_dates(conn, user_id=int(user.id)))
+        global_usage_streak = _max_consecutive_day_count(global_activity_days)
 
         event_section: AchievementSectionOut | None = None
         if event_row is not None:
@@ -2989,6 +3097,26 @@ async def get_achievement_summary(
             }
             event_completed_count = len(event_task_ids & completed_task_ids) + len(event_appointment_ids & completed_appointment_ids)
             event_focus_seconds = await _event_focus_seconds(conn, user_id=int(user.id), event_id=event_row["id"])
+            event_completion_records = _event_completion_records(
+                all_completion_records,
+                task_ids=event_task_ids,
+                appointment_ids=event_appointment_ids,
+            )
+            event_progress_streak = _max_consecutive_day_count(
+                {record["completed_at"].date() for record in event_completion_records}
+            )
+            confirmed_appointment_count = len(event_appointment_ids & completed_appointment_ids)
+            confirmed_appointment_count += await _event_confirmed_appointment_occurrence_count(
+                conn,
+                user_id=int(user.id),
+                event_id=event_row["id"],
+            )
+            delivery_eve_value = 1 if _delivery_eve_completed(
+                completion_records=event_completion_records,
+                event_due_at=event_row["due_at"],
+                task_ids=event_task_ids,
+                appointment_ids=event_appointment_ids,
+            ) else 0
             event_items = [
                 _achievement_item(
                     item_id="event-first-push",
@@ -3010,6 +3138,27 @@ async def get_achievement_summary(
                     description="完成 5 个绑定安排。",
                     current_value=event_completed_count,
                     target_value=5,
+                ),
+                _achievement_item(
+                    item_id="event-streak-3d",
+                    title="连续推进 3 天",
+                    description="连续三天至少完成一项绑定到该事件的安排。",
+                    current_value=event_progress_streak,
+                    target_value=3,
+                ),
+                _achievement_item(
+                    item_id="event-confirm-3-appointments",
+                    title="守住关键节点",
+                    description="确认 3 个绑定到该事件的日程。",
+                    current_value=confirmed_appointment_count,
+                    target_value=3,
+                ),
+                _achievement_item(
+                    item_id="event-delivery-eve",
+                    title="交付前夜",
+                    description="在截止前 24 小时内完成最后一个未完成的绑定安排。",
+                    current_value=delivery_eve_value,
+                    target_value=1,
                 ),
             ]
             event_section = _section_from_items(
@@ -3041,6 +3190,20 @@ async def get_achievement_summary(
                     description="跨所有事件累计专注 50 小时。",
                     current_value=global_focus_seconds,
                     target_value=50 * 60 * 60,
+                ),
+                _achievement_item(
+                    item_id="global-complete-100",
+                    title="累计完成 100 项安排",
+                    description="跨所有事件累计完成 100 次任务或日程。",
+                    current_value=global_completion_count,
+                    target_value=100,
+                ),
+                _achievement_item(
+                    item_id="global-usage-7d",
+                    title="连续使用 7 天",
+                    description="连续 7 天有完成记录或专注记录。",
+                    current_value=global_usage_streak,
+                    target_value=7,
                 ),
             ],
         ),

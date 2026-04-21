@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -18,7 +18,8 @@ describe('AchievementCard', () => {
     vi.useRealTimers();
   });
 
-  it('renders event and global summaries together in card state', async () => {
+  it('shows only the achievement label by default and reveals summaries on hover', async () => {
+    const user = userEvent.setup();
     (apiJson as Mock).mockResolvedValue({
       active_event: { id: 'event-1', name: '论文投稿', due_at: '2026-04-25T12:00:00Z', is_primary: true, user_id: 7, created_at: '2026-04-20T00:00:00Z', updated_at: '2026-04-20T00:00:00Z' },
       event_achievements: {
@@ -39,15 +40,25 @@ describe('AchievementCard', () => {
 
     render(<AchievementCard />);
 
-    expect(await screen.findByText('论文投稿')).toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: '成就' });
+    expect(screen.getByText('成就')).toBeInTheDocument();
+    await waitFor(() => expect(apiJson).toHaveBeenCalledWith('/todo/achievements/summary'));
+    expect(screen.queryByText('论文投稿')).not.toBeInTheDocument();
+
+    await user.hover(trigger);
+
+    expect(screen.getByText('论文投稿')).toBeInTheDocument();
     expect(screen.getByText(/事件已解锁 3 项/)).toBeInTheDocument();
     expect(screen.getByText(/全局：总专注 50 小时/)).toBeInTheDocument();
   });
 
   it('opens the modal when the card is clicked', async () => {
     const user = userEvent.setup();
-    (apiJson as Mock)
-      .mockResolvedValueOnce({
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events') {
+        return [];
+      }
+      return {
         active_event: null,
         event_achievements: null,
         global_achievements: {
@@ -57,8 +68,8 @@ describe('AchievementCard', () => {
           latest_unlocked: [],
           upcoming: [],
         },
-      })
-      .mockResolvedValueOnce([]);
+      };
+    });
 
     render(
       <div data-testid="right-panel-shell" className="overflow-hidden">
