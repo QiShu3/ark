@@ -1408,7 +1408,7 @@ def test_complete_repeating_task_rejects_after_period_limit(monkeypatch) -> None
 def test_complete_repeating_appointment_records_completion_without_marking_attended(monkeypatch) -> None:
     conn = _FakeTodoConn()
     appointment = {
-        **_appointment_row(title="Daily walk", ends_at=datetime(2026, 4, 20, 18, tzinfo=UTC)),
+        **_appointment_row(title="Daily walk", ends_at=datetime.now(UTC) + timedelta(hours=2)),
         "is_recurring": True,
         "period_type": "daily",
         "max_completions_per_period": 2,
