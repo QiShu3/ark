@@ -111,4 +111,31 @@ describe('AchievementModal', () => {
     expect(document.body.style.overflow).toBe('auto');
     expect(document.documentElement.style.overflow).toBe('clip');
   });
+
+  it('applies entry animation classes to overlay and modal surface', async () => {
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events') {
+        return [];
+      }
+      return {
+        active_event: null,
+        event_achievements: null,
+        global_achievements: {
+          title: '全局成就',
+          summary_text: null,
+          stats: { unlocked_count: 0, in_progress_count: 0, primary_metric_value: 0, primary_metric_label: '总专注秒数' },
+          latest_unlocked: [],
+          upcoming: [],
+        },
+      };
+    });
+
+    render(<AchievementModal isOpen={true} onClose={() => {}} initialSummary={null} />);
+
+    const overlay = await screen.findByRole('dialog', { name: '成就弹窗' });
+    const surface = screen.getByRole('button', { name: '关闭成就弹窗' }).closest('div[class*="rounded-3xl"]');
+
+    expect(overlay).toHaveClass('animate-in', 'fade-in', 'duration-200');
+    expect(surface).toHaveClass('animate-in', 'zoom-in-95', 'duration-200');
+  });
 });

@@ -121,7 +121,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm md:items-center md:px-6 md:py-6"
+      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm animate-in fade-in duration-200 md:items-center md:px-6 md:py-6"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -129,7 +129,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
     >
       <div
         ref={dialogRef}
-        className="w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5"
+        className="w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5 animate-in zoom-in-95 duration-200"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
