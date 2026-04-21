@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import AchievementModal from '../AchievementModal';
@@ -12,6 +13,8 @@ vi.mock('../../lib/api', () => ({
 describe('AchievementModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
   });
 
   it('keeps global achievements visible while switching events', async () => {
@@ -67,5 +70,45 @@ describe('AchievementModal', () => {
 
     expect(await screen.findByText('首次推进')).toBeInTheDocument();
     expect(screen.getByText('总专注 50 小时')).toBeInTheDocument();
+  });
+
+  it('locks page scroll while open and restores previous styles after closing', async () => {
+    const user = userEvent.setup();
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'clip';
+
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events') {
+        return [];
+      }
+      return {
+        active_event: null,
+        event_achievements: null,
+        global_achievements: {
+          title: '全局成就',
+          summary_text: null,
+          stats: { unlocked_count: 0, in_progress_count: 0, primary_metric_value: 0, primary_metric_label: '总专注秒数' },
+          latest_unlocked: [],
+          upcoming: [],
+        },
+      };
+    });
+
+    function ModalHarness() {
+      const [open, setOpen] = useState(true);
+      return <AchievementModal isOpen={open} onClose={() => setOpen(false)} initialSummary={null} />;
+    }
+
+    render(<ModalHarness />);
+
+    await screen.findByRole('dialog', { name: '成就弹窗' });
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    await user.click(screen.getByRole('dialog', { name: '成就弹窗' }));
+
+    expect(screen.queryByRole('dialog', { name: '成就弹窗' })).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('auto');
+    expect(document.documentElement.style.overflow).toBe('clip');
   });
 });
