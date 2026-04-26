@@ -40,6 +40,25 @@ function buildTask(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function buildWorkflowPreset(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'preset-1',
+    user_id: 7,
+    name: '深度工作流',
+    focus_duration: 1500,
+    break_duration: 300,
+    default_focus_timer_mode: 'countdown',
+    phases: [
+      { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null },
+      { phase_type: 'break', duration: 300, timer_mode: null, task_id: null },
+    ],
+    is_default: true,
+    created_at: '2026-04-16T08:00:00+08:00',
+    updated_at: '2026-04-16T08:00:00+08:00',
+    ...overrides,
+  };
+}
+
 function defaultApiResponse(path: string) {
   if (path === '/todo/focus/current') {
     return Promise.reject(new Error('no focus'));
@@ -245,6 +264,93 @@ describe('PlaceholderCard workflow UI', () => {
       const body = JSON.parse(String(call?.[1]?.body ?? '{}'));
       expect(body).toEqual({ task_id: todoTask.id });
     });
+  });
+
+  it('copies an existing preset into a new draft', async () => {
+    const user = userEvent.setup();
+    const preset = buildWorkflowPreset();
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflows' && !init?.method) {
+        return Promise.resolve([preset]);
+      }
+      if (path === '/todo/focus/workflows' && init?.method === 'POST') {
+        return Promise.resolve(buildWorkflowPreset({ id: 'preset-copy', name: '深度工作流（副本）', is_default: false }));
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+    window.dispatchEvent(new Event('ark:open-workflow-modal'));
+
+    await user.click(await screen.findByRole('button', { name: '复制工作流 深度工作流' }));
+
+    expect(await screen.findByLabelText('工作流名称')).toHaveValue('深度工作流（副本）');
+    expect(screen.getByRole('heading', { name: '创建工作流' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '创建工作流' }));
+
+    await waitFor(() => {
+      const call = mockApiJson.mock.calls.find(([path, requestInit]) => path === '/todo/focus/workflows' && requestInit?.method === 'POST');
+      expect(call).toBeTruthy();
+      const body = JSON.parse(String(call?.[1]?.body ?? '{}'));
+      expect(body.name).toBe('深度工作流（副本）');
+    });
+  });
+
+  it('reorders phases and updates the live summary', async () => {
+    const user = userEvent.setup();
+
+    renderCard();
+    window.dispatchEvent(new Event('ark:open-workflow-modal'));
+
+    await user.type(await screen.findByLabelText('工作流名称'), '新的节奏');
+    await user.click(screen.getByRole('button', { name: '新增阶段' }));
+
+    expect(screen.getByText('共 3 个阶段 · 专注 30min · 休息 5min')).toBeInTheDocument();
+    expect(screen.getByText('1.专注 25min · 2.休息 5min · 3.专注 5min')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '上移阶段 3' }));
+
+    expect(screen.getByText('1.专注 25min · 2.专注 5min · 3.休息 5min')).toBeInTheDocument();
+  });
+
+  it('prompts before closing when the workflow draft has unsaved changes', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    renderCard();
+    window.dispatchEvent(new Event('ark:open-workflow-modal'));
+
+    await user.type(await screen.findByLabelText('工作流名称'), '未保存草稿');
+    await user.click(screen.getByRole('button', { name: '关闭工作流预设弹窗' }));
+
+    expect(confirmSpy).toHaveBeenCalledWith('当前工作流还有未保存修改，确定要放弃吗？');
+    expect(screen.getByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
+  it('shows clearer preset-management copy and the active editing state', async () => {
+    const user = userEvent.setup();
+    const preset = buildWorkflowPreset();
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflows' && !init?.method) {
+        return Promise.resolve([preset]);
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+    window.dispatchEvent(new Event('ark:open-workflow-modal'));
+
+    expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+    expect(screen.getByText('这里管理的是可复用的专注流程模板，运行控制仍在主面板中完成。')).toBeInTheDocument();
+
+    await user.click(screen.getByText('深度工作流'));
+
+    expect(screen.getByText('编辑中')).toBeInTheDocument();
   });
 
   it('dispatches a workflow reminder event when focus advances into break', async () => {

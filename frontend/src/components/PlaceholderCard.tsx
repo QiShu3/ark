@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
 import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
+import WorkflowPresetModal from './WorkflowPresetModal';
 import CalendarWidget from './CalendarWidget';
 import PhoneSimulator from './PhoneSimulator';
 import TaskEditModal from './TaskEditModal';
@@ -15,6 +16,16 @@ import {
   type WorkflowNotificationSnapshot,
 } from '../lib/workflowNotifications';
 import { formatClockTime } from './workflowProgress';
+import {
+  cloneWorkflowForm,
+  createDefaultWorkflowForm,
+  createWorkflowCopyDraft,
+  createWorkflowFormFromPreset,
+  isWorkflowFormDirty,
+  moveWorkflowPhase,
+  type WorkflowFormState,
+  type WorkflowPreset,
+} from './workflowPresetForm';
 
 interface PlaceholderCardProps {
   index: number;
@@ -52,19 +63,6 @@ interface FocusWorkflow {
   completed_workflow_name?: string | null;
 }
 
-interface WorkflowPreset {
-  id: string;
-  user_id: number;
-  name: string;
-  focus_duration: number;
-  break_duration: number;
-  default_focus_timer_mode?: 'countdown' | 'countup';
-  phases: { phase_type: 'focus' | 'break'; duration: number; timer_mode?: 'countdown' | 'countup' | null; task_id?: string | null }[];
-  is_default: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 interface EventItem {
   id: string;
   user_id: number;
@@ -73,32 +71,6 @@ interface EventItem {
   is_primary: boolean;
   created_at: string;
   updated_at: string;
-}
-
-type WorkflowFormPhase = {
-  phase_type: 'focus' | 'break';
-  duration: number;
-  timer_mode: 'countdown' | 'countup';
-  task_id: string | null;
-};
-
-type WorkflowFormState = {
-  name: string;
-  defaultFocusTimerMode: 'countdown' | 'countup';
-  phases: WorkflowFormPhase[];
-  isDefault: boolean;
-};
-
-function createDefaultWorkflowForm(isDefault: boolean): WorkflowFormState {
-  return {
-    name: '',
-    defaultFocusTimerMode: 'countdown',
-    phases: [
-      { phase_type: 'focus', duration: 25 * 60, timer_mode: 'countdown', task_id: null },
-      { phase_type: 'break', duration: 5 * 60, timer_mode: 'countdown', task_id: null },
-    ],
-    isDefault,
-  };
 }
 
 type CreateTaskForm = {
@@ -214,6 +186,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null);
   const [workflowForm, setWorkflowForm] = useState<WorkflowFormState>(() => createDefaultWorkflowForm(false));
+  const [workflowFormBaseline, setWorkflowFormBaseline] = useState<WorkflowFormState>(() => createDefaultWorkflowForm(false));
   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
   const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
   const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
@@ -231,6 +204,35 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [taskAssistantDrafts, setTaskAssistantDrafts] = useState<TaskAssistantDraft[]>([]);
   const [activeTaskDraftId, setActiveTaskDraftId] = useState<string | null>(null);
   const [workflowRenderTick, setWorkflowRenderTick] = useState(() => Date.now());
+
+  function _replaceWorkflowDraft(nextForm: WorkflowFormState, nextEditingId: string | null) {
+    const snapshot = cloneWorkflowForm(nextForm);
+    setEditingWorkflowId(nextEditingId);
+    setWorkflowForm(snapshot);
+    setWorkflowFormBaseline(cloneWorkflowForm(snapshot));
+    setWorkflowError(null);
+  }
+
+  function _workflowDraftIsDirty() {
+    return isWorkflowFormDirty(workflowForm, workflowFormBaseline);
+  }
+
+  function _confirmWorkflowDiscard(): boolean {
+    if (!_workflowDraftIsDirty()) {
+      return true;
+    }
+    return window.confirm('当前工作流还有未保存修改，确定要放弃吗？');
+  }
+
+  function _closeWorkflowModal() {
+    if (!_confirmWorkflowDiscard()) return;
+    setShowWorkflowModal(false);
+  }
+
+  function _startNewWorkflowDraft() {
+    if (!_confirmWorkflowDiscard()) return;
+    _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+  }
 
   // Task Management State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -268,9 +270,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   useEffect(() => {
     if (index !== 0) return;
     const handler = () => {
-      setWorkflowError(null);
-      setEditingWorkflowId(null);
-      setWorkflowForm(createDefaultWorkflowForm(workflowPresets.length === 0));
+      _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
       setShowWorkflowModal(true);
       _loadWorkflowPresets();
     };
@@ -937,44 +937,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   }
 
   function _editWorkflowPreset(preset: WorkflowPreset) {
-    setEditingWorkflowId(preset.id);
-    setWorkflowForm({
-      name: preset.name,
-      defaultFocusTimerMode: preset.default_focus_timer_mode ?? 'countdown',
-      phases: preset.phases.length
-        ? preset.phases.map((phase) => ({
-            phase_type: phase.phase_type,
-            duration: phase.duration,
-            timer_mode: phase.phase_type === 'focus' ? (phase.timer_mode ?? preset.default_focus_timer_mode ?? 'countdown') : 'countdown',
-            task_id: phase.phase_type === 'focus' ? (phase.task_id ?? null) : null,
-          }))
-        : [
-            {
-              phase_type: 'focus',
-              duration: preset.focus_duration,
-              timer_mode: preset.default_focus_timer_mode ?? 'countdown',
-              task_id: null,
-            },
-            { phase_type: 'break', duration: preset.break_duration, timer_mode: 'countdown', task_id: null },
-          ],
-      isDefault: preset.is_default,
-    });
-    setWorkflowError(null);
+    if (!_confirmWorkflowDiscard()) return;
+    _replaceWorkflowDraft(createWorkflowFormFromPreset(preset), preset.id);
   }
 
-  function _updateWorkflowPhase(index: number, patch: Partial<WorkflowFormPhase>) {
-    setWorkflowForm((s) => {
-      const next = s.phases.map((phase, i) => {
-        if (i !== index) return phase;
-        const updated = { ...phase, ...patch };
-        if (updated.phase_type === 'break') {
-          updated.timer_mode = 'countdown';
-          updated.task_id = null;
-        }
-        return updated;
-      });
-      return { ...s, phases: next };
-    });
+  function _copyWorkflowPreset(preset: WorkflowPreset) {
+    if (!_confirmWorkflowDiscard()) return;
+    _replaceWorkflowDraft(createWorkflowCopyDraft(preset), null);
   }
 
   function _addWorkflowPhase() {
@@ -996,11 +965,27 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     });
   }
 
+  function _moveWorkflowPhase(index: number, direction: -1 | 1) {
+    setWorkflowForm((state) => moveWorkflowPhase(state, index, direction));
+  }
+
   function _removeWorkflowPhase(index: number) {
     setWorkflowForm((s) => {
       if (s.phases.length <= 1) return s;
       return { ...s, phases: s.phases.filter((_, i) => i !== index) };
     });
+  }
+
+  function _resetWorkflowForm() {
+    if (!_confirmWorkflowDiscard()) return;
+    if (editingWorkflowId) {
+      const preset = workflowPresets.find((item) => item.id === editingWorkflowId);
+      if (preset) {
+        _replaceWorkflowDraft(createWorkflowFormFromPreset(preset), preset.id);
+        return;
+      }
+    }
+    _replaceWorkflowDraft(createDefaultWorkflowForm(false), null);
   }
 
   async function _submitWorkflowPreset() {
@@ -1061,7 +1046,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
         });
       }
       setEditingWorkflowId(null);
-      setWorkflowForm(createDefaultWorkflowForm(false));
+      const nextForm = createDefaultWorkflowForm(false);
+      setWorkflowForm(nextForm);
+      setWorkflowFormBaseline(cloneWorkflowForm(nextForm));
       await _loadWorkflowPresets();
     } catch (e) {
       setWorkflowError(e instanceof Error ? e.message : '保存工作流失败');
@@ -2035,235 +2022,28 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           </div>
         )}
 
-        {showWorkflowModal && (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-            onClick={() => setShowWorkflowModal(false)}
-          >
-            <div
-              className="w-[760px] max-w-[94vw] max-h-[78vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-                <h3 className="text-lg font-bold text-white">工作流管理</h3>
-                <button
-                  onClick={() => setShowWorkflowModal(false)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-0 h-[calc(78vh-56px)]">
-                <div className="border-r border-white/10 p-4 overflow-y-auto">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-white/70">已保存工作流</span>
-                    <button
-                      onClick={() => {
-                        setEditingWorkflowId(null);
-                        setWorkflowForm(createDefaultWorkflowForm(workflowPresets.length === 0));
-                        setWorkflowError(null);
-                      }}
-                      className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                    >
-                      新建
-                    </button>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {workflowPresets.map((preset) => (
-                      <div
-                        key={preset.id}
-                        className={`rounded-lg border p-3 cursor-pointer transition-colors ${preset.is_default ? 'border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                        onClick={() => _editWorkflowPreset(preset)}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="font-medium text-white">{preset.name}</div>
-                            <div className="text-xs text-white/60 mt-1">
-                              {preset.phases.map((phase, idx) => `${idx + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`).join(' · ')}
-                            </div>
-                          </div>
-                          {preset.is_default && <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/30">默认</span>}
-                        </div>
-                        <div className="flex items-center gap-2 mt-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              _setDefaultWorkflowPreset(preset.id);
-                            }}
-                            className="text-xs px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30"
-                          >
-                            设为默认
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              _deleteWorkflowPreset(preset.id);
-                            }}
-                            className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30"
-                          >
-                            删除
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {workflowPresets.length === 0 && (
-                      <div className="text-center text-white/35 py-8">暂无工作流，先创建一个</div>
-                    )}
-                  </div>
-                </div>
-                <div className="p-4 overflow-y-auto">
-                  <h4 className="text-sm text-white/70 mb-3">{editingWorkflowId ? '编辑工作流' : '创建工作流'}</h4>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="workflow-name" className="text-xs text-white/60">名称</label>
-                      <input
-                        id="workflow-name"
-                        aria-label="工作流名称"
-                        value={workflowForm.name}
-                        onChange={(e) => setWorkflowForm((s) => ({ ...s, name: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        placeholder="例如：番茄默认"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="workflow-default-timer-mode" className="text-xs text-white/60">默认专注计时方式</label>
-                      <select
-                        id="workflow-default-timer-mode"
-                        aria-label="默认专注计时方式"
-                        value={workflowForm.defaultFocusTimerMode}
-                        onChange={(e) => {
-                          const mode = e.target.value as 'countdown' | 'countup';
-                          setWorkflowForm((s) => ({
-                            ...s,
-                            defaultFocusTimerMode: mode,
-                            phases: s.phases.map((phase) => (
-                              phase.phase_type === 'focus' && phase.timer_mode === s.defaultFocusTimerMode
-                                ? { ...phase, timer_mode: mode }
-                                : phase
-                            )),
-                          }));
-                        }}
-                        className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                      >
-                        <option value="countdown">倒计时</option>
-                        <option value="countup">正计时</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-white/60">阶段配置</span>
-                      <button onClick={_addWorkflowPhase} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">新增阶段</button>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {workflowForm.phases.map((phase, idx) => (
-                        <div key={`${phase.phase_type}-${idx}`} className="grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
-                          <select
-                            aria-label={`阶段 ${idx + 1} 类型`}
-                            value={phase.phase_type}
-                            onChange={(e) => _updateWorkflowPhase(idx, { phase_type: e.target.value as 'focus' | 'break' })}
-                            className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                          >
-                            <option value="focus">专注</option>
-                            <option value="break">休息</option>
-                          </select>
-                          {phase.phase_type === 'focus' && phase.timer_mode === 'countup' ? (
-                            <div className="grid grid-cols-[1fr,auto] gap-2">
-                              <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white/60 flex items-center">
-                                正计时阶段不需要单独设置时长
-                              </div>
-                              <button
-                                onClick={() => _removeWorkflowPhase(idx)}
-                                className="px-2 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs"
-                                disabled={workflowForm.phases.length <= 1}
-                              >
-                                删除
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-[1fr,auto] gap-2">
-                              <input
-                                aria-label={`阶段 ${idx + 1} 时长（分钟）`}
-                                type="number"
-                                min={1}
-                                value={Math.round(phase.duration / 60)}
-                                onChange={(e) => _updateWorkflowPhase(idx, { duration: Math.max(60, Number(e.target.value || 1) * 60) })}
-                                className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                              <button
-                                onClick={() => _removeWorkflowPhase(idx)}
-                                className="px-2 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs"
-                                disabled={workflowForm.phases.length <= 1}
-                              >
-                                删除
-                              </button>
-                            </div>
-                          )}
-                          {phase.phase_type === 'focus' ? (
-                            <div className="grid grid-cols-2 gap-2">
-                              <select
-                                aria-label={`阶段 ${idx + 1} 计时方式`}
-                                value={phase.timer_mode}
-                                onChange={(e) => _updateWorkflowPhase(idx, { timer_mode: e.target.value as 'countdown' | 'countup' })}
-                                className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              >
-                                <option value="countdown">倒计时</option>
-                                <option value="countup">正计时</option>
-                              </select>
-                              <select
-                                aria-label={`阶段 ${idx + 1} 绑定任务`}
-                                value={phase.task_id ?? ''}
-                                onChange={(e) => _updateWorkflowPhase(idx, { task_id: e.target.value || null })}
-                                className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              >
-                                <option value="">运行时选择任务</option>
-                                {tasks.filter((task) => task.status !== 'done' && !_isTaskHiddenFromActionList(task)).map((task) => (
-                                  <option key={task.id} value={task.id}>{task.title}</option>
-                                ))}
-                              </select>
-                            </div>
-                          ) : (
-                            <div className="text-xs text-white/45 px-1">休息阶段不绑定任务，固定使用倒计时。</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <label className="inline-flex items-center gap-2 text-sm text-white/75">
-                      <input
-                        type="checkbox"
-                        checked={workflowForm.isDefault}
-                        onChange={(e) => setWorkflowForm((s) => ({ ...s, isDefault: e.target.checked }))}
-                      />
-                      设为默认工作流
-                    </label>
-                    {workflowError && <div className="text-sm text-red-400">{workflowError}</div>}
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                      <button
-                        onClick={() => {
-                          setEditingWorkflowId(null);
-                          setWorkflowForm(createDefaultWorkflowForm(false));
-                          setWorkflowError(null);
-                        }}
-                        className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20"
-                        disabled={workflowSubmitting}
-                      >
-                        重置
-                      </button>
-                      <button
-                        onClick={_submitWorkflowPreset}
-                        className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60"
-                        disabled={workflowSubmitting}
-                      >
-                        {workflowSubmitting ? '保存中...' : (editingWorkflowId ? '保存修改' : '创建工作流')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <WorkflowPresetModal
+          open={showWorkflowModal}
+          presets={workflowPresets}
+          tasks={tasks}
+          editingWorkflowId={editingWorkflowId}
+          workflowForm={workflowForm}
+          workflowError={workflowError}
+          workflowSubmitting={workflowSubmitting}
+          onClose={_closeWorkflowModal}
+          onCreateNew={_startNewWorkflowDraft}
+          onSelectPreset={_editWorkflowPreset}
+          onCopyPreset={_copyWorkflowPreset}
+          onSetDefault={_setDefaultWorkflowPreset}
+          onDeletePreset={_deleteWorkflowPreset}
+          onUpdateForm={setWorkflowForm}
+          onAddPhase={_addWorkflowPhase}
+          onMovePhase={_moveWorkflowPhase}
+          onRemovePhase={_removeWorkflowPhase}
+          onSubmit={_submitWorkflowPreset}
+          onReset={_resetWorkflowForm}
+          isTaskHiddenFromActionList={_isTaskHiddenFromActionList}
+        />
 
         {/* 专注时长统计悬浮页面 */}
         {showStatsModal && (

@@ -47,3 +47,12 @@ backend/2ms/mini_agent/app_state/log/
 backend/2ms/mini_agent/app_state/.history/
 
 DockerImages/
+
+# Local Codex artifacts
+.codex/
+backend/workspace/
+
+# Local planning drafts
+docs/superpowers/plans/2026-04-20-dev-log-branch-grouping.md
+docs/superpowers/plans/2026-04-20-dev-log-user-request-field.md
+docs/superpowers/plans/2026-04-20-repeat-completion-events-phase1-2.md
