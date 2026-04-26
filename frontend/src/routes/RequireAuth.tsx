@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
+import BeianFooter from '../components/BeianFooter';
 import { useAuthStore } from '../lib/auth';
 import Navigation from '../components/Navigation';
 
@@ -36,6 +37,8 @@ export default function RequireAuth() {
 
       {/* 主体内容区域 */}
       <Outlet />
+
+      <BeianFooter />
     </div>
   );
 }

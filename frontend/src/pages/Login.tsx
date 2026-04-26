@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson } from '../lib/api';
+import BeianFooter from '../components/BeianFooter';
 
 type LoginResponse = {
   access_token: string;
@@ -183,6 +184,8 @@ export default function Login() {
           </form>
         </div>
       </div>
+
+      <BeianFooter />
     </div>
   );
 }
