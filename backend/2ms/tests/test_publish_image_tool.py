@@ -6,9 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mini_agent.tools.publish_image_tool import PublishImageTool
-
 
 MINIMAL_PNG = (
     b"\x89PNG\r\n\x1a\n"

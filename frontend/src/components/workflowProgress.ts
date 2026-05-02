@@ -102,16 +102,13 @@ export function computeWorkflowProgress(workflow: WorkflowSnapshot): WorkflowPro
   const currentDuration = safePhases[activePhaseIndex]?.duration ?? 0;
   const timerMode = getWorkflowPhaseTimerMode(workflow);
   const remaining = clamp(Math.round(workflow.remaining_seconds ?? currentDuration), 0, currentDuration);
-  let currentElapsed = 0;
-  if (workflow.pending_confirmation) {
-    currentElapsed = currentDuration;
-  } else if (workflow.pending_task_selection) {
-    currentElapsed = 0;
-  } else if (timerMode === 'countup' && safePhases[activePhaseIndex]?.phase_type === 'focus') {
-    currentElapsed = clamp(Math.round(workflow.elapsed_seconds ?? 0), 0, currentDuration);
-  } else {
-    currentElapsed = currentDuration - remaining;
-  }
+  const currentElapsed = workflow.pending_confirmation
+    ? currentDuration
+    : workflow.pending_task_selection
+      ? 0
+      : timerMode === 'countup' && safePhases[activePhaseIndex]?.phase_type === 'focus'
+        ? clamp(Math.round(workflow.elapsed_seconds ?? 0), 0, currentDuration)
+        : currentDuration - remaining;
   const elapsedSeconds = clamp(completedBefore + currentElapsed, 0, totalSeconds);
   const percent = totalSeconds > 0 ? clamp((elapsedSeconds / totalSeconds) * 100, 0, 100) : 0;
 

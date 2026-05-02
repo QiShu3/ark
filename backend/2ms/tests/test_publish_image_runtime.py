@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from mini_agent.config import Config
 from mini_agent.server import runtime
 

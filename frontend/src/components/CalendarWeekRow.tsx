@@ -2,7 +2,6 @@ import React from 'react';
 import CalendarDayCell from './CalendarDayCell';
 import CalendarTaskBar from './CalendarTaskBar';
 import {
-  CALENDAR_DAY_HEADER_HEIGHT,
   CALENDAR_MIN_CELL_HEIGHT,
   CALENDAR_TASK_FOOTER_PADDING,
   CALENDAR_TASK_LAYER_TOP,

@@ -384,7 +384,7 @@ describe('PlaceholderCard arrangements', () => {
   it('completes repeating tasks through the complete endpoint and hides them from actionable lists', async () => {
     const user = userEvent.setup();
     let completed = false;
-    mockApiJson.mockImplementation((path: string, options?: RequestInit) => {
+    mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/tasks?limit=100') {
         return Promise.resolve(
           completed
@@ -454,7 +454,7 @@ describe('PlaceholderCard arrangements', () => {
   it('completes repeating appointments through the complete endpoint and hides them from actionable lists', async () => {
     const user = userEvent.setup();
     let completed = false;
-    mockApiJson.mockImplementation((path: string, options?: RequestInit) => {
+    mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/appointments') {
         return Promise.resolve(
           completed
@@ -510,7 +510,7 @@ describe('PlaceholderCard arrangements', () => {
     const now = new Date();
     const todayDue = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 30).toISOString();
     const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0).toISOString();
-    mockApiJson.mockImplementation((path: string, options?: RequestInit) => {
+    mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/tasks?limit=100') {
         return Promise.resolve([
           buildTask({

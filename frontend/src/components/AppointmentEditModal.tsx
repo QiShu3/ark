@@ -28,22 +28,6 @@ type AppointmentEditFormState = {
   timeOverridden: boolean;
 };
 
-const EMPTY_FORM: AppointmentEditFormState = {
-  title: '',
-  content: '',
-  status: 'pending',
-  startsAt: '',
-  endsAt: '',
-  repeatRule: '',
-  eventId: '',
-  periodType: 'once',
-  customPeriodDays: 1,
-  maxCompletionsPerPeriod: 1,
-  weekdayOnly: false,
-  timeInheritsFromEvent: false,
-  timeOverridden: false,
-};
-
 type AppointmentEditModalProps = {
   open: boolean;
   appointment: Appointment | null;
@@ -101,29 +85,19 @@ function syncAppointmentEventSelection(form: AppointmentEditFormState, eventId: 
   };
 }
 
-const AppointmentEditModal: React.FC<AppointmentEditModalProps> = ({ open, appointment, onClose, onChanged }) => {
-  const [form, setForm] = useState<AppointmentEditFormState>(EMPTY_FORM);
+type AppointmentEditModalBodyProps = {
+  appointment: Appointment;
+  onClose: () => void;
+  onChanged?: () => void | Promise<void>;
+};
+
+const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ appointment, onClose, onChanged }) => {
+  const [form, setForm] = useState<AppointmentEditFormState>(() => buildEditForm(appointment));
   const [events, setEvents] = useState<EventItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !appointment) {
-      setForm(EMPTY_FORM);
-      setSubmitting(false);
-      setError(null);
-      return;
-    }
-    setForm(buildEditForm(appointment));
-    setSubmitting(false);
-    setError(null);
-  }, [open, appointment]);
-
-  useEffect(() => {
-    if (!open) {
-      setEvents([]);
-      return;
-    }
     let cancelled = false;
     void (async () => {
       try {
@@ -138,9 +112,7 @@ const AppointmentEditModal: React.FC<AppointmentEditModalProps> = ({ open, appoi
     return () => {
       cancelled = true;
     };
-  }, [open]);
-
-  if (!open || !appointment) return null;
+  }, []);
 
   async function handleChanged(): Promise<void> {
     await Promise.resolve(onChanged?.());
@@ -380,6 +352,19 @@ const AppointmentEditModal: React.FC<AppointmentEditModalProps> = ({ open, appoi
         </div>
       </div>
     </div>
+  );
+};
+
+const AppointmentEditModal: React.FC<AppointmentEditModalProps> = ({ open, appointment, onClose, onChanged }) => {
+  if (!open || !appointment) return null;
+
+  return (
+    <AppointmentEditModalBody
+      key={`${appointment.id}:${appointment.updated_at}`}
+      appointment={appointment}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
   );
 };
 

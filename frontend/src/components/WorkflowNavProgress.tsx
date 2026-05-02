@@ -4,7 +4,6 @@ import {
   formatClockTime,
   getActiveWorkflowPhase,
   getWorkflowPhaseTimerMode,
-  phaseLabel,
   WorkflowSnapshot,
 } from './workflowProgress';
 import { apiJson } from '../lib/api';

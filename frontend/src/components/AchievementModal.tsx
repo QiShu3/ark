@@ -33,7 +33,9 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
   const closeTimeoutRef = useRef<number | null>(null);
   const onCloseRef = useRef(onClose);
 
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +43,8 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
         window.clearTimeout(closeTimeoutRef.current);
         closeTimeoutRef.current = null;
       }
+      // Re-opening needs to cancel the exit state immediately so the portal stays mounted.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsRendered(true);
       return;
     }
@@ -128,11 +132,12 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
     };
 
     document.addEventListener('keydown', handleKeyDown);
+    const returnFocusTarget = returnFocusRef?.current ?? null;
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
 
-      const target = returnFocusRef?.current ?? previousActive;
+      const target = returnFocusTarget ?? previousActive;
       if (target) {
         target.focus();
       }

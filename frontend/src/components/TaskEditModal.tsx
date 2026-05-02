@@ -31,25 +31,6 @@ type TaskEditFormState = {
   dueDate: string;
 };
 
-const EMPTY_FORM: TaskEditFormState = {
-  title: '',
-  content: '',
-  priority: 0,
-  targetMinutes: 0,
-  event: '',
-  eventId: '',
-  periodType: 'once',
-  customPeriodDays: 1,
-  maxCompletionsPerPeriod: 1,
-  weekdayOnly: false,
-  timeInheritsFromEvent: false,
-  timeOverridden: false,
-  taskType: 'focus',
-  tagsText: '',
-  startDate: '',
-  dueDate: '',
-};
-
 type TaskEditModalProps = {
   open: boolean;
   task: Task | null;
@@ -107,29 +88,19 @@ function syncTaskEventSelection(form: TaskEditFormState, eventId: string, events
   };
 }
 
-const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onChanged }) => {
-  const [form, setForm] = useState<TaskEditFormState>(EMPTY_FORM);
+type TaskEditModalBodyProps = {
+  task: Task;
+  onClose: () => void;
+  onChanged?: () => void | Promise<void>;
+};
+
+const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, onChanged }) => {
+  const [form, setForm] = useState<TaskEditFormState>(() => buildEditForm(task));
   const [events, setEvents] = useState<EventItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !task) {
-      setForm(EMPTY_FORM);
-      setSubmitting(false);
-      setError(null);
-      return;
-    }
-    setForm(buildEditForm(task));
-    setSubmitting(false);
-    setError(null);
-  }, [open, task]);
-
-  useEffect(() => {
-    if (!open) {
-      setEvents([]);
-      return;
-    }
     let cancelled = false;
     void (async () => {
       try {
@@ -144,9 +115,7 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
     return () => {
       cancelled = true;
     };
-  }, [open]);
-
-  if (!open || !task) return null;
+  }, []);
 
   async function handleChanged(): Promise<void> {
     window.dispatchEvent(new CustomEvent('ark:reload-focus'));
@@ -448,6 +417,19 @@ const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onCh
         </div>
       </div>
     </div>
+  );
+};
+
+const TaskEditModal: React.FC<TaskEditModalProps> = ({ open, task, onClose, onChanged }) => {
+  if (!open || !task) return null;
+
+  return (
+    <TaskEditModalBody
+      key={`${task.id}:${task.updated_at}`}
+      task={task}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
   );
 };
 

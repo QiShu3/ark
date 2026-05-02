@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from mini_agent.assets import IMAGE_ASSET_DIR
 from mini_agent.server.auth import CurrentUser, get_current_user
 from mini_agent.server.repository import SessionRecord

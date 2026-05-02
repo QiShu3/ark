@@ -39,7 +39,6 @@ const AUTO_OPEN_STORAGE_KEY = 'ark:auto-open:MainAgent:last-run-started-at';
 const HOME_AUTO_OPEN_SOURCE = 'home_auto_open';
 const WORKFLOW_NOTIFICATION_EVENT = 'ark:main-agent-workflow-notification';
 
-type AutoOpenPhase = 'idle' | 'blocked' | 'ready' | 'sending' | 'confirmed' | 'done';
 type SystemRunDetail = {
   key: string;
   prompt: string;
@@ -172,7 +171,6 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [socketState, setSocketState] = useState<'disconnected' | 'connecting' | 'open'>('disconnected');
-  const [autoOpenPhase, setAutoOpenPhase] = useState<AutoOpenPhase>('idle');
 
   const tts = useTts();
 
@@ -182,6 +180,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   const hasAutoOpenAttemptedRef = useRef(false);
   const autoOpenAwaitingAckRef = useRef(false);
   const pendingSystemRunRef = useRef<SystemRunDetail | null>(null);
+  const autoOpenScheduleRef = useRef<number | null>(null);
 
   const stopStreamingTimer = useCallback(() => {
     if (streamingTimerRef.current !== null) {
@@ -229,7 +228,10 @@ export function useAgentChat(profileKey: string = 'agent-console') {
   useEffect(() => {
     hasAutoOpenAttemptedRef.current = false;
     autoOpenAwaitingAckRef.current = false;
-    setAutoOpenPhase(isHomeMainAgentScope(profileKey) ? 'idle' : 'done');
+    if (autoOpenScheduleRef.current !== null) {
+      window.clearTimeout(autoOpenScheduleRef.current);
+      autoOpenScheduleRef.current = null;
+    }
   }, [profileKey]);
 
   // 初始化 Session 和历史记录 
@@ -337,7 +339,8 @@ export function useAgentChat(profileKey: string = 'agent-console') {
         setError(null);
         resetStreamingTextRef.current();
         if (autoOpenAwaitingAckRef.current) {
-          setAutoOpenPhase('confirmed');
+          persistAutoOpenCooldown();
+          autoOpenAwaitingAckRef.current = false;
         }
         return;
       }
@@ -361,9 +364,12 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       setIsGenerating(false);
       resetStreamingTextRef.current();
       resetTtsRef.current();
+      if (autoOpenScheduleRef.current !== null) {
+        window.clearTimeout(autoOpenScheduleRef.current);
+        autoOpenScheduleRef.current = null;
+      }
       if (autoOpenAwaitingAckRef.current) {
         autoOpenAwaitingAckRef.current = false;
-        setAutoOpenPhase('done');
       }
       if (socketRef.current === socket) {
         socketRef.current = null;
@@ -377,6 +383,10 @@ export function useAgentChat(profileKey: string = 'agent-console') {
       }
       resetStreamingTextRef.current();
       resetTtsRef.current();
+      if (autoOpenScheduleRef.current !== null) {
+        window.clearTimeout(autoOpenScheduleRef.current);
+        autoOpenScheduleRef.current = null;
+      }
       socket.close();
     };
   }, [session?.id, token]);
@@ -439,8 +449,7 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     if (!isHomeMainAgentScope(profileKey)) {
       return;
     }
-
-    if (autoOpenPhase === 'done' || autoOpenPhase === 'sending' || autoOpenPhase === 'confirmed') {
+    if (hasAutoOpenAttemptedRef.current || autoOpenAwaitingAckRef.current) {
       return;
     }
 
@@ -454,35 +463,35 @@ export function useAgentChat(profileKey: string = 'agent-console') {
     });
 
     if (!eligible) {
-      setAutoOpenPhase((current) => (current === 'idle' || current === 'ready' ? 'blocked' : current));
+      return;
+    }
+    if (autoOpenScheduleRef.current !== null) {
       return;
     }
 
-    setAutoOpenPhase('ready');
     tts.ensureAutoPlayReady?.();
-    const sent = sendSystemRun({
-      key: HOME_AUTO_OPEN_SOURCE,
-      prompt: buildAutoOpenPrompt(),
-    });
-    if (!sent) {
-      setAutoOpenPhase('blocked');
-      return;
-    }
+    autoOpenScheduleRef.current = window.setTimeout(() => {
+      autoOpenScheduleRef.current = null;
 
-    hasAutoOpenAttemptedRef.current = true;
-    autoOpenAwaitingAckRef.current = true;
-    setAutoOpenPhase('sending');
-  }, [autoOpenPhase, isGenerating, profileKey, sendSystemRun, session, socketState, tts]);
+      const sent = sendSystemRun({
+        key: HOME_AUTO_OPEN_SOURCE,
+        prompt: buildAutoOpenPrompt(),
+      });
+      if (!sent) {
+        return;
+      }
 
-  useEffect(() => {
-    if (autoOpenPhase !== 'confirmed') {
-      return;
-    }
+      hasAutoOpenAttemptedRef.current = true;
+      autoOpenAwaitingAckRef.current = true;
+    }, 0);
 
-    persistAutoOpenCooldown();
-    autoOpenAwaitingAckRef.current = false;
-    setAutoOpenPhase('done');
-  }, [autoOpenPhase]);
+    return () => {
+      if (autoOpenScheduleRef.current !== null) {
+        window.clearTimeout(autoOpenScheduleRef.current);
+        autoOpenScheduleRef.current = null;
+      }
+    };
+  }, [isGenerating, profileKey, sendSystemRun, session, socketState, tts]);
 
   return {
     session,
