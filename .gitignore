@@ -50,9 +50,12 @@ DockerImages/
 
 # Local Codex artifacts
 .codex/
+.playwright-mcp/
 backend/workspace/
+docs/draw.io/
 
 # Local planning drafts
 docs/superpowers/plans/2026-04-20-dev-log-branch-grouping.md
 docs/superpowers/plans/2026-04-20-dev-log-user-request-field.md
 docs/superpowers/plans/2026-04-20-repeat-completion-events-phase1-2.md
+docs/superpowers/plans/2026-05-01-frontend-architecture-diagram.md
