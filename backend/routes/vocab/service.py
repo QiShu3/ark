@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 
 import asyncpg
@@ -9,6 +10,7 @@ from .repository import (
     count_active_mistakes,
     count_due_reviews,
     count_new_words,
+    count_studied_new_words_today,
     get_daily_new_limit,
     get_user_word_progress,
     get_word_detail_row,
@@ -23,6 +25,77 @@ from .repository import (
     upsert_mistake_bucket,
     upsert_user_word_progress,
 )
+
+_SERIAL_SUFFIX_RE = re.compile(r"_(\d+)$")
+
+
+def _deck_group_key(raw_value: str) -> str:
+    return _SERIAL_SUFFIX_RE.sub("", raw_value)
+
+
+def _natural_sort_key(raw_value: str) -> list[int | str]:
+    parts = re.split(r"(\d+)", raw_value)
+    return [int(part) if part.isdigit() else part.lower() for part in parts if part]
+
+
+def _group_deck_rows(rows: list[asyncpg.Record | dict]) -> list[dict]:
+    grouped: dict[str, dict] = {}
+
+    for raw_row in rows:
+        row = dict(raw_row)
+        group_key = _deck_group_key(str(row["key"]))
+        group_name = _deck_group_key(str(row["name"]))
+        group = grouped.get(group_key)
+
+        if group is None:
+            group = {
+                "id": group_key,
+                "key": group_key,
+                "name": group_name,
+                "description": f"{group_name} 词书",
+                "word_count": 0,
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "member_deck_ids": [],
+                "member_keys": [],
+                "member_names": [],
+                "members": [],
+            }
+            grouped[group_key] = group
+
+        group["word_count"] += int(row["word_count"])
+        group["created_at"] = min(group["created_at"], row["created_at"])
+        group["updated_at"] = max(group["updated_at"], row["updated_at"])
+        group["members"].append(
+            {
+                "id": str(row["id"]),
+                "key": str(row["key"]),
+                "name": str(row["name"]),
+            }
+        )
+
+    items = sorted(grouped.values(), key=lambda item: _natural_sort_key(str(item["name"])))
+    for item in items:
+        sorted_members = sorted(item["members"], key=lambda member: _natural_sort_key(member["name"]))
+        item["member_deck_ids"] = [member["id"] for member in sorted_members]
+        item["member_keys"] = [member["key"] for member in sorted_members]
+        item["member_names"] = [member["name"] for member in sorted_members]
+        item.pop("members", None)
+        member_count = len(item["member_deck_ids"])
+        if member_count > 1:
+            item["description"] = f"{item['name']} 词书（{member_count} 册，共 {item['word_count']} 个单词）"
+        else:
+            item["description"] = f"{item['name']} 词书"
+    return items
+
+
+def _resolve_deck_group(grouped_decks: list[dict], deck_id: str) -> dict:
+    for deck in grouped_decks:
+        if deck_id == deck["id"] or deck_id == deck["key"]:
+            return deck
+        if deck_id in deck["member_deck_ids"] or deck_id in deck["member_keys"]:
+            return deck
+    raise HTTPException(status_code=404, detail="词书不存在")
 
 
 def _detail_payload(
@@ -89,17 +162,23 @@ def apply_review_result(progress: dict, *, result: str) -> dict:
 async def list_decks(pool: asyncpg.Pool) -> list[dict]:
     async with pool.acquire() as conn:
         rows = await list_vocab_decks(conn)
-    return [dict(row) for row in rows]
+    return _group_deck_rows(rows)
 
 
 async def get_today_summary(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> dict[str, int]:
     async with pool.acquire() as conn:
-        daily_new_limit = await get_daily_new_limit(conn, user_id=user_id, deck_id=deck_id)
-        new_count = await count_new_words(conn, user_id=user_id, deck_id=deck_id, limit=daily_new_limit)
-        review_count = await count_due_reviews(conn, user_id=user_id, deck_id=deck_id)
-        mistake_count = await count_active_mistakes(conn, user_id=user_id, deck_id=deck_id)
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        member_deck_ids = list(deck_group["member_deck_ids"])
+
+        daily_new_limit = await get_daily_new_limit(conn, user_id=user_id, deck_ids=member_deck_ids)
+        unseen_new_count = await count_new_words(conn, user_id=user_id, deck_ids=member_deck_ids)
+        studied_today_count = await count_studied_new_words_today(conn, user_id=user_id, deck_ids=member_deck_ids)
+        remaining_new_quota = max(daily_new_limit - studied_today_count, 0)
+        review_count = await count_due_reviews(conn, user_id=user_id, deck_ids=member_deck_ids)
+        mistake_count = await count_active_mistakes(conn, user_id=user_id, deck_ids=member_deck_ids)
     return {
-        "new_count": new_count,
+        "new_count": min(unseen_new_count, remaining_new_quota),
         "review_count": review_count,
         "mistake_count": mistake_count,
     }
@@ -119,7 +198,9 @@ async def get_word_detail(pool: asyncpg.Pool, *, user_id: int, word_id: str) -> 
 
 async def get_review_queue(pool: asyncpg.Pool, *, user_id: int, deck_id: str, limit: int = 10) -> list[dict]:
     async with pool.acquire() as conn:
-        rows = await list_review_queue_rows(conn, user_id=user_id, deck_id=deck_id, limit=limit)
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        rows = await list_review_queue_rows(conn, user_id=user_id, deck_ids=list(deck_group["member_deck_ids"]), limit=limit)
         items: list[dict] = []
         for row in rows:
             word_id = str(row["id"])
@@ -135,23 +216,47 @@ async def get_review_queue(pool: asyncpg.Pool, *, user_id: int, deck_id: str, li
 
 async def get_study_queue(pool: asyncpg.Pool, *, user_id: int, deck_id: str, limit: int = 10) -> list[dict]:
     async with pool.acquire() as conn:
-        rows = await list_study_queue_rows(conn, user_id=user_id, deck_id=deck_id, limit=limit)
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        member_deck_ids = list(deck_group["member_deck_ids"])
+
+        daily_new_limit = await get_daily_new_limit(conn, user_id=user_id, deck_ids=member_deck_ids)
+        studied_today_count = await count_studied_new_words_today(conn, user_id=user_id, deck_ids=member_deck_ids)
+        remaining_new_quota = max(daily_new_limit - studied_today_count, 0)
+        if remaining_new_quota <= 0:
+            return []
+
         items: list[dict] = []
-        for row in rows:
-            word_id = str(row["id"])
-            translations = await list_word_translations(conn, word_id=word_id)
-            phrases = await list_word_phrases(conn, word_id=word_id)
-            sentences = await list_word_sentences(conn, word_id=word_id)
-            payload = _detail_payload(row, translations=translations, phrases=phrases, sentences=sentences)
-            payload["prompt_type"] = "en_to_zh"
-            payload["review_mode"] = "study"
-            items.append(payload)
+        remaining_limit = min(limit, remaining_new_quota)
+
+        for member_deck_id in member_deck_ids:
+            if remaining_limit <= 0:
+                break
+
+            rows = await list_study_queue_rows(
+                conn,
+                user_id=user_id,
+                deck_id=member_deck_id,
+                limit=remaining_limit,
+            )
+            for row in rows:
+                word_id = str(row["id"])
+                translations = await list_word_translations(conn, word_id=word_id)
+                phrases = await list_word_phrases(conn, word_id=word_id)
+                sentences = await list_word_sentences(conn, word_id=word_id)
+                payload = _detail_payload(row, translations=translations, phrases=phrases, sentences=sentences)
+                payload["prompt_type"] = "en_to_zh"
+                payload["review_mode"] = "study"
+                items.append(payload)
+            remaining_limit -= len(rows)
     return items
 
 
 async def list_mistakes(pool: asyncpg.Pool, *, user_id: int, deck_id: str, limit: int = 50) -> list[dict]:
     async with pool.acquire() as conn:
-        rows = await list_mistake_rows(conn, user_id=user_id, deck_id=deck_id, limit=limit)
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        rows = await list_mistake_rows(conn, user_id=user_id, deck_ids=list(deck_group["member_deck_ids"]), limit=limit)
         items: list[dict] = []
         for row in rows:
             word_id = str(row["id"])

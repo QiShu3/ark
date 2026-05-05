@@ -4,6 +4,32 @@ import { fetchVocabDecks } from '../../lib/vocab/api';
 import type { VocabDeck } from '../../lib/vocab/types';
 
 const ACTIVE_DECK_KEY = 'ark-vocab-active-deck';
+const SERIAL_SUFFIX_RE = /_\d+$/;
+let decksCache: VocabDeck[] | null = null;
+let decksRequest: Promise<VocabDeck[]> | null = null;
+
+async function loadDecks() {
+  if (decksCache) return decksCache;
+
+  if (!decksRequest) {
+    decksRequest = fetchVocabDecks()
+      .then((items) => {
+        decksCache = items;
+        return items;
+      })
+      .catch((error: unknown) => {
+        decksRequest = null;
+        throw error;
+      });
+  }
+
+  return decksRequest;
+}
+
+function normalizeDeckKey(rawKey: string | null) {
+  if (!rawKey) return null;
+  return rawKey.replace(SERIAL_SUFFIX_RE, '');
+}
 
 export function useVocabDeck() {
   const [decks, setDecks] = useState<VocabDeck[]>([]);
@@ -14,11 +40,11 @@ export function useVocabDeck() {
   useEffect(() => {
     let cancelled = false;
 
-    fetchVocabDecks()
+    loadDecks()
       .then((items) => {
         if (cancelled) return;
         setDecks(items);
-        const savedKey = window.localStorage.getItem(ACTIVE_DECK_KEY);
+        const savedKey = normalizeDeckKey(window.localStorage.getItem(ACTIVE_DECK_KEY));
         const fallbackDeck = items[0] ?? null;
         const matched = items.find((item) => item.key === savedKey) ?? fallbackDeck;
         setActiveDeckState(matched);

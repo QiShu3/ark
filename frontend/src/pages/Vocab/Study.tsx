@@ -1,11 +1,18 @@
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
+import ReviewResultPanel from '../../components/Vocab/ReviewResultPanel';
 import StudyCard from '../../components/Vocab/StudyCard';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
-import { useVocabReviewQueue } from '../../hooks/vocab/useVocabReviewQueue';
+import { useVocabSession } from '../../hooks/vocab/useVocabSession';
+
+const studyActions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'good' }> = [
+  { label: '没记住', hint: '明天重新见', value: 'again' },
+  { label: '有点印象', hint: '过两天再看', value: 'hard' },
+  { label: '记住了', hint: '进入更长间隔', value: 'good' },
+];
 
 export default function VocabStudy() {
   const { decks, activeDeck, setActiveDeck } = useVocabDeck();
-  const { currentItem, loading, error } = useVocabReviewQueue(activeDeck?.id ?? null, 'study');
+  const session = useVocabSession(activeDeck?.id ?? null, 'study');
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -18,11 +25,47 @@ export default function VocabStudy() {
         </div>
 
         <div className="mt-8">
-          {loading ? <p className="text-sm text-white/55">新词加载中…</p> : null}
-          {error ? <p className="text-sm text-rose-200">{error}</p> : null}
-          {currentItem ? <StudyCard item={currentItem} /> : null}
-          {!loading && !error && !currentItem ? (
-            <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">当前词书没有待学新词。</div>
+          {session.loading ? <p className="text-sm text-white/55">新词加载中…</p> : null}
+          {session.error ? <p className="text-sm text-rose-200">{session.error}</p> : null}
+
+          {session.currentItem ? (
+            <div className="space-y-6">
+              <StudyCard item={session.currentItem} />
+
+              <div className="rounded-[2rem] border border-white/10 bg-black/20 p-5 text-sm text-white/68">
+                看完释义后，直接给这张卡一个结果，系统会自动推进到下一词并安排后续复习。
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {studyActions.map((action) => (
+                  <button
+                    key={action.value}
+                    type="button"
+                    disabled={session.submitting}
+                    onClick={() => void session.submit(action.value)}
+                    className="rounded-[1.5rem] border border-white/15 bg-white/8 px-5 py-4 text-left transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <div className="text-base font-medium text-white">{action.label}</div>
+                    <div className="mt-1 text-sm text-white/55">{action.hint}</div>
+                  </button>
+                ))}
+              </div>
+
+              <a
+                href={`#/vocab/words/${session.currentItem.id}`}
+                className="inline-block text-sm text-white/65 transition hover:text-white"
+              >
+                查看完整词条
+              </a>
+            </div>
+          ) : null}
+
+          {session.lastResult ? <ReviewResultPanel result={session.lastResult} /> : null}
+
+          {!session.loading && !session.error && !session.currentItem ? (
+            <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">
+              当前词书今天没有待学新词了。
+            </div>
           ) : null}
         </div>
       </div>

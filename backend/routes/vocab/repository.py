@@ -258,79 +258,120 @@ async def import_deck(conn: asyncpg.Connection, deck: DeckSeed) -> str:
     return deck_id
 
 
+async def sync_vocab_deck_word_counts(conn: asyncpg.Connection) -> None:
+    await conn.execute(
+        """
+        UPDATE vocab_decks d
+        SET word_count = COALESCE(stats.actual_word_count, 0),
+            updated_at = NOW()
+        FROM (
+          SELECT d2.id AS deck_id, COUNT(w.id)::int AS actual_word_count
+          FROM vocab_decks d2
+          LEFT JOIN vocab_words w ON w.deck_id = d2.id
+          GROUP BY d2.id
+        ) stats
+        WHERE d.id = stats.deck_id
+          AND d.word_count IS DISTINCT FROM COALESCE(stats.actual_word_count, 0)
+        """
+    )
+
+
 async def list_vocab_decks(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     return await conn.fetch(
         """
-        SELECT id::text AS id, key, name, description, word_count, created_at, updated_at
-        FROM vocab_decks
-        ORDER BY name ASC
+        SELECT
+          d.id::text AS id,
+          d.key,
+          d.name,
+          d.description,
+          COALESCE(stats.actual_word_count, 0) AS word_count,
+          d.created_at,
+          d.updated_at
+        FROM vocab_decks d
+        LEFT JOIN (
+          SELECT deck_id, COUNT(*)::int AS actual_word_count
+          FROM vocab_words
+          GROUP BY deck_id
+        ) stats ON stats.deck_id = d.id
+        ORDER BY d.name ASC
         """
     )
 
 
-async def get_daily_new_limit(conn: asyncpg.Connection, *, user_id: int, deck_id: str) -> int:
+async def get_daily_new_limit(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
     row = await conn.fetchrow(
         """
-        SELECT daily_new_limit
+        SELECT MIN(daily_new_limit) AS daily_new_limit
         FROM vocab_user_deck_settings
-        WHERE user_id = $1 AND deck_id = $2::uuid
+        WHERE user_id = $1 AND deck_id = ANY($2::uuid[])
         """,
         user_id,
-        deck_id,
+        deck_ids,
     )
-    return int(row["daily_new_limit"]) if row else 20
+    return int(row["daily_new_limit"]) if row and row["daily_new_limit"] is not None else 20
 
 
-async def count_new_words(conn: asyncpg.Connection, *, user_id: int, deck_id: str, limit: int) -> int:
+async def count_new_words(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
     row = await conn.fetchrow(
         """
         SELECT COUNT(*) AS total
-        FROM (
-          SELECT w.id
-          FROM vocab_words w
-          LEFT JOIN vocab_user_word_progress p
-            ON p.user_id = $1 AND p.word_id = w.id
-          WHERE w.deck_id = $2::uuid
-            AND p.word_id IS NULL
-          ORDER BY w.sort_order ASC
-          LIMIT $3
-        ) AS pending
+        FROM vocab_words w
+        LEFT JOIN vocab_user_word_progress p
+          ON p.user_id = $1 AND p.word_id = w.id
+        WHERE w.deck_id = ANY($2::uuid[])
+          AND p.word_id IS NULL
         """,
         user_id,
-        deck_id,
-        limit,
+        deck_ids,
     )
     return int(row["total"])
 
 
-async def count_due_reviews(conn: asyncpg.Connection, *, user_id: int, deck_id: str) -> int:
+async def count_studied_new_words_today(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT COUNT(DISTINCT word_id) AS total
+        FROM vocab_review_logs
+        WHERE user_id = $1
+          AND deck_id = ANY($2::uuid[])
+          AND review_mode = 'study'
+          AND created_at >= date_trunc('day', NOW())
+          AND created_at < date_trunc('day', NOW()) + INTERVAL '1 day'
+        """,
+        user_id,
+        deck_ids,
+    )
+    return int(row["total"])
+
+
+async def count_due_reviews(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
     row = await conn.fetchrow(
         """
         SELECT COUNT(*) AS total
         FROM vocab_user_word_progress
         WHERE user_id = $1
-          AND deck_id = $2::uuid
+          AND deck_id = ANY($2::uuid[])
           AND next_review_at IS NOT NULL
           AND next_review_at <= NOW()
           AND is_suspended = FALSE
         """,
         user_id,
-        deck_id,
+        deck_ids,
     )
     return int(row["total"])
 
 
-async def count_active_mistakes(conn: asyncpg.Connection, *, user_id: int, deck_id: str) -> int:
+async def count_active_mistakes(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
     row = await conn.fetchrow(
         """
         SELECT COUNT(*) AS total
         FROM vocab_mistake_bucket
         WHERE user_id = $1
-          AND deck_id = $2::uuid
+          AND deck_id = ANY($2::uuid[])
           AND is_active = TRUE
         """,
         user_id,
-        deck_id,
+        deck_ids,
     )
     return int(row["total"])
 
@@ -510,7 +551,7 @@ async def list_review_queue_rows(
     conn: asyncpg.Connection,
     *,
     user_id: int,
-    deck_id: str,
+    deck_ids: list[str],
     limit: int,
 ) -> list[asyncpg.Record]:
     return await conn.fetch(
@@ -526,7 +567,7 @@ async def list_review_queue_rows(
         JOIN vocab_user_word_progress p
           ON p.word_id = w.id
          AND p.user_id = $1
-        WHERE w.deck_id = $2::uuid
+        WHERE w.deck_id = ANY($2::uuid[])
           AND p.next_review_at IS NOT NULL
           AND p.next_review_at <= NOW()
           AND p.is_suspended = FALSE
@@ -534,7 +575,7 @@ async def list_review_queue_rows(
         LIMIT $3
         """,
         user_id,
-        deck_id,
+        deck_ids,
         limit,
     )
 
@@ -573,7 +614,7 @@ async def list_mistake_rows(
     conn: asyncpg.Connection,
     *,
     user_id: int,
-    deck_id: str,
+    deck_ids: list[str],
     limit: int,
 ) -> list[asyncpg.Record]:
     return await conn.fetch(
@@ -589,12 +630,12 @@ async def list_mistake_rows(
         FROM vocab_mistake_bucket m
         JOIN vocab_words w ON w.id = m.word_id
         WHERE m.user_id = $1
-          AND m.deck_id = $2::uuid
+          AND m.deck_id = ANY($2::uuid[])
           AND m.is_active = TRUE
         ORDER BY m.last_wrong_at DESC, w.sort_order ASC
         LIMIT $3
         """,
         user_id,
-        deck_id,
+        deck_ids,
         limit,
     )
