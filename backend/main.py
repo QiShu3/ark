@@ -15,6 +15,8 @@ from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
+from routes.vocab import init_vocab
+from routes.vocab import router as vocab_router
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH, override=False)
@@ -27,6 +29,7 @@ async def _lifespan(app: FastAPI):
     await init_checkin(app)
     await init_todo(app)
     await init_arxiv(app)
+    await init_vocab(app)
     try:
         yield
     finally:
@@ -49,6 +52,7 @@ app.include_router(checkin_router)
 app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(arxiv_router)
+app.include_router(vocab_router)
 register_mini_agent(app)
 
 
