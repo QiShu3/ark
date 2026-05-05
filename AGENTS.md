@@ -5,6 +5,7 @@ This repository is split into `frontend/` and `backend/`.
 
 - `frontend/src/` contains the React + TypeScript app.
 - `frontend/src/components/`, `pages/`, `routes/`, `hooks/`, and `lib/` hold UI, route screens, routing guards, reusable hooks, and client utilities.
+- For larger frontend sub-apps or domain modules, group related files under a dedicated namespace folder instead of scattering them across shared directories. Example: place vocab pages under `frontend/src/pages/Vocab/`, vocab components under `frontend/src/components/Vocab/`, vocab hooks under `frontend/src/hooks/vocab/`, and vocab utilities/types under `frontend/src/lib/vocab/`.
 - `frontend/src/pages/__tests__/` contains frontend tests.
 - `backend/main.py` is the FastAPI entrypoint.
 - `backend/routes/` contains API route modules such as auth, todo, and arXiv.
