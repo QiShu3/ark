@@ -49,6 +49,26 @@ class VocabTranslationOut(BaseModel):
     translation: str
 
 
+class VocabOverviewCurrentWordOut(BaseModel):
+    id: str
+    deck_id: str
+    deck_name: str
+    word: str
+    us_pronunciation: str | None = None
+    uk_pronunciation: str | None = None
+    mastery_state: Literal["unstarted", "learning", "mastered"]
+    translations: list[VocabTranslationOut] = Field(default_factory=list)
+
+
+class VocabOverviewMasteredWordOut(BaseModel):
+    id: str
+    word: str
+    us_pronunciation: str | None = None
+    uk_pronunciation: str | None = None
+    translations: list[VocabTranslationOut] = Field(default_factory=list)
+    source_deck_names: list[str] = Field(default_factory=list)
+
+
 class VocabPhraseOut(BaseModel):
     phrase: str
     translation: str

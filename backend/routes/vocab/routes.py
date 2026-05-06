@@ -8,8 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from routes.auth_routes import get_current_user
 
 from .schemas import (
+    VocabDeckMasteryOut,
     VocabDeckOut,
     VocabMistakeItemOut,
+    VocabOverviewCurrentWordOut,
+    VocabOverviewMasteredWordOut,
     VocabOverviewOut,
     VocabReviewQueueItemOut,
     VocabReviewSubmitIn,
@@ -27,6 +30,9 @@ from .service import (
     get_word_detail,
     list_decks,
     list_mistakes,
+    list_overview_completed_decks,
+    list_overview_current_words,
+    list_overview_mastered_words,
     submit_review,
     update_today_plan,
 )
@@ -74,6 +80,44 @@ async def route_get_overview(
 ) -> VocabOverviewOut:
     payload = await get_overview(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
     return VocabOverviewOut(**payload)
+
+
+@router.get("/decks/{deck_id}/overview/completed-decks", response_model=list[VocabDeckMasteryOut])
+async def route_list_overview_completed_decks(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[VocabDeckMasteryOut]:
+    items = await list_overview_completed_decks(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
+    return [VocabDeckMasteryOut(**item) for item in items]
+
+
+@router.get("/decks/{deck_id}/overview/mastered-words", response_model=list[VocabOverviewMasteredWordOut])
+async def route_list_overview_mastered_words(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[VocabOverviewMasteredWordOut]:
+    items = await list_overview_mastered_words(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
+    return [VocabOverviewMasteredWordOut(**item) for item in items]
+
+
+@router.get("/decks/{deck_id}/overview/current-words", response_model=list[VocabOverviewCurrentWordOut])
+async def route_list_overview_current_words(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+    state: str = Query(default="all"),
+    target_deck_id: str | None = Query(default=None),
+) -> list[VocabOverviewCurrentWordOut]:
+    items = await list_overview_current_words(
+        _pool_from_request(request),
+        user_id=int(user.id),
+        deck_id=deck_id,
+        state=state,
+        target_deck_id=target_deck_id,
+    )
+    return [VocabOverviewCurrentWordOut(**item) for item in items]
 
 
 @router.get("/decks/{deck_id}/study", response_model=list[VocabReviewQueueItemOut])

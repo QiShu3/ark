@@ -100,6 +100,68 @@ def test_vocab_overview_route_returns_global_snapshot(monkeypatch) -> None:
     assert response.json()["current_deck"]["mastered_word_count"] == 1400
 
 
+def test_vocab_overview_mastered_words_route_returns_items(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+
+    async def fake_list_overview_mastered_words(*_args, **_kwargs):
+        return [
+            {
+                "id": "word-1",
+                "word": "prosperity",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "translations": [{"pos": "n.", "translation": "繁荣"}],
+                "source_deck_names": ["CET4", "CET6"],
+            }
+        ]
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "list_overview_mastered_words", fake_list_overview_mastered_words)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.get("/api/vocab/decks/cet6/overview/mastered-words")
+
+    assert response.status_code == 200
+    assert response.json()[0]["word"] == "prosperity"
+    assert response.json()[0]["source_deck_names"] == ["CET4", "CET6"]
+
+
+def test_vocab_overview_current_words_route_returns_items(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+
+    async def fake_list_overview_current_words(*_args, **_kwargs):
+        return [
+            {
+                "id": "word-1",
+                "deck_id": "cet6",
+                "deck_name": "CET6",
+                "word": "prosperity",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "mastery_state": "mastered",
+                "translations": [{"pos": "n.", "translation": "繁荣"}],
+            }
+        ]
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "list_overview_current_words", fake_list_overview_current_words)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.get("/api/vocab/decks/cet6/overview/current-words?state=mastered")
+
+    assert response.status_code == 200
+    assert response.json()[0]["deck_name"] == "CET6"
+    assert response.json()[0]["mastery_state"] == "mastered"
+
+
 def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(vocab_router)

@@ -145,15 +145,20 @@ async def test_get_overview_aggregates_global_and_current_deck_mastery(monkeypat
             },
         ]
 
+    async def fake_count_global_mastered_word_keys(_conn, *, user_id: int):
+        assert user_id == 1
+        return 145
+
     monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
     monkeypatch.setattr(vocab_service, "list_deck_mastery_rows", fake_list_deck_mastery_rows)
+    monkeypatch.setattr(vocab_service, "count_global_mastered_word_keys", fake_count_global_mastered_word_keys)
 
     overview = await vocab_service.get_overview(_Pool(), user_id=1, deck_id="cet6")
 
     assert overview == {
         "completed_deck_count": 1,
         "total_deck_count": 2,
-        "mastered_word_count": 160,
+        "mastered_word_count": 145,
         "current_deck": {
             "deck_id": "cet6",
             "deck_name": "CET6",
@@ -277,6 +282,176 @@ async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(
     assert summary["total_count"] == 12
     assert summary["pending_count"] == 9
     assert summary["memorized_count"] == 91
+
+
+@pytest.mark.asyncio
+async def test_list_overview_mastered_words_deduplicates_by_word(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        return [
+            {
+                "id": "deck-1-1",
+                "key": "cet4_1",
+                "name": "CET4_1",
+                "description": "CET4_1 词书",
+                "word_count": 100,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            }
+        ]
+
+    async def fake_list_mastered_word_rows(_conn, *, user_id: int):
+        assert user_id == 1
+        return [
+            {
+                "word_key": "prosperity",
+                "id": "word-1",
+                "word": "prosperity",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "deck_name": "CET4_1",
+                "pos": "n.",
+                "translation": "繁荣",
+            },
+            {
+                "word_key": "prosperity",
+                "id": "word-2",
+                "word": "prosperity",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "deck_name": "CET6_1",
+                "pos": "n.",
+                "translation": "繁荣",
+            },
+            {
+                "word_key": "prosperity",
+                "id": "word-2",
+                "word": "prosperity",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "deck_name": "CET6_1",
+                "pos": "n.",
+                "translation": "兴旺",
+            },
+        ]
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "list_mastered_word_rows", fake_list_mastered_word_rows)
+
+    items = await vocab_service.list_overview_mastered_words(_Pool(), user_id=1, deck_id="cet4")
+
+    assert items == [
+        {
+            "id": "word-1",
+            "word": "prosperity",
+            "us_pronunciation": None,
+            "uk_pronunciation": None,
+            "translations": [
+                {"pos": "n.", "translation": "繁荣"},
+                {"pos": "n.", "translation": "兴旺"},
+            ],
+            "source_deck_names": ["CET4", "CET6"],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_overview_current_words_filters_by_mastery_state(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        return [
+            {
+                "id": "deck-1-1",
+                "key": "cet6_1",
+                "name": "CET6_1",
+                "description": "CET6_1 词书",
+                "word_count": 100,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            }
+        ]
+
+    async def fake_list_deck_word_rows(_conn, *, user_id: int, deck_ids: list[str]):
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1"]
+        return [
+            {
+                "id": "word-1",
+                "deck_id": "deck-1-1",
+                "deck_name": "CET6_1",
+                "word": "alpha",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "fsrs_state": "",
+                "pos": "n.",
+                "translation": "甲",
+            },
+            {
+                "id": "word-2",
+                "deck_id": "deck-1-1",
+                "deck_name": "CET6_1",
+                "word": "beta",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "fsrs_state": "1",
+                "pos": "n.",
+                "translation": "乙",
+            },
+            {
+                "id": "word-3",
+                "deck_id": "deck-1-1",
+                "deck_name": "CET6_1",
+                "word": "gamma",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "fsrs_state": "2",
+                "pos": "n.",
+                "translation": "丙",
+            },
+        ]
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "list_deck_word_rows", fake_list_deck_word_rows)
+
+    learning_items = await vocab_service.list_overview_current_words(
+        _Pool(),
+        user_id=1,
+        deck_id="cet6",
+        state="learning",
+    )
+
+    assert learning_items == [
+        {
+            "id": "word-2",
+            "deck_id": "cet6",
+            "deck_name": "CET6",
+            "word": "beta",
+            "us_pronunciation": None,
+            "uk_pronunciation": None,
+            "mastery_state": "learning",
+            "translations": [{"pos": "n.", "translation": "乙"}],
+        }
+    ]
 
 
 @pytest.mark.asyncio

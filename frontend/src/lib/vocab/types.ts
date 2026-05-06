@@ -39,6 +39,35 @@ export type VocabTranslation = {
   translation: string;
 };
 
+export type VocabOverviewCompletedDeck = {
+  deck_id: string;
+  deck_name: string;
+  total_word_count: number;
+  mastered_word_count: number;
+  learning_word_count: number;
+  unstarted_word_count: number;
+};
+
+export type VocabOverviewMasteredWord = {
+  id: string;
+  word: string;
+  us_pronunciation: string | null;
+  uk_pronunciation: string | null;
+  translations: VocabTranslation[];
+  source_deck_names: string[];
+};
+
+export type VocabOverviewCurrentWord = {
+  id: string;
+  deck_id: string;
+  deck_name: string;
+  word: string;
+  us_pronunciation: string | null;
+  uk_pronunciation: string | null;
+  mastery_state: 'unstarted' | 'learning' | 'mastered';
+  translations: VocabTranslation[];
+};
+
 export type VocabPhrase = {
   phrase: string;
   translation: string;

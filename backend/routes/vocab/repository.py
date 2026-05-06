@@ -864,6 +864,24 @@ async def count_memorized_words(
     return int(row["memorized_count"]) if row else 0
 
 
+async def count_global_mastered_word_keys(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT COUNT(DISTINCT LOWER(BTRIM(w.word)))::int AS mastered_word_count
+        FROM vocab_user_word_progress p
+        JOIN vocab_words w ON w.id = p.word_id
+        WHERE p.user_id = $1
+          AND COALESCE(p.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')
+        """,
+        user_id,
+    )
+    return int(row["mastered_word_count"]) if row else 0
+
+
 async def list_deck_mastery_rows(
     conn: asyncpg.Connection,
     *,
@@ -892,6 +910,70 @@ async def list_deck_mastery_rows(
         ORDER BY d.created_at ASC
         """,
         user_id,
+    )
+
+
+async def list_mastered_word_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          LOWER(BTRIM(w.word)) AS word_key,
+          w.id::text AS id,
+          w.word,
+          w.us_pronunciation,
+          w.uk_pronunciation,
+          d.name AS deck_name,
+          t.pos,
+          t.translation,
+          COALESCE(t.sort_order, 999999) AS translation_sort_order,
+          w.sort_order
+        FROM vocab_user_word_progress p
+        JOIN vocab_words w ON w.id = p.word_id
+        JOIN vocab_decks d ON d.id = w.deck_id
+        LEFT JOIN vocab_word_translations t ON t.word_id = w.id
+        WHERE p.user_id = $1
+          AND COALESCE(p.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')
+        ORDER BY LOWER(BTRIM(w.word)) ASC, d.name ASC, w.sort_order ASC, COALESCE(t.sort_order, 999999) ASC
+        """,
+        user_id,
+    )
+
+
+async def list_deck_word_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_ids: list[str],
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          w.id::text AS id,
+          w.deck_id::text AS deck_id,
+          d.name AS deck_name,
+          w.word,
+          w.us_pronunciation,
+          w.uk_pronunciation,
+          COALESCE(p.fsrs_card_json ->> 'state', '') AS fsrs_state,
+          t.pos,
+          t.translation,
+          COALESCE(t.sort_order, 999999) AS translation_sort_order,
+          w.sort_order
+        FROM vocab_words w
+        JOIN vocab_decks d ON d.id = w.deck_id
+        LEFT JOIN vocab_user_word_progress p
+          ON p.word_id = w.id
+         AND p.user_id = $1
+        LEFT JOIN vocab_word_translations t ON t.word_id = w.id
+        WHERE w.deck_id = ANY($2::uuid[])
+        ORDER BY w.sort_order ASC, COALESCE(t.sort_order, 999999) ASC
+        """,
+        user_id,
+        deck_ids,
     )
 
 

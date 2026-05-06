@@ -6,8 +6,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Home from '../Home';
 
-const { fetchVocabOverview, fetchVocabToday, updateVocabTodaySettings } = vi.hoisted(() => ({
+const {
+  fetchVocabOverview,
+  fetchVocabOverviewCompletedDecks,
+  fetchVocabOverviewCurrentWords,
+  fetchVocabOverviewMasteredWords,
+  fetchVocabToday,
+  updateVocabTodaySettings,
+} = vi.hoisted(() => ({
   fetchVocabOverview: vi.fn(),
+  fetchVocabOverviewCompletedDecks: vi.fn(),
+  fetchVocabOverviewCurrentWords: vi.fn(),
+  fetchVocabOverviewMasteredWords: vi.fn(),
   fetchVocabToday: vi.fn(),
   updateVocabTodaySettings: vi.fn(),
 }));
@@ -27,6 +37,9 @@ vi.mock('../../../hooks/vocab/useVocabDeck', () => ({
 
 vi.mock('../../../lib/vocab/api', () => ({
   fetchVocabOverview,
+  fetchVocabOverviewCompletedDecks,
+  fetchVocabOverviewCurrentWords,
+  fetchVocabOverviewMasteredWords,
   fetchVocabToday,
   updateVocabTodaySettings,
 }));
@@ -34,6 +47,9 @@ vi.mock('../../../lib/vocab/api', () => ({
 describe('Vocab home page', () => {
   beforeEach(() => {
     fetchVocabOverview.mockReset();
+    fetchVocabOverviewCompletedDecks.mockReset();
+    fetchVocabOverviewCurrentWords.mockReset();
+    fetchVocabOverviewMasteredWords.mockReset();
     fetchVocabToday.mockReset();
     updateVocabTodaySettings.mockReset();
   });
@@ -96,6 +112,60 @@ describe('Vocab home page', () => {
     expect(screen.getAllByText('已掌握')).toHaveLength(2);
     expect(screen.getByText('3600')).toBeInTheDocument();
     expect(screen.getByText('快捷入口')).toBeInTheDocument();
+  });
+
+  it('opens the overview detail dialog and loads current deck words', async () => {
+    const user = userEvent.setup();
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 2,
+      total_deck_count: 6,
+      mastered_word_count: 1240,
+      current_deck: {
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 3600,
+        learning_word_count: 2100,
+        unstarted_word_count: 1808,
+      },
+    });
+    fetchVocabToday.mockResolvedValue({
+      learning_count: 7,
+      new_count: 12,
+      review_count: 5,
+      mistake_count: 2,
+      total_count: 24,
+      pending_count: 17,
+      completed_count: 7,
+      daily_target_count: 24,
+      memorized_count: 120,
+    });
+    fetchVocabOverviewCurrentWords.mockResolvedValue([
+      {
+        id: 'word-1',
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        word: 'prosperity',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'mastered',
+        translations: [{ pos: 'n.', translation: '繁荣' }],
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('当前词书掌握度');
+    await user.click(screen.getByRole('button', { name: /当前词书掌握度/ }));
+
+    expect(await screen.findByRole('dialog', { name: '总览明细' })).toBeInTheDocument();
+    expect(fetchVocabOverviewCurrentWords).toHaveBeenCalledWith('deck-1', 'all', 'deck-1');
+    expect(await screen.findByText('prosperity')).toBeInTheDocument();
+    expect(screen.getByText('繁荣')).toBeInTheDocument();
   });
 
   it('opens the today settings dialog and saves a new total target', async () => {

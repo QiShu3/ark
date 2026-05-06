@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
+import OverviewDetailModal, { type OverviewDetailTab } from '../../components/Vocab/OverviewDetailModal';
 import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { fetchVocabOverview, fetchVocabToday, updateVocabTodaySettings } from '../../lib/vocab/api';
@@ -15,6 +16,9 @@ export default function VocabHome() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [overviewDetailOpen, setOverviewDetailOpen] = useState(false);
+  const [overviewDetailTab, setOverviewDetailTab] = useState<OverviewDetailTab>('completed');
+  const [overviewDetailDeckId, setOverviewDetailDeckId] = useState<string | null>(null);
   const isTodayComplete = !!summary && summary.total_count > 0 && summary.pending_count === 0;
   const modalInitialTarget = summary ? (isTodayComplete ? summary.total_count + summary.daily_target_count : summary.daily_target_count) : 20;
 
@@ -67,6 +71,13 @@ export default function VocabHome() {
   const currentDeckMasteryPercent = overview && overview.current_deck.total_word_count > 0
     ? Math.round((overview.current_deck.mastered_word_count / overview.current_deck.total_word_count) * 100)
     : 0;
+
+  const openOverviewDetail = (tab: OverviewDetailTab, targetDeckId?: string | null) => {
+    if (!activeDeck) return;
+    setOverviewDetailTab(tab);
+    setOverviewDetailDeckId(targetDeckId ?? activeDeck.id);
+    setOverviewDetailOpen(true);
+  };
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -161,19 +172,31 @@ export default function VocabHome() {
             {overview ? (
               <div className="mt-5 space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                  <button
+                    type="button"
+                    onClick={() => openOverviewDetail('completed')}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-5 text-left transition hover:border-white/25 hover:bg-black/30"
+                  >
                     <div className="text-sm text-white/50">已完成词书</div>
                     <div className="mt-3 text-3xl font-semibold text-white">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
                     <div className="mt-2 text-sm text-white/55">全部单词都已进入 Review 状态的词书数量。</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openOverviewDetail('mastered')}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-5 text-left transition hover:border-white/25 hover:bg-black/30"
+                  >
                     <div className="text-sm text-white/50">累计掌握单词</div>
                     <div className="mt-3 text-3xl font-semibold text-white">{overview.mastered_word_count}</div>
                     <div className="mt-2 text-sm text-white/55">按 FSRS Review 口径统计的全局已掌握单词总数。</div>
-                  </div>
+                  </button>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                <button
+                  type="button"
+                  onClick={() => openOverviewDetail('current', activeDeck?.id)}
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 p-5 text-left transition hover:border-white/25 hover:bg-black/30"
+                >
                   <div className="flex items-end justify-between gap-4">
                     <div>
                       <div className="text-sm text-white/50">当前词书掌握度</div>
@@ -208,7 +231,7 @@ export default function VocabHome() {
                       <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.mastered_word_count}</div>
                     </div>
                   </div>
-                </div>
+                </button>
 
                 <div>
                   <div className="text-sm uppercase tracking-[0.24em] text-white/40">快捷入口</div>
@@ -239,6 +262,15 @@ export default function VocabHome() {
           isSaving={settingsSaving}
           onClose={() => setSettingsOpen(false)}
           onSave={handleSaveSettings}
+        />
+      ) : null}
+      {overviewDetailOpen && activeDeck ? (
+        <OverviewDetailModal
+          isOpen={overviewDetailOpen}
+          baseDeckId={activeDeck.id}
+          initialTab={overviewDetailTab}
+          initialTargetDeckId={overviewDetailDeckId}
+          onClose={() => setOverviewDetailOpen(false)}
         />
       ) : null}
     </div>

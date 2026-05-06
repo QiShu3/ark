@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from .repository import (
     count_active_mistakes,
+    count_global_mastered_word_keys,
     count_memorized_words,
     create_daily_plan,
     delete_pending_daily_plan_items,
@@ -24,7 +25,9 @@ from .repository import (
     list_daily_plan_queue_rows,
     list_daily_plan_word_ids,
     list_deck_mastery_rows,
+    list_deck_word_rows,
     list_due_review_candidate_rows,
+    list_mastered_word_rows,
     list_mistake_rows,
     list_study_queue_rows,
     list_vocab_decks,
@@ -45,6 +48,7 @@ _DECK_DISPLAY_NAME_MAP = {
     "kaoyan": "考研",
 }
 _LEARNING_STATE_VALUES = {1, 3}
+_REVIEW_STATE_VALUES = {"2", "review", "Review"}
 
 
 def _deck_group_key(raw_value: str) -> str:
@@ -286,6 +290,29 @@ def _aggregate_group_mastery(deck_group: dict, deck_stats: dict[str, dict]) -> d
     }
 
 
+def _is_review_state(raw_state: object) -> bool:
+    return str(raw_state).strip() in _REVIEW_STATE_VALUES
+
+
+def _word_mastery_state(raw_state: object) -> str:
+    if _is_review_state(raw_state):
+        return "mastered"
+    if str(raw_state).strip():
+        return "learning"
+    return "unstarted"
+
+
+def _append_translation_unique(target: list[dict], *, pos: object, translation: object) -> None:
+    if translation is None:
+        return
+    item = {
+        "pos": str(pos) if pos not in {None, ""} else None,
+        "translation": str(translation),
+    }
+    if item not in target:
+        target.append(item)
+
+
 def _serialize_fsrs_card(card: object) -> dict:
     if hasattr(card, "to_dict"):
         return dict(card.to_dict())
@@ -417,15 +444,14 @@ async def get_overview(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> dic
         grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
         deck_group = _resolve_deck_group(grouped_decks, deck_id)
         deck_mastery_rows = await list_deck_mastery_rows(conn, user_id=user_id)
+        total_mastered_word_count = await count_global_mastered_word_keys(conn, user_id=user_id)
         deck_stats = {str(row["deck_id"]): dict(row) for row in deck_mastery_rows}
 
     completed_deck_count = 0
-    total_mastered_word_count = 0
     current_deck_snapshot: dict | None = None
 
     for grouped_deck in grouped_decks:
         snapshot = _aggregate_group_mastery(grouped_deck, deck_stats)
-        total_mastered_word_count += int(snapshot["mastered_word_count"])
         if int(snapshot["total_word_count"]) > 0 and int(snapshot["mastered_word_count"]) == int(snapshot["total_word_count"]):
             completed_deck_count += 1
         if grouped_deck["id"] == deck_group["id"]:
@@ -440,6 +466,103 @@ async def get_overview(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> dic
         "mastered_word_count": total_mastered_word_count,
         "current_deck": current_deck_snapshot,
     }
+
+
+async def list_overview_completed_decks(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> list[dict]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        _resolve_deck_group(grouped_decks, deck_id)
+        deck_mastery_rows = await list_deck_mastery_rows(conn, user_id=user_id)
+        deck_stats = {str(row["deck_id"]): dict(row) for row in deck_mastery_rows}
+
+    completed: list[dict] = []
+    for grouped_deck in grouped_decks:
+        snapshot = _aggregate_group_mastery(grouped_deck, deck_stats)
+        if int(snapshot["total_word_count"]) > 0 and int(snapshot["mastered_word_count"]) == int(snapshot["total_word_count"]):
+            completed.append(snapshot)
+    return completed
+
+
+async def list_overview_mastered_words(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> list[dict]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        _resolve_deck_group(grouped_decks, deck_id)
+        rows = await list_mastered_word_rows(conn, user_id=user_id)
+
+    items: dict[str, dict] = {}
+    for raw_row in rows:
+        row = dict(raw_row)
+        word_key = str(row["word_key"])
+        item = items.get(word_key)
+        if item is None:
+            item = {
+                "id": str(row["id"]),
+                "word": str(row["word"]),
+                "us_pronunciation": row.get("us_pronunciation"),
+                "uk_pronunciation": row.get("uk_pronunciation"),
+                "translations": [],
+                "source_deck_names": [],
+            }
+            items[word_key] = item
+
+        if not item["us_pronunciation"] and row.get("us_pronunciation"):
+            item["us_pronunciation"] = row.get("us_pronunciation")
+        if not item["uk_pronunciation"] and row.get("uk_pronunciation"):
+            item["uk_pronunciation"] = row.get("uk_pronunciation")
+
+        source_deck_name = _deck_display_name(_deck_group_key(str(row["deck_name"])))
+        if source_deck_name not in item["source_deck_names"]:
+            item["source_deck_names"].append(source_deck_name)
+        _append_translation_unique(item["translations"], pos=row.get("pos"), translation=row.get("translation"))
+
+    return list(items.values())
+
+
+async def list_overview_current_words(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    deck_id: str,
+    state: str = "all",
+    target_deck_id: str | None = None,
+) -> list[dict]:
+    normalized_state = state.strip().lower()
+    if normalized_state not in {"all", "unstarted", "learning", "mastered"}:
+        raise HTTPException(status_code=400, detail="无效的掌握状态筛选")
+
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        _resolve_deck_group(grouped_decks, deck_id)
+        target_group = _resolve_deck_group(grouped_decks, target_deck_id or deck_id)
+        rows = await list_deck_word_rows(conn, user_id=user_id, deck_ids=list(target_group["member_deck_ids"]))
+
+    items_by_id: dict[str, dict] = {}
+    order: list[str] = []
+    for raw_row in rows:
+        row = dict(raw_row)
+        word_id = str(row["id"])
+        item = items_by_id.get(word_id)
+        if item is None:
+            mastery_state = _word_mastery_state(row.get("fsrs_state"))
+            item = {
+                "id": word_id,
+                "deck_id": target_group["id"],
+                "deck_name": str(target_group["name"]),
+                "word": str(row["word"]),
+                "us_pronunciation": row.get("us_pronunciation"),
+                "uk_pronunciation": row.get("uk_pronunciation"),
+                "mastery_state": mastery_state,
+                "translations": [],
+            }
+            items_by_id[word_id] = item
+            order.append(word_id)
+
+        _append_translation_unique(item["translations"], pos=row.get("pos"), translation=row.get("translation"))
+
+    items = [items_by_id[word_id] for word_id in order]
+    if normalized_state == "all":
+        return items
+    return [item for item in items if item["mastery_state"] == normalized_state]
 
 
 async def update_today_plan(pool: asyncpg.Pool, *, user_id: int, deck_id: str, total_target_count: int) -> dict[str, int]:

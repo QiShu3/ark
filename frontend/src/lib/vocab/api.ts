@@ -1,6 +1,9 @@
 import { apiJson } from '../api';
 import type {
   VocabDeck,
+  VocabOverviewCompletedDeck,
+  VocabOverviewCurrentWord,
+  VocabOverviewMasteredWord,
   VocabOverview,
   VocabMistakeItem,
   VocabReviewItem,
@@ -21,6 +24,26 @@ export function fetchVocabToday(deckId: string) {
 
 export function fetchVocabOverview(deckId: string) {
   return apiJson<VocabOverview>(`/api/vocab/decks/${deckId}/overview`);
+}
+
+export function fetchVocabOverviewCompletedDecks(deckId: string) {
+  return apiJson<VocabOverviewCompletedDeck[]>(`/api/vocab/decks/${deckId}/overview/completed-decks`);
+}
+
+export function fetchVocabOverviewMasteredWords(deckId: string) {
+  return apiJson<VocabOverviewMasteredWord[]>(`/api/vocab/decks/${deckId}/overview/mastered-words`);
+}
+
+export function fetchVocabOverviewCurrentWords(
+  deckId: string,
+  state: 'all' | 'unstarted' | 'learning' | 'mastered' = 'all',
+  targetDeckId?: string,
+) {
+  const query = new URLSearchParams({ state });
+  if (targetDeckId) {
+    query.set('target_deck_id', targetDeckId);
+  }
+  return apiJson<VocabOverviewCurrentWord[]>(`/api/vocab/decks/${deckId}/overview/current-words?${query.toString()}`);
 }
 
 export function fetchVocabStudyQueue(deckId: string, limit = 10) {
