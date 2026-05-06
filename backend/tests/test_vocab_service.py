@@ -65,10 +65,16 @@ async def test_get_today_summary_returns_daily_plan_counts(monkeypatch) -> None:
         assert deck_ids == ["deck-1-1", "deck-1-2"]
         return 24
 
+    async def fake_count_memorized_words(_conn, *, user_id: int, deck_ids: list[str]) -> int:
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1", "deck-1-2"]
+        return 88
+
     monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
     monkeypatch.setattr(vocab_service, "_ensure_today_plan", fake_ensure_today_plan)
     monkeypatch.setattr(vocab_service, "get_daily_plan_summary", fake_get_daily_plan_summary)
     monkeypatch.setattr(vocab_service, "get_daily_total_target", fake_get_daily_total_target)
+    monkeypatch.setattr(vocab_service, "count_memorized_words", fake_count_memorized_words)
 
     summary = await vocab_service.get_today_summary(_Pool(), user_id=1, deck_id="cet4")
 
@@ -81,6 +87,7 @@ async def test_get_today_summary_returns_daily_plan_counts(monkeypatch) -> None:
         "pending_count": 17,
         "completed_count": 7,
         "daily_target_count": 24,
+        "memorized_count": 88,
     }
 
 
@@ -172,6 +179,11 @@ async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(
         assert deck_ids == ["deck-1-1", "deck-1-2"]
         return 2
 
+    async def fake_count_memorized_words(_conn, *, user_id: int, deck_ids: list[str]) -> int:
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1", "deck-1-2"]
+        return 91
+
     monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
     monkeypatch.setattr(vocab_service, "_ensure_today_plan", fake_ensure_today_plan)
     monkeypatch.setattr(vocab_service, "list_daily_plan_word_ids", fake_list_daily_plan_word_ids)
@@ -181,6 +193,7 @@ async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(
     monkeypatch.setattr(vocab_service, "insert_daily_plan_items", fake_insert_daily_plan_items)
     monkeypatch.setattr(vocab_service, "get_daily_plan_summary", fake_get_daily_plan_summary)
     monkeypatch.setattr(vocab_service, "count_active_mistakes", fake_count_active_mistakes)
+    monkeypatch.setattr(vocab_service, "count_memorized_words", fake_count_memorized_words)
 
     summary = await vocab_service.update_today_plan(_Pool(), user_id=1, deck_id="cet4", total_target_count=12)
 
@@ -189,6 +202,7 @@ async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(
     assert [item["item_type"] for item in inserted_items] == ["learning", "review", "new"]
     assert summary["total_count"] == 12
     assert summary["pending_count"] == 9
+    assert summary["memorized_count"] == 91
 
 
 @pytest.mark.asyncio

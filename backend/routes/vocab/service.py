@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from .repository import (
     count_active_mistakes,
+    count_memorized_words,
     create_daily_plan,
     delete_pending_daily_plan_items,
     get_daily_plan,
@@ -365,18 +366,24 @@ async def get_today_summary(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -
     async with pool.acquire() as conn:
         grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
         deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        member_deck_ids = list(deck_group["member_deck_ids"])
         plan = await _ensure_today_plan(conn, user_id=user_id, deck_group=deck_group)
         summary = await get_daily_plan_summary(conn, plan_id=str(plan["id"]))
         summary["daily_target_count"] = await get_daily_total_target(
             conn,
             user_id=user_id,
-            deck_ids=list(deck_group["member_deck_ids"]),
+            deck_ids=member_deck_ids,
+        )
+        summary["memorized_count"] = await count_memorized_words(
+            conn,
+            user_id=user_id,
+            deck_ids=member_deck_ids,
         )
         if "mistake_count" not in summary:
             summary["mistake_count"] = await count_active_mistakes(
                 conn,
                 user_id=user_id,
-                deck_ids=list(deck_group["member_deck_ids"]),
+                deck_ids=member_deck_ids,
             )
     return summary
 
@@ -411,6 +418,11 @@ async def update_today_plan(pool: asyncpg.Pool, *, user_id: int, deck_id: str, t
         summary = await get_daily_plan_summary(conn, plan_id=str(plan["id"]))
         summary["daily_target_count"] = total_target_count
         summary["mistake_count"] = await count_active_mistakes(
+            conn,
+            user_id=user_id,
+            deck_ids=member_deck_ids,
+        )
+        summary["memorized_count"] = await count_memorized_words(
             conn,
             user_id=user_id,
             deck_ids=member_deck_ids,

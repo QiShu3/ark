@@ -17,6 +17,7 @@ export type VocabTodaySummary = {
   pending_count: number;
   completed_count: number;
   daily_target_count: number;
+  memorized_count: number;
 };
 
 export type VocabTranslation = {

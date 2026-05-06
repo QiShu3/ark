@@ -844,6 +844,26 @@ async def get_daily_plan_summary(conn: asyncpg.Connection, *, plan_id: str) -> d
     }
 
 
+async def count_memorized_words(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_ids: list[str],
+) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT COUNT(*)::int AS memorized_count
+        FROM vocab_user_word_progress
+        WHERE user_id = $1
+          AND deck_id = ANY($2::uuid[])
+          AND (correct_count > 0 OR wrong_count > 0)
+        """,
+        user_id,
+        deck_ids,
+    )
+    return int(row["memorized_count"]) if row else 0
+
+
 async def list_daily_plan_queue_rows(
     conn: asyncpg.Connection,
     *,

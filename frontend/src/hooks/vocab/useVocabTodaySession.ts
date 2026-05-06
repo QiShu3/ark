@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { submitVocabReview } from '../../lib/vocab/api';
+import { fetchVocabToday, submitVocabReview } from '../../lib/vocab/api';
 import type { VocabReviewItem, VocabReviewSubmitResult } from '../../lib/vocab/types';
 import { useVocabReviewQueue } from './useVocabReviewQueue';
 
@@ -61,6 +61,9 @@ export function useVocabTodaySession(deckId: string | null) {
   const [isBatchReview, setIsBatchReview] = useState(false);
   const [completedBatchWordIds, setCompletedBatchWordIds] = useState<string[]>([]);
   const [batchReviewEntries, setBatchReviewEntries] = useState<Record<string, BatchReviewEntry>>({});
+  const [initialCompletedCount, setInitialCompletedCount] = useState(0);
+  const [todayTotalCount, setTodayTotalCount] = useState(0);
+  const [memorizedCount, setMemorizedCount] = useState(0);
 
   const currentMode = learningQueue.currentItem ? 'learning' : reviewQueue.currentItem ? 'review' : studyQueue.currentItem ? 'study' : null;
   const activeQueue = currentMode === 'learning' ? learningQueue : currentMode === 'review' ? reviewQueue : studyQueue;
@@ -78,13 +81,39 @@ export function useVocabTodaySession(deckId: string | null) {
     [batchReviewEntries, completedBatchWordIds],
   );
   const batchReviewCount = completedBatchWordIds.length;
+  const completedTodayCount = initialCompletedCount + Object.keys(batchReviewEntries).length;
+  const totalBatchCount = todayTotalCount > 0 ? Math.ceil(todayTotalCount / BATCH_REVIEW_SIZE) : 1;
+  const batchProgressBase = isBatchReview && batchReviewCount > 0 ? Math.max(completedTodayCount - 1, 0) : completedTodayCount;
+  const currentBatchNumber = totalBatchCount > 0 ? Math.min(Math.floor(batchProgressBase / BATCH_REVIEW_SIZE) + 1, totalBatchCount) : 1;
 
   useEffect(() => {
-    if (deckId) return;
-    setIsBatchReview(false);
-    setCompletedBatchWordIds([]);
-    setBatchReviewEntries({});
-    setLastResult(null);
+    if (!deckId) {
+      setIsBatchReview(false);
+      setCompletedBatchWordIds([]);
+      setBatchReviewEntries({});
+      setLastResult(null);
+      setInitialCompletedCount(0);
+      setTodayTotalCount(0);
+      setMemorizedCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchVocabToday(deckId)
+      .then((summary) => {
+        if (cancelled) return;
+        setInitialCompletedCount(summary.completed_count);
+        setTodayTotalCount(summary.total_count);
+        setMemorizedCount(summary.memorized_count);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : '今日单词概览加载失败');
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [deckId]);
 
   useEffect(() => {
@@ -121,6 +150,9 @@ export function useVocabTodaySession(deckId: string | null) {
         activeQueue.requeueCurrent();
       } else {
         setCompletedBatchWordIds((prev) => (prev.includes(currentItem.id) ? prev : [...prev, currentItem.id]));
+        if (currentMode === 'study') {
+          setMemorizedCount((prev) => prev + 1);
+        }
         activeQueue.consumeCurrent();
       }
       return payload;
@@ -151,6 +183,9 @@ export function useVocabTodaySession(deckId: string | null) {
     reviewRemaining: reviewQueue.items.length,
     studyRemaining: studyQueue.items.length,
     totalRemaining: learningQueue.items.length + reviewQueue.items.length + studyQueue.items.length,
+    currentBatchNumber,
+    totalBatchCount,
+    memorizedCount,
     isBatchReview,
     batchReviewCount,
     batchReviewGroups,

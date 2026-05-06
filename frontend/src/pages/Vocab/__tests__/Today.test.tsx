@@ -32,6 +32,9 @@ const sessionState = {
   reviewRemaining: 3,
   studyRemaining: 5,
   totalRemaining: 10,
+  currentBatchNumber: 1,
+  totalBatchCount: 3,
+  memorizedCount: 24,
   isBatchReview: false,
   batchReviewCount: 0,
   batchReviewGroups: [],
@@ -79,6 +82,9 @@ describe('Vocab today page', () => {
       reviewRemaining: 3,
       studyRemaining: 5,
       totalRemaining: 10,
+      currentBatchNumber: 1,
+      totalBatchCount: 3,
+      memorizedCount: 24,
       isBatchReview: false,
       batchReviewCount: 0,
       batchReviewGroups: [],
@@ -98,10 +104,8 @@ describe('Vocab today page', () => {
 
     expect(screen.getByText('今日单词')).toBeInTheDocument();
     expect(screen.getByText('先完成今日复习，再进入今天的新词。')).toBeInTheDocument();
-    expect(screen.getByText('剩余 10')).toBeInTheDocument();
-    expect(screen.getByText('Learning 2')).toBeInTheDocument();
-    expect(screen.getByText('复习 3')).toBeInTheDocument();
-    expect(screen.getByText('新词 5')).toBeInTheDocument();
+    expect(screen.getByText('批次：当前处于第 1 批 / 共 3 批')).toBeInTheDocument();
+    expect(screen.getByText('已记忆 24 个单词')).toBeInTheDocument();
     expect(screen.getByText('abruptly')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /很轻松/ }));

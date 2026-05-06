@@ -25,11 +25,11 @@ export default function VocabToday() {
             <h1 className="text-3xl font-semibold tracking-tight">今日单词</h1>
             <p className="mt-3 text-white/65">先完成今日复习，再进入今天的新词。</p>
           </div>
-          <div className="grid grid-cols-4 gap-3 text-sm text-white/70">
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">剩余 {session.totalRemaining}</div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">Learning {session.learningRemaining}</div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">复习 {session.reviewRemaining}</div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">新词 {session.studyRemaining}</div>
+          <div className="grid gap-3 text-sm text-white/70 md:min-w-[24rem]">
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              {`批次：当前处于第 ${session.currentBatchNumber} 批 / 共 ${session.totalBatchCount} 批`}
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">{`已记忆 ${session.memorizedCount} 个单词`}</div>
           </div>
         </div>
 

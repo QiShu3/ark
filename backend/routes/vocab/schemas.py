@@ -25,6 +25,7 @@ class VocabTodaySummaryOut(BaseModel):
     pending_count: int = 0
     completed_count: int = 0
     daily_target_count: int = 0
+    memorized_count: int = 0
 
 
 class VocabTranslationOut(BaseModel):

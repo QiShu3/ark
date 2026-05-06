@@ -15,20 +15,6 @@ export default function WordMetaPanel({ detail }: { detail: VocabWordDetail }) {
         </div>
       </section>
 
-      {detail.phrases.length ? (
-        <section>
-          <h3 className="text-sm uppercase tracking-[0.24em] text-white/45">短语</h3>
-          <div className="mt-3 space-y-2">
-            {detail.phrases.map((item, index) => (
-              <div key={`${item.phrase}-${index}`} className="rounded-2xl bg-white/6 px-4 py-3 text-sm">
-                <div className="font-medium text-white">{item.phrase}</div>
-                <div className="mt-1 text-white/60">{item.translation}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       {detail.sentences.length ? (
         <section>
           <h3 className="text-sm uppercase tracking-[0.24em] text-white/45">例句</h3>
@@ -36,6 +22,20 @@ export default function WordMetaPanel({ detail }: { detail: VocabWordDetail }) {
             {detail.sentences.map((item, index) => (
               <div key={`${item.sentence}-${index}`} className="rounded-2xl bg-white/6 px-4 py-3 text-sm">
                 <div className="text-white">{item.sentence}</div>
+                <div className="mt-1 text-white/60">{item.translation}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {detail.phrases.length ? (
+        <section>
+          <h3 className="text-sm uppercase tracking-[0.24em] text-white/45">短语</h3>
+          <div className="mt-3 space-y-2">
+            {detail.phrases.map((item, index) => (
+              <div key={`${item.phrase}-${index}`} className="rounded-2xl bg-white/6 px-4 py-3 text-sm">
+                <div className="font-medium text-white">{item.phrase}</div>
                 <div className="mt-1 text-white/60">{item.translation}</div>
               </div>
             ))}

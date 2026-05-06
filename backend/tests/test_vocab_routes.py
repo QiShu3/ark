@@ -42,6 +42,7 @@ def test_vocab_today_route_returns_counts(monkeypatch) -> None:
             "pending_count": 17,
             "completed_count": 7,
             "daily_target_count": 24,
+            "memorized_count": 88,
         }
 
     from routes.vocab import routes as vocab_routes
@@ -62,6 +63,7 @@ def test_vocab_today_route_returns_counts(monkeypatch) -> None:
         "pending_count": 17,
         "completed_count": 7,
         "daily_target_count": 24,
+        "memorized_count": 88,
     }
 
 
@@ -80,6 +82,7 @@ def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
             "pending_count": 20,
             "completed_count": 0,
             "daily_target_count": 20,
+            "memorized_count": 64,
         }
 
     from routes.vocab import routes as vocab_routes
@@ -92,6 +95,7 @@ def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["daily_target_count"] == 20
+    assert response.json()["memorized_count"] == 64
 
 
 def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:

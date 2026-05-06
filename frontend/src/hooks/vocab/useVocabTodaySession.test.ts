@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVocabTodaySession } from './useVocabTodaySession';
 
 const {
+  fetchVocabToday,
   fetchVocabLearningQueue,
   fetchVocabReviewQueue,
   fetchVocabStudyQueue,
   submitVocabReview,
 } = vi.hoisted(() => ({
+  fetchVocabToday: vi.fn(),
   fetchVocabLearningQueue: vi.fn(),
   fetchVocabReviewQueue: vi.fn(),
   fetchVocabStudyQueue: vi.fn(),
@@ -16,6 +18,7 @@ const {
 }));
 
 vi.mock('../../lib/vocab/api', () => ({
+  fetchVocabToday,
   fetchVocabLearningQueue,
   fetchVocabReviewQueue,
   fetchVocabStudyQueue,
@@ -41,6 +44,17 @@ function makeWord(index: number) {
 describe('useVocabTodaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    fetchVocabToday.mockResolvedValue({
+      learning_count: 0,
+      new_count: 10,
+      review_count: 0,
+      mistake_count: 0,
+      total_count: 25,
+      pending_count: 25,
+      completed_count: 0,
+      daily_target_count: 25,
+      memorized_count: 40,
+    });
   });
 
   it('switches to batch review after ten completed words', async () => {
@@ -62,6 +76,9 @@ describe('useVocabTodaySession', () => {
     await waitFor(() => {
       expect(result.current.currentItem?.id).toBe('word-1');
     });
+    expect(result.current.currentBatchNumber).toBe(1);
+    expect(result.current.totalBatchCount).toBe(3);
+    expect(result.current.memorizedCount).toBe(40);
 
     for (let index = 1; index <= 10; index += 1) {
       await act(async () => {
@@ -79,5 +96,7 @@ describe('useVocabTodaySession', () => {
       expect(result.current.isBatchReview).toBe(true);
     });
     expect(result.current.batchReviewGroups.find((group) => group.key === 'good')?.items).toHaveLength(10);
+    expect(result.current.currentBatchNumber).toBe(1);
+    expect(result.current.memorizedCount).toBe(50);
   });
 });
