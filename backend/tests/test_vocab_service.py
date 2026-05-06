@@ -49,15 +49,146 @@ async def test_get_today_summary_returns_daily_plan_counts(monkeypatch) -> None:
 
     async def fake_get_daily_plan_summary(_conn, *, plan_id: str) -> dict[str, int]:
         assert plan_id == "plan-1"
-        return {"new_count": 12, "review_count": 5, "mistake_count": 2}
+        return {
+            "learning_count": 7,
+            "new_count": 12,
+            "review_count": 5,
+            "mistake_count": 2,
+            "total_count": 24,
+            "pending_count": 17,
+            "completed_count": 7,
+            "daily_target_count": 24,
+        }
+
+    async def fake_get_daily_total_target(_conn, *, user_id: int, deck_ids: list[str]) -> int:
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1", "deck-1-2"]
+        return 24
 
     monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
     monkeypatch.setattr(vocab_service, "_ensure_today_plan", fake_ensure_today_plan)
     monkeypatch.setattr(vocab_service, "get_daily_plan_summary", fake_get_daily_plan_summary)
+    monkeypatch.setattr(vocab_service, "get_daily_total_target", fake_get_daily_total_target)
 
     summary = await vocab_service.get_today_summary(_Pool(), user_id=1, deck_id="cet4")
 
-    assert summary == {"new_count": 12, "review_count": 5, "mistake_count": 2}
+    assert summary == {
+        "learning_count": 7,
+        "new_count": 12,
+        "review_count": 5,
+        "mistake_count": 2,
+        "total_count": 24,
+        "pending_count": 17,
+        "completed_count": 7,
+        "daily_target_count": 24,
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        return [
+            {
+                "id": "deck-1-1",
+                "key": "cet4_1",
+                "name": "CET4_1",
+                "description": "CET4_1 词书",
+                "word_count": 100,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            },
+            {
+                "id": "deck-1-2",
+                "key": "cet4_2",
+                "name": "CET4_2",
+                "description": "CET4_2 词书",
+                "word_count": 120,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            },
+        ]
+
+    async def fake_ensure_today_plan(_conn, *, user_id: int, deck_group: dict) -> dict:
+        assert user_id == 1
+        assert deck_group["id"] == "cet4"
+        return {"id": "plan-1", "deck_key": "cet4"}
+
+    async def fake_list_daily_plan_word_ids(_conn, *, plan_id: str, statuses: list[str]):
+        assert plan_id == "plan-1"
+        assert statuses == ["done"]
+        return ["word-completed-1", "word-completed-2", "word-completed-3"]
+
+    saved_targets: list[tuple[list[str], int]] = []
+    deleted_plan_ids: list[str] = []
+    inserted_items: list[dict] = []
+
+    async def fake_upsert_daily_total_target(_conn, *, user_id: int, deck_ids: list[str], daily_total_target: int):
+        saved_targets.append((deck_ids, daily_total_target))
+
+    async def fake_delete_pending_daily_plan_items(_conn, *, plan_id: str):
+        deleted_plan_ids.append(plan_id)
+
+    async def fake_build_plan_items(_conn, *, user_id: int, deck_group: dict, remaining_target: int, excluded_word_ids: set[str]):
+        assert user_id == 1
+        assert deck_group["id"] == "cet4"
+        assert remaining_target == 9
+        assert excluded_word_ids == {"word-completed-1", "word-completed-2", "word-completed-3"}
+        return [
+            {"word_id": "word-learning-1", "item_type": "learning", "fsrs_due_at_snapshot": None},
+            {"word_id": "word-review-1", "item_type": "review", "fsrs_due_at_snapshot": None},
+            {"word_id": "word-new-1", "item_type": "new", "fsrs_due_at_snapshot": None},
+        ]
+
+    async def fake_insert_daily_plan_items(_conn, *, plan_id: str, items: list[dict]):
+        assert plan_id == "plan-1"
+        inserted_items.extend(items)
+
+    async def fake_get_daily_plan_summary(_conn, *, plan_id: str):
+        assert plan_id == "plan-1"
+        return {
+            "learning_count": 1,
+            "review_count": 1,
+            "new_count": 1,
+            "mistake_count": 2,
+            "total_count": 12,
+            "pending_count": 9,
+            "completed_count": 3,
+            "daily_target_count": 12,
+        }
+
+    async def fake_count_active_mistakes(_conn, *, user_id: int, deck_ids: list[str]) -> int:
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1", "deck-1-2"]
+        return 2
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "_ensure_today_plan", fake_ensure_today_plan)
+    monkeypatch.setattr(vocab_service, "list_daily_plan_word_ids", fake_list_daily_plan_word_ids)
+    monkeypatch.setattr(vocab_service, "upsert_daily_total_target", fake_upsert_daily_total_target)
+    monkeypatch.setattr(vocab_service, "delete_pending_daily_plan_items", fake_delete_pending_daily_plan_items)
+    monkeypatch.setattr(vocab_service, "_build_today_plan_items", fake_build_plan_items)
+    monkeypatch.setattr(vocab_service, "insert_daily_plan_items", fake_insert_daily_plan_items)
+    monkeypatch.setattr(vocab_service, "get_daily_plan_summary", fake_get_daily_plan_summary)
+    monkeypatch.setattr(vocab_service, "count_active_mistakes", fake_count_active_mistakes)
+
+    summary = await vocab_service.update_today_plan(_Pool(), user_id=1, deck_id="cet4", total_target_count=12)
+
+    assert saved_targets == [(["deck-1-1", "deck-1-2"], 12)]
+    assert deleted_plan_ids == ["plan-1"]
+    assert [item["item_type"] for item in inserted_items] == ["learning", "review", "new"]
+    assert summary["total_count"] == 12
+    assert summary["pending_count"] == 9
 
 
 @pytest.mark.asyncio

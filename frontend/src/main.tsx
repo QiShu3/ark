@@ -11,6 +11,7 @@ import VocabHome from './pages/Vocab/Home';
 import VocabMistakes from './pages/Vocab/Mistakes';
 import VocabReview from './pages/Vocab/Review';
 import VocabStudy from './pages/Vocab/Study';
+import VocabToday from './pages/Vocab/Today';
 import VocabWordDetail from './pages/Vocab/WordDetail';
 import RequireAuth from './routes/RequireAuth';
 import './index.css';
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/agent-console" element={<AgentConsole />} />
           <Route path="/arxiv" element={<Arxiv />} />
           <Route path="/vocab" element={<VocabHome />} />
+          <Route path="/vocab/today" element={<VocabToday />} />
           <Route path="/vocab/study" element={<VocabStudy />} />
           <Route path="/vocab/review" element={<VocabReview />} />
           <Route path="/vocab/mistakes" element={<VocabMistakes />} />

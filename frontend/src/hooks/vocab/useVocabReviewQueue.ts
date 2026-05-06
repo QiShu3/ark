@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
-import { fetchVocabReviewQueue, fetchVocabStudyQueue } from '../../lib/vocab/api';
+import { fetchVocabLearningQueue, fetchVocabReviewQueue, fetchVocabStudyQueue } from '../../lib/vocab/api';
 import type { VocabReviewItem } from '../../lib/vocab/types';
 
-type QueueMode = 'study' | 'review';
+type QueueMode = 'study' | 'review' | 'learning';
 
 export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 'review', limit = 10) {
   const [items, setItems] = useState<VocabReviewItem[]>([]);
@@ -21,7 +21,11 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
     setLoading(true);
     try {
       const data =
-        mode === 'study' ? await fetchVocabStudyQueue(deckId, limit) : await fetchVocabReviewQueue(deckId, limit);
+        mode === 'study'
+          ? await fetchVocabStudyQueue(deckId, limit)
+          : mode === 'learning'
+            ? await fetchVocabLearningQueue(deckId, limit)
+            : await fetchVocabReviewQueue(deckId, limit);
       setItems(data);
       setActiveIndex(0);
       setError(null);

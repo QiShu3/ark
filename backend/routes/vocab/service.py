@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import UTC, datetime
+from math import floor
 
 import asyncpg
 from fastapi import HTTPException
@@ -10,15 +11,17 @@ from fastapi import HTTPException
 from .repository import (
     count_active_mistakes,
     create_daily_plan,
-    get_daily_new_limit,
+    delete_pending_daily_plan_items,
     get_daily_plan,
     get_daily_plan_item,
     get_daily_plan_summary,
+    get_daily_total_target,
     get_user_word_progress,
     get_word_detail_row,
     insert_daily_plan_items,
     insert_review_log,
     list_daily_plan_queue_rows,
+    list_daily_plan_word_ids,
     list_due_review_candidate_rows,
     list_mistake_rows,
     list_study_queue_rows,
@@ -27,6 +30,7 @@ from .repository import (
     list_word_sentences,
     list_word_translations,
     update_daily_plan_item,
+    upsert_daily_total_target,
     upsert_mistake_bucket,
     upsert_user_word_progress,
 )
@@ -38,6 +42,7 @@ _DECK_DISPLAY_NAME_MAP = {
     "gaozhong": "高中",
     "kaoyan": "考研",
 }
+_LEARNING_STATE_VALUES = {1, 3}
 
 
 def _deck_group_key(raw_value: str) -> str:
@@ -148,6 +153,114 @@ def _result_mastery_delta(result_key: str) -> int:
     return {"again": -1, "hard": 1, "good": 2, "easy": 3}[result_key]
 
 
+def _ratio_targets(total_target: int) -> dict[str, int]:
+    ratios = [("learning", 0.3), ("review", 0.1), ("new", 0.6)]
+    base_targets: dict[str, int] = {}
+    remainders: list[tuple[float, str]] = []
+
+    assigned = 0
+    for key, ratio in ratios:
+        raw_value = total_target * ratio
+        base_value = floor(raw_value)
+        base_targets[key] = base_value
+        assigned += base_value
+        remainders.append((raw_value - base_value, key))
+
+    missing = max(total_target - assigned, 0)
+    for _remainder, key in sorted(remainders, key=lambda item: item[0], reverse=True)[:missing]:
+        base_targets[key] += 1
+    return base_targets
+
+
+def _split_due_rows(rows: list[asyncpg.Record | dict]) -> tuple[list[dict], list[dict]]:
+    learning_rows: list[dict] = []
+    review_rows: list[dict] = []
+    for raw_row in rows:
+        row = dict(raw_row)
+        fsrs_payload = row.get("fsrs_card_json") or {}
+        state_value = None
+        if isinstance(fsrs_payload, str):
+            try:
+                fsrs_payload = json.loads(fsrs_payload)
+            except Exception:
+                fsrs_payload = {}
+        if isinstance(fsrs_payload, dict):
+            state_value = fsrs_payload.get("state")
+
+        if state_value in _LEARNING_STATE_VALUES:
+            learning_rows.append(row)
+        else:
+            review_rows.append(row)
+    return learning_rows, review_rows
+
+
+def _take_rows(pool: list[dict], count: int) -> tuple[list[dict], list[dict]]:
+    if count <= 0:
+        return [], pool
+    return pool[:count], pool[count:]
+
+
+async def _build_today_plan_items(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_group: dict,
+    remaining_target: int,
+    excluded_word_ids: set[str],
+) -> list[dict]:
+    member_deck_ids = list(deck_group["member_deck_ids"])
+    due_rows = await list_due_review_candidate_rows(conn, user_id=user_id, deck_ids=member_deck_ids)
+    filtered_due_rows = [dict(row) for row in due_rows if str(row["id"]) not in excluded_word_ids]
+    learning_pool, review_pool = _split_due_rows(filtered_due_rows)
+
+    new_pool: list[dict] = []
+    remaining_scan_limit = remaining_target
+    for member_deck_id in member_deck_ids:
+        if remaining_scan_limit <= 0:
+            break
+        rows = await list_study_queue_rows(conn, user_id=user_id, deck_id=member_deck_id, limit=remaining_scan_limit)
+        for row in rows:
+            if str(row["id"]) in excluded_word_ids:
+                continue
+            new_pool.append(dict(row))
+        remaining_scan_limit -= len(rows)
+
+    targets = _ratio_targets(remaining_target)
+    chosen_learning, learning_left = _take_rows(learning_pool, targets["learning"])
+    chosen_review, review_left = _take_rows(review_pool, targets["review"])
+    chosen_new, new_left = _take_rows(new_pool, targets["new"])
+
+    selected = [
+        {"word_id": str(row["id"]), "item_type": "learning", "fsrs_due_at_snapshot": row.get("next_review_at")}
+        for row in chosen_learning
+    ]
+    selected.extend(
+        {"word_id": str(row["id"]), "item_type": "review", "fsrs_due_at_snapshot": row.get("next_review_at")}
+        for row in chosen_review
+    )
+    selected.extend(
+        {"word_id": str(row["id"]), "item_type": "new", "fsrs_due_at_snapshot": None}
+        for row in chosen_new
+    )
+
+    still_needed = max(remaining_target - len(selected), 0)
+    fallback_rows = (
+        [("learning", row) for row in learning_left]
+        + [("review", row) for row in review_left]
+        + [("new", row) for row in new_left]
+    )
+    for item_type, row in fallback_rows[:still_needed]:
+        selected.append(
+            {
+                "word_id": str(row["id"]),
+                "item_type": item_type,
+                "fsrs_due_at_snapshot": row.get("next_review_at") if item_type != "new" else None,
+            }
+        )
+
+    return selected
+
+
 def _serialize_fsrs_card(card: object) -> dict:
     if hasattr(card, "to_dict"):
         return dict(card.to_dict())
@@ -221,37 +334,23 @@ async def _ensure_today_plan(conn: asyncpg.Connection, *, user_id: int, deck_gro
         return dict(existing_plan)
 
     member_deck_ids = list(deck_group["member_deck_ids"])
-    daily_new_limit = await get_daily_new_limit(conn, user_id=user_id, deck_ids=member_deck_ids)
-    review_rows = await list_due_review_candidate_rows(conn, user_id=user_id, deck_ids=member_deck_ids)
-
-    new_items: list[dict] = []
-    remaining_limit = daily_new_limit
-    for member_deck_id in member_deck_ids:
-        if remaining_limit <= 0:
-            break
-        rows = await list_study_queue_rows(conn, user_id=user_id, deck_id=member_deck_id, limit=remaining_limit)
-        for row in rows:
-            new_items.append({"word_id": str(row["id"]), "item_type": "new", "fsrs_due_at_snapshot": None})
-        remaining_limit -= len(rows)
+    daily_total_target = await get_daily_total_target(conn, user_id=user_id, deck_ids=member_deck_ids)
+    plan_items = await _build_today_plan_items(
+        conn,
+        user_id=user_id,
+        deck_group=deck_group,
+        remaining_target=daily_total_target,
+        excluded_word_ids=set(),
+    )
 
     plan_row = await create_daily_plan(
         conn,
         user_id=user_id,
         deck_key=str(deck_group["key"]),
         plan_date=today,
-        new_target_count=len(new_items),
-        review_target_count=len(review_rows),
+        new_target_count=sum(1 for item in plan_items if item["item_type"] == "new"),
+        review_target_count=sum(1 for item in plan_items if item["item_type"] in {"learning", "review"}),
     )
-
-    plan_items = [
-        {
-            "word_id": str(row["id"]),
-            "item_type": "review",
-            "fsrs_due_at_snapshot": row.get("next_review_at"),
-        }
-        for row in review_rows
-    ]
-    plan_items.extend(new_items)
     await insert_daily_plan_items(conn, plan_id=str(plan_row["id"]), items=plan_items)
     return dict(plan_row)
 
@@ -268,6 +367,11 @@ async def get_today_summary(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -
         deck_group = _resolve_deck_group(grouped_decks, deck_id)
         plan = await _ensure_today_plan(conn, user_id=user_id, deck_group=deck_group)
         summary = await get_daily_plan_summary(conn, plan_id=str(plan["id"]))
+        summary["daily_target_count"] = await get_daily_total_target(
+            conn,
+            user_id=user_id,
+            deck_ids=list(deck_group["member_deck_ids"]),
+        )
         if "mistake_count" not in summary:
             summary["mistake_count"] = await count_active_mistakes(
                 conn,
@@ -275,6 +379,62 @@ async def get_today_summary(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -
                 deck_ids=list(deck_group["member_deck_ids"]),
             )
     return summary
+
+
+async def update_today_plan(pool: asyncpg.Pool, *, user_id: int, deck_id: str, total_target_count: int) -> dict[str, int]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        plan = await _ensure_today_plan(conn, user_id=user_id, deck_group=deck_group)
+        member_deck_ids = list(deck_group["member_deck_ids"])
+
+        await upsert_daily_total_target(
+            conn,
+            user_id=user_id,
+            deck_ids=member_deck_ids,
+            daily_total_target=total_target_count,
+        )
+
+        completed_word_ids = set(
+            await list_daily_plan_word_ids(conn, plan_id=str(plan["id"]), statuses=["done"])
+        )
+        await delete_pending_daily_plan_items(conn, plan_id=str(plan["id"]))
+        remaining_target = max(total_target_count - len(completed_word_ids), 0)
+        items = await _build_today_plan_items(
+            conn,
+            user_id=user_id,
+            deck_group=deck_group,
+            remaining_target=remaining_target,
+            excluded_word_ids=completed_word_ids,
+        )
+        await insert_daily_plan_items(conn, plan_id=str(plan["id"]), items=items)
+        summary = await get_daily_plan_summary(conn, plan_id=str(plan["id"]))
+        summary["daily_target_count"] = total_target_count
+        summary["mistake_count"] = await count_active_mistakes(
+            conn,
+            user_id=user_id,
+            deck_ids=member_deck_ids,
+        )
+    return summary
+
+
+async def get_learning_queue(pool: asyncpg.Pool, *, user_id: int, deck_id: str, limit: int = 10) -> list[dict]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        plan = await _ensure_today_plan(conn, user_id=user_id, deck_group=deck_group)
+        rows = await list_daily_plan_queue_rows(conn, plan_id=str(plan["id"]), item_type="learning", limit=limit)
+        items: list[dict] = []
+        for row in rows:
+            word_id = str(row["id"])
+            translations = await list_word_translations(conn, word_id=word_id)
+            phrases = await list_word_phrases(conn, word_id=word_id)
+            sentences = await list_word_sentences(conn, word_id=word_id)
+            payload = _detail_payload(row, translations=translations, phrases=phrases, sentences=sentences)
+            payload["prompt_type"] = "en_to_zh"
+            payload["review_mode"] = "learning"
+            items.append(payload)
+    return items
 
 
 async def get_word_detail(pool: asyncpg.Pool, *, user_id: int, word_id: str) -> dict:

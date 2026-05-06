@@ -86,11 +86,15 @@ async def init_tables(pool: asyncpg.Pool) -> None:
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
               deck_id UUID NOT NULL REFERENCES vocab_decks(id) ON DELETE CASCADE,
               daily_new_limit INTEGER NOT NULL DEFAULT 20,
+              daily_total_target INTEGER NOT NULL DEFAULT 20,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               PRIMARY KEY (user_id, deck_id)
             );
             """
+        )
+        await conn.execute(
+            "ALTER TABLE vocab_user_deck_settings ADD COLUMN IF NOT EXISTS daily_total_target INTEGER NOT NULL DEFAULT 20;"
         )
         await conn.execute(
             """
@@ -360,6 +364,42 @@ async def get_daily_new_limit(conn: asyncpg.Connection, *, user_id: int, deck_id
     return int(row["daily_new_limit"]) if row and row["daily_new_limit"] is not None else 20
 
 
+async def get_daily_total_target(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
+    row = await conn.fetchrow(
+        """
+        SELECT MIN(daily_total_target) AS daily_total_target
+        FROM vocab_user_deck_settings
+        WHERE user_id = $1 AND deck_id = ANY($2::uuid[])
+        """,
+        user_id,
+        deck_ids,
+    )
+    return int(row["daily_total_target"]) if row and row["daily_total_target"] is not None else 20
+
+
+async def upsert_daily_total_target(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_ids: list[str],
+    daily_total_target: int,
+) -> None:
+    for deck_id in deck_ids:
+        await conn.execute(
+            """
+            INSERT INTO vocab_user_deck_settings(user_id, deck_id, daily_total_target)
+            VALUES ($1, $2::uuid, $3)
+            ON CONFLICT (user_id, deck_id)
+            DO UPDATE SET
+              daily_total_target = EXCLUDED.daily_total_target,
+              updated_at = NOW()
+            """,
+            user_id,
+            deck_id,
+            daily_total_target,
+        )
+
+
 async def count_new_words(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
     row = await conn.fetchrow(
         """
@@ -536,8 +576,8 @@ async def upsert_user_word_progress(
         lapse_count,
         interval_days,
         next_review_at,
-        _to_jsonb_param(fsrs_card_json),
         last_result,
+        _to_jsonb_param(fsrs_card_json),
     )
 
 
@@ -647,7 +687,8 @@ async def list_due_review_candidate_rows(
           w.us_pronunciation,
           w.uk_pronunciation,
           COALESCE(p.mastery_score, 0) AS mastery_score,
-          p.next_review_at
+          p.next_review_at,
+          p.fsrs_card_json
         FROM vocab_words w
         JOIN vocab_user_word_progress p
           ON p.word_id = w.id
@@ -782,16 +823,24 @@ async def get_daily_plan_summary(conn: asyncpg.Connection, *, plan_id: str) -> d
     row = await conn.fetchrow(
         """
         SELECT
+          COUNT(*) FILTER (WHERE item_type = 'learning' AND status = 'pending')::int AS learning_count,
           COUNT(*) FILTER (WHERE item_type = 'new' AND status = 'pending')::int AS new_count,
-          COUNT(*) FILTER (WHERE item_type = 'review' AND status = 'pending')::int AS review_count
+          COUNT(*) FILTER (WHERE item_type = 'review' AND status = 'pending')::int AS review_count,
+          COUNT(*)::int AS total_count,
+          COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
+          COUNT(*) FILTER (WHERE status = 'done')::int AS completed_count
         FROM vocab_daily_plan_items
         WHERE plan_id = $1::uuid
         """,
         plan_id,
     )
     return {
+        "learning_count": int(row["learning_count"]) if row else 0,
         "new_count": int(row["new_count"]) if row else 0,
         "review_count": int(row["review_count"]) if row else 0,
+        "total_count": int(row["total_count"]) if row else 0,
+        "pending_count": int(row["pending_count"]) if row else 0,
+        "completed_count": int(row["completed_count"]) if row else 0,
     }
 
 
@@ -838,6 +887,37 @@ async def get_daily_plan_item(conn: asyncpg.Connection, *, plan_id: str, word_id
         """,
         plan_id,
         word_id,
+    )
+
+
+async def list_daily_plan_word_ids(
+    conn: asyncpg.Connection,
+    *,
+    plan_id: str,
+    statuses: list[str],
+) -> list[str]:
+    rows = await conn.fetch(
+        """
+        SELECT word_id::text AS word_id
+        FROM vocab_daily_plan_items
+        WHERE plan_id = $1::uuid
+          AND status = ANY($2::text[])
+        ORDER BY queue_position ASC
+        """,
+        plan_id,
+        statuses,
+    )
+    return [str(row["word_id"]) for row in rows]
+
+
+async def delete_pending_daily_plan_items(conn: asyncpg.Connection, *, plan_id: str) -> None:
+    await conn.execute(
+        """
+        DELETE FROM vocab_daily_plan_items
+        WHERE plan_id = $1::uuid
+          AND status = 'pending'
+        """,
+        plan_id,
     )
 
 

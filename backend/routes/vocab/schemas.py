@@ -17,9 +17,14 @@ class VocabDeckOut(BaseModel):
 
 
 class VocabTodaySummaryOut(BaseModel):
+    learning_count: int = 0
     new_count: int
     review_count: int
     mistake_count: int
+    total_count: int = 0
+    pending_count: int = 0
+    completed_count: int = 0
+    daily_target_count: int = 0
 
 
 class VocabTranslationOut(BaseModel):
@@ -50,8 +55,12 @@ class VocabWordDetailOut(BaseModel):
 
 class VocabReviewQueueItemOut(VocabWordDetailOut):
     prompt_type: Literal["en_to_zh", "zh_to_en"] = "en_to_zh"
-    review_mode: Literal["study", "review", "mistake"] = "review"
+    review_mode: Literal["study", "review", "learning", "mistake"] = "review"
     mastery_score: int = 0
+
+
+class VocabTodaySettingsIn(BaseModel):
+    total_target_count: int = Field(ge=1, le=500)
 
 
 class VocabReviewSubmitIn(BaseModel):

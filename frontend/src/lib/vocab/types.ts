@@ -9,9 +9,14 @@ export type VocabDeck = {
 };
 
 export type VocabTodaySummary = {
+  learning_count: number;
   new_count: number;
   review_count: number;
   mistake_count: number;
+  total_count: number;
+  pending_count: number;
+  completed_count: number;
+  daily_target_count: number;
 };
 
 export type VocabTranslation = {
@@ -42,8 +47,12 @@ export type VocabWordDetail = {
 
 export type VocabReviewItem = VocabWordDetail & {
   prompt_type: 'en_to_zh' | 'zh_to_en';
-  review_mode: 'study' | 'review' | 'mistake';
+  review_mode: 'study' | 'review' | 'learning' | 'mistake';
   mastery_score: number;
+};
+
+export type VocabTodaySettingsPayload = {
+  total_target_count: number;
 };
 
 export type VocabMistakeItem = VocabWordDetail & {

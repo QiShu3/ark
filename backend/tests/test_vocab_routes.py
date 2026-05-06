@@ -33,7 +33,16 @@ def test_vocab_today_route_returns_counts(monkeypatch) -> None:
     app.dependency_overrides[get_current_user] = lambda: _User()
 
     async def fake_get_today_summary(*_args, **_kwargs):
-        return {"new_count": 12, "review_count": 5, "mistake_count": 2}
+        return {
+            "learning_count": 7,
+            "new_count": 12,
+            "review_count": 5,
+            "mistake_count": 2,
+            "total_count": 24,
+            "pending_count": 17,
+            "completed_count": 7,
+            "daily_target_count": 24,
+        }
 
     from routes.vocab import routes as vocab_routes
 
@@ -44,7 +53,45 @@ def test_vocab_today_route_returns_counts(monkeypatch) -> None:
     response = client.get("/api/vocab/decks/deck-1/today")
 
     assert response.status_code == 200
-    assert response.json() == {"new_count": 12, "review_count": 5, "mistake_count": 2}
+    assert response.json() == {
+        "learning_count": 7,
+        "new_count": 12,
+        "review_count": 5,
+        "mistake_count": 2,
+        "total_count": 24,
+        "pending_count": 17,
+        "completed_count": 7,
+        "daily_target_count": 24,
+    }
+
+
+def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+
+    async def fake_update_today_plan(*_args, **_kwargs):
+        return {
+            "learning_count": 6,
+            "new_count": 12,
+            "review_count": 2,
+            "mistake_count": 1,
+            "total_count": 20,
+            "pending_count": 20,
+            "completed_count": 0,
+            "daily_target_count": 20,
+        }
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "update_today_plan", fake_update_today_plan)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.put("/api/vocab/decks/cet4/today/settings", json={"total_target_count": 20})
+
+    assert response.status_code == 200
+    assert response.json()["daily_target_count"] == 20
 
 
 def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:

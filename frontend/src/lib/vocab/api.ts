@@ -5,6 +5,7 @@ import type {
   VocabReviewItem,
   VocabReviewSubmitPayload,
   VocabReviewSubmitResult,
+  VocabTodaySettingsPayload,
   VocabTodaySummary,
   VocabWordDetail,
 } from './types';
@@ -21,6 +22,10 @@ export function fetchVocabStudyQueue(deckId: string, limit = 10) {
   return apiJson<VocabReviewItem[]>(`/api/vocab/decks/${deckId}/study?limit=${limit}`);
 }
 
+export function fetchVocabLearningQueue(deckId: string, limit = 10) {
+  return apiJson<VocabReviewItem[]>(`/api/vocab/decks/${deckId}/learning?limit=${limit}`);
+}
+
 export function fetchVocabReviewQueue(deckId: string, limit = 10) {
   return apiJson<VocabReviewItem[]>(`/api/vocab/decks/${deckId}/review?limit=${limit}`);
 }
@@ -31,6 +36,14 @@ export function fetchVocabMistakes(deckId: string, limit = 50) {
 
 export function fetchVocabWordDetail(wordId: string) {
   return apiJson<VocabWordDetail>(`/api/vocab/words/${wordId}`);
+}
+
+export function updateVocabTodaySettings(deckId: string, payload: VocabTodaySettingsPayload) {
+  return apiJson<VocabTodaySummary>(`/api/vocab/decks/${deckId}/today/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function submitVocabReview(payload: VocabReviewSubmitPayload) {
