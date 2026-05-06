@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
-import ProgressSummary from '../../components/Vocab/ProgressSummary';
 import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
-import { fetchVocabToday, updateVocabTodaySettings } from '../../lib/vocab/api';
-import type { VocabTodaySummary } from '../../lib/vocab/types';
+import { fetchVocabOverview, fetchVocabToday, updateVocabTodaySettings } from '../../lib/vocab/api';
+import type { VocabOverview, VocabTodaySummary } from '../../lib/vocab/types';
 
 export default function VocabHome() {
   const navigate = useNavigate();
   const { decks, activeDeck, setActiveDeck, loading, error } = useVocabDeck();
   const [summary, setSummary] = useState<VocabTodaySummary | null>(null);
+  const [overview, setOverview] = useState<VocabOverview | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -23,13 +23,15 @@ export default function VocabHome() {
 
     if (!activeDeck) {
       setSummary(null);
+      setOverview(null);
       return;
     }
 
-    fetchVocabToday(activeDeck.id)
-      .then((payload) => {
+    Promise.all([fetchVocabToday(activeDeck.id), fetchVocabOverview(activeDeck.id)])
+      .then(([todayPayload, overviewPayload]) => {
         if (cancelled) return;
-        setSummary(payload);
+        setSummary(todayPayload);
+        setOverview(overviewPayload);
         setSummaryError(null);
       })
       .catch((err: unknown) => {
@@ -50,6 +52,8 @@ export default function VocabHome() {
       setSummary(payload);
       setSummaryError(null);
       setSettingsOpen(false);
+      const overviewPayload = await fetchVocabOverview(activeDeck.id);
+      setOverview(overviewPayload);
       if (payload.pending_count > 0 && isTodayComplete) {
         navigate('/vocab/today');
       }
@@ -59,6 +63,10 @@ export default function VocabHome() {
       setSettingsSaving(false);
     }
   };
+
+  const currentDeckMasteryPercent = overview && overview.current_deck.total_word_count > 0
+    ? Math.round((overview.current_deck.mastered_word_count / overview.current_deck.total_word_count) * 100)
+    : 0;
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -141,8 +149,6 @@ export default function VocabHome() {
                     <div className="text-sm text-white/60">已完成 {summary.completed_count} / {summary.total_count}</div>
                   </div>
                 </div>
-
-                <ProgressSummary summary={summary} />
               </div>
             ) : null}
 
@@ -150,27 +156,77 @@ export default function VocabHome() {
           </section>
 
           <section className="rounded-[2rem] border border-white/10 bg-white/6 p-8 backdrop-blur-md">
-            <div className="text-sm uppercase tracking-[0.32em] text-white/45">Flow</div>
-            <div className="mt-5 space-y-4">
-              <a href="#/vocab/study" className="block rounded-3xl border border-white/10 bg-white/8 p-5 transition hover:bg-white/12">
-                <div className="text-lg font-medium">新词学习</div>
-                <div className="mt-2 text-sm text-white/60">单独查看今天的新词部分，适合想集中先过新词时使用。</div>
-              </a>
-              <a href="#/vocab/review" className="block rounded-3xl border border-white/10 bg-white/8 p-5 transition hover:bg-white/12">
-                <div className="text-lg font-medium">今日复习</div>
-                <div className="mt-2 text-sm text-white/60">单独处理今天到期的复习词，适合只想清空复习时使用。</div>
-              </a>
-              <a href="#/vocab/mistakes" className="block rounded-3xl border border-white/10 bg-white/8 p-5 transition hover:bg-white/12">
-                <div className="text-lg font-medium">错题回捞</div>
-                <div className="mt-2 text-sm text-white/60">集中看最近失误词，快速定位薄弱点。</div>
-              </a>
-            </div>
+            <div className="text-sm uppercase tracking-[0.32em] text-white/45">总览</div>
 
-            {activeDeck ? (
-              <div className="mt-8 rounded-3xl border border-white/10 bg-black/20 p-5">
-                <div className="text-sm text-white/50">当前词书</div>
-                <div className="mt-2 text-2xl font-medium">{activeDeck.name}</div>
-                <div className="mt-2 text-sm text-white/55">{activeDeck.description || `${activeDeck.word_count} 个单词`}</div>
+            {overview ? (
+              <div className="mt-5 space-y-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                    <div className="text-sm text-white/50">已完成词书</div>
+                    <div className="mt-3 text-3xl font-semibold text-white">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
+                    <div className="mt-2 text-sm text-white/55">全部单词都已进入 Review 状态的词书数量。</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                    <div className="text-sm text-white/50">累计掌握单词</div>
+                    <div className="mt-3 text-3xl font-semibold text-white">{overview.mastered_word_count}</div>
+                    <div className="mt-2 text-sm text-white/55">按 FSRS Review 口径统计的全局已掌握单词总数。</div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <div className="text-sm text-white/50">当前词书掌握度</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">{overview.current_deck.deck_name}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-white/50">已掌握</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">
+                        {overview.current_deck.mastered_word_count} / {overview.current_deck.total_word_count}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/8">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-sky-300 to-cyan-200 transition-[width] duration-300"
+                      style={{ width: `${currentDeckMasteryPercent}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="text-sm text-white/50">未开始</div>
+                      <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.unstarted_word_count}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="text-sm text-white/50">学习中</div>
+                      <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.learning_word_count}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="text-sm text-white/50">已掌握</div>
+                      <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.mastered_word_count}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm uppercase tracking-[0.24em] text-white/40">快捷入口</div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <a href="#/vocab/study" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white/80 transition hover:border-white/25 hover:bg-white/10">
+                      <div className="text-base font-medium text-white">新词</div>
+                      <div className="mt-1 text-sm text-white/55">单独进入新词队列</div>
+                    </a>
+                    <a href="#/vocab/review" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white/80 transition hover:border-white/25 hover:bg-white/10">
+                      <div className="text-base font-medium text-white">复习</div>
+                      <div className="mt-1 text-sm text-white/55">单独清理到期复习</div>
+                    </a>
+                    <a href="#/vocab/mistakes" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white/80 transition hover:border-white/25 hover:bg-white/10">
+                      <div className="text-base font-medium text-white">错题</div>
+                      <div className="mt-1 text-sm text-white/55">快速查看薄弱词</div>
+                    </a>
+                  </div>
+                </div>
               </div>
             ) : null}
           </section>

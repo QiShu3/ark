@@ -28,6 +28,22 @@ class VocabTodaySummaryOut(BaseModel):
     memorized_count: int = 0
 
 
+class VocabDeckMasteryOut(BaseModel):
+    deck_id: str
+    deck_name: str
+    total_word_count: int = 0
+    mastered_word_count: int = 0
+    learning_word_count: int = 0
+    unstarted_word_count: int = 0
+
+
+class VocabOverviewOut(BaseModel):
+    completed_deck_count: int = 0
+    total_deck_count: int = 0
+    mastered_word_count: int = 0
+    current_deck: VocabDeckMasteryOut
+
+
 class VocabTranslationOut(BaseModel):
     pos: str | None = None
     translation: str

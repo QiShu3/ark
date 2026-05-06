@@ -20,6 +20,20 @@ export type VocabTodaySummary = {
   memorized_count: number;
 };
 
+export type VocabOverview = {
+  completed_deck_count: number;
+  total_deck_count: number;
+  mastered_word_count: number;
+  current_deck: {
+    deck_id: string;
+    deck_name: string;
+    total_word_count: number;
+    mastered_word_count: number;
+    learning_word_count: number;
+    unstarted_word_count: number;
+  };
+};
+
 export type VocabTranslation = {
   pos: string | null;
   translation: string;

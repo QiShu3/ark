@@ -92,6 +92,80 @@ async def test_get_today_summary_returns_daily_plan_counts(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_overview_aggregates_global_and_current_deck_mastery(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        return [
+            {
+                "id": "deck-1-1",
+                "key": "cet4_1",
+                "name": "CET4_1",
+                "description": "CET4_1 词书",
+                "word_count": 100,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            },
+            {
+                "id": "deck-2-1",
+                "key": "cet6_1",
+                "name": "CET6_1",
+                "description": "CET6_1 词书",
+                "word_count": 120,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            },
+        ]
+
+    async def fake_list_deck_mastery_rows(_conn, *, user_id: int):
+        assert user_id == 1
+        return [
+            {
+                "deck_id": "deck-1-1",
+                "total_word_count": 100,
+                "mastered_word_count": 100,
+                "learning_word_count": 0,
+                "unstarted_word_count": 0,
+            },
+            {
+                "deck_id": "deck-2-1",
+                "total_word_count": 120,
+                "mastered_word_count": 60,
+                "learning_word_count": 40,
+                "unstarted_word_count": 20,
+            },
+        ]
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "list_deck_mastery_rows", fake_list_deck_mastery_rows)
+
+    overview = await vocab_service.get_overview(_Pool(), user_id=1, deck_id="cet6")
+
+    assert overview == {
+        "completed_deck_count": 1,
+        "total_deck_count": 2,
+        "mastered_word_count": 160,
+        "current_deck": {
+            "deck_id": "cet6",
+            "deck_name": "CET6",
+            "total_word_count": 120,
+            "mastered_word_count": 60,
+            "learning_word_count": 40,
+            "unstarted_word_count": 20,
+        },
+    }
+
+
+@pytest.mark.asyncio
 async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(monkeypatch) -> None:
     class _PoolAcquire:
         async def __aenter__(self):

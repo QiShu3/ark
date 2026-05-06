@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Home from '../Home';
 
-const { fetchVocabToday, updateVocabTodaySettings } = vi.hoisted(() => ({
+const { fetchVocabOverview, fetchVocabToday, updateVocabTodaySettings } = vi.hoisted(() => ({
+  fetchVocabOverview: vi.fn(),
   fetchVocabToday: vi.fn(),
   updateVocabTodaySettings: vi.fn(),
 }));
@@ -25,17 +26,32 @@ vi.mock('../../../hooks/vocab/useVocabDeck', () => ({
 }));
 
 vi.mock('../../../lib/vocab/api', () => ({
+  fetchVocabOverview,
   fetchVocabToday,
   updateVocabTodaySettings,
 }));
 
 describe('Vocab home page', () => {
   beforeEach(() => {
+    fetchVocabOverview.mockReset();
     fetchVocabToday.mockReset();
     updateVocabTodaySettings.mockReset();
   });
 
   it('renders a today-focused hero card and keeps deck switching collapsed by default', async () => {
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 2,
+      total_deck_count: 6,
+      mastered_word_count: 1240,
+      current_deck: {
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 3600,
+        learning_word_count: 2100,
+        unstarted_word_count: 1808,
+      },
+    });
     fetchVocabToday.mockResolvedValue({
       learning_count: 7,
       new_count: 12,
@@ -45,6 +61,7 @@ describe('Vocab home page', () => {
       pending_count: 17,
       completed_count: 7,
       daily_target_count: 24,
+      memorized_count: 120,
     });
 
     render(
@@ -53,7 +70,7 @@ describe('Vocab home page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findAllByText('CET6')).toHaveLength(2);
+    expect(await screen.findByText('CET6')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '切换词书' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'CET6luan' })).not.toBeInTheDocument();
 
@@ -65,12 +82,37 @@ describe('Vocab home page', () => {
     expect(screen.getByRole('button', { name: '调整今日单词' })).toBeInTheDocument();
     expect(screen.getByText('已完成 7 / 24')).toBeInTheDocument();
     expect(screen.getByText('17')).toBeInTheDocument();
-    expect(screen.getAllByText('12').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('5').length).toBeGreaterThan(0);
+    expect(screen.getByText('总览')).toBeInTheDocument();
+    expect(screen.getByText('已完成词书')).toBeInTheDocument();
+    expect(screen.getByText('2 / 6 本')).toBeInTheDocument();
+    expect(screen.getByText('累计掌握单词')).toBeInTheDocument();
+    expect(screen.getByText('1240')).toBeInTheDocument();
+    expect(screen.getByText('当前词书掌握度')).toBeInTheDocument();
+    expect(screen.getByText('3600 / 7508')).toBeInTheDocument();
+    expect(screen.getByText('未开始')).toBeInTheDocument();
+    expect(screen.getByText('1808')).toBeInTheDocument();
+    expect(screen.getByText('学习中')).toBeInTheDocument();
+    expect(screen.getByText('2100')).toBeInTheDocument();
+    expect(screen.getAllByText('已掌握')).toHaveLength(2);
+    expect(screen.getByText('3600')).toBeInTheDocument();
+    expect(screen.getByText('快捷入口')).toBeInTheDocument();
   });
 
   it('opens the today settings dialog and saves a new total target', async () => {
     const user = userEvent.setup();
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 1,
+      total_deck_count: 6,
+      mastered_word_count: 1000,
+      current_deck: {
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 2000,
+        learning_word_count: 3000,
+        unstarted_word_count: 2508,
+      },
+    });
     fetchVocabToday.mockResolvedValue({
       learning_count: 6,
       new_count: 12,
@@ -80,6 +122,7 @@ describe('Vocab home page', () => {
       pending_count: 20,
       completed_count: 0,
       daily_target_count: 20,
+      memorized_count: 90,
     });
     updateVocabTodaySettings.mockResolvedValue({
       learning_count: 9,
@@ -90,6 +133,7 @@ describe('Vocab home page', () => {
       pending_count: 30,
       completed_count: 0,
       daily_target_count: 30,
+      memorized_count: 90,
     });
 
     render(
@@ -118,6 +162,19 @@ describe('Vocab home page', () => {
 
   it('shows the completed action when today is done and opens a continue dialog', async () => {
     const user = userEvent.setup();
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 4,
+      total_deck_count: 6,
+      mastered_word_count: 2200,
+      current_deck: {
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 7508,
+        learning_word_count: 0,
+        unstarted_word_count: 0,
+      },
+    });
     fetchVocabToday.mockResolvedValue({
       learning_count: 0,
       new_count: 0,
@@ -127,6 +184,7 @@ describe('Vocab home page', () => {
       pending_count: 0,
       completed_count: 24,
       daily_target_count: 24,
+      memorized_count: 100,
     });
 
     render(

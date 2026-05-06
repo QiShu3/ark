@@ -1,6 +1,7 @@
 import { apiJson } from '../api';
 import type {
   VocabDeck,
+  VocabOverview,
   VocabMistakeItem,
   VocabReviewItem,
   VocabReviewSubmitPayload,
@@ -16,6 +17,10 @@ export function fetchVocabDecks() {
 
 export function fetchVocabToday(deckId: string) {
   return apiJson<VocabTodaySummary>(`/api/vocab/decks/${deckId}/today`);
+}
+
+export function fetchVocabOverview(deckId: string) {
+  return apiJson<VocabOverview>(`/api/vocab/decks/${deckId}/overview`);
 }
 
 export function fetchVocabStudyQueue(deckId: string, limit = 10) {

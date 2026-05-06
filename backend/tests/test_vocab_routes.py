@@ -67,6 +67,39 @@ def test_vocab_today_route_returns_counts(monkeypatch) -> None:
     }
 
 
+def test_vocab_overview_route_returns_global_snapshot(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+
+    async def fake_get_overview(*_args, **_kwargs):
+        return {
+            "completed_deck_count": 3,
+            "total_deck_count": 8,
+            "mastered_word_count": 1450,
+            "current_deck": {
+                "deck_id": "cet6",
+                "deck_name": "CET6",
+                "total_word_count": 2000,
+                "mastered_word_count": 1400,
+                "learning_word_count": 300,
+                "unstarted_word_count": 300,
+            },
+        }
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "get_overview", fake_get_overview)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.get("/api/vocab/decks/cet6/overview")
+
+    assert response.status_code == 200
+    assert response.json()["completed_deck_count"] == 3
+    assert response.json()["current_deck"]["mastered_word_count"] == 1400
+
+
 def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(vocab_router)

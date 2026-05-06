@@ -10,6 +10,7 @@ from routes.auth_routes import get_current_user
 from .schemas import (
     VocabDeckOut,
     VocabMistakeItemOut,
+    VocabOverviewOut,
     VocabReviewQueueItemOut,
     VocabReviewSubmitIn,
     VocabReviewSubmitOut,
@@ -19,6 +20,7 @@ from .schemas import (
 )
 from .service import (
     get_learning_queue,
+    get_overview,
     get_review_queue,
     get_study_queue,
     get_today_summary,
@@ -62,6 +64,16 @@ async def route_get_today_summary(
 ) -> VocabTodaySummaryOut:
     payload = await get_today_summary(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
     return VocabTodaySummaryOut(**payload)
+
+
+@router.get("/decks/{deck_id}/overview", response_model=VocabOverviewOut)
+async def route_get_overview(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> VocabOverviewOut:
+    payload = await get_overview(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
+    return VocabOverviewOut(**payload)
 
 
 @router.get("/decks/{deck_id}/study", response_model=list[VocabReviewQueueItemOut])

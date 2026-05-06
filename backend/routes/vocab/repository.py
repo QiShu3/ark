@@ -864,6 +864,37 @@ async def count_memorized_words(
     return int(row["memorized_count"]) if row else 0
 
 
+async def list_deck_mastery_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          d.id::text AS deck_id,
+          COUNT(w.id)::int AS total_word_count,
+          COUNT(*) FILTER (
+            WHERE p.word_id IS NOT NULL
+              AND COALESCE(p.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')
+          )::int AS mastered_word_count,
+          COUNT(*) FILTER (
+            WHERE p.word_id IS NOT NULL
+              AND COALESCE(p.fsrs_card_json ->> 'state', '') NOT IN ('2', 'review', 'Review')
+          )::int AS learning_word_count,
+          COUNT(*) FILTER (WHERE p.word_id IS NULL)::int AS unstarted_word_count
+        FROM vocab_decks d
+        JOIN vocab_words w ON w.deck_id = d.id
+        LEFT JOIN vocab_user_word_progress p
+          ON p.word_id = w.id
+         AND p.user_id = $1
+        GROUP BY d.id
+        ORDER BY d.created_at ASC
+        """,
+        user_id,
+    )
+
+
 async def list_daily_plan_queue_rows(
     conn: asyncpg.Connection,
     *,
