@@ -43,6 +43,15 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
     setActiveIndex(0);
   };
 
+  const requeueCurrent = () => {
+    setItems((prev) => {
+      if (prev.length <= 1) return prev;
+      const [current, ...rest] = prev;
+      return [...rest, current];
+    });
+    setActiveIndex(0);
+  };
+
   return {
     items,
     currentItem: items[activeIndex] ?? null,
@@ -50,5 +59,6 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
     error,
     refresh,
     consumeCurrent,
+    requeueCurrent,
   };
 }

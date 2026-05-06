@@ -4,11 +4,11 @@ import ReviewResultPanel from '../../components/Vocab/ReviewResultPanel';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabSession } from '../../hooks/vocab/useVocabSession';
 
-const actions: Array<{ label: string; value: 'again' | 'hard' | 'good' | 'wrong' }> = [
-  { label: 'Again', value: 'again' },
-  { label: 'Hard', value: 'hard' },
-  { label: 'Good', value: 'good' },
-  { label: 'Wrong', value: 'wrong' },
+const actions: Array<{ label: string; value: 'again' | 'hard' | 'good' | 'easy' }> = [
+  { label: '没记住', value: 'again' },
+  { label: '有点难', value: 'hard' },
+  { label: '记住了', value: 'good' },
+  { label: '很轻松', value: 'easy' },
 ];
 
 export default function VocabReview() {

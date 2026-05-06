@@ -12,7 +12,7 @@ export function useVocabSession(deckId: string | null, mode: SessionMode = 'revi
   const [lastResult, setLastResult] = useState<VocabReviewSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async (result: 'again' | 'hard' | 'good' | 'wrong') => {
+  const submit = async (result: 'again' | 'hard' | 'good' | 'easy') => {
     if (!deckId || !queue.currentItem) return null;
 
     setSubmitting(true);
@@ -26,7 +26,11 @@ export function useVocabSession(deckId: string | null, mode: SessionMode = 'revi
       });
       setLastResult(payload);
       setError(null);
-      queue.consumeCurrent();
+      if (payload.should_repeat_today) {
+        queue.requeueCurrent();
+      } else {
+        queue.consumeCurrent();
+      }
       return payload;
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败');

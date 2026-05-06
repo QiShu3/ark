@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import asyncpg
@@ -114,6 +115,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             """
         )
         await conn.execute(
+            "ALTER TABLE vocab_user_word_progress ADD COLUMN IF NOT EXISTS fsrs_card_json JSONB NULL;"
+        )
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS vocab_review_logs (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -125,6 +129,39 @@ async def init_tables(pool: asyncpg.Pool) -> None:
               result TEXT NOT NULL,
               response_ms INTEGER NULL,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vocab_daily_plans (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              deck_key TEXT NOT NULL,
+              plan_date DATE NOT NULL,
+              new_target_count INTEGER NOT NULL DEFAULT 0,
+              review_target_count INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE(user_id, deck_key, plan_date)
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vocab_daily_plan_items (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              plan_id UUID NOT NULL REFERENCES vocab_daily_plans(id) ON DELETE CASCADE,
+              word_id UUID NOT NULL REFERENCES vocab_words(id) ON DELETE CASCADE,
+              item_type TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'pending',
+              queue_position INTEGER NOT NULL DEFAULT 0,
+              fsrs_due_at_snapshot TIMESTAMPTZ NULL,
+              last_result TEXT NULL,
+              completed_at TIMESTAMPTZ NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE(plan_id, word_id)
             );
             """
         )
@@ -159,8 +196,20 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "CREATE INDEX IF NOT EXISTS idx_vocab_progress_due ON vocab_user_word_progress(user_id, deck_id, next_review_at);"
         )
         await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vocab_daily_plans_lookup ON vocab_daily_plans(user_id, deck_key, plan_date);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vocab_daily_plan_items_queue ON vocab_daily_plan_items(plan_id, item_type, status, queue_position ASC);"
+        )
+        await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vocab_mistakes_active ON vocab_mistake_bucket(user_id, deck_id, is_active);"
         )
+
+
+def _to_jsonb_param(value: Any) -> str | None:
+    if value is None:
+        return None
+    return json.dumps(value)
 
 
 async def upsert_vocab_deck(
@@ -432,7 +481,7 @@ async def get_user_word_progress(
 ) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
-        SELECT mastery_score, correct_count, wrong_count, lapse_count, interval_days
+        SELECT mastery_score, correct_count, wrong_count, lapse_count, interval_days, next_review_at, last_review_at, fsrs_card_json
         FROM vocab_user_word_progress
         WHERE user_id = $1 AND deck_id = $2::uuid AND word_id = $3::uuid
         """,
@@ -454,15 +503,16 @@ async def upsert_user_word_progress(
     lapse_count: int,
     interval_days: int,
     next_review_at: Any,
+    fsrs_card_json: Any,
     last_result: str,
 ) -> None:
     await conn.execute(
         """
         INSERT INTO vocab_user_word_progress(
           user_id, deck_id, word_id, mastery_score, correct_count, wrong_count, lapse_count,
-          interval_days, next_review_at, last_review_at, last_result, updated_at
+          interval_days, next_review_at, last_review_at, last_result, updated_at, fsrs_card_json
         )
-        VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, NOW(), $10, NOW())
+        VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, NOW(), $10, NOW(), $11::jsonb)
         ON CONFLICT (user_id, word_id)
         DO UPDATE SET
           mastery_score = EXCLUDED.mastery_score,
@@ -473,6 +523,7 @@ async def upsert_user_word_progress(
           next_review_at = EXCLUDED.next_review_at,
           last_review_at = NOW(),
           last_result = EXCLUDED.last_result,
+          fsrs_card_json = EXCLUDED.fsrs_card_json,
           updated_at = NOW(),
           deck_id = EXCLUDED.deck_id
         """,
@@ -485,6 +536,7 @@ async def upsert_user_word_progress(
         lapse_count,
         interval_days,
         next_review_at,
+        _to_jsonb_param(fsrs_card_json),
         last_result,
     )
 
@@ -580,6 +632,37 @@ async def list_review_queue_rows(
     )
 
 
+async def list_due_review_candidate_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_ids: list[str],
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          w.id::text AS id,
+          w.deck_id::text AS deck_id,
+          w.word,
+          w.us_pronunciation,
+          w.uk_pronunciation,
+          COALESCE(p.mastery_score, 0) AS mastery_score,
+          p.next_review_at
+        FROM vocab_words w
+        JOIN vocab_user_word_progress p
+          ON p.word_id = w.id
+         AND p.user_id = $1
+        WHERE w.deck_id = ANY($2::uuid[])
+          AND p.next_review_at IS NOT NULL
+          AND p.next_review_at <= NOW()
+          AND p.is_suspended = FALSE
+        ORDER BY p.next_review_at ASC, w.sort_order ASC
+        """,
+        user_id,
+        deck_ids,
+    )
+
+
 async def list_study_queue_rows(
     conn: asyncpg.Connection,
     *,
@@ -638,4 +721,166 @@ async def list_mistake_rows(
         user_id,
         deck_ids,
         limit,
+    )
+
+
+async def get_daily_plan(conn: asyncpg.Connection, *, user_id: int, deck_key: str, plan_date: Any) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT id::text AS id, deck_key, plan_date, new_target_count, review_target_count
+        FROM vocab_daily_plans
+        WHERE user_id = $1 AND deck_key = $2 AND plan_date = $3::date
+        """,
+        user_id,
+        deck_key,
+        plan_date,
+    )
+
+
+async def create_daily_plan(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_key: str,
+    plan_date: Any,
+    new_target_count: int,
+    review_target_count: int,
+) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """
+        INSERT INTO vocab_daily_plans(user_id, deck_key, plan_date, new_target_count, review_target_count)
+        VALUES ($1, $2, $3::date, $4, $5)
+        ON CONFLICT (user_id, deck_key, plan_date)
+        DO UPDATE SET updated_at = NOW()
+        RETURNING id::text AS id, deck_key, plan_date, new_target_count, review_target_count
+        """,
+        user_id,
+        deck_key,
+        plan_date,
+        new_target_count,
+        review_target_count,
+    )
+
+
+async def insert_daily_plan_items(conn: asyncpg.Connection, *, plan_id: str, items: list[dict[str, Any]]) -> None:
+    for index, item in enumerate(items, start=1):
+        await conn.execute(
+            """
+            INSERT INTO vocab_daily_plan_items(plan_id, word_id, item_type, status, queue_position, fsrs_due_at_snapshot)
+            VALUES ($1::uuid, $2::uuid, $3, 'pending', $4, $5)
+            ON CONFLICT (plan_id, word_id) DO NOTHING
+            """,
+            plan_id,
+            item["word_id"],
+            item["item_type"],
+            index,
+            item.get("fsrs_due_at_snapshot"),
+        )
+
+
+async def get_daily_plan_summary(conn: asyncpg.Connection, *, plan_id: str) -> dict[str, int]:
+    row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*) FILTER (WHERE item_type = 'new' AND status = 'pending')::int AS new_count,
+          COUNT(*) FILTER (WHERE item_type = 'review' AND status = 'pending')::int AS review_count
+        FROM vocab_daily_plan_items
+        WHERE plan_id = $1::uuid
+        """,
+        plan_id,
+    )
+    return {
+        "new_count": int(row["new_count"]) if row else 0,
+        "review_count": int(row["review_count"]) if row else 0,
+    }
+
+
+async def list_daily_plan_queue_rows(
+    conn: asyncpg.Connection,
+    *,
+    plan_id: str,
+    item_type: str,
+    limit: int,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          w.id::text AS id,
+          w.deck_id::text AS deck_id,
+          w.word,
+          w.us_pronunciation,
+          w.uk_pronunciation,
+          COALESCE(p.mastery_score, 0) AS mastery_score
+        FROM vocab_daily_plan_items i
+        JOIN vocab_daily_plans dp ON dp.id = i.plan_id
+        JOIN vocab_words w ON w.id = i.word_id
+        LEFT JOIN vocab_user_word_progress p
+          ON p.word_id = w.id
+         AND p.user_id = dp.user_id
+        WHERE i.plan_id = $1::uuid
+          AND i.item_type = $2
+          AND i.status = 'pending'
+        ORDER BY i.queue_position ASC, w.sort_order ASC
+        LIMIT $3
+        """,
+        plan_id,
+        item_type,
+        limit,
+    )
+
+
+async def get_daily_plan_item(conn: asyncpg.Connection, *, plan_id: str, word_id: str) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT plan_id::text AS plan_id, word_id::text AS word_id, item_type, status, queue_position
+        FROM vocab_daily_plan_items
+        WHERE plan_id = $1::uuid AND word_id = $2::uuid
+        """,
+        plan_id,
+        word_id,
+    )
+
+
+async def update_daily_plan_item(
+    conn: asyncpg.Connection,
+    *,
+    plan_id: str,
+    word_id: str,
+    status: str,
+    last_result: str,
+) -> None:
+    if status == "pending":
+        await conn.execute(
+            """
+            UPDATE vocab_daily_plan_items i
+            SET status = 'pending',
+                last_result = $3,
+                completed_at = NULL,
+                updated_at = NOW(),
+                queue_position = (
+                  SELECT COALESCE(MAX(queue_position), 0) + 1
+                  FROM vocab_daily_plan_items
+                  WHERE plan_id = $1::uuid
+                )
+            WHERE i.plan_id = $1::uuid AND i.word_id = $2::uuid
+            """,
+            plan_id,
+            word_id,
+            last_result,
+        )
+        return
+
+    await conn.execute(
+        """
+        UPDATE vocab_daily_plan_items
+        SET status = $3,
+            last_result = $4,
+            completed_at = NOW(),
+            updated_at = NOW()
+        WHERE plan_id = $1::uuid AND word_id = $2::uuid
+        """,
+        plan_id,
+        word_id,
+        status,
+        last_result,
     )

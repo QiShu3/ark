@@ -54,7 +54,7 @@ export type VocabMistakeItem = VocabWordDetail & {
 export type VocabReviewSubmitPayload = {
   deck_id: string;
   word_id: string;
-  result: 'again' | 'hard' | 'good' | 'wrong';
+  result: 'again' | 'hard' | 'good' | 'easy';
   review_mode: string;
   prompt_type: string;
   response_ms?: number;
@@ -67,4 +67,5 @@ export type VocabReviewSubmitResult = {
   correct_count: number;
   interval_days: number;
   result: string;
+  should_repeat_today: boolean;
 };

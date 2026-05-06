@@ -56,10 +56,11 @@ def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:
         return {
             "mastery_score": 2,
             "next_review_at": datetime(2026, 5, 5, tzinfo=UTC),
-            "wrong_count": 2,
+            "wrong_count": 0,
             "correct_count": 3,
-            "interval_days": 1,
-            "result": "wrong",
+            "interval_days": 5,
+            "result": "easy",
+            "should_repeat_today": False,
         }
 
     from routes.vocab import routes as vocab_routes
@@ -73,7 +74,7 @@ def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:
         json={
             "deck_id": "deck-1",
             "word_id": "word-1",
-            "result": "wrong",
+            "result": "easy",
             "review_mode": "review",
             "prompt_type": "en_to_zh",
         },
@@ -81,7 +82,8 @@ def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["mastery_score"] == 2
-    assert response.json()["wrong_count"] == 2
+    assert response.json()["wrong_count"] == 0
+    assert response.json()["should_repeat_today"] is False
 
 
 def test_vocab_word_detail_route_returns_nested_content(monkeypatch) -> None:

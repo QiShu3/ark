@@ -55,11 +55,12 @@ describe('Vocab study page', () => {
 
     expect(screen.getByText('abruptly')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /没记住/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /有点印象/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /有点难/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /记住了/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /很轻松/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /记住了/ }));
+    await user.click(screen.getByRole('button', { name: /很轻松/ }));
 
-    expect(submit).toHaveBeenCalledWith('good');
+    expect(submit).toHaveBeenCalledWith('easy');
   });
 });

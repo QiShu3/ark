@@ -57,7 +57,7 @@ class VocabReviewQueueItemOut(VocabWordDetailOut):
 class VocabReviewSubmitIn(BaseModel):
     deck_id: str
     word_id: str
-    result: Literal["again", "hard", "good", "wrong"]
+    result: Literal["again", "hard", "good", "easy"]
     review_mode: str
     prompt_type: str
     response_ms: int | None = Field(default=None, ge=0)
@@ -70,6 +70,7 @@ class VocabReviewSubmitOut(BaseModel):
     correct_count: int
     interval_days: int
     result: str
+    should_repeat_today: bool = False
 
 
 class VocabMistakeItemOut(VocabWordDetailOut):

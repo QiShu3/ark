@@ -4,10 +4,11 @@ import StudyCard from '../../components/Vocab/StudyCard';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabSession } from '../../hooks/vocab/useVocabSession';
 
-const studyActions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'good' }> = [
-  { label: '没记住', hint: '明天重新见', value: 'again' },
-  { label: '有点印象', hint: '过两天再看', value: 'hard' },
-  { label: '记住了', hint: '进入更长间隔', value: 'good' },
+const studyActions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'good' | 'easy' }> = [
+  { label: '没记住', hint: '今天稍后再看', value: 'again' },
+  { label: '有点难', hint: '进入较短间隔', value: 'hard' },
+  { label: '记住了', hint: '进入正常间隔', value: 'good' },
+  { label: '很轻松', hint: '延后更久再看', value: 'easy' },
 ];
 
 export default function VocabStudy() {
@@ -36,7 +37,7 @@ export default function VocabStudy() {
                 看完释义后，直接给这张卡一个结果，系统会自动推进到下一词并安排后续复习。
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {studyActions.map((action) => (
                   <button
                     key={action.value}
