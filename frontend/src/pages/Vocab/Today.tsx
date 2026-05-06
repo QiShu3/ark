@@ -1,5 +1,6 @@
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
 import QuizRenderer from '../../components/Vocab/QuizRenderer';
+import TodayBatchReview from '../../components/Vocab/TodayBatchReview';
 import ReviewResultPanel from '../../components/Vocab/ReviewResultPanel';
 import StudyCard from '../../components/Vocab/StudyCard';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
@@ -40,7 +41,14 @@ export default function VocabToday() {
           {session.loading ? <p className="text-sm text-white/55">今日单词加载中…</p> : null}
           {session.error ? <p className="text-sm text-rose-200">{session.error}</p> : null}
 
-          {session.currentItem ? (
+          {session.isBatchReview ? (
+            <TodayBatchReview
+              count={session.batchReviewCount}
+              groups={session.batchReviewGroups}
+              actionLabel={session.batchReviewActionLabel}
+              onContinue={session.continueBatchReview}
+            />
+          ) : session.currentItem ? (
             <>
               {session.currentMode === 'review' ? <QuizRenderer item={session.currentItem} /> : <StudyCard item={session.currentItem} />}
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -65,7 +73,7 @@ export default function VocabToday() {
 
           {session.lastResult ? <ReviewResultPanel result={session.lastResult} /> : null}
 
-          {!session.loading && !session.error && !session.currentItem ? (
+          {!session.isBatchReview && !session.loading && !session.error && !session.currentItem ? (
             <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">今天这本词书的单词已经完成了。</div>
           ) : null}
         </div>
