@@ -977,6 +977,57 @@ async def list_deck_word_rows(
     )
 
 
+async def list_inheritable_mastered_progress_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_ids: list[str],
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        WITH source_progress AS (
+          SELECT DISTINCT ON (LOWER(BTRIM(w.word)))
+            LOWER(BTRIM(w.word)) AS word_key,
+            p.mastery_score,
+            p.correct_count,
+            p.wrong_count,
+            p.lapse_count,
+            p.interval_days,
+            p.next_review_at,
+            p.last_result,
+            p.fsrs_card_json
+          FROM vocab_user_word_progress p
+          JOIN vocab_words w ON w.id = p.word_id
+          WHERE p.user_id = $1
+            AND COALESCE(p.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')
+          ORDER BY LOWER(BTRIM(w.word)) ASC, p.interval_days DESC, p.next_review_at DESC NULLS LAST, p.updated_at DESC
+        )
+        SELECT
+          target.id::text AS word_id,
+          target.deck_id::text AS deck_id,
+          source.mastery_score,
+          source.correct_count,
+          source.wrong_count,
+          source.lapse_count,
+          source.interval_days,
+          source.next_review_at,
+          source.last_result,
+          source.fsrs_card_json
+        FROM vocab_words target
+        JOIN source_progress source
+          ON source.word_key = LOWER(BTRIM(target.word))
+        LEFT JOIN vocab_user_word_progress existing
+          ON existing.user_id = $1
+         AND existing.word_id = target.id
+        WHERE target.deck_id = ANY($2::uuid[])
+          AND existing.word_id IS NULL
+        ORDER BY target.sort_order ASC
+        """,
+        user_id,
+        deck_ids,
+    )
+
+
 async def list_daily_plan_queue_rows(
     conn: asyncpg.Connection,
     *,

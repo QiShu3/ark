@@ -162,6 +162,46 @@ def test_vocab_overview_current_words_route_returns_items(monkeypatch) -> None:
     assert response.json()[0]["mastery_state"] == "mastered"
 
 
+def test_vocab_inheritance_preview_route_returns_count(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+
+    async def fake_get_inheritance_preview(*_args, **_kwargs):
+        return {"inheritable_word_count": 18}
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "get_inheritance_preview", fake_get_inheritance_preview)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.get("/api/vocab/decks/cet6/inheritance-preview")
+
+    assert response.status_code == 200
+    assert response.json() == {"inheritable_word_count": 18}
+
+
+def test_vocab_inherit_mastered_words_route_returns_count(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+
+    async def fake_inherit_mastered_words(*_args, **_kwargs):
+        return {"inherited_word_count": 15}
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "inherit_mastered_words", fake_inherit_mastered_words)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.post("/api/vocab/decks/cet6/inherit-mastered-words")
+
+    assert response.status_code == 200
+    assert response.json() == {"inherited_word_count": 15}
+
+
 def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(vocab_router)

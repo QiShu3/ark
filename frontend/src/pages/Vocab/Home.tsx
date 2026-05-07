@@ -10,7 +10,17 @@ import type { VocabOverview, VocabTodaySummary } from '../../lib/vocab/types';
 
 export default function VocabHome() {
   const navigate = useNavigate();
-  const { decks, activeDeck, setActiveDeck, loading, error } = useVocabDeck();
+  const {
+    decks,
+    activeDeck,
+    activeDeckVersion,
+    inheritancePrompt,
+    setActiveDeck,
+    confirmInheritance,
+    dismissInheritance,
+    loading,
+    error,
+  } = useVocabDeck();
   const [summary, setSummary] = useState<VocabTodaySummary | null>(null);
   const [overview, setOverview] = useState<VocabOverview | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -46,7 +56,7 @@ export default function VocabHome() {
     return () => {
       cancelled = true;
     };
-  }, [activeDeck]);
+  }, [activeDeck, activeDeckVersion]);
 
   const handleSaveSettings = async (totalTargetCount: number) => {
     if (!activeDeck) return;
@@ -91,7 +101,14 @@ export default function VocabHome() {
             </p>
 
             <div className="mt-8">
-              <DeckSwitcher decks={decks} activeDeck={activeDeck} onChange={setActiveDeck} />
+              <DeckSwitcher
+                decks={decks}
+                activeDeck={activeDeck}
+                onChange={setActiveDeck}
+                inheritancePrompt={inheritancePrompt}
+                onConfirmInheritance={confirmInheritance}
+                onDismissInheritance={dismissInheritance}
+              />
             </div>
 
             {loading ? <p className="mt-6 text-sm text-white/55">词书加载中…</p> : null}
@@ -264,7 +281,7 @@ export default function VocabHome() {
           onSave={handleSaveSettings}
         />
       ) : null}
-      {overviewDetailOpen && activeDeck ? (
+      {activeDeck ? (
         <OverviewDetailModal
           isOpen={overviewDetailOpen}
           baseDeckId={activeDeck.id}

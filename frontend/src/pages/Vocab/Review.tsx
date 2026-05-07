@@ -12,8 +12,8 @@ const actions: Array<{ label: string; value: 'again' | 'hard' | 'good' | 'easy' 
 ];
 
 export default function VocabReview() {
-  const { decks, activeDeck, setActiveDeck } = useVocabDeck();
-  const session = useVocabSession(activeDeck?.id ?? null, 'review');
+  const { decks, activeDeck, activeDeckVersion, inheritancePrompt, setActiveDeck, confirmInheritance, dismissInheritance } = useVocabDeck();
+  const session = useVocabSession(activeDeck?.id ?? null, 'review', activeDeckVersion);
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -29,7 +29,14 @@ export default function VocabReview() {
         </div>
 
         <div className="mt-8">
-          <DeckSwitcher decks={decks} activeDeck={activeDeck} onChange={setActiveDeck} />
+          <DeckSwitcher
+            decks={decks}
+            activeDeck={activeDeck}
+            onChange={setActiveDeck}
+            inheritancePrompt={inheritancePrompt}
+            onConfirmInheritance={confirmInheritance}
+            onDismissInheritance={dismissInheritance}
+          />
         </div>
 
         <div className="mt-8 space-y-6">

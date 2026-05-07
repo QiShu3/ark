@@ -51,10 +51,10 @@ function mergeBatchReviewEntry(
   };
 }
 
-export function useVocabTodaySession(deckId: string | null) {
-  const learningQueue = useVocabReviewQueue(deckId, 'learning');
-  const reviewQueue = useVocabReviewQueue(deckId, 'review');
-  const studyQueue = useVocabReviewQueue(deckId, 'study');
+export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
+  const learningQueue = useVocabReviewQueue(deckId, 'learning', 10, refreshToken);
+  const reviewQueue = useVocabReviewQueue(deckId, 'review', 10, refreshToken);
+  const studyQueue = useVocabReviewQueue(deckId, 'study', 10, refreshToken);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<VocabReviewSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export function useVocabTodaySession(deckId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [deckId]);
+  }, [deckId, refreshToken]);
 
   useEffect(() => {
     if (isBatchReview) return;

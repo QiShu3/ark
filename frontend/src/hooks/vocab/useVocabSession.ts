@@ -6,8 +6,8 @@ import { useVocabReviewQueue } from './useVocabReviewQueue';
 
 type SessionMode = 'study' | 'review';
 
-export function useVocabSession(deckId: string | null, mode: SessionMode = 'review') {
-  const queue = useVocabReviewQueue(deckId, mode);
+export function useVocabSession(deckId: string | null, mode: SessionMode = 'review', refreshToken = 0) {
+  const queue = useVocabReviewQueue(deckId, mode, 10, refreshToken);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<VocabReviewSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);

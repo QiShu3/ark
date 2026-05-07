@@ -1,6 +1,8 @@
 import { apiJson } from '../api';
 import type {
   VocabDeck,
+  VocabInheritanceApplyResult,
+  VocabInheritancePreview,
   VocabOverviewCompletedDeck,
   VocabOverviewCurrentWord,
   VocabOverviewMasteredWord,
@@ -24,6 +26,16 @@ export function fetchVocabToday(deckId: string) {
 
 export function fetchVocabOverview(deckId: string) {
   return apiJson<VocabOverview>(`/api/vocab/decks/${deckId}/overview`);
+}
+
+export function fetchVocabInheritancePreview(deckId: string) {
+  return apiJson<VocabInheritancePreview>(`/api/vocab/decks/${deckId}/inheritance-preview`);
+}
+
+export function inheritVocabMasteredWords(deckId: string) {
+  return apiJson<VocabInheritanceApplyResult>(`/api/vocab/decks/${deckId}/inherit-mastered-words`, {
+    method: 'POST',
+  });
 }
 
 export function fetchVocabOverviewCompletedDecks(deckId: string) {

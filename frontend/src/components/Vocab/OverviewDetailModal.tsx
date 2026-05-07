@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   fetchVocabOverviewCompletedDecks,
@@ -35,6 +35,17 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
   const [completedDecks, setCompletedDecks] = useState<VocabOverviewCompletedDeck[]>([]);
   const [masteredWords, setMasteredWords] = useState<VocabOverviewMasteredWord[]>([]);
   const [currentWords, setCurrentWords] = useState<VocabOverviewCurrentWord[]>([]);
+  const cacheRef = useRef(
+    new Map<
+      string,
+      {
+        createdAt: number;
+        payload: VocabOverviewCompletedDeck[] | VocabOverviewMasteredWord[] | VocabOverviewCurrentWord[];
+      }
+    >(),
+  );
+  const requestIdRef = useRef(0);
+  const CACHE_TTL_MS = 5 * 60 * 1000;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -46,7 +57,28 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
 
   useEffect(() => {
     if (!isOpen) return;
-    let cancelled = false;
+    const requestId = ++requestIdRef.current;
+    const cacheKey =
+      activeTab === 'completed'
+        ? `completed:${baseDeckId}`
+        : activeTab === 'mastered'
+          ? `mastered:${baseDeckId}`
+          : `current:${baseDeckId}:${targetDeckId}:${currentFilter}`;
+
+    const cached = cacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.createdAt < CACHE_TTL_MS) {
+      const payload = cached.payload;
+      if (activeTab === 'completed') {
+        setCompletedDecks(payload as VocabOverviewCompletedDeck[]);
+      } else if (activeTab === 'mastered') {
+        setMasteredWords(payload as VocabOverviewMasteredWord[]);
+      } else {
+        setCurrentWords(payload as VocabOverviewCurrentWord[]);
+      }
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
     async function load() {
       setLoading(true);
@@ -54,31 +86,34 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
       try {
         if (activeTab === 'completed') {
           const items = await fetchVocabOverviewCompletedDecks(baseDeckId);
-          if (!cancelled) setCompletedDecks(items);
+          if (requestId !== requestIdRef.current) return;
+          cacheRef.current.set(cacheKey, { createdAt: Date.now(), payload: items });
+          setCompletedDecks(items);
           return;
         }
         if (activeTab === 'mastered') {
           const items = await fetchVocabOverviewMasteredWords(baseDeckId);
-          if (!cancelled) setMasteredWords(items);
+          if (requestId !== requestIdRef.current) return;
+          cacheRef.current.set(cacheKey, { createdAt: Date.now(), payload: items });
+          setMasteredWords(items);
           return;
         }
         const items = await fetchVocabOverviewCurrentWords(baseDeckId, currentFilter, targetDeckId);
-        if (!cancelled) setCurrentWords(items);
+        if (requestId !== requestIdRef.current) return;
+        cacheRef.current.set(cacheKey, { createdAt: Date.now(), payload: items });
+        setCurrentWords(items);
       } catch (err) {
-        if (!cancelled) {
+        if (requestId === requestIdRef.current) {
           setError(err instanceof Error ? err.message : '总览明细加载失败');
         }
       } finally {
-        if (!cancelled) {
+        if (requestId === requestIdRef.current) {
           setLoading(false);
         }
       }
     }
 
     void load();
-    return () => {
-      cancelled = true;
-    };
   }, [activeTab, baseDeckId, currentFilter, isOpen, targetDeckId]);
 
   const currentDeckName = useMemo(() => {

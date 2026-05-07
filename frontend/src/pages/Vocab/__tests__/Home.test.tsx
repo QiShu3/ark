@@ -29,7 +29,11 @@ vi.mock('../../../hooks/vocab/useVocabDeck', () => ({
       { id: 'deck-2', key: 'cet6luan', name: 'CET6luan', description: '', word_count: 1200, created_at: '', updated_at: '' },
     ],
     activeDeck: { id: 'deck-1', key: 'cet6', name: 'CET6', description: '', word_count: 7508, created_at: '', updated_at: '' },
+    activeDeckVersion: 0,
+    inheritancePrompt: null,
     setActiveDeck: vi.fn(),
+    confirmInheritance: vi.fn(),
+    dismissInheritance: vi.fn(),
     loading: false,
     error: null,
   }),
@@ -166,6 +170,64 @@ describe('Vocab home page', () => {
     expect(fetchVocabOverviewCurrentWords).toHaveBeenCalledWith('deck-1', 'all', 'deck-1');
     expect(await screen.findByText('prosperity')).toBeInTheDocument();
     expect(screen.getByText('繁荣')).toBeInTheDocument();
+  });
+
+  it('reuses cached overview data when reopening the same detail modal', async () => {
+    const user = userEvent.setup();
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 2,
+      total_deck_count: 6,
+      mastered_word_count: 1240,
+      current_deck: {
+        deck_id: 'deck-1',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 3600,
+        learning_word_count: 2100,
+        unstarted_word_count: 1808,
+      },
+    });
+    fetchVocabToday.mockResolvedValue({
+      learning_count: 7,
+      new_count: 12,
+      review_count: 5,
+      mistake_count: 2,
+      total_count: 24,
+      pending_count: 17,
+      completed_count: 7,
+      daily_target_count: 24,
+      memorized_count: 120,
+    });
+    fetchVocabOverviewCompletedDecks.mockResolvedValue([
+      {
+        deck_id: 'deck-2',
+        deck_name: 'CET4',
+        total_word_count: 100,
+        mastered_word_count: 100,
+        learning_word_count: 0,
+        unstarted_word_count: 0,
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('已完成词书');
+    await user.click(screen.getByRole('button', { name: /已完成词书 2 \/ 6 本/ }));
+    expect(await screen.findByRole('dialog', { name: '总览明细' })).toBeInTheDocument();
+    await screen.findByText('CET4');
+    expect(fetchVocabOverviewCompletedDecks).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: '关闭总览明细弹窗' }));
+    expect(screen.queryByRole('dialog', { name: '总览明细' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /已完成词书 2 \/ 6 本/ }));
+    expect(await screen.findByRole('dialog', { name: '总览明细' })).toBeInTheDocument();
+    await screen.findByText('CET4');
+    expect(fetchVocabOverviewCompletedDecks).toHaveBeenCalledTimes(1);
   });
 
   it('opens the today settings dialog and saves a new total target', async () => {

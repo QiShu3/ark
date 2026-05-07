@@ -6,7 +6,7 @@ import { fetchVocabMistakes } from '../../lib/vocab/api';
 import type { VocabMistakeItem } from '../../lib/vocab/types';
 
 export default function VocabMistakes() {
-  const { decks, activeDeck, setActiveDeck } = useVocabDeck();
+  const { decks, activeDeck, activeDeckVersion, inheritancePrompt, setActiveDeck, confirmInheritance, dismissInheritance } = useVocabDeck();
   const [items, setItems] = useState<VocabMistakeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function VocabMistakes() {
     return () => {
       cancelled = true;
     };
-  }, [activeDeck]);
+  }, [activeDeck, activeDeckVersion]);
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -46,7 +46,14 @@ export default function VocabMistakes() {
         <p className="mt-3 text-white/65">这里保留最近答错的词，适合做快速回捞和集中补洞。</p>
 
         <div className="mt-8">
-          <DeckSwitcher decks={decks} activeDeck={activeDeck} onChange={setActiveDeck} />
+          <DeckSwitcher
+            decks={decks}
+            activeDeck={activeDeck}
+            onChange={setActiveDeck}
+            inheritancePrompt={inheritancePrompt}
+            onConfirmInheritance={confirmInheritance}
+            onDismissInheritance={dismissInheritance}
+          />
         </div>
 
         <div className="mt-8 space-y-4">

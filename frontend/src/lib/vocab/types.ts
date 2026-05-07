@@ -68,6 +68,14 @@ export type VocabOverviewCurrentWord = {
   translations: VocabTranslation[];
 };
 
+export type VocabInheritancePreview = {
+  inheritable_word_count: number;
+};
+
+export type VocabInheritanceApplyResult = {
+  inherited_word_count: number;
+};
+
 export type VocabPhrase = {
   phrase: string;
   translation: string;

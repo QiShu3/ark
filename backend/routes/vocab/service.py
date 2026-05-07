@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from math import floor
 
 import asyncpg
@@ -27,6 +27,7 @@ from .repository import (
     list_deck_mastery_rows,
     list_deck_word_rows,
     list_due_review_candidate_rows,
+    list_inheritable_mastered_progress_rows,
     list_mastered_word_rows,
     list_mistake_rows,
     list_study_queue_rows,
@@ -313,6 +314,30 @@ def _append_translation_unique(target: list[dict], *, pos: object, translation: 
         target.append(item)
 
 
+def _normalize_inherited_progress_row(row: dict, *, now: datetime) -> dict:
+    next_review_at = row.get("next_review_at") or now
+    if next_review_at <= now:
+        next_review_at = now.replace(microsecond=0) + timedelta(days=1)
+
+    card_json = row.get("fsrs_card_json")
+    if isinstance(card_json, str):
+        card_json = json.loads(card_json)
+    card_payload = dict(card_json or {})
+    card_payload["state"] = card_payload.get("state") or "review"
+    card_payload["due"] = next_review_at.isoformat()
+
+    return {
+        "mastery_score": max(int(row.get("mastery_score", 0)), 1),
+        "correct_count": max(int(row.get("correct_count", 0)), 1),
+        "wrong_count": int(row.get("wrong_count", 0)),
+        "lapse_count": int(row.get("lapse_count", 0)),
+        "interval_days": max(int((next_review_at - now).total_seconds() // 86400), 1),
+        "next_review_at": next_review_at,
+        "last_result": str(row.get("last_result") or "good"),
+        "fsrs_card_json": card_payload,
+    }
+
+
 def _serialize_fsrs_card(card: object) -> dict:
     if hasattr(card, "to_dict"):
         return dict(card.to_dict())
@@ -565,11 +590,94 @@ async def list_overview_current_words(
     return [item for item in items if item["mastery_state"] == normalized_state]
 
 
+async def _rebuild_today_plan_for_group(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_group: dict,
+) -> dict[str, int]:
+    plan = await _ensure_today_plan(conn, user_id=user_id, deck_group=deck_group)
+    member_deck_ids = list(deck_group["member_deck_ids"])
+    total_target_count = await get_daily_total_target(conn, user_id=user_id, deck_ids=member_deck_ids)
+
+    completed_word_ids = set(await list_daily_plan_word_ids(conn, plan_id=str(plan["id"]), statuses=["done"]))
+    await delete_pending_daily_plan_items(conn, plan_id=str(plan["id"]))
+    remaining_target = max(total_target_count - len(completed_word_ids), 0)
+    items = await _build_today_plan_items(
+        conn,
+        user_id=user_id,
+        deck_group=deck_group,
+        remaining_target=remaining_target,
+        excluded_word_ids=completed_word_ids,
+    )
+    await insert_daily_plan_items(conn, plan_id=str(plan["id"]), items=items)
+    summary = await get_daily_plan_summary(conn, plan_id=str(plan["id"]))
+    summary["daily_target_count"] = total_target_count
+    summary["mistake_count"] = await count_active_mistakes(
+        conn,
+        user_id=user_id,
+        deck_ids=member_deck_ids,
+    )
+    summary["memorized_count"] = await count_memorized_words(
+        conn,
+        user_id=user_id,
+        deck_ids=member_deck_ids,
+    )
+    return summary
+
+
+async def get_inheritance_preview(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> dict[str, int]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        rows = await list_inheritable_mastered_progress_rows(
+            conn,
+            user_id=user_id,
+            deck_ids=list(deck_group["member_deck_ids"]),
+        )
+    return {"inheritable_word_count": len(rows)}
+
+
+async def inherit_mastered_words(pool: asyncpg.Pool, *, user_id: int, deck_id: str) -> dict[str, int]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        rows = await list_inheritable_mastered_progress_rows(
+            conn,
+            user_id=user_id,
+            deck_ids=list(deck_group["member_deck_ids"]),
+        )
+        now = datetime.now(UTC)
+        inherited_count = 0
+        for raw_row in rows:
+            row = dict(raw_row)
+            normalized = _normalize_inherited_progress_row(row, now=now)
+            await upsert_user_word_progress(
+                conn,
+                user_id=user_id,
+                deck_id=str(row["deck_id"]),
+                word_id=str(row["word_id"]),
+                mastery_score=int(normalized["mastery_score"]),
+                correct_count=int(normalized["correct_count"]),
+                wrong_count=int(normalized["wrong_count"]),
+                lapse_count=int(normalized["lapse_count"]),
+                interval_days=int(normalized["interval_days"]),
+                next_review_at=normalized["next_review_at"],
+                fsrs_card_json=normalized["fsrs_card_json"],
+                last_result=str(normalized["last_result"]),
+            )
+            inherited_count += 1
+
+        if inherited_count > 0:
+            await _rebuild_today_plan_for_group(conn, user_id=user_id, deck_group=deck_group)
+
+    return {"inherited_word_count": inherited_count}
+
+
 async def update_today_plan(pool: asyncpg.Pool, *, user_id: int, deck_id: str, total_target_count: int) -> dict[str, int]:
     async with pool.acquire() as conn:
         grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
         deck_group = _resolve_deck_group(grouped_decks, deck_id)
-        plan = await _ensure_today_plan(conn, user_id=user_id, deck_group=deck_group)
         member_deck_ids = list(deck_group["member_deck_ids"])
 
         await upsert_daily_total_target(
@@ -578,32 +686,7 @@ async def update_today_plan(pool: asyncpg.Pool, *, user_id: int, deck_id: str, t
             deck_ids=member_deck_ids,
             daily_total_target=total_target_count,
         )
-
-        completed_word_ids = set(
-            await list_daily_plan_word_ids(conn, plan_id=str(plan["id"]), statuses=["done"])
-        )
-        await delete_pending_daily_plan_items(conn, plan_id=str(plan["id"]))
-        remaining_target = max(total_target_count - len(completed_word_ids), 0)
-        items = await _build_today_plan_items(
-            conn,
-            user_id=user_id,
-            deck_group=deck_group,
-            remaining_target=remaining_target,
-            excluded_word_ids=completed_word_ids,
-        )
-        await insert_daily_plan_items(conn, plan_id=str(plan["id"]), items=items)
-        summary = await get_daily_plan_summary(conn, plan_id=str(plan["id"]))
-        summary["daily_target_count"] = total_target_count
-        summary["mistake_count"] = await count_active_mistakes(
-            conn,
-            user_id=user_id,
-            deck_ids=member_deck_ids,
-        )
-        summary["memorized_count"] = await count_memorized_words(
-            conn,
-            user_id=user_id,
-            deck_ids=member_deck_ids,
-        )
+        summary = await _rebuild_today_plan_for_group(conn, user_id=user_id, deck_group=deck_group)
     return summary
 
 

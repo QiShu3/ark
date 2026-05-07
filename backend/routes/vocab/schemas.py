@@ -69,6 +69,14 @@ class VocabOverviewMasteredWordOut(BaseModel):
     source_deck_names: list[str] = Field(default_factory=list)
 
 
+class VocabInheritancePreviewOut(BaseModel):
+    inheritable_word_count: int = 0
+
+
+class VocabInheritanceApplyOut(BaseModel):
+    inherited_word_count: int = 0
+
+
 class VocabPhraseOut(BaseModel):
     phrase: str
     translation: str

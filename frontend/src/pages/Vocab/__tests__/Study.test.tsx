@@ -12,7 +12,11 @@ vi.mock('../../../hooks/vocab/useVocabDeck', () => ({
   useVocabDeck: () => ({
     decks: [{ id: 'deck-1', key: 'cet4', name: 'CET4', description: '', word_count: 7508, created_at: '', updated_at: '' }],
     activeDeck: { id: 'deck-1', key: 'cet4', name: 'CET4', description: '', word_count: 7508, created_at: '', updated_at: '' },
+    activeDeckVersion: 0,
+    inheritancePrompt: null,
     setActiveDeck: vi.fn(),
+    confirmInheritance: vi.fn(),
+    dismissInheritance: vi.fn(),
   }),
 }));
 

@@ -10,6 +10,8 @@ from routes.auth_routes import get_current_user
 from .schemas import (
     VocabDeckMasteryOut,
     VocabDeckOut,
+    VocabInheritanceApplyOut,
+    VocabInheritancePreviewOut,
     VocabMistakeItemOut,
     VocabOverviewCurrentWordOut,
     VocabOverviewMasteredWordOut,
@@ -22,12 +24,14 @@ from .schemas import (
     VocabWordDetailOut,
 )
 from .service import (
+    get_inheritance_preview,
     get_learning_queue,
     get_overview,
     get_review_queue,
     get_study_queue,
     get_today_summary,
     get_word_detail,
+    inherit_mastered_words,
     list_decks,
     list_mistakes,
     list_overview_completed_decks,
@@ -80,6 +84,26 @@ async def route_get_overview(
 ) -> VocabOverviewOut:
     payload = await get_overview(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
     return VocabOverviewOut(**payload)
+
+
+@router.get("/decks/{deck_id}/inheritance-preview", response_model=VocabInheritancePreviewOut)
+async def route_get_inheritance_preview(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> VocabInheritancePreviewOut:
+    payload = await get_inheritance_preview(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
+    return VocabInheritancePreviewOut(**payload)
+
+
+@router.post("/decks/{deck_id}/inherit-mastered-words", response_model=VocabInheritanceApplyOut)
+async def route_inherit_mastered_words(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> VocabInheritanceApplyOut:
+    payload = await inherit_mastered_words(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id)
+    return VocabInheritanceApplyOut(**payload)
 
 
 @router.get("/decks/{deck_id}/overview/completed-decks", response_model=list[VocabDeckMasteryOut])

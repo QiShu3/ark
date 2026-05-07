@@ -222,6 +222,11 @@ async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(
     async def fake_upsert_daily_total_target(_conn, *, user_id: int, deck_ids: list[str], daily_total_target: int):
         saved_targets.append((deck_ids, daily_total_target))
 
+    async def fake_get_daily_total_target(_conn, *, user_id: int, deck_ids: list[str]) -> int:
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1", "deck-1-2"]
+        return 12
+
     async def fake_delete_pending_daily_plan_items(_conn, *, plan_id: str):
         deleted_plan_ids.append(plan_id)
 
@@ -267,6 +272,7 @@ async def test_update_today_plan_preserves_completed_items_and_rebuilds_pending(
     monkeypatch.setattr(vocab_service, "_ensure_today_plan", fake_ensure_today_plan)
     monkeypatch.setattr(vocab_service, "list_daily_plan_word_ids", fake_list_daily_plan_word_ids)
     monkeypatch.setattr(vocab_service, "upsert_daily_total_target", fake_upsert_daily_total_target)
+    monkeypatch.setattr(vocab_service, "get_daily_total_target", fake_get_daily_total_target)
     monkeypatch.setattr(vocab_service, "delete_pending_daily_plan_items", fake_delete_pending_daily_plan_items)
     monkeypatch.setattr(vocab_service, "_build_today_plan_items", fake_build_plan_items)
     monkeypatch.setattr(vocab_service, "insert_daily_plan_items", fake_insert_daily_plan_items)
@@ -452,6 +458,114 @@ async def test_list_overview_current_words_filters_by_mastery_state(monkeypatch)
             "translations": [{"pos": "n.", "translation": "乙"}],
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_inheritance_preview_returns_match_count(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        return [
+            {
+                "id": "deck-1-1",
+                "key": "cet6_1",
+                "name": "CET6_1",
+                "description": "CET6_1 词书",
+                "word_count": 100,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            }
+        ]
+
+    async def fake_list_inheritable_mastered_progress_rows(_conn, *, user_id: int, deck_ids: list[str]):
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1"]
+        return [{"word_id": "word-1"}, {"word_id": "word-2"}]
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "list_inheritable_mastered_progress_rows", fake_list_inheritable_mastered_progress_rows)
+
+    payload = await vocab_service.get_inheritance_preview(_Pool(), user_id=1, deck_id="cet6")
+
+    assert payload == {"inheritable_word_count": 2}
+
+
+@pytest.mark.asyncio
+async def test_inherit_mastered_words_writes_progress_and_rebuilds_plan(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        return [
+            {
+                "id": "deck-1-1",
+                "key": "cet6_1",
+                "name": "CET6_1",
+                "description": "CET6_1 词书",
+                "word_count": 100,
+                "created_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "updated_at": datetime(2026, 5, 5, tzinfo=UTC),
+            }
+        ]
+
+    async def fake_list_inheritable_mastered_progress_rows(_conn, *, user_id: int, deck_ids: list[str]):
+        assert user_id == 1
+        assert deck_ids == ["deck-1-1"]
+        return [
+            {
+                "word_id": "word-1",
+                "deck_id": "deck-1-1",
+                "mastery_score": 5,
+                "correct_count": 8,
+                "wrong_count": 1,
+                "lapse_count": 1,
+                "interval_days": 6,
+                "next_review_at": datetime(2026, 5, 8, tzinfo=UTC),
+                "last_result": "good",
+                "fsrs_card_json": {"due": "2026-05-08T00:00:00+00:00", "state": "review"},
+            }
+        ]
+
+    saved_progress: list[dict] = []
+    rebuilt_groups: list[str] = []
+
+    async def fake_upsert_user_word_progress(_conn, **kwargs):
+        saved_progress.append(kwargs)
+
+    async def fake_rebuild_today_plan_for_group(_conn, *, user_id: int, deck_group: dict):
+        assert user_id == 1
+        rebuilt_groups.append(str(deck_group["id"]))
+        return {"daily_target_count": 20}
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "list_inheritable_mastered_progress_rows", fake_list_inheritable_mastered_progress_rows)
+    monkeypatch.setattr(vocab_service, "upsert_user_word_progress", fake_upsert_user_word_progress)
+    monkeypatch.setattr(vocab_service, "_rebuild_today_plan_for_group", fake_rebuild_today_plan_for_group)
+
+    payload = await vocab_service.inherit_mastered_words(_Pool(), user_id=1, deck_id="cet6")
+
+    assert payload == {"inherited_word_count": 1}
+    assert rebuilt_groups == ["cet6"]
+    assert saved_progress[0]["deck_id"] == "deck-1-1"
+    assert saved_progress[0]["word_id"] == "word-1"
+    assert saved_progress[0]["mastery_score"] == 5
 
 
 @pytest.mark.asyncio

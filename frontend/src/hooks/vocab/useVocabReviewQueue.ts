@@ -5,7 +5,7 @@ import type { VocabReviewItem } from '../../lib/vocab/types';
 
 type QueueMode = 'study' | 'review' | 'learning';
 
-export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 'review', limit = 10) {
+export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 'review', limit = 10, refreshToken = 0) {
   const [items, setItems] = useState<VocabReviewItem[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,7 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
 
   useEffect(() => {
     void refresh();
-  }, [deckId, mode, limit]);
+  }, [deckId, mode, limit, refreshToken]);
 
   const consumeCurrent = () => {
     const shouldRefetch = items.length <= 1 && !!deckId;

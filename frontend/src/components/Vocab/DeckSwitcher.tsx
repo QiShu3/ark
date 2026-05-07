@@ -1,14 +1,29 @@
 import { useState } from 'react';
 
+import DeckInheritanceModal from './DeckInheritanceModal';
 import type { VocabDeck } from '../../lib/vocab/types';
 
 type Props = {
   decks: VocabDeck[];
   activeDeck: VocabDeck | null;
   onChange: (deck: VocabDeck) => void;
+  inheritancePrompt?: {
+    deck: VocabDeck;
+    inheritableWordCount: number;
+    submitting: boolean;
+  } | null;
+  onConfirmInheritance?: () => Promise<void> | void;
+  onDismissInheritance?: () => void;
 };
 
-export default function DeckSwitcher({ decks, activeDeck, onChange }: Props) {
+export default function DeckSwitcher({
+  decks,
+  activeDeck,
+  onChange,
+  inheritancePrompt = null,
+  onConfirmInheritance,
+  onDismissInheritance,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -56,6 +71,18 @@ export default function DeckSwitcher({ decks, activeDeck, onChange }: Props) {
             })}
           </div>
         </div>
+      ) : null}
+
+      {inheritancePrompt ? (
+        <DeckInheritanceModal
+          deckName={inheritancePrompt.deck.name}
+          inheritableWordCount={inheritancePrompt.inheritableWordCount}
+          submitting={inheritancePrompt.submitting}
+          onConfirm={async () => {
+            await onConfirmInheritance?.();
+          }}
+          onCancel={() => onDismissInheritance?.()}
+        />
       ) : null}
     </div>
   );

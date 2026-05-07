@@ -14,8 +14,8 @@ const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'g
 ];
 
 export default function VocabToday() {
-  const { decks, activeDeck, setActiveDeck } = useVocabDeck();
-  const session = useVocabTodaySession(activeDeck?.id ?? null);
+  const { decks, activeDeck, activeDeckVersion, inheritancePrompt, setActiveDeck, confirmInheritance, dismissInheritance } = useVocabDeck();
+  const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -34,7 +34,14 @@ export default function VocabToday() {
         </div>
 
         <div className="mt-8">
-          <DeckSwitcher decks={decks} activeDeck={activeDeck} onChange={setActiveDeck} />
+          <DeckSwitcher
+            decks={decks}
+            activeDeck={activeDeck}
+            onChange={setActiveDeck}
+            inheritancePrompt={inheritancePrompt}
+            onConfirmInheritance={confirmInheritance}
+            onDismissInheritance={dismissInheritance}
+          />
         </div>
 
         <div className="mt-8 space-y-6">
