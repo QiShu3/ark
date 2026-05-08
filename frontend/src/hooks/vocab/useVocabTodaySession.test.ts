@@ -60,7 +60,9 @@ describe('useVocabTodaySession', () => {
   it('switches to batch review after ten completed words', async () => {
     fetchVocabLearningQueue.mockResolvedValue([]);
     fetchVocabReviewQueue.mockResolvedValue([]);
-    fetchVocabStudyQueue.mockResolvedValueOnce(Array.from({ length: 10 }, (_, index) => makeWord(index + 1))).mockResolvedValueOnce([]);
+    fetchVocabStudyQueue
+      .mockResolvedValueOnce(Array.from({ length: 10 }, (_, index) => makeWord(index + 1)))
+      .mockResolvedValueOnce(Array.from({ length: 10 }, (_, index) => makeWord(index + 11)));
     submitVocabReview.mockResolvedValue({
       mastery_score: 2,
       next_review_at: '2026-05-06T00:00:00Z',
@@ -98,5 +100,14 @@ describe('useVocabTodaySession', () => {
     expect(result.current.batchReviewGroups.find((group) => group.key === 'good')?.items).toHaveLength(10);
     expect(result.current.currentBatchNumber).toBe(1);
     expect(result.current.memorizedCount).toBe(50);
+
+    await act(async () => {
+      result.current.continueBatchReview();
+    });
+
+    await waitFor(() => {
+      expect(result.current.currentItem?.id).toBe('word-11');
+    });
+    expect(result.current.currentBatchNumber).toBe(2);
   });
 });

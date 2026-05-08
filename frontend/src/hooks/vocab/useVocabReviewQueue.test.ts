@@ -58,4 +58,23 @@ describe('useVocabReviewQueue', () => {
       expect(result.current.currentItem?.id).toBe('word-2');
     });
   });
+
+  it('refetches the queue when the final visible item is requeued', async () => {
+    fetchVocabStudyQueue.mockResolvedValueOnce([firstItem]).mockResolvedValueOnce([secondItem]);
+
+    const { result } = renderHook(() => useVocabReviewQueue('deck-1', 'study', 1));
+
+    await waitFor(() => {
+      expect(result.current.currentItem?.id).toBe('word-1');
+    });
+
+    await act(async () => {
+      result.current.requeueCurrent();
+    });
+
+    await waitFor(() => {
+      expect(fetchVocabStudyQueue).toHaveBeenCalledTimes(2);
+      expect(result.current.currentItem?.id).toBe('word-2');
+    });
+  });
 });

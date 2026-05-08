@@ -60,6 +60,7 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
   const [error, setError] = useState<string | null>(null);
   const [isBatchReview, setIsBatchReview] = useState(false);
   const [completedBatchWordIds, setCompletedBatchWordIds] = useState<string[]>([]);
+  const [completedSessionWordIds, setCompletedSessionWordIds] = useState<string[]>([]);
   const [batchReviewEntries, setBatchReviewEntries] = useState<Record<string, BatchReviewEntry>>({});
   const [initialCompletedCount, setInitialCompletedCount] = useState(0);
   const [todayTotalCount, setTodayTotalCount] = useState(0);
@@ -81,7 +82,7 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
     [batchReviewEntries, completedBatchWordIds],
   );
   const batchReviewCount = completedBatchWordIds.length;
-  const completedTodayCount = initialCompletedCount + Object.keys(batchReviewEntries).length;
+  const completedTodayCount = initialCompletedCount + completedSessionWordIds.length;
   const totalBatchCount = todayTotalCount > 0 ? Math.ceil(todayTotalCount / BATCH_REVIEW_SIZE) : 1;
   const batchProgressBase = isBatchReview && batchReviewCount > 0 ? Math.max(completedTodayCount - 1, 0) : completedTodayCount;
   const currentBatchNumber = totalBatchCount > 0 ? Math.min(Math.floor(batchProgressBase / BATCH_REVIEW_SIZE) + 1, totalBatchCount) : 1;
@@ -90,6 +91,7 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
     if (!deckId) {
       setIsBatchReview(false);
       setCompletedBatchWordIds([]);
+      setCompletedSessionWordIds([]);
       setBatchReviewEntries({});
       setLastResult(null);
       setInitialCompletedCount(0);
@@ -150,6 +152,7 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
         activeQueue.requeueCurrent();
       } else {
         setCompletedBatchWordIds((prev) => (prev.includes(currentItem.id) ? prev : [...prev, currentItem.id]));
+        setCompletedSessionWordIds((prev) => (prev.includes(currentItem.id) ? prev : [...prev, currentItem.id]));
         if (currentMode === 'study') {
           setMemorizedCount((prev) => prev + 1);
         }

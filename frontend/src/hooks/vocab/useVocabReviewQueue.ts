@@ -52,12 +52,16 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
   };
 
   const requeueCurrent = () => {
+    const shouldRefetch = items.length <= 1 && !!deckId;
     setItems((prev) => {
       if (prev.length <= 1) return prev;
       const [current, ...rest] = prev;
       return [...rest, current];
     });
     setActiveIndex(0);
+    if (shouldRefetch) {
+      void refresh();
+    }
   };
 
   return {

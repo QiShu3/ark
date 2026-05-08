@@ -281,7 +281,11 @@ describe('Vocab home page', () => {
     expect(screen.getByDisplayValue('20')).toBeInTheDocument();
     expect(screen.getByText('30% Learning / Relearning')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('今日总量'), { target: { value: '30' } });
+    const targetInput = screen.getByLabelText('今日总量');
+    fireEvent.change(targetInput, { target: { value: '' } });
+    expect(targetInput).toHaveValue(null);
+
+    fireEvent.change(targetInput, { target: { value: '30' } });
     await user.click(screen.getByRole('button', { name: '保存今日参数' }));
 
     await waitFor(() => {

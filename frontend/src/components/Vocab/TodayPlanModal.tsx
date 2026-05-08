@@ -16,12 +16,15 @@ function ratioBreakdown(totalTargetCount: number) {
 }
 
 export default function TodayPlanModal({ initialTargetCount, isCompleted, isSaving, onClose, onSave }: Props) {
-  const [totalTargetCount, setTotalTargetCount] = useState(initialTargetCount);
+  const [targetCountValue, setTargetCountValue] = useState(String(initialTargetCount));
 
   useEffect(() => {
-    setTotalTargetCount(initialTargetCount);
+    setTargetCountValue(String(initialTargetCount));
   }, [initialTargetCount]);
 
+  const parsedTargetCount = Number(targetCountValue);
+  const totalTargetCount = targetCountValue === '' || !Number.isFinite(parsedTargetCount) ? 0 : Math.max(1, parsedTargetCount);
+  const canSave = totalTargetCount >= 1 && totalTargetCount <= 500;
   const ratio = useMemo(() => ratioBreakdown(totalTargetCount), [totalTargetCount]);
   const title = isCompleted ? '今日已完成' : '调整今日单词';
 
@@ -55,8 +58,8 @@ export default function TodayPlanModal({ initialTargetCount, isCompleted, isSavi
             type="number"
             min={1}
             max={500}
-            value={totalTargetCount}
-            onChange={(event) => setTotalTargetCount(Math.max(1, Number(event.target.value || 1)))}
+            value={targetCountValue}
+            onChange={(event) => setTargetCountValue(event.target.value)}
             className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-white/30"
           />
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -85,7 +88,7 @@ export default function TodayPlanModal({ initialTargetCount, isCompleted, isSavi
           </button>
           <button
             type="button"
-            disabled={isSaving}
+            disabled={isSaving || !canSave}
             onClick={() => void onSave(totalTargetCount)}
             className="rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
