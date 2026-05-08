@@ -1,0 +1,2043 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from typing import Annotated, Any, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+
+from routes.auth_routes import get_current_user
+
+from .db import _pool_from_request
+from .helpers import (
+    UTC,
+    _achievement_item,
+    _advance_focus_workflow_to_next_phase,
+    _appointment_occurrence_bounds,
+    _appointment_with_completion,
+    _build_appointment_occurrence,
+    _build_completion_state,
+    _build_default_phases,
+    _close_open_focus_log,
+    _completion_records_for_user,
+    _create_workflow_with_focus_phase,
+    _delivery_eve_completed,
+    _event_completion_records,
+    _event_confirmed_appointment_occurrence_count,
+    _event_focus_seconds,
+    _focus_activity_dates,
+    _get_bindable_task,
+    _get_default_focus_workflow_preset,
+    _get_event_for_user,
+    _global_focus_seconds,
+    _insert_completion_record,
+    _max_consecutive_day_count,
+    _next_task_window_after_today,
+    _normalize_completion_settings,
+    _normalize_focus_end_at,
+    _normalize_timer_mode,
+    _normalize_workflow_phases,
+    _propagate_event_due_at,
+    _raise_if_completion_blocked,
+    _resolve_appointment_ends_at,
+    _resolve_appointment_occurrences,
+    _resolve_task_due_date,
+    _row_to_event,
+    _row_to_focus_log,
+    _row_to_focus_workflow,
+    _row_to_focus_workflow_preset,
+    _safe_int,
+    _section_from_items,
+    _set_workflow_current_phase,
+    _start_focus_log_for_task,
+    _stop_active_focus,
+    _sync_active_focus_workflow,
+    _task_with_completion,
+    _to_jsonb_param,
+    _validate_appointment_times,
+    _validate_linked_task,
+    _validate_phase_task_bindings,
+)
+from .schemas import (
+    AchievementSectionOut,
+    AchievementSummaryOut,
+    AppointmentCreateRequest,
+    AppointmentListView,
+    AppointmentOccurrenceConfirmRequest,
+    AppointmentOccurrenceOut,
+    AppointmentOut,
+    AppointmentUpdateRequest,
+    EventCreateRequest,
+    EventOut,
+    EventUpdateRequest,
+    FocusLogCreateRequest,
+    FocusLogOut,
+    FocusStatsOut,
+    FocusTodayOut,
+    FocusWorkflowCreateRequest,
+    FocusWorkflowOut,
+    FocusWorkflowPresetCreateRequest,
+    FocusWorkflowPresetOut,
+    FocusWorkflowPresetUpdateRequest,
+    FocusWorkflowSelectTaskRequest,
+    TaskCreateRequest,
+    TaskFocusStats,
+    TaskOut,
+    TaskStatus,
+    TaskUpdateRequest,
+)
+
+router = APIRouter(prefix="/todo", tags=["todo"])
+
+
+@router.post("/tasks", response_model=TaskOut)
+async def create_task(
+    request: Request,
+    body: TaskCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """创建任务。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = (
+            _normalize_completion_settings(
+                is_recurring=body.is_recurring,
+                period_type=body.period_type,
+                custom_period_days=body.custom_period_days,
+                max_completions_per_period=body.max_completions_per_period,
+            )
+        )
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+        due_date = _resolve_task_due_date(
+            event_row=event_row,
+            due_date=body.due_date,
+            time_inherits_from_event=body.time_inherits_from_event,
+            time_overridden=body.time_overridden,
+        )
+        row = await conn.fetchrow(
+            """
+            INSERT INTO tasks(
+                user_id, title, content, status, priority, target_duration,
+                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                start_date, due_date
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            int(user.id),
+            body.title,
+            body.content,
+            body.status,
+            body.priority,
+            body.target_duration,
+            body.current_cycle_count,
+            body.target_cycle_count,
+            body.cycle_period,
+            body.cycle_every_days,
+            body.event,
+            body.event_ids,
+            body.event_id,
+            normalized_is_recurring,
+            normalized_period_type,
+            normalized_custom_period_days,
+            normalized_max,
+            body.weekday_only,
+            body.time_inherits_from_event,
+            body.time_overridden,
+            False,
+            body.task_type,
+            body.tags,
+            body.start_date,
+            due_date,
+        )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建任务失败")
+    async with pool.acquire() as conn:
+        return await _task_with_completion(conn, row)
+
+
+@router.get("/tasks", response_model=list[TaskOut])
+async def list_tasks(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    status_: Annotated[TaskStatus | None, Query(alias="status")] = None,
+    q: str | None = Query(default=None, max_length=255),
+    include_deleted: bool = False,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[TaskOut]:
+    """分页列出任务。"""
+    pool = _pool_from_request(request)
+
+    clauses: list[str] = ["user_id = $1"]
+    args: list[Any] = [int(user.id)]
+
+    if not include_deleted:
+        clauses.append("is_deleted = FALSE")
+    if status_ is not None:
+        args.append(status_)
+        clauses.append(f"status = ${len(args)}")
+    if q is not None and q.strip():
+        args.append(f"%{q.strip()}%")
+        clauses.append(f"title ILIKE ${len(args)}")
+
+    args.append(limit)
+    limit_i = len(args)
+    args.append(offset)
+    offset_i = len(args)
+
+    where_sql = " AND ".join(clauses)
+    sql = f"""
+        SELECT id, user_id, title, content, status, priority, target_duration,
+               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+               weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+               actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+        FROM tasks
+        WHERE {where_sql}
+        ORDER BY updated_at DESC
+        LIMIT ${limit_i} OFFSET ${offset_i}
+    """
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(sql, *args)
+        return [await _task_with_completion(conn, r) for r in rows]
+
+
+@router.get("/tasks/calendar", response_model=list[TaskOut])
+async def list_calendar_tasks(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    start: date = Query(...),
+    end: date = Query(...),
+) -> list[TaskOut]:
+    """List tasks that overlap a calendar date range."""
+    if end <= start:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end must be after start")
+
+    range_start = datetime.combine(start, datetime.min.time(), tzinfo=UTC)
+    range_end = datetime.combine(end, datetime.min.time(), tzinfo=UTC)
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            -- calendar range endpoint
+            SELECT id, user_id, title, content, status, priority, target_duration,
+                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            FROM tasks
+            WHERE user_id = $1
+              AND is_deleted = FALSE
+              AND (
+                (start_date IS NOT NULL AND due_date IS NOT NULL AND start_date < $3 AND due_date >= $2)
+                OR (start_date IS NOT NULL AND due_date IS NULL AND start_date >= $2 AND start_date < $3)
+                OR (start_date IS NULL AND due_date IS NOT NULL AND due_date >= $2 AND due_date < $3)
+              )
+            ORDER BY
+              CASE WHEN status = 'done' THEN 1 ELSE 0 END ASC,
+              priority DESC,
+              due_date ASC NULLS LAST,
+              updated_at ASC
+            LIMIT 500
+            """,
+            int(user.id),
+            range_start,
+            range_end,
+        )
+        return [await _task_with_completion(conn, r) for r in rows]
+
+
+@router.get("/tasks/{task_id}", response_model=TaskOut)
+async def get_task(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+    include_deleted: bool = False,
+) -> TaskOut:
+    """获取单个任务。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, title, content, status, priority, target_duration,
+                   current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            FROM tasks
+            WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
+            """,
+            task_id,
+            int(user.id),
+            include_deleted,
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskOut)
+async def update_task(
+    request: Request,
+    task_id: UUID,
+    body: TaskUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """更新任务（部分字段）。"""
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        return await get_task(request, task_id, user)
+
+    pool = _pool_from_request(request)
+    current = await get_task(request, task_id, user)
+
+    allowed_cols: dict[str, str] = {
+        "title": "title",
+        "content": "content",
+        "status": "status",
+        "priority": "priority",
+        "target_duration": "target_duration",
+        "current_cycle_count": "current_cycle_count",
+        "target_cycle_count": "target_cycle_count",
+        "cycle_period": "cycle_period",
+        "cycle_every_days": "cycle_every_days",
+        "event": "event",
+        "event_ids": "event_ids",
+        "event_id": "event_id",
+        "is_recurring": "is_recurring",
+        "period_type": "period_type",
+        "custom_period_days": "custom_period_days",
+        "max_completions_per_period": "max_completions_per_period",
+        "weekday_only": "weekday_only",
+        "time_inherits_from_event": "time_inherits_from_event",
+        "time_overridden": "time_overridden",
+        "task_type": "task_type",
+        "tags": "tags",
+        "start_date": "start_date",
+        "due_date": "due_date",
+    }
+
+    async with pool.acquire() as conn:
+        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = (
+            _normalize_completion_settings(
+                is_recurring=patch.get("is_recurring", current.is_recurring),
+                period_type=patch.get("period_type", current.period_type),
+                custom_period_days=patch.get("custom_period_days", current.custom_period_days),
+                max_completions_per_period=patch.get("max_completions_per_period", current.max_completions_per_period),
+            )
+        )
+        patch["is_recurring"] = normalized_is_recurring
+        patch["period_type"] = normalized_period_type
+        patch["custom_period_days"] = normalized_custom_period_days
+        patch["max_completions_per_period"] = normalized_max
+
+        event_row = await _get_event_for_user(
+            conn, user_id=int(user.id), event_id=patch.get("event_id", current.event_id)
+        )
+        patch["due_date"] = _resolve_task_due_date(
+            event_row=event_row,
+            due_date=patch.get("due_date", current.due_date),
+            time_inherits_from_event=patch.get("time_inherits_from_event", current.time_inherits_from_event),
+            time_overridden=patch.get("time_overridden", current.time_overridden),
+        )
+
+        sets: list[str] = []
+        args: list[Any] = []
+        for key, value in patch.items():
+            col = allowed_cols.get(key)
+            if col is None:
+                continue
+            args.append(value)
+            sets.append(f"{col} = ${len(args)}")
+        if not sets:
+            return current
+
+        row = await conn.fetchrow(
+            f"""
+            UPDATE tasks
+            SET {", ".join(sets)}, updated_at = NOW()
+            WHERE id = ${len(args) + 1} AND user_id = ${len(args) + 2} AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            *args,
+            task_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
+
+
+@router.patch("/tasks/{task_id}/move-to-today", response_model=TaskOut)
+async def move_task_to_today(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """将任务移动到今天（修改 due_date）。"""
+    pool = _pool_from_request(request)
+    now = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE tasks
+            SET due_date = $1,
+                start_date = CASE WHEN start_date > $1 THEN $1 ELSE start_date END,
+                manually_scheduled_for_today = TRUE,
+                updated_at = NOW()
+            WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            now,
+            task_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
+
+
+@router.patch("/tasks/{task_id}/move-out-of-today", response_model=TaskOut)
+async def move_task_out_of_today(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """将今日任务移回安排仓库，不改变任务完成周期。"""
+    pool = _pool_from_request(request)
+    current = await get_task(request, task_id, user)
+    next_start, next_due = _next_task_window_after_today(current)
+    time_overridden = bool(
+        current.time_overridden or (current.event_id is not None and current.time_inherits_from_event)
+    )
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE tasks
+            SET start_date = $1, due_date = $2, time_overridden = $3, manually_scheduled_for_today = FALSE, updated_at = NOW()
+            WHERE id = $4 AND user_id = $5 AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, priority, target_duration,
+                      current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+            """,
+            next_start,
+            next_due,
+            time_overridden,
+            task_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+        return await _task_with_completion(conn, row)
+
+
+@router.post("/tasks/{task_id}/complete", response_model=TaskOut)
+async def complete_task(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> TaskOut:
+    """完成任务；重复任务仅记录一次完成，不直接改为 done。"""
+    pool = _pool_from_request(request)
+    completed_at = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, title, content, status, priority, target_duration,
+                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                       weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                FROM tasks
+                WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
+                """,
+                task_id,
+                int(user.id),
+                False,
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+            completion_state = await _build_completion_state(
+                conn,
+                user_id=int(user.id),
+                subject_type="task",
+                subject_id=task_id,
+                is_recurring=bool(row["is_recurring"]),
+                period_type=row["period_type"],
+                custom_period_days=row["custom_period_days"],
+                max_completions_per_period=int(row["max_completions_per_period"]),
+                weekday_only=bool(row["weekday_only"]),
+                permanent_done=str(row["status"]) == "done",
+                now=completed_at,
+            )
+            _raise_if_completion_blocked(completion_state, noun="任务")
+            await _insert_completion_record(
+                conn,
+                user_id=int(user.id),
+                subject_type="task",
+                subject_id=task_id,
+                completed_at=completed_at,
+                counted_period_start=completion_state.current_period_start,
+                counted_period_end=completion_state.current_period_end,
+            )
+
+            if not bool(row["is_recurring"]) or row["period_type"] == "once":
+                row = await conn.fetchrow(
+                    """
+                    UPDATE tasks
+                    SET status = $1, updated_at = NOW()
+                    WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                    RETURNING id, user_id, title, content, status, priority, target_duration,
+                              current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                              event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                              weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                              actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                    """,
+                    "done",
+                    task_id,
+                    int(user.id),
+                )
+                if row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+        return await _task_with_completion(conn, row, now=completed_at)
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    """软删除任务。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        tag = await conn.execute(
+            """
+            UPDATE tasks
+            SET is_deleted = TRUE, updated_at = NOW()
+            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+            """,
+            task_id,
+            int(user.id),
+        )
+    if not tag.startswith("UPDATE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    return {"ok": True}
+
+
+@router.post("/appointments", response_model=AppointmentOut)
+async def create_appointment(
+    request: Request,
+    body: AppointmentCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """创建日程。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = (
+            _normalize_completion_settings(
+                is_recurring=body.is_recurring,
+                period_type=body.period_type,
+                custom_period_days=body.custom_period_days,
+                max_completions_per_period=body.max_completions_per_period,
+            )
+        )
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+        resolved_ends_at = _resolve_appointment_ends_at(
+            event_row=event_row,
+            ends_at=body.ends_at,
+            time_inherits_from_event=body.time_inherits_from_event,
+            time_overridden=body.time_overridden,
+        )
+        _validate_appointment_times(body.starts_at, resolved_ends_at)
+        await _validate_linked_task(
+            conn,
+            user_id=int(user.id),
+            linked_task_id=body.linked_task_id,
+        )
+        row = await conn.fetchrow(
+            """
+            INSERT INTO appointments(
+                user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                weekday_only, time_inherits_from_event, time_overridden
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden,
+                      is_deleted, created_at, updated_at
+            """,
+            int(user.id),
+            body.title,
+            body.content,
+            body.status,
+            body.starts_at,
+            resolved_ends_at,
+            body.repeat_rule,
+            body.linked_task_id,
+            body.event_id,
+            normalized_is_recurring,
+            normalized_period_type,
+            normalized_custom_period_days,
+            normalized_max,
+            body.weekday_only,
+            body.time_inherits_from_event,
+            body.time_overridden,
+        )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建日程失败")
+    async with pool.acquire() as conn:
+        return await _appointment_with_completion(conn, row)
+
+
+@router.get("/appointments", response_model=list[AppointmentOut])
+async def list_appointments(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    view: AppointmentListView = Query(default="all"),
+) -> list[AppointmentOut]:
+    """列出日程。"""
+    pool = _pool_from_request(request)
+    where_clauses = ["user_id = $1", "is_deleted = FALSE"]
+    sql_comment = ""
+    args: list[Any] = [int(user.id)]
+
+    if view == "today":
+        sql_comment = "-- today filter"
+        where_clauses.append("DATE(ends_at AT TIME ZONE 'UTC') = DATE(NOW() AT TIME ZONE 'UTC')")
+    elif view == "needs_confirmation":
+        sql_comment = "-- needs_confirmation filter"
+        where_clauses.append("status = 'pending' AND ends_at <= NOW()")
+    elif view == "repeating":
+        sql_comment = "-- repeat filter"
+        where_clauses.append("repeat_rule IS NOT NULL")
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""
+            {sql_comment}
+            SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden,
+                   is_deleted, created_at, updated_at
+            FROM appointments
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY ends_at ASC, created_at ASC
+            """,
+            *args,
+        )
+        return [await _appointment_with_completion(conn, row) for row in rows]
+
+
+@router.get("/appointments/{appointment_id}", response_model=AppointmentOut)
+async def get_appointment(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """获取单个日程。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                   event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                   weekday_only, time_inherits_from_event, time_overridden,
+                   is_deleted, created_at, updated_at
+            FROM appointments
+            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+            """,
+            appointment_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+        return await _appointment_with_completion(conn, row)
+
+
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentOut)
+async def update_appointment(
+    request: Request,
+    appointment_id: UUID,
+    body: AppointmentUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """更新日程。"""
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        return await get_appointment(request, appointment_id, user)
+
+    pool = _pool_from_request(request)
+    current = await get_appointment(request, appointment_id, user)
+    next_starts_at = patch.get("starts_at", current.starts_at)
+    next_linked_task_id = patch.get("linked_task_id", current.linked_task_id)
+
+    allowed_cols = {
+        "title": "title",
+        "content": "content",
+        "status": "status",
+        "starts_at": "starts_at",
+        "ends_at": "ends_at",
+        "repeat_rule": "repeat_rule",
+        "linked_task_id": "linked_task_id",
+        "event_id": "event_id",
+        "is_recurring": "is_recurring",
+        "period_type": "period_type",
+        "custom_period_days": "custom_period_days",
+        "max_completions_per_period": "max_completions_per_period",
+        "weekday_only": "weekday_only",
+        "time_inherits_from_event": "time_inherits_from_event",
+        "time_overridden": "time_overridden",
+    }
+    sets: list[str] = []
+    args: list[Any] = []
+    for key, value in patch.items():
+        col = allowed_cols.get(key)
+        if col is None:
+            continue
+        args.append(value)
+        sets.append(f"{col} = ${len(args)}")
+    if not sets:
+        return current
+
+    async with pool.acquire() as conn:
+        merged_is_recurring, merged_period_type, merged_custom_period_days, merged_max = _normalize_completion_settings(
+            is_recurring=patch.get("is_recurring", current.is_recurring),
+            period_type=patch.get("period_type", current.period_type),
+            custom_period_days=patch.get("custom_period_days", current.custom_period_days),
+            max_completions_per_period=patch.get("max_completions_per_period", current.max_completions_per_period),
+        )
+        patch["is_recurring"] = merged_is_recurring
+        patch["period_type"] = merged_period_type
+        patch["custom_period_days"] = merged_custom_period_days
+        patch["max_completions_per_period"] = merged_max
+        event_row = await _get_event_for_user(
+            conn, user_id=int(user.id), event_id=patch.get("event_id", current.event_id)
+        )
+        next_ends_at = _resolve_appointment_ends_at(
+            event_row=event_row,
+            ends_at=patch.get("ends_at", current.ends_at),
+            time_inherits_from_event=patch.get("time_inherits_from_event", current.time_inherits_from_event),
+            time_overridden=patch.get("time_overridden", current.time_overridden),
+        )
+        patch["ends_at"] = next_ends_at
+        _validate_appointment_times(next_starts_at, next_ends_at)
+        sets = []
+        args = []
+        for key, value in patch.items():
+            col = allowed_cols.get(key)
+            if col is None:
+                continue
+            args.append(value)
+            sets.append(f"{col} = ${len(args)}")
+        await _validate_linked_task(
+            conn,
+            user_id=int(user.id),
+            linked_task_id=next_linked_task_id,
+            exclude_appointment_id=appointment_id,
+        )
+        row = await conn.fetchrow(
+            f"""
+            UPDATE appointments
+            SET {", ".join(sets)}, updated_at = NOW()
+            WHERE id = ${len(args) + 1} AND user_id = ${len(args) + 2} AND is_deleted = FALSE
+            RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                      event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                      weekday_only, time_inherits_from_event, time_overridden,
+                      is_deleted, created_at, updated_at
+            """,
+            *args,
+            appointment_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+        return await _appointment_with_completion(conn, row)
+
+
+@router.post("/appointments/{appointment_id}/complete", response_model=AppointmentOut)
+async def complete_appointment(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOut:
+    """完成日程；重复日程仅记录一次完成，不直接改为 attended。"""
+    pool = _pool_from_request(request)
+    completed_at = datetime.now(UTC)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                       weekday_only, time_inherits_from_event, time_overridden,
+                       is_deleted, created_at, updated_at
+                FROM appointments
+                WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+                """,
+                appointment_id,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+
+            completion_state = await _build_completion_state(
+                conn,
+                user_id=int(user.id),
+                subject_type="appointment",
+                subject_id=appointment_id,
+                is_recurring=bool(row["is_recurring"]),
+                period_type=row["period_type"],
+                custom_period_days=row["custom_period_days"],
+                max_completions_per_period=int(row["max_completions_per_period"]),
+                weekday_only=bool(row["weekday_only"]),
+                permanent_done=str(row["status"]) in {"attended", "missed", "cancelled"}
+                and not bool(row["is_recurring"]),
+                now=completed_at,
+            )
+            _raise_if_completion_blocked(completion_state, noun="日程")
+            await _insert_completion_record(
+                conn,
+                user_id=int(user.id),
+                subject_type="appointment",
+                subject_id=appointment_id,
+                completed_at=completed_at,
+                counted_period_start=completion_state.current_period_start,
+                counted_period_end=completion_state.current_period_end,
+            )
+
+            if not bool(row["is_recurring"]) or row["period_type"] == "once":
+                row = await conn.fetchrow(
+                    """
+                    UPDATE appointments
+                    SET status = $1, updated_at = NOW()
+                    WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                    RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                              event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                              weekday_only, time_inherits_from_event, time_overridden,
+                              is_deleted, created_at, updated_at
+                    """,
+                    "attended",
+                    appointment_id,
+                    int(user.id),
+                )
+                if row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+
+        return await _appointment_with_completion(conn, row, now=completed_at)
+
+
+@router.get("/appointments/{appointment_id}/occurrences", response_model=list[AppointmentOccurrenceOut])
+async def list_appointment_occurrences(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+    start: date = Query(...),
+    end: date = Query(...),
+) -> list[AppointmentOccurrenceOut]:
+    """列出日程在给定区间内的 occurrence。"""
+    if end <= start:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end must be after start")
+
+    appointment = await get_appointment(request, appointment_id, user)
+    range_start = datetime.combine(start, datetime.min.time(), tzinfo=UTC)
+    range_end = datetime.combine(end, datetime.min.time(), tzinfo=UTC)
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        return await _resolve_appointment_occurrences(
+            conn,
+            appointment=appointment,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+
+@router.post("/appointments/{appointment_id}/occurrences/confirm", response_model=AppointmentOccurrenceOut)
+async def confirm_appointment_occurrence(
+    request: Request,
+    appointment_id: UUID,
+    body: AppointmentOccurrenceConfirmRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppointmentOccurrenceOut:
+    """独立确认某一次日程 occurrence。"""
+    appointment = await get_appointment(request, appointment_id, user)
+    occurrence_starts_at, occurrence_ends_at = _appointment_occurrence_bounds(appointment, body.occurrence_ends_at)
+
+    if appointment.repeat_rule is None and body.occurrence_ends_at != appointment.ends_at:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="单次日程只能确认原始 occurrence")
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO appointment_occurrence_results(appointment_id, occurrence_ends_at, status)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (appointment_id, occurrence_ends_at)
+            DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()
+            RETURNING appointment_id, occurrence_ends_at, status, created_at, updated_at
+            """,
+            appointment.id,
+            occurrence_ends_at,
+            body.status,
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认日程 occurrence 失败")
+
+    return _build_appointment_occurrence(
+        appointment,
+        occurrence_starts_at=occurrence_starts_at,
+        occurrence_ends_at=row["occurrence_ends_at"],
+        stored_status=row["status"],
+    )
+
+
+@router.delete("/appointments/{appointment_id}")
+async def delete_appointment(
+    request: Request,
+    appointment_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    """软删除日程。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        tag = await conn.execute(
+            """
+            UPDATE appointments
+            SET is_deleted = TRUE, updated_at = NOW()
+            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+            """,
+            appointment_id,
+            int(user.id),
+        )
+    if not tag.startswith("UPDATE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="日程不存在")
+    return {"ok": True}
+
+
+@router.get("/achievements/summary", response_model=AchievementSummaryOut)
+async def get_achievement_summary(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    event_id: UUID | None = Query(default=None),
+) -> AchievementSummaryOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+        if event_row is None:
+            event_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+                FROM events
+                WHERE user_id = $1 AND is_primary = TRUE
+                """,
+                int(user.id),
+            )
+        selected_event = _row_to_event(event_row) if event_row is not None else None
+        all_completion_records = await _completion_records_for_user(conn, user_id=int(user.id))
+        completed_task_ids = {
+            record["subject_id"] for record in all_completion_records if record["subject_type"] == "task"
+        }
+        completed_appointment_ids = {
+            record["subject_id"] for record in all_completion_records if record["subject_type"] == "appointment"
+        }
+        global_focus_seconds = await _global_focus_seconds(conn, user_id=int(user.id))
+        global_completion_count = len(all_completion_records)
+        global_activity_days = {record["completed_at"].date() for record in all_completion_records}
+        global_activity_days.update(await _focus_activity_dates(conn, user_id=int(user.id)))
+        global_usage_streak = _max_consecutive_day_count(global_activity_days)
+
+        event_section: AchievementSectionOut | None = None
+        if event_row is not None:
+            event_task_ids = {
+                row["id"]
+                for row in await conn.fetch(
+                    "SELECT id FROM tasks WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE",
+                    int(user.id),
+                    event_row["id"],
+                )
+            }
+            event_appointment_ids = {
+                row["id"]
+                for row in await conn.fetch(
+                    "SELECT id FROM appointments WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE",
+                    int(user.id),
+                    event_row["id"],
+                )
+            }
+            event_completed_count = len(event_task_ids & completed_task_ids) + len(
+                event_appointment_ids & completed_appointment_ids
+            )
+            event_focus_seconds = await _event_focus_seconds(conn, user_id=int(user.id), event_id=event_row["id"])
+            event_completion_records = _event_completion_records(
+                all_completion_records,
+                task_ids=event_task_ids,
+                appointment_ids=event_appointment_ids,
+            )
+            event_progress_streak = _max_consecutive_day_count(
+                {record["completed_at"].date() for record in event_completion_records}
+            )
+            confirmed_appointment_count = len(event_appointment_ids & completed_appointment_ids)
+            confirmed_appointment_count += await _event_confirmed_appointment_occurrence_count(
+                conn,
+                user_id=int(user.id),
+                event_id=event_row["id"],
+            )
+            delivery_eve_value = (
+                1
+                if _delivery_eve_completed(
+                    completion_records=event_completion_records,
+                    event_due_at=event_row["due_at"],
+                    task_ids=event_task_ids,
+                    appointment_ids=event_appointment_ids,
+                )
+                else 0
+            )
+            event_items = [
+                _achievement_item(
+                    item_id="event-first-push",
+                    title="首次推进",
+                    description="第一次完成绑定到该事件的任务或日程。",
+                    current_value=1 if event_completed_count > 0 else 0,
+                    target_value=1,
+                ),
+                _achievement_item(
+                    item_id="event-focus-2h",
+                    title="进入状态",
+                    description="围绕该事件累计专注 2 小时。",
+                    current_value=event_focus_seconds,
+                    target_value=2 * 60 * 60,
+                ),
+                _achievement_item(
+                    item_id="event-complete-5",
+                    title="推进不停",
+                    description="完成 5 个绑定安排。",
+                    current_value=event_completed_count,
+                    target_value=5,
+                ),
+                _achievement_item(
+                    item_id="event-streak-3d",
+                    title="连续推进 3 天",
+                    description="连续三天至少完成一项绑定到该事件的安排。",
+                    current_value=event_progress_streak,
+                    target_value=3,
+                ),
+                _achievement_item(
+                    item_id="event-confirm-3-appointments",
+                    title="守住关键节点",
+                    description="确认 3 个绑定到该事件的日程。",
+                    current_value=confirmed_appointment_count,
+                    target_value=3,
+                ),
+                _achievement_item(
+                    item_id="event-delivery-eve",
+                    title="交付前夜",
+                    description="在截止前 24 小时内完成最后一个未完成的绑定安排。",
+                    current_value=delivery_eve_value,
+                    target_value=1,
+                ),
+            ]
+            event_section = _section_from_items(
+                title="事件成就",
+                summary_text=f"{event_row['name']} 的当前进展",
+                primary_metric_value=event_focus_seconds,
+                primary_metric_label="事件专注秒数",
+                items=event_items,
+            )
+    return AchievementSummaryOut(
+        active_event=selected_event,
+        event_achievements=event_section,
+        global_achievements=_section_from_items(
+            title="全局成就",
+            summary_text="始终显示的长期累计进度",
+            primary_metric_value=global_focus_seconds,
+            primary_metric_label="总专注秒数",
+            items=[
+                _achievement_item(
+                    item_id="global-focus-10h",
+                    title="总专注 10 小时",
+                    description="跨所有事件累计专注 10 小时。",
+                    current_value=global_focus_seconds,
+                    target_value=10 * 60 * 60,
+                ),
+                _achievement_item(
+                    item_id="global-focus-50h",
+                    title="总专注 50 小时",
+                    description="跨所有事件累计专注 50 小时。",
+                    current_value=global_focus_seconds,
+                    target_value=50 * 60 * 60,
+                ),
+                _achievement_item(
+                    item_id="global-complete-100",
+                    title="累计完成 100 项安排",
+                    description="跨所有事件累计完成 100 次任务或日程。",
+                    current_value=global_completion_count,
+                    target_value=100,
+                ),
+                _achievement_item(
+                    item_id="global-usage-7d",
+                    title="连续使用 7 天",
+                    description="连续 7 天有完成记录或专注记录。",
+                    current_value=global_usage_streak,
+                    target_value=7,
+                ),
+            ],
+        ),
+    )
+
+
+@router.post("/events", response_model=EventOut)
+async def create_event(
+    request: Request,
+    body: EventCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventOut:
+    """创建事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if body.is_primary:
+                await conn.execute(
+                    """
+                    UPDATE events
+                    SET is_primary = FALSE, updated_at = NOW()
+                    WHERE user_id = $1 AND is_primary = TRUE
+                    """,
+                    int(user.id),
+                )
+            row = await conn.fetchrow(
+                """
+                INSERT INTO events(user_id, name, due_at, is_primary)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at
+                """,
+                int(user.id),
+                body.name,
+                body.due_at,
+                body.is_primary,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建事件失败")
+    return _row_to_event(row)
+
+
+@router.get("/events", response_model=list[EventOut])
+async def list_events(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[EventOut]:
+    """列出当前用户全部事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+            FROM events
+            WHERE user_id = $1
+            ORDER BY due_at ASC, created_at DESC
+            """,
+            int(user.id),
+        )
+    return [_row_to_event(row) for row in rows]
+
+
+@router.get("/events/primary", response_model=EventOut)
+async def get_primary_event(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventOut:
+    """获取当前用户主事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+            FROM events
+            WHERE user_id = $1 AND is_primary = TRUE
+            """,
+            int(user.id),
+        )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="主事件不存在")
+    return _row_to_event(row)
+
+
+@router.patch("/events/{event_id}", response_model=EventOut)
+async def update_event(
+    request: Request,
+    event_id: UUID,
+    body: EventUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventOut:
+    """更新事件。"""
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        pool = _pool_from_request(request)
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+                FROM events
+                WHERE id = $1 AND user_id = $2
+                """,
+                event_id,
+                int(user.id),
+            )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+        return _row_to_event(row)
+
+    allowed_cols: dict[str, str] = {
+        "name": "name",
+        "due_at": "due_at",
+        "is_primary": "is_primary",
+    }
+
+    sets: list[str] = []
+    args: list[Any] = []
+    is_primary = patch.get("is_primary")
+
+    for key, value in patch.items():
+        col = allowed_cols.get(key)
+        if col is None:
+            continue
+        args.append(value)
+        sets.append(f"{col} = ${len(args)}")
+
+    if not sets:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可更新字段")
+
+    args.append(event_id)
+    event_i = len(args)
+    args.append(int(user.id))
+    user_i = len(args)
+
+    sql = f"""
+        UPDATE events
+        SET {", ".join(sets)}, updated_at = NOW()
+        WHERE id = ${event_i} AND user_id = ${user_i}
+        RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at
+    """
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if is_primary is True:
+                await conn.execute(
+                    """
+                    UPDATE events
+                    SET is_primary = FALSE, updated_at = NOW()
+                    WHERE user_id = $1 AND is_primary = TRUE AND id <> $2
+                    """,
+                    int(user.id),
+                    event_id,
+                )
+            row = await conn.fetchrow(sql, *args)
+            if row is not None and patch.get("due_at") is not None:
+                await _propagate_event_due_at(conn, user_id=int(user.id), event_id=event_id, due_at=row["due_at"])
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+    return _row_to_event(row)
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(
+    request: Request,
+    event_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    """删除事件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        tag = await conn.execute(
+            "DELETE FROM events WHERE id = $1 AND user_id = $2",
+            event_id,
+            int(user.id),
+        )
+    if not tag.startswith("DELETE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+    return {"ok": True}
+
+
+@router.post("/tasks/{task_id}/focus-logs", response_model=FocusLogOut)
+async def create_focus_log(
+    request: Request,
+    task_id: UUID,
+    body: FocusLogCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusLogOut:
+    """创建专注记录并累计到任务实际时长。"""
+    end_at = _normalize_focus_end_at(body)
+    if end_at < body.start_time:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="end_at 不能早于 start_time",
+        )
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            task_row = await conn.fetchrow(
+                "SELECT id FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+                task_id,
+                int(user.id),
+            )
+            if task_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+
+            log_row = await conn.fetchrow(
+                """
+                INSERT INTO focus_logs(user_id, task_id, duration, start_time, end_at)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, user_id, task_id, duration, start_time, end_at, created_at
+                """,
+                int(user.id),
+                task_id,
+                body.duration,
+                body.start_time,
+                end_at,
+            )
+            await conn.execute(
+                """
+                UPDATE tasks
+                SET actual_duration = actual_duration + $1, updated_at = NOW()
+                WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                """,
+                body.duration,
+                task_id,
+                int(user.id),
+            )
+
+    if log_row is None:
+        raise HTTPException(status_code=500, detail="创建专注记录失败")
+    return _row_to_focus_log(log_row)
+
+
+@router.get("/tasks/{task_id}/focus-logs", response_model=list[FocusLogOut])
+async def list_focus_logs(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[FocusLogOut]:
+    """列出指定任务的专注记录。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, task_id, duration, start_time, end_at, created_at
+            FROM focus_logs
+            WHERE task_id = $1 AND user_id = $2
+            ORDER BY start_time DESC
+            LIMIT $3 OFFSET $4
+            """,
+            task_id,
+            int(user.id),
+            limit,
+            offset,
+        )
+    return [_row_to_focus_log(r) for r in rows]
+
+
+@router.get("/focus/workflows", response_model=list[FocusWorkflowPresetOut])
+async def list_focus_workflow_presets(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[FocusWorkflowPresetOut]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+            FROM focus_workflow_presets
+            WHERE user_id = $1
+            ORDER BY is_default DESC, updated_at DESC
+            """,
+            int(user.id),
+        )
+    return [_row_to_focus_workflow_preset(row) for row in rows]
+
+
+@router.post("/focus/workflows", response_model=FocusWorkflowPresetOut)
+async def create_focus_workflow_preset(
+    request: Request,
+    body: FocusWorkflowPresetCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowPresetOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            existing_default = await _get_default_focus_workflow_preset(conn, int(user.id))
+            should_default = body.is_default or existing_default is None
+            if should_default:
+                await conn.execute(
+                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
+                    int(user.id),
+                )
+            phases = _normalize_workflow_phases(
+                body.phases,
+                fallback_focus_duration=int(body.focus_duration),
+                fallback_break_duration=int(body.break_duration),
+                default_focus_timer_mode=body.default_focus_timer_mode,
+            )
+            phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
+            row = await conn.fetchrow(
+                """
+                INSERT INTO focus_workflow_presets(user_id, name, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                """,
+                int(user.id),
+                body.name.strip(),
+                int(body.focus_duration),
+                int(body.break_duration),
+                _to_jsonb_param(phases),
+                body.default_focus_timer_mode,
+                should_default,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建工作流失败")
+    return _row_to_focus_workflow_preset(row)
+
+
+@router.patch("/focus/workflows/{preset_id}", response_model=FocusWorkflowPresetOut)
+async def update_focus_workflow_preset(
+    request: Request,
+    preset_id: UUID,
+    body: FocusWorkflowPresetUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowPresetOut:
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可更新字段")
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            target = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                FROM focus_workflow_presets
+                WHERE id = $1 AND user_id = $2
+                """,
+                preset_id,
+                int(user.id),
+            )
+            if target is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
+            if patch.get("is_default") is True:
+                await conn.execute(
+                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
+                    int(user.id),
+                )
+            if "phases" in patch:
+                phases = _normalize_workflow_phases(
+                    body.phases,
+                    fallback_focus_duration=int(target["focus_duration"]),
+                    fallback_break_duration=int(target["break_duration"]),
+                    default_focus_timer_mode=str(
+                        patch.get("default_focus_timer_mode") or target.get("default_focus_timer_mode", "countdown")
+                    ),
+                )
+                phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
+            else:
+                phases = target["phases"]
+            sets: list[str] = []
+            args: list[Any] = []
+            if "name" in patch:
+                args.append(str(patch["name"]).strip())
+                sets.append(f"name = ${len(args)}")
+            if "focus_duration" in patch:
+                args.append(int(patch["focus_duration"]))
+                sets.append(f"focus_duration = ${len(args)}")
+            if "break_duration" in patch:
+                args.append(int(patch["break_duration"]))
+                sets.append(f"break_duration = ${len(args)}")
+            if "phases" in patch:
+                args.append(_to_jsonb_param(phases))
+                sets.append(f"phases = ${len(args)}::jsonb")
+            if "default_focus_timer_mode" in patch:
+                args.append(str(patch["default_focus_timer_mode"]))
+                sets.append(f"default_focus_timer_mode = ${len(args)}")
+            if "is_default" in patch:
+                args.append(bool(patch["is_default"]))
+                sets.append(f"is_default = ${len(args)}")
+            args.append(preset_id)
+            p_i = len(args)
+            args.append(int(user.id))
+            u_i = len(args)
+            row = await conn.fetchrow(
+                f"""
+                UPDATE focus_workflow_presets
+                SET {", ".join(sets)}, updated_at = NOW()
+                WHERE id = ${p_i} AND user_id = ${u_i}
+                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                """,
+                *args,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="更新工作流失败")
+    return _row_to_focus_workflow_preset(row)
+
+
+@router.delete("/focus/workflows/{preset_id}")
+async def delete_focus_workflow_preset(
+    request: Request,
+    preset_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT id, is_default FROM focus_workflow_presets WHERE id = $1 AND user_id = $2",
+                preset_id,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
+            await conn.execute(
+                "DELETE FROM focus_workflow_presets WHERE id = $1 AND user_id = $2",
+                preset_id,
+                int(user.id),
+            )
+            if bool(row["is_default"]):
+                next_row = await conn.fetchrow(
+                    """
+                    SELECT id
+                    FROM focus_workflow_presets
+                    WHERE user_id = $1
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    int(user.id),
+                )
+                if next_row is not None:
+                    await conn.execute(
+                        "UPDATE focus_workflow_presets SET is_default = TRUE, updated_at = NOW() WHERE id = $1",
+                        next_row["id"],
+                    )
+    return {"ok": True}
+
+
+@router.post("/focus/workflows/{preset_id}/default", response_model=FocusWorkflowPresetOut)
+async def set_default_focus_workflow_preset(
+    request: Request,
+    preset_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowPresetOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                FROM focus_workflow_presets
+                WHERE id = $1 AND user_id = $2
+                """,
+                preset_id,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
+            await conn.execute(
+                "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
+                int(user.id),
+            )
+            updated = await conn.fetchrow(
+                """
+                UPDATE focus_workflow_presets
+                SET is_default = TRUE, updated_at = NOW()
+                WHERE id = $1 AND user_id = $2
+                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                """,
+                preset_id,
+                int(user.id),
+            )
+    if updated is None:
+        raise HTTPException(status_code=500, detail="设置默认工作流失败")
+    return _row_to_focus_workflow_preset(updated)
+
+
+@router.post("/tasks/{task_id}/focus/start", response_model=FocusLogOut)
+async def start_focus(
+    request: Request,
+    task_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusLogOut:
+    """兼容开始专注接口：创建工作流并进入 focus 阶段。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            task_row = await conn.fetchrow(
+                "SELECT id, target_duration FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+                task_id,
+                int(user.id),
+            )
+            if task_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+            await _stop_active_focus(conn, int(user.id))
+            preset = await _get_default_focus_workflow_preset(conn, int(user.id))
+            if preset is not None:
+                focus_duration = int(preset["focus_duration"])
+                break_duration = int(preset["break_duration"])
+                phases = _normalize_workflow_phases(
+                    preset["phases"],
+                    fallback_focus_duration=focus_duration,
+                    fallback_break_duration=break_duration,
+                    default_focus_timer_mode=_normalize_timer_mode(
+                        preset.get("default_focus_timer_mode", "countdown") if hasattr(preset, "get") else "countdown"
+                    ),
+                )
+                workflow_name = str(preset["name"] or "默认工作流")
+            else:
+                focus_duration = int(task_row["target_duration"]) if int(task_row["target_duration"]) >= 60 else 1500
+                break_duration = 300
+                phases = _build_default_phases(focus_duration, break_duration)
+                workflow_name = "默认工作流"
+            row = await _create_workflow_with_focus_phase(
+                conn,
+                user_id=int(user.id),
+                task_id=task_id,
+                workflow_name=workflow_name,
+                phases=phases,
+                focus_duration=focus_duration,
+                break_duration=break_duration,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="开始专注失败")
+    return _row_to_focus_log(row)
+
+
+@router.post("/focus/workflow/create", response_model=FocusWorkflowOut)
+async def create_focus_workflow(
+    request: Request,
+    body: FocusWorkflowCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """创建工作流并立即进入 focus 阶段。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            task_row = await conn.fetchrow(
+                "SELECT id, title FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+                body.task_id,
+                int(user.id),
+            )
+            if task_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+            await _stop_active_focus(conn, int(user.id))
+            phases = _build_default_phases(int(body.focus_duration), int(body.break_duration))
+            await _create_workflow_with_focus_phase(
+                conn,
+                user_id=int(user.id),
+                task_id=body.task_id,
+                workflow_name="自定义工作流",
+                phases=phases,
+                focus_duration=int(body.focus_duration),
+                break_duration=int(body.break_duration),
+            )
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection
+                FROM focus_workflows
+                WHERE user_id = $1 AND status = 'active'
+                """,
+                int(user.id),
+            )
+    return _row_to_focus_workflow(row, task_title=str(task_row["title"]))
+
+
+@router.post("/focus/workflow/ai-create", response_model=FocusWorkflowOut)
+async def create_focus_workflow_by_ai(
+    request: Request,
+    body: FocusWorkflowCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """AI 创建工作流入口，必须携带授权标记。"""
+    authorized = (request.headers.get("X-AI-Authorized") or "").strip().lower()
+    if authorized != "true":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="AI 创建工作流需要用户授权")
+    return await create_focus_workflow(request, body, user)
+
+
+@router.get("/focus/workflow/current", response_model=FocusWorkflowOut)
+async def get_focus_workflow_current(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """查询当前工作流与阶段状态。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _sync_active_focus_workflow(conn, int(user.id))
+            if row is None:
+                return FocusWorkflowOut(state="normal")
+            task_title = None
+            if row["task_id"] is not None:
+                task_row = await conn.fetchrow(
+                    "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
+                    row["task_id"],
+                    int(user.id),
+                )
+                if task_row is not None:
+                    task_title = str(task_row["title"])
+    return _row_to_focus_workflow(row, task_title=task_title)
+
+
+@router.post("/focus/workflow/skip_phase", response_model=FocusWorkflowOut)
+async def skip_focus_workflow_phase(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """跳过当前阶段的剩余时间，直接将其置为待确认状态。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection
+                FROM focus_workflows
+                WHERE user_id = $1 AND status = 'active'
+                """,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段需要先选择任务")
+            if bool(row["pending_confirmation"]):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段已结束，请确认流转")
+
+            # 将其强制置为待确认
+            await conn.execute(
+                """
+                UPDATE focus_workflows
+                SET pending_confirmation = TRUE, updated_at = NOW()
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            current_phase_type = str(row["current_phase"])
+            if current_phase_type == "focus":
+                await _close_open_focus_log(conn, int(user.id))
+
+            # 重新获取以返回最新状态
+            updated_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection
+                FROM focus_workflows
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            task_row = await conn.fetchrow(
+                "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
+                updated_row["task_id"],
+                int(user.id),
+            )
+    return _row_to_focus_workflow(updated_row, task_title=str(task_row["title"]) if task_row else None)
+
+
+@router.post("/focus/workflow/confirm", response_model=FocusWorkflowOut)
+async def confirm_focus_workflow_transition(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """确认阶段结束并流转到下一阶段。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _sync_active_focus_workflow(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if not bool(row["pending_confirmation"]):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段未结束，无需确认")
+            return await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+
+
+@router.post("/focus/workflow/select-task", response_model=FocusWorkflowOut)
+async def select_focus_workflow_task(
+    request: Request,
+    body: FocusWorkflowSelectTaskRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection
+                FROM focus_workflows
+                WHERE user_id = $1 AND status = 'active'
+                """,
+                int(user.id),
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if not bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段无需选择任务")
+            phases = _normalize_workflow_phases(
+                row.get("phases") if hasattr(row, "get") else row["phases"],
+                fallback_focus_duration=int(row["focus_duration"]),
+                fallback_break_duration=int(row["break_duration"]),
+            )
+            current_index = _safe_int(
+                row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"], 0
+            )
+            phase = phases[current_index]
+            if str(phase["phase_type"]) != "focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
+            task_row = await _get_bindable_task(conn, int(user.id), body.task_id)
+            if task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="请选择未完成任务")
+            next_row = await _set_workflow_current_phase(
+                conn,
+                row["id"],
+                phase_index=current_index,
+                phase=phase,
+                task_id=task_row["id"],
+                runtime_task_id=task_row["id"],
+                pending_task_selection=False,
+            )
+            await _start_focus_log_for_task(conn, int(user.id), task_row["id"])
+    return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
+
+
+@router.post("/focus/stop", response_model=Any)
+async def stop_focus(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> Any:
+    """结束当前专注并终止活动工作流。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            workflow_row = await conn.fetchrow(
+                "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
+                int(user.id),
+            )
+            open_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, duration, start_time, end_at, created_at
+                FROM focus_logs
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                int(user.id),
+            )
+            if open_row is None:
+                if workflow_row is not None:
+                    await conn.execute(
+                        """
+                        UPDATE focus_workflows
+                        SET status = 'stopped', ended_at = NOW(), updated_at = NOW()
+                        WHERE id = $1
+                        """,
+                        workflow_row["id"],
+                    )
+                    return {"msg": "Workflow stopped", "stopped": True}
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的专注")
+            now = datetime.now(UTC)
+            start = open_row["start_time"]
+            dur = int((now - start).total_seconds())
+            if dur < 0:
+                dur = 0
+            row = await conn.fetchrow(
+                """
+                UPDATE focus_logs
+                SET end_at = NOW(), duration = $1
+                WHERE id = $2
+                RETURNING id, user_id, task_id, duration, start_time, end_at, created_at
+                """,
+                dur,
+                open_row["id"],
+            )
+            if workflow_row is not None:
+                await conn.execute(
+                    """
+                    UPDATE focus_workflows
+                    SET status = 'stopped', ended_at = NOW(), updated_at = NOW()
+                    WHERE id = $1
+                    """,
+                    workflow_row["id"],
+                )
+            await conn.execute(
+                """
+                UPDATE tasks
+                SET actual_duration = actual_duration + $1, updated_at = NOW()
+                WHERE id = $2 AND user_id = $3 AND is_deleted = FALSE
+                """,
+                dur,
+                row["task_id"],
+                int(user.id),
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="结束专注失败")
+    return _row_to_focus_log(row)
+
+
+@router.get("/focus/current", response_model=FocusLogOut)
+async def get_current_focus(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusLogOut:
+    """查询当前用户正在进行的专注记录，返回动态计算的持续时长。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await _sync_active_focus_workflow(conn, int(user.id))
+            row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, duration, start_time, end_at, created_at
+                FROM focus_logs
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                int(user.id),
+            )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的专注")
+    return _row_to_focus_log(row)
+
+
+@router.get("/focus/today", response_model=FocusTodayOut)
+async def get_today_focus_duration(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusTodayOut:
+    """获取当前用户“今日”专注时长（秒与分钟），包含进行中的专注。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            WITH bounds AS (
+              SELECT date_trunc('day', NOW()) AS day_start,
+                     date_trunc('day', NOW()) + interval '1 day' AS day_end
+            )
+            SELECT
+              COALESCE(
+                SUM(
+                  GREATEST(
+                    0,
+                    EXTRACT(
+                      epoch FROM (
+                        LEAST(COALESCE(fl.end_at, NOW()), b.day_end)
+                        - GREATEST(fl.start_time, b.day_start)
+                      )
+                    )
+                  )
+                ),
+                0
+              )::BIGINT AS seconds
+            FROM focus_logs fl
+            CROSS JOIN bounds b
+            WHERE fl.user_id = $1
+              AND fl.start_time < b.day_end
+              AND COALESCE(fl.end_at, NOW()) > b.day_start
+            """,
+            int(user.id),
+        )
+    seconds = int((row or {}).get("seconds") or 0)
+    if seconds < 0:
+        seconds = 0
+    return FocusTodayOut(seconds=seconds, minutes=seconds // 60)
+
+
+@router.get("/focus/stats", response_model=FocusStatsOut)
+async def get_focus_stats(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    range_query: Annotated[Literal["today", "week", "month"], Query(alias="range")],
+) -> FocusStatsOut:
+    """获取专注统计信息。"""
+    pool = _pool_from_request(request)
+
+    now = datetime.now(UTC)
+    if range_query == "today":
+        range_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_query == "week":
+        range_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    else:  # month
+        range_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            WITH bounds AS (
+                SELECT $2::TIMESTAMPTZ AS range_start,
+                       NOW() AS range_end
+            ),
+            log_durations AS (
+                SELECT
+                    fl.task_id,
+                    GREATEST(
+                        0,
+                        EXTRACT(
+                            epoch FROM (
+                                LEAST(COALESCE(fl.end_at, NOW()), b.range_end)
+                                - GREATEST(fl.start_time, b.range_start)
+                            )
+                        )
+                    )::BIGINT AS duration
+                FROM focus_logs fl
+                CROSS JOIN bounds b
+                WHERE fl.user_id = $1
+                  AND fl.start_time < b.range_end
+                  AND COALESCE(fl.end_at, NOW()) > b.range_start
+            )
+            SELECT
+                t.id,
+                t.title,
+                SUM(ld.duration)::BIGINT as total_duration
+            FROM log_durations ld
+            JOIN tasks t ON ld.task_id = t.id
+            GROUP BY t.id, t.title
+            HAVING SUM(ld.duration) > 0
+            ORDER BY total_duration DESC
+            """,
+            int(user.id),
+            range_start,
+        )
+
+    tasks_stats = [
+        TaskFocusStats(
+            id=row["id"],
+            title=row["title"],
+            duration=row["total_duration"],
+        )
+        for row in rows
+    ]
+
+    total_duration = sum(t.duration for t in tasks_stats)
+    return FocusStatsOut(total_duration=total_duration, tasks=tasks_stats)
