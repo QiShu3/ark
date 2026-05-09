@@ -4,7 +4,12 @@ from datetime import UTC, datetime, timedelta
 from inspect import getsource
 
 from routes.erc.repository import get_overview_counts
-from routes.erc.service import make_practice_wrong_immediately_due, rating_for_answer, should_skip_same_article
+from routes.erc.service import (
+    choose_due_review_candidate,
+    make_practice_wrong_immediately_due,
+    rating_for_answer,
+    should_skip_same_article,
+)
 
 
 def test_rating_for_answer_maps_wrong_to_again_and_correct_to_good() -> None:
@@ -50,3 +55,28 @@ def test_overview_counts_do_not_join_independent_count_sources() -> None:
     assert "LEFT JOIN erc_review_logs" not in source
     assert "LEFT JOIN erc_user_question_cards" not in source
     assert "LEFT JOIN erc_mistake_bucket" not in source
+
+
+def test_choose_due_review_candidate_uses_weighted_random_within_due_candidates() -> None:
+    now = datetime(2026, 5, 9, 12, tzinfo=UTC)
+    rows = [
+        {"question_id": "q1", "article_pk": "a1", "due_at": now - timedelta(hours=1), "lapse_count": 0, "is_mistake": False},
+        {"question_id": "q2", "article_pk": "a2", "due_at": now - timedelta(hours=1), "lapse_count": 4, "is_mistake": True},
+    ]
+
+    chosen = choose_due_review_candidate(rows, recent_logs=[], now=now, cooldown_hours=24, random_value=lambda: 0.99)
+
+    assert chosen["question_id"] == "q2"
+
+
+def test_choose_due_review_candidate_respects_same_article_cooldown_before_random_choice() -> None:
+    now = datetime(2026, 5, 9, 12, tzinfo=UTC)
+    rows = [
+        {"question_id": "q1", "article_pk": "a1", "due_at": now - timedelta(hours=1), "lapse_count": 0, "is_mistake": False},
+        {"question_id": "q2", "article_pk": "a2", "due_at": now - timedelta(hours=1), "lapse_count": 0, "is_mistake": False},
+    ]
+    recent_logs = [{"article_pk": "a1", "created_at": now - timedelta(minutes=5)}]
+
+    chosen = choose_due_review_candidate(rows, recent_logs=recent_logs, now=now, cooldown_hours=24, random_value=lambda: 0)
+
+    assert chosen["question_id"] == "q2"

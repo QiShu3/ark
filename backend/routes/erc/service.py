@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import random
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -43,6 +45,51 @@ def should_skip_same_article(
 ) -> bool:
     threshold = now - timedelta(hours=cooldown_hours)
     return any(str(item["article_pk"]) == article_pk and item["created_at"] >= threshold for item in recent_logs)
+
+
+def due_review_weight(row: dict, *, now: datetime) -> float:
+    due_at = row.get("due_at")
+    overdue_hours = 0.0
+    if isinstance(due_at, datetime) and due_at < now:
+        overdue_hours = min((now - due_at).total_seconds() / 3600, 72)
+    lapse_count = max(int(row.get("lapse_count") or 0), 0)
+    mistake_bonus = 4.0 if bool(row.get("is_mistake")) else 0.0
+    return 1.0 + mistake_bonus + min(lapse_count, 6) * 1.5 + overdue_hours / 24
+
+
+def choose_due_review_candidate(
+    due_rows: list[dict],
+    *,
+    recent_logs: list[dict],
+    now: datetime,
+    cooldown_hours: int,
+    random_value: Callable[[], float] = random.random,
+) -> dict | None:
+    if not due_rows:
+        return None
+
+    candidates = [
+        row
+        for row in due_rows
+        if not should_skip_same_article(
+            str(row["article_pk"]),
+            recent_logs=recent_logs,
+            now=now,
+            cooldown_hours=cooldown_hours,
+        )
+    ]
+    if not candidates:
+        candidates = due_rows
+
+    weighted_candidates = [(row, due_review_weight(row, now=now)) for row in candidates]
+    total_weight = sum(weight for _row, weight in weighted_candidates)
+    threshold = random_value() * total_weight
+    running = 0.0
+    for row, weight in weighted_candidates:
+        running += weight
+        if threshold <= running:
+            return row
+    return weighted_candidates[-1][0]
 
 
 def make_practice_wrong_immediately_due(scheduled: dict, *, rating: str, now: datetime) -> dict:
@@ -330,18 +377,11 @@ async def get_next_review(pool: asyncpg.Pool, *, user_id: int) -> dict:
                 since=now - timedelta(hours=cooldown_hours),
             )
         ]
-        chosen = next(
-            (
-                row
-                for row in due_rows
-                if not should_skip_same_article(
-                    str(row["article_pk"]),
-                    recent_logs=recent_logs,
-                    now=now,
-                    cooldown_hours=cooldown_hours,
-                )
-            ),
-            due_rows[0] if due_rows else None,
+        chosen = choose_due_review_candidate(
+            due_rows,
+            recent_logs=recent_logs,
+            now=now,
+            cooldown_hours=cooldown_hours,
         )
         if chosen is None:
             return {"has_item": False, "next_due_at": await get_next_due_at(conn, user_id=user_id)}
