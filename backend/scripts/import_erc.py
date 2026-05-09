@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
 import asyncpg
+from dotenv import load_dotenv
 
-from routes.auth_routes import _database_url
-from routes.erc.importer import load_article_seeds
-from routes.erc.repository import init_tables, refresh_set_counts, upsert_article_seed, upsert_set
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+ENV_PATH = ROOT / ".env"
+load_dotenv(dotenv_path=ENV_PATH, override=False)
+
+from routes.auth_routes import _database_url  # noqa: E402
+from routes.erc.importer import load_article_seeds  # noqa: E402
+from routes.erc.repository import init_tables, refresh_set_counts, upsert_article_seed, upsert_set  # noqa: E402
 
 
 async def _run(args: argparse.Namespace) -> None:
