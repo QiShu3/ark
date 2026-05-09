@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from routes.erc.importer import ERCArticleSeed, parse_article_payload
+from routes.erc.importer import ERCArticleSeed, load_article_seeds, parse_article_payload
 
 
 def _payload() -> dict:
@@ -56,3 +58,18 @@ def test_parse_article_payload_rejects_invalid_answer() -> None:
 def test_parse_article_payload_rejects_filename_article_mismatch() -> None:
     with pytest.raises(ValueError, match="filename"):
         parse_article_payload(_payload(), source_name="kaoyan2_2025_text2.json", sort_order=1)
+
+
+def test_load_article_seeds_reads_sorted_json_files(tmp_path) -> None:
+    first = _payload()
+    second = _payload()
+    second["article_id"] = "kaoyan2_2025_text2"
+    second["text_no"] = 2
+    second["questions"][0]["question_id"] = "kaoyan2_2025_text2_q26"
+    (tmp_path / "kaoyan2_2025_text2.json").write_text(json.dumps(second), encoding="utf-8")
+    (tmp_path / "kaoyan2_2025_text1.json").write_text(json.dumps(first), encoding="utf-8")
+
+    seeds = load_article_seeds(tmp_path)
+
+    assert [seed.article_id for seed in seeds] == ["kaoyan2_2025_text1", "kaoyan2_2025_text2"]
+    assert [seed.sort_order for seed in seeds] == [1, 2]

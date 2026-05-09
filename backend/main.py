@@ -13,6 +13,7 @@ from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
+from routes.erc import init_erc
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
 from routes.vocab import init_vocab
@@ -30,6 +31,7 @@ async def _lifespan(app: FastAPI):
     await init_todo(app)
     await init_arxiv(app)
     await init_vocab(app)
+    await init_erc(app)
     try:
         yield
     finally:
