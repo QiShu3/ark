@@ -57,6 +57,22 @@ class ERCQuestionOut(BaseModel):
     answer: str | None = None
 
 
+class ERCArticleVocabularyWordOut(BaseModel):
+    word: str
+    state: Literal["mastered", "learning", "unstarted", "unknown"]
+
+
+class ERCArticleVocabularySummaryOut(BaseModel):
+    total_word_count: int = 0
+    mastered_count: int = 0
+    learning_count: int = 0
+    unstarted_count: int = 0
+    unknown_count: int = 0
+    unfamiliar_count: int = 0
+    mastery_rate: float = 0.0
+    preview_words: list[ERCArticleVocabularyWordOut] = Field(default_factory=list)
+
+
 class ERCArticleDetailOut(BaseModel):
     article_id: str
     set_id: str
@@ -67,6 +83,7 @@ class ERCArticleDetailOut(BaseModel):
     paragraphs: list[ERCParagraphOut]
     questions: list[ERCQuestionOut]
     last_attempt_at: datetime | None = None
+    vocabulary_summary: ERCArticleVocabularySummaryOut | None = None
 
 
 class ERCAnswerIn(BaseModel):

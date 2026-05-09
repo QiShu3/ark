@@ -5,6 +5,7 @@ from inspect import getsource
 
 from routes.erc.repository import get_overview_counts
 from routes.erc.service import (
+    _vocabulary_summary,
     choose_due_review_candidate,
     make_practice_wrong_immediately_due,
     rating_for_answer,
@@ -80,3 +81,27 @@ def test_choose_due_review_candidate_respects_same_article_cooldown_before_rando
     chosen = choose_due_review_candidate(rows, recent_logs=recent_logs, now=now, cooldown_hours=24, random_value=lambda: 0)
 
     assert chosen["question_id"] == "q2"
+
+
+def test_vocabulary_summary_counts_user_word_states() -> None:
+    summary = _vocabulary_summary(
+        [
+            {"word": "paradoxical", "state": "mastered"},
+            {"word": "detached", "state": "learning"},
+            {"word": "adolescence", "state": "unstarted"},
+            {"word": "prosociality", "state": "unknown"},
+        ],
+        preview_limit=2,
+    )
+
+    assert summary["total_word_count"] == 4
+    assert summary["mastered_count"] == 1
+    assert summary["learning_count"] == 1
+    assert summary["unstarted_count"] == 1
+    assert summary["unknown_count"] == 1
+    assert summary["unfamiliar_count"] == 3
+    assert summary["mastery_rate"] == 0.25
+    assert summary["preview_words"] == [
+        {"word": "detached", "state": "learning"},
+        {"word": "adolescence", "state": "unstarted"},
+    ]

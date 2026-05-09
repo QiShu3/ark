@@ -5,7 +5,7 @@ from typing import Any
 
 import asyncpg
 
-from .importer import ERCArticleSeed
+from .importer import ERCArticleSeed, ERCArticleWordSeed
 
 
 async def init_erc(app: Any) -> None:
@@ -77,6 +77,17 @@ async def init_tables(pool: asyncpg.Pool) -> None:
               sort_order INTEGER NOT NULL DEFAULT 0,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS erc_article_words (
+              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
+              word TEXT NOT NULL,
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              PRIMARY KEY (article_pk, word)
             );
             """
         )
@@ -158,6 +169,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             """
         )
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_erc_articles_set_sort ON erc_articles(set_id, sort_order);")
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_erc_article_words_article_sort ON erc_article_words(article_pk, sort_order);"
+        )
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_erc_cards_due ON erc_user_question_cards(user_id, due_at);")
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_erc_logs_user_created ON erc_review_logs(user_id, created_at DESC);"
@@ -283,6 +297,25 @@ async def refresh_set_counts(conn: asyncpg.Connection, *, set_id: str) -> None:
     )
 
 
+async def replace_article_words(conn: asyncpg.Connection, *, seed: ERCArticleWordSeed) -> None:
+    article_row = await conn.fetchrow("SELECT id::text AS article_pk FROM erc_articles WHERE article_id = $1", seed.article_id)
+    if article_row is None:
+        raise ValueError(f"article_id {seed.article_id} does not exist")
+
+    article_pk = str(article_row["article_pk"])
+    await conn.execute("DELETE FROM erc_article_words WHERE article_pk = $1::uuid", article_pk)
+    for index, word in enumerate(seed.words, start=1):
+        await conn.execute(
+            """
+            INSERT INTO erc_article_words(article_pk, word, sort_order)
+            VALUES ($1::uuid, $2, $3)
+            """,
+            article_pk,
+            word,
+            index,
+        )
+
+
 async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     return await conn.fetch(
         """
@@ -385,6 +418,36 @@ async def list_question_rows(conn: asyncpg.Connection, *, article_pk: str) -> li
         WHERE article_pk = $1::uuid
         ORDER BY sort_order ASC
         """,
+        article_pk,
+    )
+
+
+async def list_article_word_state_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    article_pk: str,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          aw.word,
+          CASE
+            WHEN COUNT(v.id) = 0 THEN 'unknown'
+            WHEN BOOL_OR(COALESCE(p.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')) THEN 'mastered'
+            WHEN BOOL_OR(p.word_id IS NOT NULL) THEN 'learning'
+            ELSE 'unstarted'
+          END AS state
+        FROM erc_article_words aw
+        LEFT JOIN vocab_words v ON LOWER(v.word) = aw.word
+        LEFT JOIN vocab_user_word_progress p
+          ON p.user_id = $1
+         AND p.word_id = v.id
+        WHERE aw.article_pk = $2::uuid
+        GROUP BY aw.word, aw.sort_order
+        ORDER BY aw.sort_order ASC
+        """,
+        user_id,
         article_pk,
     )
 

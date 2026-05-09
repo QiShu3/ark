@@ -4,7 +4,13 @@ import json
 
 import pytest
 
-from routes.erc.importer import ERCArticleSeed, load_article_seeds, parse_article_payload
+from routes.erc.importer import (
+    ERCArticleSeed,
+    load_article_seeds,
+    load_article_word_seeds,
+    parse_article_payload,
+    parse_article_word_payload,
+)
 
 
 def _payload() -> dict:
@@ -73,3 +79,33 @@ def test_load_article_seeds_reads_sorted_json_files(tmp_path) -> None:
 
     assert [seed.article_id for seed in seeds] == ["kaoyan2_2025_text1", "kaoyan2_2025_text2"]
     assert [seed.sort_order for seed in seeds] == [1, 2]
+
+
+def test_parse_article_word_payload_extracts_words() -> None:
+    seed = parse_article_word_payload(
+        {"article_id": "kaoyan2_2025_text1", "words": ["Visionary", "mortality"]},
+        source_name="kaoyan2_2025_text1.words.json",
+    )
+
+    assert seed.article_id == "kaoyan2_2025_text1"
+    assert seed.words == ["visionary", "mortality"]
+
+
+def test_parse_article_word_payload_rejects_phrases() -> None:
+    with pytest.raises(ValueError, match="spaces"):
+        parse_article_word_payload(
+            {"article_id": "kaoyan2_2025_text1", "words": ["minimum wage"]},
+            source_name="kaoyan2_2025_text1.words.json",
+        )
+
+
+def test_load_article_word_seeds_reads_word_profiles(tmp_path) -> None:
+    (tmp_path / "kaoyan2_2025_text1.words.json").write_text(
+        json.dumps({"article_id": "kaoyan2_2025_text1", "words": ["visionary"]}),
+        encoding="utf-8",
+    )
+
+    seeds = load_article_word_seeds(tmp_path)
+
+    assert [seed.article_id for seed in seeds] == ["kaoyan2_2025_text1"]
+    assert seeds[0].words == ["visionary"]

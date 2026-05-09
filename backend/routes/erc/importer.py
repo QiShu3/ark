@@ -37,6 +37,12 @@ class ERCArticleSeed:
     questions: list[ERCQuestionSeed]
 
 
+@dataclass(frozen=True)
+class ERCArticleWordSeed:
+    article_id: str
+    words: list[str]
+
+
 def _require_text(payload: dict[str, Any], key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -109,6 +115,46 @@ def load_article_seeds(directory: Path) -> list[ERCArticleSeed]:
     for sort_order, file_path in enumerate(files, start=1):
         payload = json.loads(file_path.read_text(encoding="utf-8"))
         seed = parse_article_payload(payload, source_name=file_path.name, sort_order=sort_order)
+        if seed.article_id in seen_article_ids:
+            raise ValueError(f"duplicate article_id {seed.article_id}")
+        seen_article_ids.add(seed.article_id)
+        seeds.append(seed)
+    return seeds
+
+
+def parse_article_word_payload(payload: dict[str, Any], *, source_name: str) -> ERCArticleWordSeed:
+    article_id = _require_text(payload, "article_id")
+    expected_name = f"{article_id}.words.json"
+    if source_name != expected_name:
+        raise ValueError(f"filename {source_name} does not match article_id {article_id}")
+
+    words_payload = payload.get("words")
+    if not isinstance(words_payload, list):
+        raise ValueError("words must be a list")
+
+    words: list[str] = []
+    seen_words: set[str] = set()
+    for raw_word in words_payload:
+        if not isinstance(raw_word, str) or not raw_word.strip():
+            raise ValueError(f"{article_id} words must contain non-empty strings")
+        word = raw_word.strip().lower()
+        if " " in word:
+            raise ValueError(f"{article_id} word must not contain spaces: {word}")
+        if word in seen_words:
+            raise ValueError(f"{article_id} duplicate word {word}")
+        seen_words.add(word)
+        words.append(word)
+
+    return ERCArticleWordSeed(article_id=article_id, words=words)
+
+
+def load_article_word_seeds(directory: Path) -> list[ERCArticleWordSeed]:
+    files = sorted(directory.glob("*.words.json"))
+    seeds: list[ERCArticleWordSeed] = []
+    seen_article_ids: set[str] = set()
+    for file_path in files:
+        payload = json.loads(file_path.read_text(encoding="utf-8"))
+        seed = parse_article_word_payload(payload, source_name=file_path.name)
         if seed.article_id in seen_article_ids:
             raise ValueError(f"duplicate article_id {seed.article_id}")
         seen_article_ids.add(seed.article_id)

@@ -6,6 +6,12 @@ import type { ERCArticleDetail, ERCPracticeAnswer } from '../../lib/erc/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 
+const vocabularyStateLabel: Record<string, string> = {
+  learning: '学习中',
+  unstarted: '未学',
+  unknown: '词库外',
+};
+
 export default function ERCPractice() {
   const { articleId = '' } = useParams();
   const navigate = useNavigate();
@@ -89,6 +95,40 @@ export default function ERCPractice() {
             </article>
 
             <section className="space-y-5">
+              {article.vocabulary_summary && article.vocabulary_summary.total_word_count > 0 ? (
+                <section className="rounded-2xl border border-white/10 bg-white/[0.07] p-5 backdrop-blur-xl">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <div className="text-sm text-white/50">阅读前词汇预热</div>
+                      <div className="mt-2 text-2xl font-semibold text-white">
+                        {Math.round(article.vocabulary_summary.mastery_rate * 100)}%
+                        <span className="ml-2 text-sm font-normal text-white/55">已掌握</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-sm text-white/60">
+                      预计生词 {article.vocabulary_summary.unfamiliar_count} / {article.vocabulary_summary.total_word_count}
+                    </div>
+                  </div>
+
+                  {article.vocabulary_summary.preview_words.length > 0 ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {article.vocabulary_summary.preview_words.map((item) => (
+                        <span
+                          key={`${item.word}-${item.state}`}
+                          className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/72"
+                          title={vocabularyStateLabel[item.state] ?? item.state}
+                        >
+                          {item.word}
+                          <span className="ml-2 text-white/38">{vocabularyStateLabel[item.state] ?? item.state}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-white/58">这篇文章的预习词已经全部掌握，可以直接开练。</p>
+                  )}
+                </section>
+              ) : null}
+
               {article.questions.map((question) => (
                 <fieldset key={question.question_id} className="rounded-2xl border border-white/10 bg-black/22 p-5">
                   <legend className="text-base font-medium text-white">

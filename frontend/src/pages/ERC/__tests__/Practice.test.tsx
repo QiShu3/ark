@@ -31,6 +31,19 @@ describe('ERC practice page', () => {
       text_no: 1,
       title: '',
       paragraphs: [{ paragraph_no: 1, text: 'Paragraph one.' }],
+      vocabulary_summary: {
+        total_word_count: 3,
+        mastered_count: 1,
+        learning_count: 1,
+        unstarted_count: 1,
+        unknown_count: 0,
+        unfamiliar_count: 2,
+        mastery_rate: 1 / 3,
+        preview_words: [
+          { word: 'paradoxical', state: 'unstarted' },
+          { word: 'detached', state: 'learning' },
+        ],
+      },
       questions: [
         {
           question_id: 'kaoyan2_2025_text1_q21',
@@ -57,6 +70,9 @@ describe('ERC practice page', () => {
     );
 
     expect(await screen.findByText(/Question 21/)).toBeInTheDocument();
+    expect(screen.getByText('阅读前词汇预热')).toBeInTheDocument();
+    expect(screen.getByText('预计生词 2 / 3')).toBeInTheDocument();
+    expect(screen.getByText('paradoxical')).toBeInTheDocument();
     expect(screen.getByLabelText('阅读原文')).toHaveClass('backdrop-blur-2xl');
     await userEvent.click(screen.getByRole('radio', { name: 'A A1' }));
     await userEvent.click(screen.getByRole('button', { name: '提交整篇' }));

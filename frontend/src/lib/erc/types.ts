@@ -45,12 +45,29 @@ export interface ERCQuestion {
   answer?: string | null;
 }
 
+export interface ERCArticleVocabularyWord {
+  word: string;
+  state: 'mastered' | 'learning' | 'unstarted' | 'unknown';
+}
+
+export interface ERCArticleVocabularySummary {
+  total_word_count: number;
+  mastered_count: number;
+  learning_count: number;
+  unstarted_count: number;
+  unknown_count: number;
+  unfamiliar_count: number;
+  mastery_rate: number;
+  preview_words: ERCArticleVocabularyWord[];
+}
+
 export interface ERCArticleDetail extends ERCOverviewArticle {
   set_id: string;
   exam: string;
   paragraphs: ERCParagraph[];
   questions: ERCQuestion[];
   last_attempt_at: string | null;
+  vocabulary_summary: ERCArticleVocabularySummary | null;
 }
 
 export interface ERCPracticeAnswer {

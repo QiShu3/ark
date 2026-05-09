@@ -21,6 +21,7 @@ from .repository import (
     insert_article_attempt,
     insert_review_log,
     list_article_rows,
+    list_article_word_state_rows,
     list_due_card_rows,
     list_mistake_rows,
     list_paragraph_rows,
@@ -190,6 +191,25 @@ def _question_payload(row: dict, *, include_answer: bool) -> dict:
     return payload
 
 
+def _vocabulary_summary(rows: list[dict], *, preview_limit: int = 12) -> dict:
+    total = len(rows)
+    mastered_count = sum(1 for row in rows if row["state"] == "mastered")
+    learning_count = sum(1 for row in rows if row["state"] == "learning")
+    unstarted_count = sum(1 for row in rows if row["state"] == "unstarted")
+    unknown_count = sum(1 for row in rows if row["state"] == "unknown")
+    unfamiliar_rows = [row for row in rows if row["state"] != "mastered"]
+    return {
+        "total_word_count": total,
+        "mastered_count": mastered_count,
+        "learning_count": learning_count,
+        "unstarted_count": unstarted_count,
+        "unknown_count": unknown_count,
+        "unfamiliar_count": len(unfamiliar_rows),
+        "mastery_rate": mastered_count / total if total else 0.0,
+        "preview_words": unfamiliar_rows[:preview_limit],
+    }
+
+
 async def list_sets(pool: asyncpg.Pool) -> list[dict]:
     async with pool.acquire() as conn:
         return [_as_dict(row) for row in await list_set_rows(conn)]
@@ -247,6 +267,14 @@ async def get_article_detail(pool: asyncpg.Pool, *, user_id: int, article_id: st
         article_dict = dict(article)
         paragraphs = await list_paragraph_rows(conn, article_pk=article_dict["article_pk"])
         questions = await list_question_rows(conn, article_pk=article_dict["article_pk"])
+        vocabulary_rows = [
+            dict(row)
+            for row in await list_article_word_state_rows(
+                conn,
+                user_id=user_id,
+                article_pk=article_dict["article_pk"],
+            )
+        ]
         last_attempt_at = await get_last_article_attempt_at(
             conn,
             user_id=user_id,
@@ -263,6 +291,7 @@ async def get_article_detail(pool: asyncpg.Pool, *, user_id: int, article_id: st
         "paragraphs": [dict(row) for row in paragraphs],
         "questions": [_question_payload(dict(row), include_answer=False) for row in questions],
         "last_attempt_at": last_attempt_at,
+        "vocabulary_summary": _vocabulary_summary(vocabulary_rows),
     }
 
 
