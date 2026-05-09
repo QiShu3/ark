@@ -9,7 +9,7 @@ const AppCenter: React.FC = () => {
     { id: 0, name: 'Agent Console', description: '恢复最近一次页面专属会话', icon: '◉', route: '/agent-console' },
     { id: 1, name: 'Arxiv', description: '阅读文献', icon: '∑', route: '/arxiv' },
     { id: 2, name: '背单词', description: '切换词书并开始今日学习', icon: '✦', route: '/vocab' },
-    { id: 3, name: '应用 3', description: '这是一个待开发的应用', icon: '🎨' },
+    { id: 3, name: '阅读训练', description: '整篇练习并进入 FSRS 复习池', icon: 'R', route: '/erc' },
     { id: 4, name: '应用 4', description: '这是一个待开发的应用', icon: '🔧' },
     { id: 5, name: '应用 5', description: '这是一个待开发的应用', icon: '📊' },
     { id: 6, name: '应用 6', description: '这是一个待开发的应用', icon: '🎮' },

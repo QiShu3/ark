@@ -1,0 +1,108 @@
+export interface ERCSet {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  exam: string;
+  article_count: number;
+  question_count: number;
+}
+
+export interface ERCOverviewArticle {
+  article_id: string;
+  year: number;
+  text_no: number;
+  title: string;
+}
+
+export interface ERCOverview {
+  due_review_count: number;
+  practiced_article_count: number;
+  practiced_question_count: number;
+  accuracy: number;
+  mistake_count: number;
+  recommended_article: ERCOverviewArticle | null;
+}
+
+export interface ERCArticleListItem extends ERCOverviewArticle {
+  set_id: string;
+  status: 'unstarted' | 'practiced' | 'has_due_review';
+  question_count: number;
+  mistake_count: number;
+  last_attempt_at: string | null;
+}
+
+export interface ERCParagraph {
+  paragraph_no: number;
+  text: string;
+}
+
+export interface ERCQuestion {
+  question_id: string;
+  question_no: number;
+  stem: string;
+  options: Record<'A' | 'B' | 'C' | 'D', string>;
+  answer?: string | null;
+}
+
+export interface ERCArticleDetail extends ERCOverviewArticle {
+  set_id: string;
+  exam: string;
+  paragraphs: ERCParagraph[];
+  questions: ERCQuestion[];
+  last_attempt_at: string | null;
+}
+
+export interface ERCPracticeAnswer {
+  question_id: string;
+  chosen_option: 'A' | 'B' | 'C' | 'D';
+  time_spent_ms?: number;
+}
+
+export interface ERCArticleSubmitResult {
+  attempt_id: string;
+  article_id: string;
+  correct_count: number;
+  question_count: number;
+  items: Array<{
+    question_id: string;
+    question_no: number;
+    chosen_option: string;
+    correct_option: string;
+    is_correct: boolean;
+    rating: 'again' | 'hard' | 'good' | 'easy';
+    next_review_at: string | null;
+    entered_mistakes: boolean;
+  }>;
+}
+
+export interface ERCReviewNext {
+  has_item: boolean;
+  next_due_at: string | null;
+  article: ERCOverviewArticle | null;
+  paragraphs: ERCParagraph[];
+  question: ERCQuestion | null;
+}
+
+export interface ERCReviewSubmitResult {
+  question_id: string;
+  chosen_option: string;
+  correct_option: string;
+  is_correct: boolean;
+  rating: 'again' | 'hard' | 'good' | 'easy';
+  next_review_at: string | null;
+}
+
+export interface ERCMistakeItem {
+  article_id: string;
+  year: number;
+  text_no: number;
+  question_id: string;
+  question_no: number;
+  stem: string;
+  correct_option: string;
+  last_chosen_option: string | null;
+  wrong_count: number;
+  last_wrong_at: string;
+  is_due: boolean;
+}

@@ -7,6 +7,12 @@ import Login from './pages/Login';
 import AppCenter from './pages/AppCenter';
 import AgentConsole from './pages/AgentConsole';
 import Arxiv from './pages/Arxiv';
+import ERCHome from './pages/ERC/Home';
+import ERCLibrary from './pages/ERC/Library';
+import ERCMistakes from './pages/ERC/Mistakes';
+import ERCPractice from './pages/ERC/Practice';
+import ERCPracticeResult from './pages/ERC/PracticeResult';
+import ERCReview from './pages/ERC/Review';
 import VocabHome from './pages/Vocab/Home';
 import VocabMistakes from './pages/Vocab/Mistakes';
 import VocabReview from './pages/Vocab/Review';
@@ -26,6 +32,12 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/apps" element={<AppCenter />} />
           <Route path="/agent-console" element={<AgentConsole />} />
           <Route path="/arxiv" element={<Arxiv />} />
+          <Route path="/erc" element={<ERCHome />} />
+          <Route path="/erc/library" element={<ERCLibrary />} />
+          <Route path="/erc/articles/:articleId/practice" element={<ERCPractice />} />
+          <Route path="/erc/articles/:articleId/result" element={<ERCPracticeResult />} />
+          <Route path="/erc/review" element={<ERCReview />} />
+          <Route path="/erc/mistakes" element={<ERCMistakes />} />
           <Route path="/vocab" element={<VocabHome />} />
           <Route path="/vocab/today" element={<VocabToday />} />
           <Route path="/vocab/study" element={<VocabStudy />} />
