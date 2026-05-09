@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { fetchERCArticles } from '../../lib/erc/api';
-import type { ERCArticleListItem } from '../../lib/erc/types';
+import { fetchERCArticles, fetchERCSets } from '../../lib/erc/api';
+import type { ERCArticleListItem, ERCSet } from '../../lib/erc/types';
 
 const statusLabel: Record<ERCArticleListItem['status'], string> = {
   unstarted: '未练',
@@ -12,11 +12,29 @@ const statusLabel: Record<ERCArticleListItem['status'], string> = {
 
 export default function ERCLibrary() {
   const [articles, setArticles] = useState<ERCArticleListItem[]>([]);
+  const [sets, setSets] = useState<ERCSet[]>([]);
+  const [activeExam, setActiveExam] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchERCArticles()
+    fetchERCSets()
+      .then((payload) => {
+        if (cancelled) return;
+        setSets(payload);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : '题库分类加载失败');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchERCArticles(activeExam ? { exam: activeExam } : {})
       .then((payload) => {
         if (cancelled) return;
         setArticles(payload);
@@ -29,7 +47,9 @@ export default function ERCLibrary() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeExam]);
+
+  const examOptions = Array.from(new Set(sets.map((set) => set.exam).filter(Boolean)));
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -45,6 +65,27 @@ export default function ERCLibrary() {
         </div>
 
         {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
+
+        <div className="mt-6 flex flex-wrap gap-2" aria-label="考试分类">
+          {['', ...examOptions].map((exam) => {
+            const label = exam || '全部';
+            const isActive = activeExam === exam;
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setActiveExam(exam)}
+                className={`rounded-full border px-4 py-2 text-sm transition ${
+                  isActive
+                    ? 'border-white bg-white text-slate-950'
+                    : 'border-white/12 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           {articles.map((article) => (

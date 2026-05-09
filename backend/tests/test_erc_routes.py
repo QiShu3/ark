@@ -59,6 +59,36 @@ def test_erc_overview_returns_summary(monkeypatch) -> None:
     assert response.json()["due_review_count"] == 3
 
 
+def test_erc_articles_accepts_exam_filter(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_list_articles(*_args, **kwargs):
+        captured.update(kwargs)
+        return [
+            {
+                "article_id": "kaoyan2_2025_text1",
+                "set_id": "set-1",
+                "year": 2025,
+                "text_no": 1,
+                "title": "",
+                "status": "unstarted",
+                "question_count": 5,
+                "mistake_count": 0,
+                "last_attempt_at": None,
+            }
+        ]
+
+    from routes.erc import routes as erc_routes
+
+    monkeypatch.setattr(erc_routes, "list_articles", fake_list_articles)
+    client = _app(monkeypatch)
+
+    response = client.get("/api/erc/articles?exam=考研英语二")
+
+    assert response.status_code == 200
+    assert captured["exam"] == "考研英语二"
+
+
 def test_erc_article_submit_returns_result(monkeypatch) -> None:
     async def fake_submit_article_practice(*_args, **_kwargs):
         return {

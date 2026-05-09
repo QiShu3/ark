@@ -20,8 +20,15 @@ export function fetchERCSets() {
   return apiJson<ERCSet[]>('/api/erc/sets');
 }
 
-export function fetchERCArticles(setId?: string) {
-  const query = setId ? `?set_id=${encodeURIComponent(setId)}` : '';
+export function fetchERCArticles(filters: { setId?: string; exam?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.setId) {
+    params.set('set_id', filters.setId);
+  }
+  if (filters.exam) {
+    params.set('exam', filters.exam);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
   return apiJson<ERCArticleListItem[]>(`/api/erc/articles${query}`);
 }
 

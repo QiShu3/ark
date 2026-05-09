@@ -65,8 +65,9 @@ async def route_list_articles(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
     set_id: str | None = Query(default=None),
+    exam: str | None = Query(default=None),
 ) -> list[ERCArticleListItemOut]:
-    rows = await list_articles(_pool_from_request(request), user_id=int(user.id), set_id=set_id)
+    rows = await list_articles(_pool_from_request(request), user_id=int(user.id), set_id=set_id, exam=exam)
     return [ERCArticleListItemOut(**item) for item in rows]
 
 

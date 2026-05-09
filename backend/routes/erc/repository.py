@@ -331,6 +331,7 @@ async def list_article_rows(
     *,
     user_id: int,
     set_id: str | None,
+    exam: str | None,
 ) -> list[asyncpg.Record]:
     return await conn.fetch(
         """
@@ -354,11 +355,13 @@ async def list_article_rows(
         LEFT JOIN erc_mistake_bucket m
           ON m.question_pk = q.id AND m.user_id = $1 AND m.is_active = TRUE
         WHERE ($2::uuid IS NULL OR a.set_id = $2::uuid)
+          AND ($3::text IS NULL OR a.exam = $3)
         GROUP BY a.id
         ORDER BY a.year DESC, a.text_no ASC
         """,
         user_id,
         set_id,
+        exam,
     )
 
 

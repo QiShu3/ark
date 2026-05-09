@@ -247,9 +247,15 @@ async def get_overview(pool: asyncpg.Pool, *, user_id: int) -> dict:
     }
 
 
-async def list_articles(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> list[dict]:
+async def list_articles(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    set_id: str | None = None,
+    exam: str | None = None,
+) -> list[dict]:
     async with pool.acquire() as conn:
-        rows = await list_article_rows(conn, user_id=user_id, set_id=set_id)
+        rows = await list_article_rows(conn, user_id=user_id, set_id=set_id, exam=exam)
     items: list[dict] = []
     for raw_row in rows:
         row = dict(raw_row)
