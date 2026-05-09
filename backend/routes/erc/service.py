@@ -9,8 +9,23 @@ from typing import Any
 import asyncpg
 from fastapi import HTTPException
 
+from routes.vocab.repository import (
+    get_user_word_progress,
+    list_word_phrases,
+    list_word_sentences,
+    list_word_translations,
+    upsert_mistake_bucket,
+    upsert_user_word_progress,
+)
+from routes.vocab.repository import (
+    insert_review_log as insert_vocab_review_log,
+)
+from routes.vocab.service import _detail_payload as _vocab_detail_payload
+from routes.vocab.service import _schedule_fsrs_review as _schedule_vocab_review
+
 from .repository import (
     get_article_row,
+    get_article_vocabulary_word_row,
     get_last_article_attempt_at,
     get_next_due_at,
     get_overview_counts,
@@ -21,6 +36,7 @@ from .repository import (
     insert_article_attempt,
     insert_review_log,
     list_article_rows,
+    list_article_vocabulary_preheat_rows,
     list_article_word_state_rows,
     list_due_card_rows,
     list_mistake_rows,
@@ -427,6 +443,93 @@ async def get_next_review(pool: asyncpg.Pool, *, user_id: int) -> dict:
         },
         "paragraphs": [dict(row) for row in paragraphs],
         "question": _question_payload(chosen, include_answer=False),
+    }
+
+
+async def get_vocabulary_preheat(pool: asyncpg.Pool, *, user_id: int, article_id: str, limit: int = 12) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await list_article_vocabulary_preheat_rows(
+            conn,
+            user_id=user_id,
+            article_id=article_id,
+            limit=limit,
+        )
+        items: list[dict] = []
+        for row in rows:
+            word_id = str(row["id"])
+            translations = await list_word_translations(conn, word_id=word_id)
+            phrases = await list_word_phrases(conn, word_id=word_id)
+            sentences = await list_word_sentences(conn, word_id=word_id)
+            payload = _vocab_detail_payload(row, translations=translations, phrases=phrases, sentences=sentences)
+            payload["prompt_type"] = "en_to_zh"
+            payload["review_mode"] = "erc_preheat"
+            items.append(payload)
+    return items
+
+
+async def submit_vocabulary_preheat(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    article_id: str,
+    deck_id: str,
+    word_id: str,
+    result: str,
+    prompt_type: str,
+    response_ms: int | None,
+) -> dict:
+    async with pool.acquire() as conn:
+        word_row = await get_article_vocabulary_word_row(
+            conn,
+            article_id=article_id,
+            deck_id=deck_id,
+            word_id=word_id,
+        )
+        if word_row is None:
+            raise HTTPException(status_code=404, detail="预热单词不存在")
+
+        progress_row = await get_user_word_progress(conn, user_id=user_id, deck_id=deck_id, word_id=word_id)
+        current_progress = dict(progress_row) if progress_row is not None else {}
+        updated = _schedule_vocab_review(current_progress, result=result, now=datetime.now(UTC))
+        await upsert_user_word_progress(
+            conn,
+            user_id=user_id,
+            deck_id=deck_id,
+            word_id=word_id,
+            mastery_score=int(updated["mastery_score"]),
+            correct_count=int(updated["correct_count"]),
+            wrong_count=int(updated["wrong_count"]),
+            lapse_count=int(updated["lapse_count"]),
+            interval_days=int(updated["interval_days"]),
+            next_review_at=updated["next_review_at"],
+            fsrs_card_json=updated["card_json"],
+            last_result=str(updated["result"]),
+        )
+        await insert_vocab_review_log(
+            conn,
+            user_id=user_id,
+            deck_id=deck_id,
+            word_id=word_id,
+            review_mode="erc_preheat",
+            prompt_type=prompt_type,
+            result=str(updated["result"]),
+            response_ms=response_ms,
+        )
+        await upsert_mistake_bucket(
+            conn,
+            user_id=user_id,
+            deck_id=deck_id,
+            word_id=word_id,
+            is_active=str(updated["result"]) == "again",
+        )
+    return {
+        "mastery_score": int(updated["mastery_score"]),
+        "next_review_at": updated["next_review_at"],
+        "wrong_count": int(updated["wrong_count"]),
+        "correct_count": int(updated["correct_count"]),
+        "interval_days": int(updated["interval_days"]),
+        "result": str(updated["result"]),
+        "should_repeat_today": str(updated["result"]) == "again",
     }
 
 

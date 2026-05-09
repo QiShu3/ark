@@ -99,7 +99,7 @@ export type VocabWordDetail = {
 
 export type VocabReviewItem = VocabWordDetail & {
   prompt_type: 'en_to_zh' | 'zh_to_en';
-  review_mode: 'study' | 'review' | 'learning' | 'mistake';
+  review_mode: 'study' | 'review' | 'learning' | 'mistake' | 'erc_preheat';
   mastery_score: number;
 };
 

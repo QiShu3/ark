@@ -92,3 +92,59 @@ def test_erc_article_submit_returns_result(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["items"][0]["rating"] == "again"
+
+
+def test_erc_vocabulary_preheat_returns_article_words(monkeypatch) -> None:
+    async def fake_get_vocabulary_preheat(*_args, **_kwargs):
+        return [
+            {
+                "id": "word-1",
+                "deck_id": "deck-1",
+                "word": "paradoxical",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "translations": [{"pos": "adj.", "translation": "矛盾的"}],
+                "phrases": [],
+                "sentences": [],
+                "prompt_type": "en_to_zh",
+                "review_mode": "erc_preheat",
+                "mastery_score": 0,
+            }
+        ]
+
+    from routes.erc import routes as erc_routes
+
+    monkeypatch.setattr(erc_routes, "get_vocabulary_preheat", fake_get_vocabulary_preheat, raising=False)
+    client = _app(monkeypatch)
+
+    response = client.get("/api/erc/articles/kaoyan2_2023_text4/vocabulary/preheat")
+
+    assert response.status_code == 200
+    assert response.json()[0]["word"] == "paradoxical"
+    assert response.json()[0]["review_mode"] == "erc_preheat"
+
+
+def test_erc_vocabulary_preheat_submit_records_review(monkeypatch) -> None:
+    async def fake_submit_vocabulary_preheat(*_args, **_kwargs):
+        return {
+            "mastery_score": 2,
+            "next_review_at": datetime(2026, 5, 10, tzinfo=UTC),
+            "wrong_count": 0,
+            "correct_count": 1,
+            "interval_days": 1,
+            "result": "good",
+            "should_repeat_today": False,
+        }
+
+    from routes.erc import routes as erc_routes
+
+    monkeypatch.setattr(erc_routes, "submit_vocabulary_preheat", fake_submit_vocabulary_preheat, raising=False)
+    client = _app(monkeypatch)
+
+    response = client.post(
+        "/api/erc/articles/kaoyan2_2023_text4/vocabulary/reviews",
+        json={"deck_id": "deck-1", "word_id": "word-1", "result": "good", "prompt_type": "en_to_zh"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"] == "good"

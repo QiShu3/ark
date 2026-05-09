@@ -1,4 +1,5 @@
 import { apiJson } from '../api';
+import type { VocabReviewItem, VocabReviewSubmitResult } from '../vocab/types';
 import type {
   ERCArticleDetail,
   ERCArticleListItem,
@@ -33,6 +34,26 @@ export function submitERCArticle(articleId: string, answers: ERCPracticeAnswer[]
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answers, time_spent_ms: timeSpentMs }),
+  });
+}
+
+export function fetchERCVocabularyPreheat(articleId: string) {
+  return apiJson<VocabReviewItem[]>(`/api/erc/articles/${articleId}/vocabulary/preheat`);
+}
+
+export function submitERCVocabularyPreheat(
+  articleId: string,
+  payload: {
+    deck_id: string;
+    word_id: string;
+    result: 'again' | 'hard' | 'good' | 'easy';
+    prompt_type: 'en_to_zh' | 'zh_to_en';
+  },
+) {
+  return apiJson<VocabReviewSubmitResult>(`/api/erc/articles/${articleId}/vocabulary/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 }
 

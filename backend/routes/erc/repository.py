@@ -452,6 +452,85 @@ async def list_article_word_state_rows(
     )
 
 
+async def list_article_vocabulary_preheat_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    article_id: str,
+    limit: int,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        WITH candidates AS (
+          SELECT
+            v.id::text AS id,
+            v.deck_id::text AS deck_id,
+            v.word,
+            v.us_pronunciation,
+            v.uk_pronunciation,
+            COALESCE(p.mastery_score, 0) AS mastery_score,
+            aw.sort_order,
+            ROW_NUMBER() OVER (
+              PARTITION BY aw.word
+              ORDER BY
+                CASE WHEN p.word_id IS NOT NULL THEN 0 ELSE 1 END,
+                v.sort_order ASC
+            ) AS row_no
+          FROM erc_articles a
+          JOIN erc_article_words aw ON aw.article_pk = a.id
+          JOIN vocab_words v ON LOWER(v.word) = aw.word
+          LEFT JOIN vocab_user_word_progress p
+            ON p.user_id = $1
+           AND p.word_id = v.id
+          WHERE a.article_id = $2
+            AND NOT EXISTS (
+              SELECT 1
+              FROM vocab_words mastered_word
+              JOIN vocab_user_word_progress mastered_progress
+                ON mastered_progress.user_id = $1
+               AND mastered_progress.word_id = mastered_word.id
+              WHERE LOWER(mastered_word.word) = aw.word
+                AND COALESCE(mastered_progress.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')
+            )
+        )
+        SELECT id, deck_id, word, us_pronunciation, uk_pronunciation, mastery_score
+        FROM candidates
+        WHERE row_no = 1
+        ORDER BY sort_order ASC
+        LIMIT $3
+        """,
+        user_id,
+        article_id,
+        limit,
+    )
+
+
+async def get_article_vocabulary_word_row(
+    conn: asyncpg.Connection,
+    *,
+    article_id: str,
+    deck_id: str,
+    word_id: str,
+) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT
+          v.id::text AS id,
+          v.deck_id::text AS deck_id,
+          v.word
+        FROM erc_articles a
+        JOIN erc_article_words aw ON aw.article_pk = a.id
+        JOIN vocab_words v ON v.id = $3::uuid
+        WHERE a.article_id = $1
+          AND v.deck_id = $2::uuid
+          AND LOWER(v.word) = aw.word
+        """,
+        article_id,
+        deck_id,
+        word_id,
+    )
+
+
 async def get_question_row_by_public_id(conn: asyncpg.Connection, *, question_id: str) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
