@@ -165,7 +165,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
 
 
 def _json_param(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False)
+    return json.dumps(value, ensure_ascii=False, default=str)
 
 
 async def upsert_set(
@@ -280,4 +280,439 @@ async def refresh_set_counts(conn: asyncpg.Connection, *, set_id: str) -> None:
         WHERE id = $1::uuid
         """,
         set_id,
+    )
+
+
+async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT id::text AS id, key, name, description, exam, article_count, question_count
+        FROM erc_sets
+        ORDER BY key ASC
+        """
+    )
+
+
+async def list_article_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    set_id: str | None,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          a.id::text AS article_pk,
+          a.article_id,
+          a.set_id::text AS set_id,
+          a.year,
+          a.text_no,
+          a.title,
+          COUNT(DISTINCT q.id)::int AS question_count,
+          COUNT(DISTINCT m.question_pk)::int AS mistake_count,
+          MAX(attempt.submitted_at) AS last_attempt_at,
+          BOOL_OR(c.due_at IS NOT NULL AND c.due_at <= NOW()) AS has_due_review
+        FROM erc_articles a
+        JOIN erc_questions q ON q.article_pk = a.id
+        LEFT JOIN erc_user_article_attempts attempt
+          ON attempt.article_pk = a.id AND attempt.user_id = $1
+        LEFT JOIN erc_user_question_cards c
+          ON c.question_pk = q.id AND c.user_id = $1
+        LEFT JOIN erc_mistake_bucket m
+          ON m.question_pk = q.id AND m.user_id = $1 AND m.is_active = TRUE
+        WHERE ($2::uuid IS NULL OR a.set_id = $2::uuid)
+        GROUP BY a.id
+        ORDER BY a.year DESC, a.text_no ASC
+        """,
+        user_id,
+        set_id,
+    )
+
+
+async def get_article_row(conn: asyncpg.Connection, *, article_id: str) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT
+          a.id::text AS article_pk,
+          a.article_id,
+          a.set_id::text AS set_id,
+          a.exam,
+          a.year,
+          a.text_no,
+          a.title
+        FROM erc_articles a
+        WHERE a.article_id = $1
+        """,
+        article_id,
+    )
+
+
+async def get_last_article_attempt_at(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    article_pk: str,
+) -> Any:
+    row = await conn.fetchrow(
+        """
+        SELECT MAX(submitted_at) AS last_attempt_at
+        FROM erc_user_article_attempts
+        WHERE user_id = $1 AND article_pk = $2::uuid
+        """,
+        user_id,
+        article_pk,
+    )
+    return row["last_attempt_at"] if row else None
+
+
+async def list_paragraph_rows(conn: asyncpg.Connection, *, article_pk: str) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT paragraph_no, text
+        FROM erc_paragraphs
+        WHERE article_pk = $1::uuid
+        ORDER BY paragraph_no ASC
+        """,
+        article_pk,
+    )
+
+
+async def list_question_rows(conn: asyncpg.Connection, *, article_pk: str) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer
+        FROM erc_questions
+        WHERE article_pk = $1::uuid
+        ORDER BY sort_order ASC
+        """,
+        article_pk,
+    )
+
+
+async def get_question_row_by_public_id(conn: asyncpg.Connection, *, question_id: str) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT
+          q.id::text AS question_pk,
+          q.question_id,
+          q.question_no,
+          q.stem,
+          q.options_json,
+          q.answer,
+          a.id::text AS article_pk,
+          a.article_id,
+          a.year,
+          a.text_no,
+          a.title
+        FROM erc_questions q
+        JOIN erc_articles a ON a.id = q.article_pk
+        WHERE q.question_id = $1
+        """,
+        question_id,
+    )
+
+
+async def insert_article_attempt(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    article_pk: str,
+    correct_count: int,
+    question_count: int,
+    time_spent_ms: int | None,
+    started_at: Any,
+) -> str:
+    row = await conn.fetchrow(
+        """
+        INSERT INTO erc_user_article_attempts(
+          user_id, article_pk, correct_count, question_count, time_spent_ms, started_at
+        )
+        VALUES ($1, $2::uuid, $3, $4, $5, $6)
+        RETURNING id::text
+        """,
+        user_id,
+        article_pk,
+        correct_count,
+        question_count,
+        time_spent_ms,
+        started_at,
+    )
+    return str(row["id"])
+
+
+async def get_user_question_card(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    question_pk: str,
+) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT due_at, fsrs_card_json, wrong_count, right_count, lapse_count
+        FROM erc_user_question_cards
+        WHERE user_id = $1 AND question_pk = $2::uuid
+        """,
+        user_id,
+        question_pk,
+    )
+
+
+async def upsert_user_question_card(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    question_pk: str,
+    due_at: Any,
+    fsrs_card_json: Any,
+    wrong_count: int,
+    right_count: int,
+    lapse_count: int,
+    last_answer_correct: bool,
+    last_chosen_option: str,
+) -> None:
+    await conn.execute(
+        """
+        INSERT INTO erc_user_question_cards(
+          user_id, question_pk, due_at, fsrs_card_json, wrong_count, right_count, lapse_count,
+          last_review_at, last_answer_correct, last_chosen_option, updated_at
+        )
+        VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, NOW(), $8, $9, NOW())
+        ON CONFLICT (user_id, question_pk)
+        DO UPDATE SET
+          due_at = EXCLUDED.due_at,
+          fsrs_card_json = EXCLUDED.fsrs_card_json,
+          wrong_count = EXCLUDED.wrong_count,
+          right_count = EXCLUDED.right_count,
+          lapse_count = EXCLUDED.lapse_count,
+          last_review_at = NOW(),
+          last_answer_correct = EXCLUDED.last_answer_correct,
+          last_chosen_option = EXCLUDED.last_chosen_option,
+          updated_at = NOW()
+        """,
+        user_id,
+        question_pk,
+        due_at,
+        _json_param(fsrs_card_json),
+        wrong_count,
+        right_count,
+        lapse_count,
+        last_answer_correct,
+        last_chosen_option,
+    )
+
+
+async def insert_review_log(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    article_pk: str,
+    question_pk: str,
+    attempt_id: str | None,
+    mode: str,
+    chosen_option: str,
+    correct_option: str,
+    is_correct: bool,
+    rating: str,
+    time_spent_ms: int | None,
+) -> None:
+    await conn.execute(
+        """
+        INSERT INTO erc_review_logs(
+          user_id, article_pk, question_pk, attempt_id, mode, chosen_option,
+          correct_option, is_correct, rating, time_spent_ms
+        )
+        VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10)
+        """,
+        user_id,
+        article_pk,
+        question_pk,
+        attempt_id,
+        mode,
+        chosen_option,
+        correct_option,
+        is_correct,
+        rating,
+        time_spent_ms,
+    )
+
+
+async def upsert_mistake(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    article_pk: str,
+    question_pk: str,
+    is_active: bool,
+) -> None:
+    await conn.execute(
+        """
+        INSERT INTO erc_mistake_bucket(user_id, article_pk, question_pk, wrong_count, last_wrong_at, is_active)
+        VALUES ($1, $2::uuid, $3::uuid, CASE WHEN $4 THEN 1 ELSE 0 END, NOW(), $4)
+        ON CONFLICT (user_id, question_pk)
+        DO UPDATE SET
+          wrong_count = CASE
+            WHEN $4 THEN erc_mistake_bucket.wrong_count + 1
+            ELSE erc_mistake_bucket.wrong_count
+          END,
+          last_wrong_at = CASE
+            WHEN $4 THEN NOW()
+            ELSE erc_mistake_bucket.last_wrong_at
+          END,
+          is_active = $4,
+          article_pk = EXCLUDED.article_pk
+        """,
+        user_id,
+        article_pk,
+        question_pk,
+        is_active,
+    )
+
+
+async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: int) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          c.question_pk::text AS question_pk,
+          c.due_at,
+          c.fsrs_card_json,
+          c.wrong_count,
+          c.right_count,
+          c.lapse_count,
+          q.question_id,
+          q.question_no,
+          q.stem,
+          q.options_json,
+          q.answer,
+          a.id::text AS article_pk,
+          a.article_id,
+          a.year,
+          a.text_no,
+          a.title,
+          COALESCE(m.is_active, FALSE) AS is_mistake
+        FROM erc_user_question_cards c
+        JOIN erc_questions q ON q.id = c.question_pk
+        JOIN erc_articles a ON a.id = q.article_pk
+        LEFT JOIN erc_mistake_bucket m ON m.user_id = c.user_id AND m.question_pk = c.question_pk
+        WHERE c.user_id = $1
+          AND c.due_at IS NOT NULL
+          AND c.due_at <= NOW()
+        ORDER BY COALESCE(m.is_active, FALSE) DESC, c.lapse_count DESC, c.due_at ASC
+        LIMIT $2
+        """,
+        user_id,
+        limit,
+    )
+
+
+async def list_recent_review_article_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    since: Any,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT DISTINCT article_pk::text AS article_pk, created_at
+        FROM erc_review_logs
+        WHERE user_id = $1 AND created_at >= $2
+        ORDER BY created_at DESC
+        """,
+        user_id,
+        since,
+    )
+
+
+async def get_next_due_at(conn: asyncpg.Connection, *, user_id: int) -> Any:
+    row = await conn.fetchrow(
+        """
+        SELECT MIN(due_at) AS next_due_at
+        FROM erc_user_question_cards
+        WHERE user_id = $1 AND due_at IS NOT NULL AND due_at > NOW()
+        """,
+        user_id,
+    )
+    return row["next_due_at"] if row else None
+
+
+async def get_user_settings(conn: asyncpg.Connection, *, user_id: int) -> asyncpg.Record:
+    return await conn.fetchrow(
+        """
+        INSERT INTO erc_user_settings(user_id)
+        VALUES ($1)
+        ON CONFLICT (user_id) DO UPDATE SET updated_at = erc_user_settings.updated_at
+        RETURNING daily_review_target, same_article_cooldown_hours
+        """,
+        user_id,
+    )
+
+
+async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int) -> dict[str, Any]:
+    row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(DISTINCT attempt.article_pk)::int AS practiced_article_count,
+          COUNT(log.id)::int AS practiced_question_count,
+          COUNT(log.id) FILTER (WHERE log.is_correct)::int AS correct_log_count,
+          COUNT(card.id) FILTER (WHERE card.due_at IS NOT NULL AND card.due_at <= NOW())::int AS due_review_count,
+          COUNT(m.question_pk) FILTER (WHERE m.is_active)::int AS mistake_count
+        FROM auth_users u
+        LEFT JOIN erc_user_article_attempts attempt ON attempt.user_id = u.id
+        LEFT JOIN erc_review_logs log ON log.user_id = u.id
+        LEFT JOIN erc_user_question_cards card ON card.user_id = u.id
+        LEFT JOIN erc_mistake_bucket m ON m.user_id = u.id
+        WHERE u.id = $1
+        """,
+        user_id,
+    )
+    if row is None:
+        return {
+            "practiced_article_count": 0,
+            "practiced_question_count": 0,
+            "correct_log_count": 0,
+            "due_review_count": 0,
+            "mistake_count": 0,
+        }
+    return dict(row)
+
+
+async def get_recommended_article(conn: asyncpg.Connection, *, user_id: int) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        SELECT a.article_id, a.year, a.text_no, a.title
+        FROM erc_articles a
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM erc_user_article_attempts attempt
+          WHERE attempt.user_id = $1 AND attempt.article_pk = a.id
+        )
+        ORDER BY a.year DESC, a.text_no ASC
+        LIMIT 1
+        """,
+        user_id,
+    )
+
+
+async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          a.article_id,
+          a.year,
+          a.text_no,
+          q.question_id,
+          q.question_no,
+          q.stem,
+          q.answer AS correct_option,
+          c.last_chosen_option,
+          m.wrong_count,
+          m.last_wrong_at,
+          COALESCE(c.due_at <= NOW(), FALSE) AS is_due
+        FROM erc_mistake_bucket m
+        JOIN erc_questions q ON q.id = m.question_pk
+        JOIN erc_articles a ON a.id = m.article_pk
+        LEFT JOIN erc_user_question_cards c ON c.user_id = m.user_id AND c.question_pk = m.question_pk
+        WHERE m.user_id = $1 AND m.is_active = TRUE
+        ORDER BY m.last_wrong_at DESC, a.year DESC, a.text_no ASC, q.sort_order ASC
+        """,
+        user_id,
     )
