@@ -45,6 +45,17 @@ def should_skip_same_article(
     return any(str(item["article_pk"]) == article_pk and item["created_at"] >= threshold for item in recent_logs)
 
 
+def make_practice_wrong_immediately_due(scheduled: dict, *, rating: str, now: datetime) -> dict:
+    if rating != "again":
+        return scheduled
+    adjusted = dict(scheduled)
+    card_json = dict(adjusted.get("fsrs_card_json") or {})
+    card_json["due"] = now.isoformat()
+    adjusted["due_at"] = now
+    adjusted["fsrs_card_json"] = card_json
+    return adjusted
+
+
 def _as_dict(row: asyncpg.Record | dict) -> dict:
     return dict(row)
 
@@ -250,6 +261,7 @@ async def submit_article_practice(
                 rating = rating_for_answer(is_correct=is_correct)
                 card_row = await get_user_question_card(conn, user_id=user_id, question_pk=row["question_pk"])
                 scheduled = _schedule_review(dict(card_row) if card_row else None, rating=rating, now=now)
+                scheduled = make_practice_wrong_immediately_due(scheduled, rating=rating, now=now)
                 await upsert_user_question_card(
                     conn,
                     user_id=user_id,
