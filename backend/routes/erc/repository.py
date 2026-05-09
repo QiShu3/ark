@@ -650,17 +650,31 @@ async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int) -> dict
     row = await conn.fetchrow(
         """
         SELECT
-          COUNT(DISTINCT attempt.article_pk)::int AS practiced_article_count,
-          COUNT(log.id)::int AS practiced_question_count,
-          COUNT(log.id) FILTER (WHERE log.is_correct)::int AS correct_log_count,
-          COUNT(card.id) FILTER (WHERE card.due_at IS NOT NULL AND card.due_at <= NOW())::int AS due_review_count,
-          COUNT(m.question_pk) FILTER (WHERE m.is_active)::int AS mistake_count
-        FROM auth_users u
-        LEFT JOIN erc_user_article_attempts attempt ON attempt.user_id = u.id
-        LEFT JOIN erc_review_logs log ON log.user_id = u.id
-        LEFT JOIN erc_user_question_cards card ON card.user_id = u.id
-        LEFT JOIN erc_mistake_bucket m ON m.user_id = u.id
-        WHERE u.id = $1
+          (
+            SELECT COUNT(DISTINCT article_pk)::int
+            FROM erc_user_article_attempts
+            WHERE user_id = $1
+          ) AS practiced_article_count,
+          (
+            SELECT COUNT(*)::int
+            FROM erc_review_logs
+            WHERE user_id = $1
+          ) AS practiced_question_count,
+          (
+            SELECT COUNT(*)::int
+            FROM erc_review_logs
+            WHERE user_id = $1 AND is_correct = TRUE
+          ) AS correct_log_count,
+          (
+            SELECT COUNT(*)::int
+            FROM erc_user_question_cards
+            WHERE user_id = $1 AND due_at IS NOT NULL AND due_at <= NOW()
+          ) AS due_review_count,
+          (
+            SELECT COUNT(*)::int
+            FROM erc_mistake_bucket
+            WHERE user_id = $1 AND is_active = TRUE
+          ) AS mistake_count
         """,
         user_id,
     )

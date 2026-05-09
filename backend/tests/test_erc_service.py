@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from inspect import getsource
 
+from routes.erc.repository import get_overview_counts
 from routes.erc.service import make_practice_wrong_immediately_due, rating_for_answer, should_skip_same_article
 
 
@@ -40,3 +42,11 @@ def test_make_practice_wrong_immediately_due_keeps_correct_due_time() -> None:
     adjusted = make_practice_wrong_immediately_due(scheduled, rating="good", now=now)
 
     assert adjusted["due_at"] == due_at
+
+
+def test_overview_counts_do_not_join_independent_count_sources() -> None:
+    source = getsource(get_overview_counts)
+
+    assert "LEFT JOIN erc_review_logs" not in source
+    assert "LEFT JOIN erc_user_question_cards" not in source
+    assert "LEFT JOIN erc_mistake_bucket" not in source
