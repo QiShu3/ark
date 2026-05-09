@@ -39,6 +39,8 @@ describe('ERC home page', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '进入题库' })).toHaveAttribute('href', '/erc/library');
     expect(screen.getByRole('link', { name: '开始复习' })).toHaveAttribute('href', '/erc/review');
+    expect(screen.getByRole('link', { name: '开始复习' })).toHaveClass('bg-white/10', 'backdrop-blur-xl');
     expect(screen.getByRole('link', { name: '查看错题' })).toHaveAttribute('href', '/erc/mistakes');
+    expect(screen.getByRole('link', { name: '查看错题' })).toHaveClass('bg-white/10', 'backdrop-blur-xl');
   });
 });

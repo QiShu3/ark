@@ -40,10 +40,16 @@ export default function ERCHome() {
             <Link to="/erc/library" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950">
               进入题库
             </Link>
-            <Link to="/erc/review" className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/82">
+            <Link
+              to="/erc/review"
+              className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white/86 shadow-lg shadow-black/10 backdrop-blur-xl backdrop-saturate-150 transition hover:border-white/25 hover:bg-white/16 hover:text-white"
+            >
               开始复习
             </Link>
-            <Link to="/erc/mistakes" className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/82">
+            <Link
+              to="/erc/mistakes"
+              className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white/86 shadow-lg shadow-black/10 backdrop-blur-xl backdrop-saturate-150 transition hover:border-white/25 hover:bg-white/16 hover:text-white"
+            >
               查看错题
             </Link>
           </div>
