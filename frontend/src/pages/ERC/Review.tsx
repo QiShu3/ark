@@ -64,11 +64,14 @@ export default function ERCReview() {
 
         {item?.has_item && item.question ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-            <article className="space-y-5 border-r border-white/10 pr-0 lg:pr-6">
+            <article
+              aria-label="阅读原文"
+              className="space-y-7 rounded-2xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/20 backdrop-blur-2xl backdrop-saturate-125 lg:p-8"
+            >
               {item.paragraphs.map((paragraph) => (
-                <p key={paragraph.paragraph_no} className="text-base leading-8 text-white/76">
-                  <span className="mr-3 text-sm text-white/35">{paragraph.paragraph_no}</span>
-                  {paragraph.text}
+                <p key={paragraph.paragraph_no} className="grid grid-cols-[2rem_minmax(0,76ch)] gap-4 text-[1.02rem] leading-9 text-white/86">
+                  <span className="text-right text-sm leading-9 text-white/28">{paragraph.paragraph_no}</span>
+                  <span>{paragraph.text}</span>
                 </p>
               ))}
             </article>

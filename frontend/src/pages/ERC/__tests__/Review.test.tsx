@@ -38,4 +38,28 @@ describe('ERC review page', () => {
 
     expect(await screen.findByText('暂无到期复习')).toBeInTheDocument();
   });
+
+  it('renders due question context on a frosted reading surface', async () => {
+    fetchERCReviewNext.mockResolvedValue({
+      has_item: true,
+      next_due_at: null,
+      article: { article_id: 'kaoyan2_2025_text2', year: 2025, text_no: 2, title: '' },
+      paragraphs: [{ paragraph_no: 1, text: 'Context paragraph.' }],
+      question: {
+        question_id: 'kaoyan2_2025_text2_q26',
+        question_no: 26,
+        stem: 'Question 26?',
+        options: { A: 'A1', B: 'B1', C: 'C1', D: 'D1' },
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <Review />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Context paragraph.')).toBeInTheDocument();
+    expect(screen.getByLabelText('阅读原文')).toHaveClass('backdrop-blur-2xl');
+  });
 });

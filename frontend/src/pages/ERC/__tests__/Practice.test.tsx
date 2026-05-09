@@ -57,6 +57,7 @@ describe('ERC practice page', () => {
     );
 
     expect(await screen.findByText(/Question 21/)).toBeInTheDocument();
+    expect(screen.getByLabelText('阅读原文')).toHaveClass('backdrop-blur-2xl');
     await userEvent.click(screen.getByRole('radio', { name: 'A A1' }));
     await userEvent.click(screen.getByRole('button', { name: '提交整篇' }));
 
