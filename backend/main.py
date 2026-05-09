@@ -14,6 +14,7 @@ from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
 from routes.erc import init_erc
+from routes.erc import router as erc_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
 from routes.vocab import init_vocab
@@ -55,6 +56,7 @@ app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(arxiv_router)
 app.include_router(vocab_router)
+app.include_router(erc_router)
 register_mini_agent(app)
 
 
