@@ -50,6 +50,7 @@ DockerImages/
 
 # Local Codex artifacts
 .codex/
+.worktrees/
 .playwright-mcp/
 backend/workspace/
 docs/draw.io/
