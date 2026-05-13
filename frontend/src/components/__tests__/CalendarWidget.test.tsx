@@ -26,6 +26,6 @@ describe('CalendarWidget', () => {
 
     await user.click(await screen.findByRole('button', { name: '打开多周任务日历' }));
 
-    expect(await screen.findByRole('dialog', { name: '多周任务日历' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '多周安排日历' })).toBeInTheDocument();
   });
 });
