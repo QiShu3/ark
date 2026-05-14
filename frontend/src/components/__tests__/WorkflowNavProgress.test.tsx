@@ -87,6 +87,24 @@ describe('WorkflowNavProgress', () => {
     expect(screen.queryByTestId('workflow-nav-pulse')).not.toBeInTheDocument();
   });
 
+  it('shows paused task focus copy and hides pulse while task focus is paused', () => {
+    render(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          task_title: '撰写周报',
+          active_focus_work_type: 'task_focus',
+          focus_work_display_state: 'fullscreen',
+          is_paused: true,
+          remaining_seconds: 754,
+        })}
+      />,
+    );
+
+    expect(screen.getByText('已暂停')).toBeInTheDocument();
+    expect(screen.getByText('12:34')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflow-nav-pulse')).not.toBeInTheDocument();
+  });
+
   it('shows countup target hint without restoring total-phase progress', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-17T00:10:00Z'));

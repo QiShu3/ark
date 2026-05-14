@@ -88,4 +88,27 @@ describe('Navigation', () => {
     expect(screen.getByTestId('current-path')).toHaveTextContent('/vocab');
     expect(screen.queryByRole('dialog', { name: '多周安排日历' })).not.toBeInTheDocument();
   });
+
+  it('keeps navigation locked while fullscreen task focus is paused', async () => {
+    mockApiJson.mockResolvedValue({
+      state: 'focus',
+      current_phase_index: 0,
+      phases: [{ phase_type: 'focus', duration: 1500, task_id: 'task-1' }],
+      task_id: 'task-1',
+      task_title: '撰写周报',
+      pending_confirmation: false,
+      pending_task_selection: false,
+      remaining_seconds: 1200,
+      elapsed_seconds: 300,
+      active_focus_work_type: 'task_focus',
+      focus_work_display_state: 'fullscreen',
+      is_paused: true,
+    });
+
+    renderNavigation();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Apps' })).toBeDisabled();
+    expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
+  });
 });

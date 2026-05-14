@@ -1,5 +1,5 @@
 export type FocusTimerMode = 'countdown' | 'countup';
-export type FocusWorkType = 'vocab_today' | 'erc_review';
+export type FocusWorkType = 'vocab_today' | 'erc_review' | 'task_focus';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
 export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
 
@@ -33,6 +33,7 @@ export type WorkflowSnapshot = {
   focus_work_progress_snapshot?: Record<string, unknown> | null;
   next_focus_work_type?: FocusWorkType | null;
   has_minimized_work?: boolean;
+  is_paused?: boolean;
   record_focus?: boolean;
 };
 

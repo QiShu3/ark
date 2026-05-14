@@ -20,7 +20,7 @@ type PendingStart = {
 };
 
 function isFocusWorkType(value: unknown): value is FocusWorkType {
-  return value === 'vocab_today' || value === 'erc_review';
+  return value === 'vocab_today' || value === 'erc_review' || value === 'task_focus';
 }
 
 export default function FocusWorkProvider({ children }: FocusWorkProviderProps) {
@@ -106,6 +106,63 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     }
   }
 
+  async function pauseFocusWork() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/pause', { method: 'POST' });
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to pause focus work', err);
+      alert(err instanceof Error ? err.message : '暂停专注失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resumeFocusWork() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/resume', { method: 'POST' });
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to resume focus work', err);
+      alert(err instanceof Error ? err.message : '继续专注失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function completeTaskAndFinishCurrentFocus() {
+    if (!snapshot?.task_id || busy) return;
+    setBusy(true);
+    try {
+      await apiJson(`/todo/tasks/${snapshot.task_id}/complete`, { method: 'POST' });
+      const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/focus-work-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          focus_work_type: snapshot.active_focus_work_type,
+          result: 'completed',
+          progress_snapshot: {
+            taskId: snapshot.task_id,
+            completedTask: true,
+          },
+        }),
+      });
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to complete task and finish focus work', err);
+      alert(err instanceof Error ? err.message : '完成任务并结束专注失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function abandonCurrentWork() {
     if (!window.confirm('确定要放弃当前专注阶段吗？这只会结束当前阶段，不会结束整个工作流。')) return;
     void submitResult('abandoned');
@@ -161,8 +218,14 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           onAbandon={abandonCurrentWork}
         >
           {activeDefinition.render({
+            workflow: snapshot,
             recordFocus,
+            onPause: snapshot.active_focus_work_type === 'task_focus' ? () => void pauseFocusWork() : undefined,
+            onResume: snapshot.active_focus_work_type === 'task_focus' ? () => void resumeFocusWork() : undefined,
             onComplete: (progressSnapshot) => void submitResult('completed', progressSnapshot),
+            onCompleteTaskAndFinish: snapshot.active_focus_work_type === 'task_focus'
+              ? () => void completeTaskAndFinishCurrentFocus()
+              : undefined,
             onInterrupt: (progressSnapshot) => void submitResult('interrupted', progressSnapshot),
             onAbandon: (progressSnapshot) => void submitResult('abandoned', progressSnapshot),
           })}
