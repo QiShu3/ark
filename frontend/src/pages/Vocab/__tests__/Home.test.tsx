@@ -98,7 +98,12 @@ describe('Vocab home page', () => {
 
     expect(screen.getByRole('button', { name: 'CET6luan' })).toBeInTheDocument();
     expect(await screen.findByText('今日单词')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '继续今日单词' })).toHaveAttribute('href', '#/vocab/today');
+    const startFocusSpy = vi.fn();
+    window.addEventListener('ark:start-focus-work', startFocusSpy);
+    fireEvent.click(screen.getByRole('button', { name: '继续今日单词' }));
+    expect(startFocusSpy).toHaveBeenCalledTimes(1);
+    expect((startFocusSpy.mock.calls[0][0] as CustomEvent).detail).toEqual({ focusWorkType: 'vocab_today' });
+    window.removeEventListener('ark:start-focus-work', startFocusSpy);
     expect(screen.getByRole('button', { name: '调整今日单词' })).toBeInTheDocument();
     expect(screen.getByText('已完成 7 / 24')).toBeInTheDocument();
     expect(screen.getByText('17')).toBeInTheDocument();

@@ -1,4 +1,5 @@
 import type { Task } from './taskTypes';
+import type { FocusWorkType } from './workflowProgress';
 
 export type WorkflowPhaseType = 'focus' | 'break';
 export type WorkflowTimerMode = 'countdown' | 'countup';
@@ -8,6 +9,9 @@ export type WorkflowPresetPhase = {
   duration: number;
   timer_mode?: WorkflowTimerMode | null;
   task_id?: string | null;
+  focus_work_type?: FocusWorkType | null;
+  is_temporary?: boolean;
+  record_focus?: boolean;
 };
 
 export interface WorkflowPreset {
@@ -28,6 +32,7 @@ export type WorkflowFormPhase = {
   duration: number;
   timer_mode: WorkflowTimerMode;
   task_id: string | null;
+  focus_work_type: FocusWorkType | null;
 };
 
 export type WorkflowFormState = {
@@ -42,8 +47,8 @@ export function createDefaultWorkflowForm(isDefault: boolean): WorkflowFormState
     name: '',
     defaultFocusTimerMode: 'countdown',
     phases: [
-      { phase_type: 'focus', duration: 25 * 60, timer_mode: 'countdown', task_id: null },
-      { phase_type: 'break', duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+      { phase_type: 'focus', duration: 25 * 60, timer_mode: 'countdown', task_id: null, focus_work_type: null },
+      { phase_type: 'break', duration: 5 * 60, timer_mode: 'countdown', task_id: null, focus_work_type: null },
     ],
     isDefault,
   };
@@ -61,6 +66,7 @@ export function createWorkflowFormFromPreset(preset: WorkflowPreset): WorkflowFo
             ? (phase.timer_mode ?? preset.default_focus_timer_mode ?? 'countdown')
             : 'countdown',
           task_id: phase.phase_type === 'focus' ? (phase.task_id ?? null) : null,
+          focus_work_type: phase.phase_type === 'focus' ? (phase.focus_work_type ?? null) : null,
         }))
       : [
           {
@@ -68,8 +74,9 @@ export function createWorkflowFormFromPreset(preset: WorkflowPreset): WorkflowFo
             duration: preset.focus_duration,
             timer_mode: preset.default_focus_timer_mode ?? 'countdown',
             task_id: null,
+            focus_work_type: null,
           },
-          { phase_type: 'break', duration: preset.break_duration, timer_mode: 'countdown', task_id: null },
+          { phase_type: 'break', duration: preset.break_duration, timer_mode: 'countdown', task_id: null, focus_work_type: null },
         ],
     isDefault: preset.is_default,
   };

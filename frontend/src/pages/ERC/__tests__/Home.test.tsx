@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,8 +38,14 @@ describe('ERC home page', () => {
     expect(screen.getByText('今日待复习')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '进入题库' })).toHaveAttribute('href', '/erc/library');
-    expect(screen.getByRole('link', { name: '开始复习' })).toHaveAttribute('href', '/erc/review');
-    expect(screen.getByRole('link', { name: '开始复习' })).toHaveClass('bg-white/10', 'backdrop-blur-xl');
+    const startFocusSpy = vi.fn();
+    window.addEventListener('ark:start-focus-work', startFocusSpy);
+    const reviewButton = screen.getByRole('button', { name: '开始复习' });
+    fireEvent.click(reviewButton);
+    expect(startFocusSpy).toHaveBeenCalledTimes(1);
+    expect((startFocusSpy.mock.calls[0][0] as CustomEvent).detail).toEqual({ focusWorkType: 'erc_review' });
+    expect(reviewButton).toHaveClass('bg-white/10', 'backdrop-blur-xl');
+    window.removeEventListener('ark:start-focus-work', startFocusSpy);
     expect(screen.getByRole('link', { name: '查看错题' })).toHaveAttribute('href', '/erc/mistakes');
     expect(screen.getByRole('link', { name: '查看错题' })).toHaveClass('bg-white/10', 'backdrop-blur-xl');
   });

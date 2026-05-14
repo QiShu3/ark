@@ -291,6 +291,15 @@ async def init_todo(app: Any) -> None:
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS runtime_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;"
         )
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ NULL;")
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS active_focus_work_type VARCHAR(40) NULL;")
+        await conn.execute(
+            "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS focus_work_display_state VARCHAR(20) NULL;"
+        )
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS focus_work_result VARCHAR(20) NULL;")
+        await conn.execute(
+            "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS focus_work_progress_snapshot JSONB NULL;"
+        )
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS record_focus BOOLEAN NOT NULL DEFAULT TRUE;")
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS workflow_name VARCHAR(100) NOT NULL DEFAULT '默认工作流';"
         )
@@ -354,6 +363,40 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_focus_logs_task_start ON focus_logs(task_id, start_time DESC);"
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS focus_app_work_logs (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              workflow_id UUID NULL REFERENCES focus_workflows(id) ON DELETE SET NULL,
+              focus_work_type VARCHAR(40) NOT NULL,
+              result VARCHAR(20) NULL,
+              duration INTEGER NOT NULL DEFAULT 0,
+              start_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              end_at TIMESTAMPTZ NULL,
+              progress_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+              record_focus BOOLEAN NOT NULL DEFAULT TRUE,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review')),
+              CONSTRAINT chk_focus_app_work_logs_result CHECK (result IS NULL OR result IN ('completed', 'interrupted', 'abandoned')),
+              CONSTRAINT chk_focus_app_work_logs_duration CHECK (duration >= 0),
+              CONSTRAINT chk_focus_app_work_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time)
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_app_work_open_per_user
+            ON focus_app_work_logs(user_id)
+            WHERE end_at IS NULL AND record_focus = TRUE;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_focus_app_work_logs_user_start
+            ON focus_app_work_logs(user_id, start_time DESC);
+            """
         )
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_open_per_user ON focus_logs(user_id) WHERE end_at IS NULL;"

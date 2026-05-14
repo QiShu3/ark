@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
 import OverviewDetailModal, { type OverviewDetailTab } from '../../components/Vocab/OverviewDetailModal';
 import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
+import { START_FOCUS_WORK_EVENT } from '../../components/focus-work/focusWorkTypes';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { fetchVocabOverview, fetchVocabToday, updateVocabTodaySettings } from '../../lib/vocab/api';
 import type { VocabOverview, VocabTodaySummary } from '../../lib/vocab/types';
@@ -89,6 +90,10 @@ export default function VocabHome() {
     setOverviewDetailOpen(true);
   };
 
+  const startTodayFocusWork = () => {
+    window.dispatchEvent(new CustomEvent(START_FOCUS_WORK_EVENT, { detail: { focusWorkType: 'vocab_today' } }));
+  };
+
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
       <div className="mx-auto max-w-6xl">
@@ -160,12 +165,13 @@ export default function VocabHome() {
                         今日已完成
                       </button>
                     ) : (
-                      <a
-                        href="#/vocab/today"
+                      <button
+                        type="button"
+                        onClick={startTodayFocusWork}
                         className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
                       >
                         {summary.completed_count > 0 ? '继续今日单词' : '开始今日单词'}
-                      </a>
+                      </button>
                     )}
                     <button
                       type="button"

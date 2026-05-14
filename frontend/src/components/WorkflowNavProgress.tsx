@@ -20,6 +20,11 @@ function phaseStatusLabel(phaseType: 'focus' | 'break'): string {
   return phaseType === 'focus' ? '专注中' : '休息中';
 }
 
+const FOCUS_WORK_LABELS = {
+  vocab_today: '背单词',
+  erc_review: 'ERC 复习',
+} as const;
+
 function resolveFeedbackCopy(
   prevState: WorkflowSnapshot['state'],
   nextState: WorkflowSnapshot['state'],
@@ -42,6 +47,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const [isHovered, setIsHovered] = React.useState(false);
   const [feedbackText, setFeedbackText] = React.useState<string | null>(null);
   const previousPhaseRef = React.useRef<{ state: WorkflowSnapshot['state']; index: number | null } | null>(null);
+  const expiredPhaseReloadRef = React.useRef<string | null>(null);
   const timerMode = getWorkflowPhaseTimerMode(workflow);
   const isCountup = workflow.state === 'focus' && timerMode === 'countup';
 
@@ -142,6 +148,34 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   }, [workflow, liveRemaining, liveElapsed, isCountup]);
 
   React.useEffect(() => {
+    if (
+      workflow.state === 'normal'
+      || workflow.pending_confirmation
+      || workflow.pending_task_selection
+      || isCountup
+      || liveRemaining !== 0
+    ) {
+      return;
+    }
+    const expiredPhaseKey = [
+      workflow.state,
+      workflow.current_phase_index ?? 'none',
+      workflow.phase_started_at ?? 'unknown-start',
+    ].join(':');
+    if (expiredPhaseReloadRef.current === expiredPhaseKey) return;
+    expiredPhaseReloadRef.current = expiredPhaseKey;
+    window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+  }, [
+    isCountup,
+    liveRemaining,
+    workflow.current_phase_index,
+    workflow.pending_confirmation,
+    workflow.pending_task_selection,
+    workflow.phase_started_at,
+    workflow.state,
+  ]);
+
+  React.useEffect(() => {
     const nextPhase = {
       state: workflowForMetrics.state,
       index: workflowForMetrics.current_phase_index ?? null,
@@ -219,6 +253,15 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       : workflowForMetrics.pending_confirmation
         ? '等待继续'
         : phaseStatusLabel(phaseType);
+  const activeFocusWorkLabel = workflowForMetrics.active_focus_work_type
+    ? FOCUS_WORK_LABELS[workflowForMetrics.active_focus_work_type]
+    : null;
+  const nextFocusWorkLabel = workflowForMetrics.next_focus_work_type
+    ? FOCUS_WORK_LABELS[workflowForMetrics.next_focus_work_type]
+    : null;
+  const focusWorkHint = workflowForMetrics.state === 'break'
+    ? nextFocusWorkLabel
+    : activeFocusWorkLabel;
   const ariaText = workflowForMetrics.pending_confirmation
     ? '等待确认继续'
     : workflowForMetrics.pending_task_selection
@@ -261,6 +304,16 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
             </span>
           ) : null}
           {targetHint ? <span className="text-[10px] text-white/45 whitespace-nowrap">{targetHint}</span> : null}
+          {focusWorkHint ? (
+            <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-white/55 whitespace-nowrap">
+              {workflowForMetrics.state === 'break' ? `下个 ${focusWorkHint}` : focusWorkHint}
+            </span>
+          ) : null}
+          {workflowForMetrics.has_minimized_work ? (
+            <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-[10px] text-amber-100 whitespace-nowrap">
+              已挂起
+            </span>
+          ) : null}
         </div>
       </div>
 

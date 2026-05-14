@@ -62,6 +62,8 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
   const [completedBatchWordIds, setCompletedBatchWordIds] = useState<string[]>([]);
   const [completedSessionWordIds, setCompletedSessionWordIds] = useState<string[]>([]);
   const [batchReviewEntries, setBatchReviewEntries] = useState<Record<string, BatchReviewEntry>>({});
+  const [summaryLoaded, setSummaryLoaded] = useState(false);
+  const [summaryLoadedDeckId, setSummaryLoadedDeckId] = useState<string | null>(null);
   const [initialCompletedCount, setInitialCompletedCount] = useState(0);
   const [todayTotalCount, setTodayTotalCount] = useState(0);
   const [memorizedCount, setMemorizedCount] = useState(0);
@@ -86,6 +88,15 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
   const totalBatchCount = todayTotalCount > 0 ? Math.ceil(todayTotalCount / BATCH_REVIEW_SIZE) : 1;
   const batchProgressBase = isBatchReview && batchReviewCount > 0 ? Math.max(completedTodayCount - 1, 0) : completedTodayCount;
   const currentBatchNumber = totalBatchCount > 0 ? Math.min(Math.floor(batchProgressBase / BATCH_REVIEW_SIZE) + 1, totalBatchCount) : 1;
+  const ready = !!deckId
+    && summaryLoaded
+    && summaryLoadedDeckId === deckId
+    && learningQueue.hasLoaded
+    && learningQueue.loadedDeckId === deckId
+    && reviewQueue.hasLoaded
+    && reviewQueue.loadedDeckId === deckId
+    && studyQueue.hasLoaded
+    && studyQueue.loadedDeckId === deckId;
 
   useEffect(() => {
     if (!deckId) {
@@ -94,6 +105,8 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
       setCompletedSessionWordIds([]);
       setBatchReviewEntries({});
       setLastResult(null);
+      setSummaryLoaded(true);
+      setSummaryLoadedDeckId(null);
       setInitialCompletedCount(0);
       setTodayTotalCount(0);
       setMemorizedCount(0);
@@ -101,16 +114,22 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
     }
 
     let cancelled = false;
+    setSummaryLoaded(false);
+    setSummaryLoadedDeckId(null);
     void fetchVocabToday(deckId)
       .then((summary) => {
         if (cancelled) return;
         setInitialCompletedCount(summary.completed_count);
         setTodayTotalCount(summary.total_count);
         setMemorizedCount(summary.memorized_count);
+        setSummaryLoaded(true);
+        setSummaryLoadedDeckId(deckId);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : '今日单词概览加载失败');
+        setSummaryLoaded(true);
+        setSummaryLoadedDeckId(deckId);
       });
 
     return () => {
@@ -178,6 +197,7 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
     currentItem,
     currentMode,
     loading,
+    ready,
     error: error ?? learningQueue.error ?? reviewQueue.error ?? studyQueue.error,
     submitting,
     lastResult,

@@ -8,6 +8,10 @@ import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 
+function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
+  return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
+}
+
 /**
  * 顶部导航栏组件
  * 仅作占位，固定在顶部
@@ -22,6 +26,7 @@ const Navigation: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
+  const focusNavigationLocked = isFocusWorkNavigationLocked(workflowSnapshot);
 
   /**
    * 加载当前工作流快照（用于导航栏中间的紧凑进度条）。
@@ -92,12 +97,24 @@ const Navigation: React.FC = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (focusNavigationLocked) setShowCalendarModal(false);
+  }, [focusNavigationLocked]);
+
+  function navigateUnlessLocked(path: string) {
+    if (focusNavigationLocked) return;
+    navigate(path);
+  }
+
   return (
     <>
       <nav className="fixed top-0 left-0 w-full h-16 bg-black/50 backdrop-blur-md text-white flex items-center px-6 z-50 border-b border-white/10">
       <div 
-        className="text-xl font-bold cursor-pointer hover:text-blue-400 transition-colors"
-        onClick={() => navigate('/')}
+        className={`text-xl font-bold transition-colors ${
+          focusNavigationLocked ? 'cursor-not-allowed text-white/55' : 'cursor-pointer hover:text-blue-400'
+        }`}
+        aria-disabled={focusNavigationLocked}
+        onClick={() => navigateUnlessLocked('/')}
       >
         Ark Project
       </div>
@@ -107,32 +124,42 @@ const Navigation: React.FC = () => {
       <div className="ml-auto flex items-center gap-6">
         <div className="flex gap-4">
           <button 
-            className="hover:text-blue-400 transition-colors"
-            onClick={() => navigate('/')}
+            type="button"
+            disabled={focusNavigationLocked}
+            className="hover:text-blue-400 transition-colors disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:text-white/35"
+            onClick={() => navigateUnlessLocked('/')}
           >
             Home
           </button>
           <button 
-            className="hover:text-blue-400 transition-colors"
-            onClick={() => navigate('/apps')}
+            type="button"
+            disabled={focusNavigationLocked}
+            className="hover:text-blue-400 transition-colors disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:text-white/35"
+            onClick={() => navigateUnlessLocked('/apps')}
           >
             Apps
           </button>
-          <button className="hover:text-gray-300 cursor-not-allowed opacity-70">About</button>
+          <button type="button" disabled className="hover:text-gray-300 cursor-not-allowed opacity-70">About</button>
         </div>
 
         {/* Check-in Icon */}
         {user && checkInState && (
-          <div 
-            className="relative flex items-center justify-center text-gray-300 hover:text-white transition-colors cursor-pointer"
+          <button
+            type="button"
+            aria-label="打开导航栏日历"
+            disabled={focusNavigationLocked}
+            className="relative flex items-center justify-center text-gray-300 hover:text-white transition-colors disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:text-gray-500"
             title={checkInState.is_checked_in_today ? `已打卡 / 连续 ${checkInState.current_streak} 天` : "今日未打卡"}
-            onClick={() => setShowCalendarModal(true)}
+            onClick={() => {
+              if (focusNavigationLocked) return;
+              setShowCalendarModal(true);
+            }}
           >
             <Calendar size={28} />
             <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold mt-[6px]">
               {checkInState.current_streak}
             </span>
-          </div>
+          </button>
         )}
 
         {/* 用户头像区域 */}

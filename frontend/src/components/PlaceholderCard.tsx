@@ -959,6 +959,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             duration: 5 * 60,
             timer_mode: nextType === 'focus' ? s.defaultFocusTimerMode : 'countdown',
             task_id: null,
+            focus_work_type: null,
           },
         ],
       };
@@ -1026,6 +1027,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           duration: Math.round(phase.duration),
           timer_mode: phase.phase_type === 'focus' ? phase.timer_mode : undefined,
           task_id: phase.phase_type === 'focus' ? phase.task_id : undefined,
+          focus_work_type: phase.phase_type === 'focus' ? phase.focus_work_type : undefined,
         })),
         focus_duration: Math.round(focusDuration),
         break_duration: Math.round(breakDuration),

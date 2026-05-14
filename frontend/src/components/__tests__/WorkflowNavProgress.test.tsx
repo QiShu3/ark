@@ -221,4 +221,20 @@ describe('WorkflowNavProgress', () => {
     expect(chip).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByText('休息中')).toBeInTheDocument();
   });
+
+  it('requests a focus state reload when a countdown phase reaches zero', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-17T00:00:00Z'));
+    const reloadSpy = vi.fn();
+    window.addEventListener('ark:reload-focus', reloadSpy);
+
+    render(<WorkflowNavProgress workflow={makeWorkflow({ remaining_seconds: 1 })} />);
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('ark:reload-focus', reloadSpy);
+  });
 });

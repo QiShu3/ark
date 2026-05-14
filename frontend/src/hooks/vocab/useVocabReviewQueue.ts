@@ -9,16 +9,22 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
   const [items, setItems] = useState<VocabReviewItem[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadedDeckId, setLoadedDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
     if (!deckId) {
       setItems([]);
       setActiveIndex(0);
+      setHasLoaded(true);
+      setLoadedDeckId(null);
       return;
     }
 
     setLoading(true);
+    setHasLoaded(false);
+    setLoadedDeckId(null);
     try {
       const data =
         mode === 'study'
@@ -35,6 +41,8 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
       setActiveIndex(0);
     } finally {
       setLoading(false);
+      setHasLoaded(true);
+      setLoadedDeckId(deckId);
     }
   };
 
@@ -68,6 +76,8 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
     items,
     currentItem: items[activeIndex] ?? null,
     loading,
+    hasLoaded,
+    loadedDeckId,
     error,
     refresh,
     consumeCurrent,

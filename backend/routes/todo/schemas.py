@@ -15,6 +15,9 @@ AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break"]
 FocusTimerMode = Literal["countdown", "countup"]
+FocusWorkType = Literal["vocab_today", "erc_review"]
+FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
+FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
 
 
@@ -287,6 +290,9 @@ class FocusWorkflowPhase(BaseModel):
     duration: int = Field(ge=60, le=24 * 60 * 60)
     timer_mode: FocusTimerMode | None = None
     task_id: UUID | None = None
+    focus_work_type: FocusWorkType | None = None
+    is_temporary: bool = False
+    record_focus: bool = True
 
 
 class FocusWorkflowOut(BaseModel):
@@ -307,6 +313,13 @@ class FocusWorkflowOut(BaseModel):
     remaining_seconds: int | None = None
     runtime_task_id: UUID | None = None
     completed_workflow_name: str | None = None
+    active_focus_work_type: FocusWorkType | None = None
+    focus_work_display_state: FocusWorkDisplayState | None = None
+    focus_work_result: FocusWorkResult | None = None
+    focus_work_progress_snapshot: dict[str, object] | None = None
+    next_focus_work_type: FocusWorkType | None = None
+    has_minimized_work: bool = False
+    record_focus: bool = True
 
 
 class FocusWorkflowPresetCreateRequest(BaseModel):
@@ -342,3 +355,14 @@ class FocusWorkflowPresetOut(BaseModel):
 
 class FocusWorkflowSelectTaskRequest(BaseModel):
     task_id: UUID
+
+
+class FocusWorkflowStartAppWorkRequest(BaseModel):
+    focus_work_type: FocusWorkType
+    record_focus: bool = True
+
+
+class FocusWorkflowResultRequest(BaseModel):
+    focus_work_type: FocusWorkType
+    result: FocusWorkResult
+    progress_snapshot: dict[str, object] = Field(default_factory=dict)

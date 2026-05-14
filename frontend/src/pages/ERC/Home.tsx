@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { START_FOCUS_WORK_EVENT } from '../../components/focus-work/focusWorkTypes';
 import { fetchERCOverview } from '../../lib/erc/api';
 import type { ERCOverview } from '../../lib/erc/types';
 
@@ -26,6 +27,9 @@ export default function ERCHome() {
   }, []);
 
   const accuracy = overview ? Math.round(overview.accuracy * 100) : 0;
+  const startReviewFocusWork = () => {
+    window.dispatchEvent(new CustomEvent(START_FOCUS_WORK_EVENT, { detail: { focusWorkType: 'erc_review' } }));
+  };
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -40,12 +44,13 @@ export default function ERCHome() {
             <Link to="/erc/library" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950">
               进入题库
             </Link>
-            <Link
-              to="/erc/review"
+            <button
+              type="button"
+              onClick={startReviewFocusWork}
               className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white/86 shadow-lg shadow-black/10 backdrop-blur-xl backdrop-saturate-150 transition hover:border-white/25 hover:bg-white/16 hover:text-white"
             >
               开始复习
-            </Link>
+            </button>
             <Link
               to="/erc/mistakes"
               className="rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm text-white/86 shadow-lg shadow-black/10 backdrop-blur-xl backdrop-saturate-150 transition hover:border-white/25 hover:bg-white/16 hover:text-white"

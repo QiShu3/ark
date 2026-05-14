@@ -75,6 +75,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
         if (updated.phase_type === 'break') {
           updated.timer_mode = 'countdown';
           updated.task_id = null;
+          updated.focus_work_type = null;
         }
         return updated;
       });
@@ -318,7 +319,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                     )}
 
                     {phase.phase_type === 'focus' ? (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
                         <select
                           aria-label={`阶段 ${index + 1} 计时方式`}
                           value={phase.timer_mode}
@@ -338,6 +339,16 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                           {availableTasks.map((task) => (
                             <option key={task.id} value={task.id}>{task.title}</option>
                           ))}
+                        </select>
+                        <select
+                          aria-label={`阶段 ${index + 1} 绑定专注工作`}
+                          value={phase.focus_work_type ?? ''}
+                          onChange={(e) => updatePhase(index, { focus_work_type: (e.target.value || null) as WorkflowFormPhase['focus_work_type'] })}
+                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        >
+                          <option value="">不绑定页面专注工作</option>
+                          <option value="vocab_today">背单词：今日单词</option>
+                          <option value="erc_review">ERC：开始复习</option>
                         </select>
                       </div>
                     ) : (

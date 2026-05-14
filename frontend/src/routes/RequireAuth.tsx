@@ -4,6 +4,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import BeianFooter from '../components/BeianFooter';
 import { useAuthStore } from '../lib/auth';
 import Navigation from '../components/Navigation';
+import FocusWorkProvider from '../components/focus-work/FocusWorkProvider';
 
 export default function RequireAuth() {
   const token = useAuthStore((s) => s.token);
@@ -36,7 +37,9 @@ export default function RequireAuth() {
       <Navigation />
 
       {/* 主体内容区域 */}
-      <Outlet />
+      <FocusWorkProvider>
+        <Outlet />
+      </FocusWorkProvider>
 
       <BeianFooter />
     </div>
