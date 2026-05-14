@@ -291,6 +291,8 @@ async def init_todo(app: Any) -> None:
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS runtime_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;"
         )
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ NULL;")
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS is_paused BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ NULL;")
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS active_focus_work_type VARCHAR(40) NULL;")
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS focus_work_display_state VARCHAR(20) NULL;"
@@ -378,11 +380,19 @@ async def init_todo(app: Any) -> None:
               progress_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
               record_focus BOOLEAN NOT NULL DEFAULT TRUE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review')),
+              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'task_focus')),
               CONSTRAINT chk_focus_app_work_logs_result CHECK (result IS NULL OR result IN ('completed', 'interrupted', 'abandoned')),
               CONSTRAINT chk_focus_app_work_logs_duration CHECK (duration >= 0),
               CONSTRAINT chk_focus_app_work_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time)
             );
+            """
+        )
+        await conn.execute("ALTER TABLE focus_app_work_logs DROP CONSTRAINT IF EXISTS chk_focus_app_work_logs_type;")
+        await conn.execute(
+            """
+            ALTER TABLE focus_app_work_logs
+            ADD CONSTRAINT chk_focus_app_work_logs_type
+            CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'task_focus'));
             """
         )
         await conn.execute(

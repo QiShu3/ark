@@ -15,7 +15,7 @@ AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break"]
 FocusTimerMode = Literal["countdown", "countup"]
-FocusWorkType = Literal["vocab_today", "erc_review"]
+FocusWorkType = Literal["vocab_today", "erc_review", "task_focus"]
 FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
 FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
@@ -319,6 +319,7 @@ class FocusWorkflowOut(BaseModel):
     focus_work_progress_snapshot: dict[str, object] | None = None
     next_focus_work_type: FocusWorkType | None = None
     has_minimized_work: bool = False
+    is_paused: bool = False
     record_focus: bool = True
 
 
