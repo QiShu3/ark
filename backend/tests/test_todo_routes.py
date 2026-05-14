@@ -1724,6 +1724,13 @@ class _WorkflowConn:
             "pending_confirmation": True,
             "pending_task_selection": False,
             "runtime_task_id": None,
+            "active_focus_work_type": None,
+            "focus_work_display_state": None,
+            "focus_work_result": None,
+            "focus_work_progress_snapshot": None,
+            "is_paused": False,
+            "paused_at": None,
+            "record_focus": True,
         }
         self.inserted_focus_task_id: Any = None
         self.open_focus_log = {
@@ -1814,15 +1821,39 @@ class _WorkflowConn:
             self.workflow["pending_confirmation"] = False
             self.workflow["phase_started_at"] = datetime.now(UTC)
             self.workflow["pending_task_selection"] = bool(args[5])
+            if len(args) > 6:
+                self.workflow["active_focus_work_type"] = args[6]
+            if len(args) > 7:
+                self.workflow["focus_work_display_state"] = args[7]
+            if len(args) > 8:
+                self.workflow["focus_work_result"] = args[8]
+            if len(args) > 9:
+                self.workflow["focus_work_progress_snapshot"] = args[9]
+            if len(args) > 10:
+                self.workflow["record_focus"] = bool(args[10])
+            self.workflow["is_paused"] = False
+            self.workflow["paused_at"] = None
         if "SET pending_task_selection = TRUE" in sql:
             self.workflow["pending_task_selection"] = True
             self.workflow["runtime_task_id"] = None
             self.workflow["task_id"] = None
+            self.workflow["is_paused"] = False
+            self.workflow["paused_at"] = None
         if "SET runtime_task_id = $1" in sql:
             self.workflow["runtime_task_id"] = args[0]
             self.workflow["task_id"] = args[1]
             self.workflow["pending_task_selection"] = False
             self.workflow["phase_started_at"] = datetime.now(UTC)
+            self.workflow["is_paused"] = False
+            self.workflow["paused_at"] = None
+        if "SET pending_confirmation = TRUE" in sql:
+            self.workflow["pending_confirmation"] = True
+        if "SET is_paused = TRUE" in sql:
+            self.workflow["is_paused"] = True
+            self.workflow["paused_at"] = datetime.now(UTC)
+        if "SET phase_started_at = phase_started_at + (NOW() - $2::timestamptz)" in sql:
+            self.workflow["is_paused"] = False
+            self.workflow["paused_at"] = None
         return "UPDATE 1"
 
     def transaction(self):
@@ -2027,6 +2058,57 @@ def test_select_focus_workflow_task_starts_pending_phase(monkeypatch) -> None:
     assert data["task_id"] == str(next_task_id)
     assert data["pending_task_selection"] is False
     assert conn.inserted_focus_task_id == next_task_id
+
+
+def test_pause_focus_workflow_marks_task_focus_as_paused(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "pending_task_selection": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "task_focus",
+            "focus_work_display_state": "fullscreen",
+            "is_paused": False,
+            "paused_at": None,
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/focus/workflow/pause")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_paused"] is True
+    assert data["active_focus_work_type"] == "task_focus"
+
+
+def test_resume_focus_workflow_clears_paused_state(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "pending_task_selection": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "task_focus",
+            "focus_work_display_state": "fullscreen",
+            "is_paused": True,
+            "paused_at": datetime.now(UTC),
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/focus/workflow/resume")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_paused"] is False
 
 
 class _WorkflowPresetConn:

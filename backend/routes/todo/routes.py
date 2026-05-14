@@ -1671,7 +1671,7 @@ async def create_focus_workflow(
                        focus_duration, break_duration, current_phase, phase_started_at,
                        phase_planned_duration, pending_confirmation, pending_task_selection,
                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, record_focus
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
                 FROM focus_workflows
                 WHERE user_id = $1 AND status = 'active'
                 """,
@@ -1757,15 +1757,15 @@ async def start_focus_workflow_app_work(
                             focus_duration, break_duration, current_phase, phase_started_at,
                             phase_planned_duration, pending_confirmation, pending_task_selection, status,
                             active_focus_work_type, focus_work_display_state, focus_work_result,
-                            focus_work_progress_snapshot, record_focus
+                            focus_work_progress_snapshot, is_paused, paused_at, record_focus
                         )
                         VALUES ($1, NULL, NULL, $2, $3::jsonb, 0, $4, $5, 'focus', NOW(), $4, FALSE, FALSE,
-                                'active', $6, 'fullscreen', NULL, NULL, $7)
+                                'active', $6, 'fullscreen', NULL, NULL, FALSE, NULL, $7)
                         RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                                   focus_duration, break_duration, current_phase, phase_started_at,
                                   phase_planned_duration, pending_confirmation, pending_task_selection,
                                   active_focus_work_type, focus_work_display_state, focus_work_result,
-                                  focus_work_progress_snapshot, record_focus
+                                  focus_work_progress_snapshot, is_paused, paused_at, record_focus
                         """,
                         int(user.id),
                         "临时专注工作",
@@ -1838,6 +1838,14 @@ async def submit_focus_work_result(
             if str(row["current_phase"]) != "focus":
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
             active_focus_work_type = row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
+            if (
+                active_focus_work_type is None
+                and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None
+                and (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) is not None
+                and not bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False)
+                and not bool(row["pending_confirmation"])
+            ):
+                active_focus_work_type = "task_focus"
             if active_focus_work_type != body.focus_work_type:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="专注工作类型不匹配")
 
@@ -1902,7 +1910,7 @@ async def skip_focus_workflow_phase(
                        focus_duration, break_duration, current_phase, phase_started_at,
                        phase_planned_duration, pending_confirmation, pending_task_selection,
                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, record_focus
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
                 FROM focus_workflows
                 WHERE user_id = $1 AND status = 'active'
                 """,
@@ -1941,7 +1949,7 @@ async def skip_focus_workflow_phase(
                        focus_duration, break_duration, current_phase, phase_started_at,
                        phase_planned_duration, pending_confirmation, pending_task_selection,
                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, record_focus
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
                 FROM focus_workflows
                 WHERE id = $1
                 """,
@@ -1970,6 +1978,121 @@ async def confirm_focus_workflow_transition(
             if not bool(row["pending_confirmation"]):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段未结束，无需确认")
             return await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+
+
+@router.post("/focus/workflow/pause", response_model=FocusWorkflowOut)
+async def pause_focus_workflow(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _sync_active_focus_workflow(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if str(row["current_phase"]) != "focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
+            if bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段需要先选择任务")
+            if bool(row["pending_confirmation"]):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段已结束，请确认流转")
+            if bool(row.get("is_paused", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注已暂停")
+            active_focus_work_type = row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
+            if (
+                active_focus_work_type is None
+                and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None
+                and (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) is not None
+            ):
+                active_focus_work_type = "task_focus"
+            if active_focus_work_type != "task_focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注不支持暂停")
+            await conn.execute(
+                """
+                UPDATE focus_workflows
+                SET is_paused = TRUE, paused_at = NOW(), updated_at = NOW()
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            updated_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection,
+                       active_focus_work_type, focus_work_display_state, focus_work_result,
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                FROM focus_workflows
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            task_row = await conn.fetchrow(
+                "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
+                updated_row["task_id"],
+                int(user.id),
+            )
+    return _row_to_focus_workflow(updated_row, task_title=str(task_row["title"]) if task_row else None)
+
+
+@router.post("/focus/workflow/resume", response_model=FocusWorkflowOut)
+async def resume_focus_workflow(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _sync_active_focus_workflow(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if str(row["current_phase"]) != "focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
+            if not bool(row.get("is_paused", False) if hasattr(row, "get") else False):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注未暂停")
+            active_focus_work_type = row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
+            if (
+                active_focus_work_type is None
+                and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None
+                and (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) is not None
+            ):
+                active_focus_work_type = "task_focus"
+            if active_focus_work_type != "task_focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注不支持恢复")
+            paused_at = row.get("paused_at") if hasattr(row, "get") else row["paused_at"]
+            if paused_at is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注缺少暂停时间")
+            await conn.execute(
+                """
+                UPDATE focus_workflows
+                SET phase_started_at = phase_started_at + (NOW() - $2::timestamptz),
+                    is_paused = FALSE,
+                    paused_at = NULL,
+                    updated_at = NOW()
+                WHERE id = $1
+                """,
+                row["id"],
+                paused_at,
+            )
+            updated_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                       focus_duration, break_duration, current_phase, phase_started_at,
+                       phase_planned_duration, pending_confirmation, pending_task_selection,
+                       active_focus_work_type, focus_work_display_state, focus_work_result,
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                FROM focus_workflows
+                WHERE id = $1
+                """,
+                row["id"],
+            )
+            task_row = await conn.fetchrow(
+                "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
+                updated_row["task_id"],
+                int(user.id),
+            )
+    return _row_to_focus_workflow(updated_row, task_title=str(task_row["title"]) if task_row else None)
 
 
 @router.post("/focus/workflow/select-task", response_model=FocusWorkflowOut)
@@ -2019,7 +2142,12 @@ async def select_focus_workflow_task(
                 task_id=task_row["id"],
                 runtime_task_id=task_row["id"],
                 pending_task_selection=False,
+                active_focus_work_type="task_focus",
+                focus_work_display_state="fullscreen",
+                focus_work_result=None,
+                focus_work_progress_snapshot=None,
             )
+            await _start_focus_app_work_log(conn, int(user.id), row["id"], "task_focus", True)
             await _start_focus_log_for_task(conn, int(user.id), task_row["id"])
     return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
 

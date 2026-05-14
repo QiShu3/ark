@@ -173,3 +173,77 @@ def test_row_to_focus_workflow_reports_next_same_focus_work_type_for_minimize():
     assert out.state == "break"
     assert out.has_minimized_work is True
     assert out.next_focus_work_type == "vocab_today"
+
+
+def test_row_to_focus_workflow_marks_task_bound_focus_phase_as_task_focus():
+    row = Row(
+        id="00000000-0000-0000-0000-000000000002",
+        user_id=1,
+        task_id="00000000-0000-0000-0000-000000000101",
+        runtime_task_id="00000000-0000-0000-0000-000000000101",
+        workflow_name="Task Focus",
+        phases=[
+            {
+                "phase_type": "focus",
+                "duration": 1500,
+                "timer_mode": "countdown",
+                "task_id": "00000000-0000-0000-0000-000000000101",
+            }
+        ],
+        current_phase_index=0,
+        focus_duration=1500,
+        break_duration=300,
+        current_phase="focus",
+        phase_started_at=datetime.now(UTC),
+        phase_planned_duration=1500,
+        pending_confirmation=False,
+        pending_task_selection=False,
+        active_focus_work_type=None,
+        focus_work_display_state=None,
+        focus_work_result=None,
+        focus_work_progress_snapshot=None,
+        is_paused=False,
+        record_focus=True,
+    )
+
+    out = _row_to_focus_workflow(row, task_title="撰写周报")
+
+    assert out.active_focus_work_type == "task_focus"
+    assert out.focus_work_display_state == "fullscreen"
+
+
+def test_row_to_focus_workflow_exposes_paused_task_focus():
+    row = Row(
+        id="00000000-0000-0000-0000-000000000003",
+        user_id=1,
+        task_id="00000000-0000-0000-0000-000000000102",
+        runtime_task_id="00000000-0000-0000-0000-000000000102",
+        workflow_name="Task Focus",
+        phases=[
+            {
+                "phase_type": "focus",
+                "duration": 1500,
+                "timer_mode": "countdown",
+                "task_id": "00000000-0000-0000-0000-000000000102",
+            }
+        ],
+        current_phase_index=0,
+        focus_duration=1500,
+        break_duration=300,
+        current_phase="focus",
+        phase_started_at=datetime.now(UTC),
+        phase_planned_duration=1500,
+        pending_confirmation=False,
+        pending_task_selection=False,
+        active_focus_work_type="task_focus",
+        focus_work_display_state="fullscreen",
+        focus_work_result=None,
+        focus_work_progress_snapshot=None,
+        is_paused=True,
+        record_focus=True,
+    )
+
+    out = _row_to_focus_workflow(row, task_title="撰写周报")
+
+    assert out.active_focus_work_type == "task_focus"
+    assert out.is_paused is True

@@ -889,13 +889,15 @@ def _workflow_remaining_seconds(
     phase_planned_duration: int | None,
     *,
     pending_confirmation: bool,
+    paused_at: datetime | None = None,
 ) -> int | None:
     """计算当前阶段剩余秒数。"""
     if phase_started_at is None or phase_planned_duration is None:
         return None
     if pending_confirmation:
         return 0
-    elapsed = int((datetime.now(UTC) - phase_started_at).total_seconds())
+    now_point = paused_at or datetime.now(UTC)
+    elapsed = int((now_point - phase_started_at).total_seconds())
     left = int(phase_planned_duration) - elapsed
     return left if left > 0 else 0
 
@@ -935,7 +937,7 @@ def _normalize_timer_mode(value: Any, default: FocusTimerMode = "countdown") -> 
 
 def _normalize_focus_work_type(value: Any) -> FocusWorkType | None:
     text = str(value or "").strip()
-    if text in {"vocab_today", "erc_review"}:
+    if text in {"vocab_today", "erc_review", "task_focus"}:
         return text  # type: ignore[return-value]
     return None
 
@@ -987,11 +989,35 @@ def _next_focus_phase_work_type(phases: list[FocusWorkflowPhase], current_phase_
     return next_phase.focus_work_type
 
 
-def _phase_elapsed_seconds(phase_started_at: datetime | None) -> int | None:
+def _phase_elapsed_seconds(phase_started_at: datetime | None, *, paused_at: datetime | None = None) -> int | None:
     if phase_started_at is None:
         return None
-    elapsed = int((datetime.now(UTC) - phase_started_at).total_seconds())
+    now_point = paused_at or datetime.now(UTC)
+    elapsed = int((now_point - phase_started_at).total_seconds())
     return elapsed if elapsed > 0 else 0
+
+
+def _should_use_task_focus_runtime(
+    *,
+    state: str,
+    current_phase: FocusWorkflowPhase | None,
+    pending_confirmation: bool,
+    pending_task_selection: bool,
+    task_id: UUID | None,
+    runtime_task_id: UUID | None,
+    active_focus_work_type: FocusWorkType | None,
+) -> bool:
+    if state != "focus":
+        return False
+    if pending_confirmation or pending_task_selection:
+        return False
+    if current_phase is None or current_phase.phase_type != "focus":
+        return False
+    if current_phase.focus_work_type is not None:
+        return False
+    if active_focus_work_type is not None and active_focus_work_type != "task_focus":
+        return False
+    return task_id is not None or runtime_task_id is not None
 
 
 def _to_jsonb_param(value: Any) -> str:
@@ -1212,19 +1238,18 @@ def _row_to_focus_workflow(
     current_phase_index_raw = row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"]
     current_phase_index = _safe_int(current_phase_index_raw, 0)
     current_phase = _phase_at_index(phases, current_phase_index)
-    elapsed_seconds = (
-        _phase_elapsed_seconds(started)
-        if not bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False)
-        else None
-    )
+    pending_task_selection = bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False)
+    paused_at = _record_get(row, "paused_at")
+    is_paused = bool(_record_get(row, "is_paused", False))
+    elapsed_seconds = _phase_elapsed_seconds(started, paused_at=paused_at) if not pending_task_selection else None
     current_phase_timer_mode = current_phase.timer_mode if current_phase is not None else None
     workflow_name = (
         str(row.get("workflow_name", "默认工作流"))
         if hasattr(row, "get")
         else str(row["workflow_name"] or "默认工作流")
     )
-    pending_task_selection = bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False)
     runtime_task_id = _record_get(row, "runtime_task_id")
+    task_id = _record_get(row, "task_id")
     active_focus_work_type = _normalize_focus_work_type(_record_get(row, "active_focus_work_type"))
     focus_work_display_state = _record_get(row, "focus_work_display_state")
     if focus_work_display_state not in {"fullscreen", "minimized", "closed"}:
@@ -1235,6 +1260,18 @@ def _row_to_focus_workflow(
     focus_work_progress_snapshot = _record_get(row, "focus_work_progress_snapshot")
     if not isinstance(focus_work_progress_snapshot, dict):
         focus_work_progress_snapshot = None
+    if _should_use_task_focus_runtime(
+        state=str(row["current_phase"]),
+        current_phase=current_phase,
+        pending_confirmation=pending,
+        pending_task_selection=pending_task_selection,
+        task_id=task_id,
+        runtime_task_id=runtime_task_id,
+        active_focus_work_type=active_focus_work_type,
+    ):
+        active_focus_work_type = "task_focus"
+        if focus_work_display_state is None:
+            focus_work_display_state = "fullscreen"
     next_focus_work_type = _next_focus_phase_work_type(phases, current_phase_index)
     has_minimized_work = focus_work_display_state == "minimized" and active_focus_work_type is not None
     return FocusWorkflowOut(
@@ -1242,7 +1279,7 @@ def _row_to_focus_workflow(
         workflow_name=workflow_name,
         current_phase_index=current_phase_index,
         phases=phases,
-        task_id=row["task_id"],
+        task_id=task_id,
         task_title=task_title,
         focus_duration=_safe_int(row["focus_duration"], 0),
         break_duration=_safe_int(row["break_duration"], 0),
@@ -1256,6 +1293,7 @@ def _row_to_focus_workflow(
             started,
             planned,
             pending_confirmation=pending,
+            paused_at=paused_at if is_paused else None,
         )
         if current_phase_timer_mode != "countup"
         else None,
@@ -1267,6 +1305,7 @@ def _row_to_focus_workflow(
         focus_work_progress_snapshot=focus_work_progress_snapshot,
         next_focus_work_type=next_focus_work_type,
         has_minimized_work=has_minimized_work,
+        is_paused=is_paused,
         record_focus=bool(_record_get(row, "record_focus", True)),
     )
 
@@ -1475,6 +1514,8 @@ async def _set_workflow_waiting_for_task(
             phase_planned_duration = $3,
             pending_confirmation = FALSE,
             pending_task_selection = TRUE,
+            is_paused = FALSE,
+            paused_at = NULL,
             active_focus_work_type = NULL,
             focus_work_display_state = NULL,
             focus_work_result = NULL,
@@ -1493,7 +1534,7 @@ async def _set_workflow_waiting_for_task(
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus
         FROM focus_workflows
         WHERE id = $1
         """,
@@ -1527,6 +1568,8 @@ async def _set_workflow_current_phase(
             phase_planned_duration = $5,
             pending_confirmation = FALSE,
             pending_task_selection = $6,
+            is_paused = FALSE,
+            paused_at = NULL,
             active_focus_work_type = $7,
             focus_work_display_state = $8,
             focus_work_result = $9,
@@ -1554,7 +1597,7 @@ async def _set_workflow_current_phase(
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus
         FROM focus_workflows
         WHERE id = $1
         """,
@@ -1661,9 +1704,14 @@ async def _advance_focus_workflow_to_next_phase(
             phase_index=idx,
             phase=phase,
             task_id=task_row["id"],
-            runtime_task_id=None,
+            runtime_task_id=task_row["id"],
             pending_task_selection=False,
+            active_focus_work_type="task_focus",
+            focus_work_display_state="fullscreen",
+            focus_work_result=None,
+            focus_work_progress_snapshot=None,
         )
+        await _start_focus_app_work_log(conn, user_id, workflow_id, "task_focus", True)
         await _start_focus_log_for_task(conn, user_id, task_row["id"])
         return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
     return await _complete_focus_workflow(conn, workflow_id, workflow_name)
@@ -1677,7 +1725,7 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus
         FROM focus_workflows
         WHERE user_id = $1 AND status = 'active'
         """,
@@ -1685,6 +1733,8 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
     )
     if row is None:
         return None
+    if bool(_record_get(row, "is_paused", False)):
+        return row
     if bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
         return row
     phases = _normalize_workflow_phases(
@@ -1718,7 +1768,7 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
                        focus_duration, break_duration, current_phase, phase_started_at,
                        phase_planned_duration, pending_confirmation, pending_task_selection,
                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, record_focus
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
                 FROM focus_workflows
                 WHERE user_id = $1 AND status = 'active'
                 """,
@@ -1749,7 +1799,7 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
                    focus_duration, break_duration, current_phase, phase_started_at,
                    phase_planned_duration, pending_confirmation, pending_task_selection,
                    active_focus_work_type, focus_work_display_state, focus_work_result,
-                   focus_work_progress_snapshot, record_focus
+                   focus_work_progress_snapshot, is_paused, paused_at, record_focus
             FROM focus_workflows
             WHERE user_id = $1 AND status = 'active'
             """,
@@ -1771,7 +1821,7 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
                    focus_duration, break_duration, current_phase, phase_started_at,
                    phase_planned_duration, pending_confirmation, pending_task_selection,
                    active_focus_work_type, focus_work_display_state, focus_work_result,
-                   focus_work_progress_snapshot, record_focus
+                   focus_work_progress_snapshot, is_paused, paused_at, record_focus
             FROM focus_workflows
             WHERE user_id = $1 AND status = 'active'
             """,
@@ -1797,7 +1847,7 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus
         FROM focus_workflows
         WHERE id = $1
         """,
@@ -1889,6 +1939,8 @@ async def _create_workflow_with_focus_phase(
     """创建活动工作流并进入 focus 阶段。"""
     first_phase = phases[0]
     first_focus_work_type = _phase_focus_work_type_value(first_phase)
+    if first_focus_work_type is None and _phase_is_focus(first_phase) and task_id is not None:
+        first_focus_work_type = "task_focus"
     first_record_focus = bool(first_phase.get("record_focus", True))
     first_focus_work_display_state = "fullscreen" if first_focus_work_type is not None else None
     try:
@@ -1899,10 +1951,10 @@ async def _create_workflow_with_focus_phase(
                 focus_duration, break_duration, current_phase, phase_started_at,
                 phase_planned_duration, pending_confirmation, pending_task_selection, status,
                 active_focus_work_type, focus_work_display_state, focus_work_result,
-                focus_work_progress_snapshot, record_focus
+                focus_work_progress_snapshot, is_paused, paused_at, record_focus
             )
             VALUES ($1, $2, $3, $4, $5::jsonb, 0, $6, $7, $8, NOW(), $9, FALSE, FALSE, 'active',
-                    $10, $11, NULL, NULL, $12)
+                    $10, $11, NULL, NULL, FALSE, NULL, $12)
             RETURNING id
             """,
             int(user_id),
