@@ -7,19 +7,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Home from '../Home';
 
 const {
+  apiJson,
   fetchVocabOverview,
   fetchVocabOverviewCompletedDecks,
   fetchVocabOverviewCurrentWords,
   fetchVocabOverviewMasteredWords,
   fetchVocabToday,
+  fetchVocabAppTaskStatus,
+  initializeVocabAppTask,
   updateVocabTodaySettings,
 } = vi.hoisted(() => ({
+  apiJson: vi.fn(),
   fetchVocabOverview: vi.fn(),
   fetchVocabOverviewCompletedDecks: vi.fn(),
   fetchVocabOverviewCurrentWords: vi.fn(),
   fetchVocabOverviewMasteredWords: vi.fn(),
   fetchVocabToday: vi.fn(),
+  fetchVocabAppTaskStatus: vi.fn(),
+  initializeVocabAppTask: vi.fn(),
   updateVocabTodaySettings: vi.fn(),
+}));
+
+vi.mock('../../../lib/api', () => ({
+  apiJson,
 }));
 
 vi.mock('../../../hooks/vocab/useVocabDeck', () => ({
@@ -45,6 +55,8 @@ vi.mock('../../../lib/vocab/api', () => ({
   fetchVocabOverviewCurrentWords,
   fetchVocabOverviewMasteredWords,
   fetchVocabToday,
+  fetchVocabAppTaskStatus,
+  initializeVocabAppTask,
   updateVocabTodaySettings,
 }));
 
@@ -55,7 +67,19 @@ describe('Vocab home page', () => {
     fetchVocabOverviewCurrentWords.mockReset();
     fetchVocabOverviewMasteredWords.mockReset();
     fetchVocabToday.mockReset();
+    fetchVocabAppTaskStatus.mockReset();
+    initializeVocabAppTask.mockReset();
     updateVocabTodaySettings.mockReset();
+    apiJson.mockReset();
+    apiJson.mockResolvedValue({ id: 'log-1' });
+    fetchVocabAppTaskStatus.mockResolvedValue({
+      state: 'ready',
+      task_id: 'task-vocab',
+      config_id: 'config-vocab',
+      completion_state: null,
+      blocked_reason: null,
+      config: {},
+    });
   });
 
   it('renders a today-focused hero card and keeps deck switching collapsed by default', async () => {
@@ -98,12 +122,14 @@ describe('Vocab home page', () => {
 
     expect(screen.getByRole('button', { name: 'CET6luan' })).toBeInTheDocument();
     expect(await screen.findByText('今日单词')).toBeInTheDocument();
-    const startFocusSpy = vi.fn();
-    window.addEventListener('ark:start-focus-work', startFocusSpy);
+    const reloadFocusSpy = vi.fn();
+    window.addEventListener('ark:reload-focus', reloadFocusSpy);
     fireEvent.click(screen.getByRole('button', { name: '继续今日单词' }));
-    expect(startFocusSpy).toHaveBeenCalledTimes(1);
-    expect((startFocusSpy.mock.calls[0][0] as CustomEvent).detail).toEqual({ focusWorkType: 'vocab_today' });
-    window.removeEventListener('ark:start-focus-work', startFocusSpy);
+    await waitFor(() => {
+      expect(apiJson).toHaveBeenCalledWith('/todo/tasks/task-vocab/focus/start', { method: 'POST' });
+    });
+    expect(reloadFocusSpy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('ark:reload-focus', reloadFocusSpy);
     expect(screen.getByRole('button', { name: '调整今日单词' })).toBeInTheDocument();
     expect(screen.getByText('已完成 7 / 24')).toBeInTheDocument();
     expect(screen.getByText('17')).toBeInTheDocument();
@@ -121,6 +147,109 @@ describe('Vocab home page', () => {
     expect(screen.getAllByText('已掌握')).toHaveLength(2);
     expect(screen.getByText('3600')).toBeInTheDocument();
     expect(screen.getByText('快捷入口')).toBeInTheDocument();
+  });
+
+  it('shows initialize button before vocab app task is initialized', async () => {
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 2,
+      total_deck_count: 6,
+      mastered_word_count: 1240,
+      current_deck: {
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 3600,
+        learning_word_count: 2100,
+        unstarted_word_count: 1808,
+      },
+    });
+    fetchVocabToday.mockResolvedValue({
+      learning_count: 7,
+      new_count: 12,
+      review_count: 5,
+      mistake_count: 2,
+      total_count: 24,
+      pending_count: 17,
+      completed_count: 7,
+      daily_target_count: 24,
+      memorized_count: 120,
+    });
+    fetchVocabAppTaskStatus.mockResolvedValue({
+      state: 'uninitialized',
+      task_id: null,
+      config_id: null,
+      completion_state: null,
+      blocked_reason: null,
+      config: {},
+    });
+
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: '初始化今日单词' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '开始今日单词' })).not.toBeInTheDocument();
+  });
+
+  it('initializes vocab app task from active deck', async () => {
+    const user = userEvent.setup();
+    fetchVocabOverview.mockResolvedValue({
+      completed_deck_count: 2,
+      total_deck_count: 6,
+      mastered_word_count: 1240,
+      current_deck: {
+        deck_id: 'cet6',
+        deck_name: 'CET6',
+        total_word_count: 7508,
+        mastered_word_count: 3600,
+        learning_word_count: 2100,
+        unstarted_word_count: 1808,
+      },
+    });
+    fetchVocabToday.mockResolvedValue({
+      learning_count: 7,
+      new_count: 12,
+      review_count: 5,
+      mistake_count: 2,
+      total_count: 24,
+      pending_count: 17,
+      completed_count: 7,
+      daily_target_count: 24,
+      memorized_count: 120,
+    });
+    fetchVocabAppTaskStatus.mockResolvedValue({
+      state: 'uninitialized',
+      task_id: null,
+      config_id: null,
+      completion_state: null,
+      blocked_reason: null,
+      config: {},
+    });
+    initializeVocabAppTask.mockResolvedValue({
+      state: 'ready',
+      task_id: 'task-vocab',
+      config_id: 'config-vocab',
+      completion_state: null,
+      blocked_reason: null,
+      config: { deck_id: 'deck-1', daily_target_count: 24 },
+    });
+
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '初始化今日单词' }));
+
+    expect(initializeVocabAppTask).toHaveBeenCalledWith({
+      deck_id: 'deck-1',
+      daily_target_count: 24,
+      default_focus_duration: 1500,
+      add_to_today_plan: true,
+    });
   });
 
   it('opens the overview detail dialog and loads current deck words', async () => {

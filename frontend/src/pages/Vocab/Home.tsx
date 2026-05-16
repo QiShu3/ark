@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
 import OverviewDetailModal, { type OverviewDetailTab } from '../../components/Vocab/OverviewDetailModal';
 import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
-import { START_FOCUS_WORK_EVENT } from '../../components/focus-work/focusWorkTypes';
+import type { AppTaskStatus } from '../../components/taskTypes';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
-import { fetchVocabOverview, fetchVocabToday, updateVocabTodaySettings } from '../../lib/vocab/api';
+import { apiJson } from '../../lib/api';
+import { fetchVocabAppTaskStatus, fetchVocabOverview, fetchVocabToday, initializeVocabAppTask, updateVocabTodaySettings } from '../../lib/vocab/api';
 import type { VocabOverview, VocabTodaySummary } from '../../lib/vocab/types';
 
 export default function VocabHome() {
@@ -25,6 +26,9 @@ export default function VocabHome() {
   const [summary, setSummary] = useState<VocabTodaySummary | null>(null);
   const [overview, setOverview] = useState<VocabOverview | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [appTaskStatus, setAppTaskStatus] = useState<AppTaskStatus | null>(null);
+  const [appTaskBusy, setAppTaskBusy] = useState(false);
+  const [appTaskError, setAppTaskError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [overviewDetailOpen, setOverviewDetailOpen] = useState(false);
@@ -59,6 +63,23 @@ export default function VocabHome() {
     };
   }, [activeDeck, activeDeckVersion]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchVocabAppTaskStatus()
+      .then((payload) => {
+        if (cancelled) return;
+        setAppTaskStatus(payload);
+        setAppTaskError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setAppTaskError(err instanceof Error ? err.message : '应用任务状态加载失败');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSaveSettings = async (totalTargetCount: number) => {
     if (!activeDeck) return;
     setSettingsSaving(true);
@@ -90,8 +111,37 @@ export default function VocabHome() {
     setOverviewDetailOpen(true);
   };
 
-  const startTodayFocusWork = () => {
-    window.dispatchEvent(new CustomEvent(START_FOCUS_WORK_EVENT, { detail: { focusWorkType: 'vocab_today' } }));
+  const initializeTodayWords = async () => {
+    if (!activeDeck) return;
+    setAppTaskBusy(true);
+    try {
+      const payload = await initializeVocabAppTask({
+        deck_id: activeDeck.id,
+        daily_target_count: summary?.daily_target_count || 20,
+        default_focus_duration: 1500,
+        add_to_today_plan: true,
+      });
+      setAppTaskStatus(payload);
+      setAppTaskError(null);
+    } catch (err) {
+      setAppTaskError(err instanceof Error ? err.message : '初始化今日单词失败');
+    } finally {
+      setAppTaskBusy(false);
+    }
+  };
+
+  const startTodayFocusWork = async () => {
+    if (!appTaskStatus?.task_id) return;
+    setAppTaskBusy(true);
+    try {
+      await apiJson(`/todo/tasks/${appTaskStatus.task_id}/focus/start`, { method: 'POST' });
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      setAppTaskError(null);
+    } catch (err) {
+      setAppTaskError(err instanceof Error ? err.message : '开始今日单词失败');
+    } finally {
+      setAppTaskBusy(false);
+    }
   };
 
   return (
@@ -155,8 +205,19 @@ export default function VocabHome() {
                     </div>
                   </div>
 
+                  {appTaskError ? <p className="mt-5 text-sm text-rose-200">{appTaskError}</p> : null}
+
                   <div className="mt-6 flex flex-wrap items-center gap-4">
-                    {isTodayComplete ? (
+                    {appTaskStatus?.state === 'uninitialized' ? (
+                      <button
+                        type="button"
+                        onClick={initializeTodayWords}
+                        disabled={!activeDeck || appTaskBusy}
+                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                      >
+                        初始化今日单词
+                      </button>
+                    ) : appTaskStatus?.state === 'completed_today' || isTodayComplete ? (
                       <button
                         type="button"
                         onClick={() => setSettingsOpen(true)}
@@ -168,7 +229,8 @@ export default function VocabHome() {
                       <button
                         type="button"
                         onClick={startTodayFocusWork}
-                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
+                        disabled={!appTaskStatus?.task_id || appTaskBusy}
+                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
                       >
                         {summary.completed_count > 0 ? '继续今日单词' : '开始今日单词'}
                       </button>
