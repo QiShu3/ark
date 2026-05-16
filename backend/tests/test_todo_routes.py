@@ -2732,6 +2732,32 @@ def test_pause_focus_workflow_marks_task_focus_as_paused(monkeypatch) -> None:
     assert data["active_focus_work_type"] == "task_focus"
 
 
+def test_pause_focus_workflow_marks_app_focus_as_paused(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "pending_task_selection": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "vocab_today",
+            "focus_work_display_state": "fullscreen",
+            "is_paused": False,
+            "paused_at": None,
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/focus/workflow/pause")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_paused"] is True
+    assert data["active_focus_work_type"] == "vocab_today"
+
+
 def test_resume_focus_workflow_clears_paused_state(monkeypatch) -> None:
     conn = _WorkflowConn()
     conn.workflow.update(
@@ -2755,6 +2781,32 @@ def test_resume_focus_workflow_clears_paused_state(monkeypatch) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["is_paused"] is False
+
+
+def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "pending_task_selection": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "erc_review",
+            "focus_work_display_state": "fullscreen",
+            "is_paused": True,
+            "paused_at": datetime.now(UTC),
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/focus/workflow/resume")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_paused"] is False
+    assert data["active_focus_work_type"] == "erc_review"
 
 
 class _WorkflowPresetConn:

@@ -2285,15 +2285,6 @@ async def pause_focus_workflow(
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段已结束，请确认流转")
             if bool(row.get("is_paused", False) if hasattr(row, "get") else False):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注已暂停")
-            active_focus_work_type = row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
-            if (
-                active_focus_work_type is None
-                and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None
-                and (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) is not None
-            ):
-                active_focus_work_type = "task_focus"
-            if active_focus_work_type != "task_focus":
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注不支持暂停")
             await conn.execute(
                 """
                 UPDATE focus_workflows
@@ -2337,15 +2328,6 @@ async def resume_focus_workflow(
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
             if not bool(row.get("is_paused", False) if hasattr(row, "get") else False):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注未暂停")
-            active_focus_work_type = row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
-            if (
-                active_focus_work_type is None
-                and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None
-                and (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) is not None
-            ):
-                active_focus_work_type = "task_focus"
-            if active_focus_work_type != "task_focus":
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注不支持恢复")
             paused_at = row.get("paused_at") if hasattr(row, "get") else row["paused_at"]
             if paused_at is None:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注缺少暂停时间")

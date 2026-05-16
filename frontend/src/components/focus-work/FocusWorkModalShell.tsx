@@ -4,7 +4,10 @@ type FocusWorkModalShellProps = {
   title: string;
   subtitle: string;
   recordFocus: boolean;
+  isPaused?: boolean;
   busy?: boolean;
+  onPause: () => void;
+  onResume: () => void;
   onAbandon: () => void;
   children: React.ReactNode;
 };
@@ -13,7 +16,10 @@ export default function FocusWorkModalShell({
   title,
   subtitle,
   recordFocus,
+  isPaused = false,
   busy = false,
+  onPause,
+  onResume,
   onAbandon,
   children,
 }: FocusWorkModalShellProps) {
@@ -38,11 +44,23 @@ export default function FocusWorkModalShell({
               <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
                 本次工作将不记录在专注时间中
               </span>
+            ) : isPaused ? (
+              <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs text-sky-100">
+                已暂停
+              </span>
             ) : (
               <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
                 正在记录专注
               </span>
             )}
+            <button
+              type="button"
+              onClick={isPaused ? onResume : onPause}
+              disabled={busy}
+              className="rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:bg-white/12 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPaused ? '继续专注' : '暂停专注'}
+            </button>
             <button
               type="button"
               onClick={onAbandon}

@@ -51,9 +51,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const expiredPhaseReloadRef = React.useRef<string | null>(null);
   const timerMode = getWorkflowPhaseTimerMode(workflow);
   const isCountup = workflow.state === 'focus' && timerMode === 'countup';
-  const isPausedTaskFocus = workflow.state === 'focus'
-    && workflow.active_focus_work_type === 'task_focus'
-    && Boolean(workflow.is_paused);
+  const isPausedFocus = workflow.state === 'focus' && Boolean(workflow.is_paused);
 
   const handleConfirm = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -82,7 +80,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       workflow.state === 'normal'
       || workflow.pending_confirmation
       || workflow.pending_task_selection
-      || isPausedTaskFocus
+      || isPausedFocus
       || isCountup
       || !Number.isFinite(workflow.remaining_seconds ?? NaN)
     ) {
@@ -96,14 +94,14 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       if (Math.abs(nextEnd - prev) >= 3000) return nextEnd;
       return prev;
     });
-  }, [workflow, isCountup, isPausedTaskFocus]);
+  }, [workflow, isCountup, isPausedFocus]);
 
   React.useEffect(() => {
     if (
       workflow.state !== 'focus'
       || workflow.pending_confirmation
       || workflow.pending_task_selection
-      || isPausedTaskFocus
+      || isPausedFocus
       || !isCountup
       || !workflow.phase_started_at
     ) {
@@ -116,7 +114,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       return;
     }
     setPhaseStartTime(nextStart);
-  }, [workflow, isCountup, isPausedTaskFocus]);
+  }, [workflow, isCountup, isPausedFocus]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
@@ -127,19 +125,19 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
 
   const liveRemaining = React.useMemo(() => {
     if (workflow.pending_confirmation) return 0;
-    if (isPausedTaskFocus) return workflow.remaining_seconds ?? null;
+    if (isPausedFocus) return workflow.remaining_seconds ?? null;
     if (workflow.state === 'normal' || endTime === null) return null;
     return Math.max(0, Math.round((endTime - now) / 1000));
-  }, [workflow.pending_confirmation, workflow.remaining_seconds, workflow.state, endTime, isPausedTaskFocus, now]);
+  }, [workflow.pending_confirmation, workflow.remaining_seconds, workflow.state, endTime, isPausedFocus, now]);
 
   const liveElapsed = React.useMemo(() => {
-    if (!isCountup || workflow.pending_confirmation || workflow.pending_task_selection || isPausedTaskFocus) return null;
+    if (!isCountup || workflow.pending_confirmation || workflow.pending_task_selection || isPausedFocus) return null;
     if (workflow.state !== 'focus' || phaseStartTime === null) return null;
     return Math.max(0, Math.round((now - phaseStartTime) / 1000));
-  }, [workflow.pending_confirmation, workflow.pending_task_selection, workflow.state, isCountup, isPausedTaskFocus, phaseStartTime, now]);
+  }, [workflow.pending_confirmation, workflow.pending_task_selection, workflow.state, isCountup, isPausedFocus, phaseStartTime, now]);
 
   const workflowForMetrics = React.useMemo<WorkflowSnapshot>(() => {
-    if (workflow.state === 'normal' || workflow.pending_confirmation || isPausedTaskFocus) {
+    if (workflow.state === 'normal' || workflow.pending_confirmation || isPausedFocus) {
       return workflow;
     }
     if (isCountup) {
@@ -152,14 +150,14 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       return workflow;
     }
     return { ...workflow, remaining_seconds: liveRemaining };
-  }, [workflow, liveRemaining, liveElapsed, isCountup, isPausedTaskFocus]);
+  }, [workflow, liveRemaining, liveElapsed, isCountup, isPausedFocus]);
 
   React.useEffect(() => {
     if (
       workflow.state === 'normal'
       || workflow.pending_confirmation
       || workflow.pending_task_selection
-      || isPausedTaskFocus
+      || isPausedFocus
       || isCountup
       || liveRemaining !== 0
     ) {
@@ -181,7 +179,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
     workflow.pending_task_selection,
     workflow.phase_started_at,
     workflow.state,
-    isPausedTaskFocus,
+    isPausedFocus,
   ]);
 
   React.useEffect(() => {
@@ -254,14 +252,14 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
     : showHoverTask
       ? 'hover'
       : 'compact';
-  const showPulse = !isPausedTaskFocus && !workflowForMetrics.pending_confirmation && !workflowForMetrics.pending_task_selection;
+  const showPulse = !isPausedFocus && !workflowForMetrics.pending_confirmation && !workflowForMetrics.pending_task_selection;
   const titleText = showFeedback
     ? feedbackText!
     : workflowForMetrics.pending_task_selection
       ? '选择任务'
       : workflowForMetrics.pending_confirmation
         ? '等待继续'
-        : isPausedTaskFocus
+        : isPausedFocus
           ? '已暂停'
         : phaseStatusLabel(phaseType);
   const activeFocusWorkLabel = workflowForMetrics.active_focus_work_type

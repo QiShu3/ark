@@ -219,20 +219,23 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           title={activeDefinition.title}
           subtitle={activeDefinition.subtitle}
           recordFocus={recordFocus}
+          isPaused={snapshot.is_paused === true}
           busy={busy}
+          onPause={() => void pauseFocusWork()}
+          onResume={() => void resumeFocusWork()}
           onAbandon={abandonCurrentWork}
         >
           {activeDefinition.render({
             workflow: snapshot,
             recordFocus,
-            onPause: snapshot.active_focus_work_type === 'task_focus' ? () => void pauseFocusWork() : undefined,
-            onResume: snapshot.active_focus_work_type === 'task_focus' ? () => void resumeFocusWork() : undefined,
+            onPause: undefined,
+            onResume: undefined,
             onComplete: (progressSnapshot) => void submitResult('completed', progressSnapshot),
             onCompleteTaskAndFinish: snapshot.task_id
               ? () => void completeTaskAndFinishCurrentFocus()
               : undefined,
             onInterrupt: (progressSnapshot) => void submitResult('interrupted', progressSnapshot),
-            onAbandon: (progressSnapshot) => void submitResult('abandoned', progressSnapshot),
+            onAbandon: undefined,
           })}
         </FocusWorkModalShell>
       ) : null}

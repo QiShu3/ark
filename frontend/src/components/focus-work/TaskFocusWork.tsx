@@ -7,36 +7,16 @@ import type { FocusWorkRendererProps } from './focusWorkTypes';
 
 type TaskFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-function PauseOverlay({ onResume }: { onResume?: () => void }) {
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 backdrop-blur-sm">
-      <div className="w-[min(28rem,92vw)] rounded-[2rem] border border-white/12 bg-[#0c1016]/92 p-8 text-center shadow-2xl">
-        <div className="text-xs uppercase tracking-[0.24em] text-white/35">Paused</div>
-        <h2 className="mt-4 text-3xl font-semibold text-white">已暂停</h2>
-        <p className="mt-3 text-sm leading-6 text-white/60">当前专注阶段已暂停，继续后会从当前这一轮接着计时。</p>
-        <button
-          type="button"
-          onClick={onResume}
-          className="mt-8 rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
-        >
-          继续专注
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function TaskFocusWork({
   workflow,
-  onPause,
-  onResume,
-  onComplete,
   onCompleteTaskAndFinish,
-  onAbandon,
 }: TaskFocusWorkProps) {
   const [task, setTask] = React.useState<Task | null>(null);
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [now, setNow] = React.useState(() => Date.now());
+  const [endTime, setEndTime] = React.useState<number | null>(null);
+  const expiredReloadKeyRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -60,7 +40,86 @@ export default function TaskFocusWork({
     };
   }, [workflow?.task_id]);
 
+  React.useEffect(() => {
+    if (
+      workflow?.state !== 'focus'
+      || workflow.pending_confirmation
+      || workflow.pending_task_selection
+      || workflow.is_paused
+      || typeof workflow.remaining_seconds !== 'number'
+    ) {
+      setEndTime(null);
+      return;
+    }
+    const remaining = Math.max(0, Math.round(workflow.remaining_seconds));
+    const nextEnd = Date.now() + remaining * 1000;
+    setEndTime((prev) => {
+      if (prev === null) return nextEnd;
+      if (Math.abs(nextEnd - prev) >= 3000) return nextEnd;
+      return prev;
+    });
+  }, [
+    workflow?.is_paused,
+    workflow?.pending_confirmation,
+    workflow?.pending_task_selection,
+    workflow?.remaining_seconds,
+    workflow?.state,
+  ]);
+
+  React.useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const liveRemaining = React.useMemo(() => {
+    if (workflow?.pending_confirmation) return 0;
+    if (workflow?.is_paused) return workflow.remaining_seconds ?? null;
+    if (workflow?.state !== 'focus' || endTime === null) return workflow?.remaining_seconds ?? null;
+    return Math.max(0, Math.round((endTime - now) / 1000));
+  }, [
+    endTime,
+    now,
+    workflow?.is_paused,
+    workflow?.pending_confirmation,
+    workflow?.remaining_seconds,
+    workflow?.state,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      workflow?.state !== 'focus'
+      || workflow.pending_confirmation
+      || workflow.pending_task_selection
+      || workflow.is_paused
+      || liveRemaining !== 0
+    ) {
+      return;
+    }
+    const expiredKey = [
+      workflow.task_id ?? 'no-task',
+      workflow.current_phase_index ?? 'none',
+      workflow.remaining_seconds ?? 'unknown-remaining',
+    ].join(':');
+    if (expiredReloadKeyRef.current === expiredKey) return;
+    expiredReloadKeyRef.current = expiredKey;
+    window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+  }, [
+    liveRemaining,
+    workflow?.current_phase_index,
+    workflow?.is_paused,
+    workflow?.pending_confirmation,
+    workflow?.pending_task_selection,
+    workflow?.remaining_seconds,
+    workflow?.state,
+    workflow?.task_id,
+  ]);
+
   const timerText = React.useMemo(() => {
+    if (typeof liveRemaining === 'number') {
+      return formatClockTime(liveRemaining);
+    }
     if (typeof workflow?.remaining_seconds === 'number') {
       return formatClockTime(workflow.remaining_seconds);
     }
@@ -68,7 +127,7 @@ export default function TaskFocusWork({
       return formatClockTime(workflow.elapsed_seconds);
     }
     return '00:00';
-  }, [workflow?.elapsed_seconds, workflow?.remaining_seconds]);
+  }, [liveRemaining, workflow?.elapsed_seconds, workflow?.remaining_seconds]);
 
   const title = workflow?.task_title ?? task?.title ?? '未命名任务';
   const content = task?.content?.trim() ?? '';
@@ -123,22 +182,6 @@ export default function TaskFocusWork({
       </main>
 
       <footer className="relative flex flex-wrap items-center justify-center gap-3 border-t border-white/10 bg-black/18 px-6 py-5">
-        {!workflow?.is_paused ? (
-          <button
-            type="button"
-            onClick={onPause}
-            className="rounded-full border border-white/14 bg-white/8 px-5 py-3 text-sm text-white/80 transition hover:border-white/24 hover:bg-white/12"
-          >
-            暂停专注
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => onComplete?.({ taskId: workflow?.task_id ?? null })}
-          className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
-        >
-          完成本轮专注
-        </button>
         <button
           type="button"
           onClick={onCompleteTaskAndFinish}
@@ -146,16 +189,7 @@ export default function TaskFocusWork({
         >
           完成任务并结束专注
         </button>
-        <button
-          type="button"
-          onClick={() => onAbandon?.({ taskId: workflow?.task_id ?? null })}
-          className="rounded-full border border-rose-300/22 bg-rose-300/10 px-5 py-3 text-sm text-rose-100 transition hover:bg-rose-300/16"
-        >
-          放弃本阶段
-        </button>
       </footer>
-
-      {workflow?.is_paused ? <PauseOverlay onResume={onResume} /> : null}
     </div>
   );
 }

@@ -32,16 +32,13 @@ vi.mock('../focus-work/focusWorkRegistry', () => ({
         subtitle: '任务',
         render: ({
           workflow,
-          onPause,
           onCompleteTaskAndFinish,
         }: {
           workflow: { task_title?: string | null };
-          onPause?: () => void;
           onCompleteTaskAndFinish?: () => void;
         }) => (
           <div>
             <div>{workflow.task_title}</div>
-            <button type="button" onClick={onPause}>暂停专注</button>
             <button type="button" onClick={onCompleteTaskAndFinish}>完成任务并结束专注</button>
           </div>
         ),
@@ -127,6 +124,55 @@ describe('FocusWorkProvider', () => {
     );
 
     expect(await screen.findByRole('button', { name: '完成今日单词' })).toBeInTheDocument();
+  });
+
+  it('pauses app-managed focus work from the modal shell', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({
+      task_id: 'task-vocab',
+      task_title: '今日单词',
+      active_focus_work_type: 'vocab_today',
+      active_task_source_type: 'app',
+      active_task_app_id: 'vocab',
+      active_task_app_task_type: 'vocab_today',
+      focus_work_display_state: 'fullscreen',
+      pending_confirmation: false,
+      pending_task_selection: false,
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+    await user.click(await screen.findByRole('button', { name: '暂停专注' }));
+
+    expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/pause', { method: 'POST' });
+  });
+
+  it('resumes paused app-managed focus work from the modal shell', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({
+      task_id: 'task-erc',
+      task_title: 'ERC 复习',
+      active_focus_work_type: 'vocab_today',
+      active_task_source_type: 'app',
+      active_task_app_id: 'vocab',
+      active_task_app_task_type: 'vocab_today',
+      focus_work_display_state: 'fullscreen',
+      pending_confirmation: false,
+      pending_task_selection: false,
+      is_paused: true,
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+    await user.click(await screen.findByRole('button', { name: '继续专注' }));
+
+    expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/resume', { method: 'POST' });
   });
 
   it('submits completed result for app-managed vocab completion without direct task complete', async () => {

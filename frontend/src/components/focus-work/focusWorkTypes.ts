@@ -17,7 +17,7 @@ export type FocusWorkRendererProps = {
   onPause?: () => void;
   onResume?: () => void;
   onInterrupt: (progressSnapshot?: Record<string, unknown>) => void;
-  onAbandon: (progressSnapshot?: Record<string, unknown>) => void;
+  onAbandon?: (progressSnapshot?: Record<string, unknown>) => void;
 };
 
 export type FocusWorkDefinition = {
