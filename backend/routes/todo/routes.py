@@ -15,6 +15,7 @@ from .helpers import (
     _advance_focus_workflow_to_next_phase,
     _appointment_occurrence_bounds,
     _appointment_with_completion,
+    _bind_first_focus_phase_to_task,
     _build_appointment_occurrence,
     _build_completion_state,
     _build_default_phases,
@@ -193,6 +194,36 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
     )
 
 
+async def _resolve_vocab_app_deck_id(conn: Any, raw_deck_id: str) -> str:
+    deck_id = raw_deck_id.strip()
+    if not deck_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="词书不存在")
+
+    try:
+        deck_uuid = UUID(deck_id)
+    except ValueError:
+        deck_uuid = None
+
+    if deck_uuid is not None:
+        deck_row = await conn.fetchrow("SELECT id FROM vocab_decks WHERE id = $1", deck_uuid)
+        if deck_row is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="词书不存在")
+        return str(deck_uuid)
+
+    deck_row = await conn.fetchrow(
+        """
+        SELECT regexp_replace(key, '_[0-9]+$', '') AS deck_id
+        FROM vocab_decks
+        WHERE key = $1 OR regexp_replace(key, '_[0-9]+$', '') = $1
+        LIMIT 1
+        """,
+        deck_id,
+    )
+    if deck_row is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="词书不存在")
+    return str(deck_row["deck_id"])
+
+
 @router.get("/app-tasks/vocab/status", response_model=AppTaskStatusOut)
 async def get_vocab_app_task_status(
     request: Request,
@@ -212,20 +243,14 @@ async def init_vocab_app_task(
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            try:
-                deck_id = UUID(body.deck_id)
-            except ValueError:
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="词书不存在") from None
-            deck_row = await conn.fetchrow("SELECT id FROM vocab_decks WHERE id = $1", deck_id)
-            if deck_row is None:
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="词书不存在")
+            deck_id = await _resolve_vocab_app_deck_id(conn, body.deck_id)
             if body.event_id is not None:
                 event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
                 if event_row is None:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
 
             config = {
-                "deck_id": str(deck_id),
+                "deck_id": deck_id,
                 "daily_target_count": body.daily_target_count,
                 "default_focus_duration": body.default_focus_duration,
                 "add_to_today_plan": body.add_to_today_plan,
@@ -1882,6 +1907,7 @@ async def start_focus(
                 break_duration = 300
                 phases = _build_default_phases(focus_duration, break_duration)
                 workflow_name = "默认工作流"
+            phases = _bind_first_focus_phase_to_task(phases, task_id)
             row = await _create_workflow_with_focus_phase(
                 conn,
                 user_id=int(user.id),

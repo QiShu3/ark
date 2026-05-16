@@ -232,6 +232,7 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid'));"
         )
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS uniq_app_task_configs_identity;")
         await conn.execute(
             """

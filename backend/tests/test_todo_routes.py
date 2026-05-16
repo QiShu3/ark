@@ -167,6 +167,11 @@ class _FakeTodoConn:
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
         if "SELECT id FROM vocab_decks WHERE id = $1" in sql:
             return {"id": args[0]}
+        if "regexp_replace(key, '_[0-9]+$', '') AS deck_id" in sql:
+            deck_id = str(args[0])
+            if deck_id in {"cet6", "cet6luan"}:
+                return {"deck_id": deck_id}
+            return None
         if "FROM app_task_configs" in sql and "status = 'active'" in sql and "UPDATE app_task_configs" not in sql:
             user_id, app_id, app_task_type = args[0], args[1], args[2]
             return next(
@@ -855,6 +860,25 @@ async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_h
     assert task_payload["is_recurring"] is True
     assert task_payload["period_type"] == "daily"
     assert task_payload["max_completions_per_period"] == 1
+
+
+@pytest.mark.asyncio
+async def test_vocab_app_task_init_accepts_grouped_deck_identifier(client, auth_headers):
+    response = await client.post(
+        "/todo/app-tasks/vocab/init",
+        json={
+            "deck_id": "cet6luan",
+            "daily_target_count": 20,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["config"]["deck_id"] == "cet6luan"
+    assert payload["task_id"]
 
 
 @pytest.mark.asyncio

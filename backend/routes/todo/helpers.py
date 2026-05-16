@@ -1162,6 +1162,20 @@ def _phase_focus_work_type_value(phase: dict[str, Any] | FocusWorkflowPhase) -> 
     return _normalize_focus_work_type(phase.get("focus_work_type"))
 
 
+def _bind_first_focus_phase_to_task(phases: list[dict[str, Any]], task_id: UUID) -> list[dict[str, Any]]:
+    """Bind an explicit task launch to the first focus phase, ignoring stale preset work bindings."""
+    bound_phases: list[dict[str, Any]] = []
+    did_bind = False
+    for phase in phases:
+        next_phase = dict(phase)
+        if not did_bind and _phase_is_focus(next_phase):
+            next_phase["task_id"] = task_id
+            next_phase["focus_work_type"] = None
+            did_bind = True
+        bound_phases.append(next_phase)
+    return bound_phases
+
+
 def _next_focus_phase_work_type(phases: list[FocusWorkflowPhase], current_phase_index: int) -> FocusWorkType | None:
     next_index = current_phase_index + 1
     if next_index >= len(phases):

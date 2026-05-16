@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from routes.todo.helpers import (
+    _bind_first_focus_phase_to_task,
     _create_workflow_with_focus_phase,
     _focus_work_type_for_task_row,
     _normalize_workflow_phases,
@@ -110,6 +111,32 @@ def test_normalize_workflow_phases_preserves_focus_work_type():
 
     assert phases[0]["focus_work_type"] == "vocab_today"
     assert phases[0]["task_id"] is None
+
+
+def test_bind_first_focus_phase_to_task_clears_stale_preset_work_binding():
+    task_id = uuid4()
+    stale_task_id = uuid4()
+    phases = _normalize_workflow_phases(
+        [
+            {
+                "phase_type": "focus",
+                "duration": 900,
+                "timer_mode": "countdown",
+                "task_id": str(stale_task_id),
+                "focus_work_type": "vocab_today",
+            },
+            {"phase_type": "break", "duration": 300},
+            {"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "vocab_today"},
+        ],
+        fallback_focus_duration=1500,
+        fallback_break_duration=300,
+    )
+
+    bound_phases = _bind_first_focus_phase_to_task(phases, task_id)
+
+    assert bound_phases[0]["task_id"] == task_id
+    assert bound_phases[0]["focus_work_type"] is None
+    assert bound_phases[2]["focus_work_type"] == "vocab_today"
 
 
 @pytest.mark.asyncio
