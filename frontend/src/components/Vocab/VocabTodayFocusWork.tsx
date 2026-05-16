@@ -18,7 +18,7 @@ const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'g
 
 type VocabTodayFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-export default function VocabTodayFocusWork({ onComplete }: VocabTodayFocusWorkProps) {
+export default function VocabTodayFocusWork({ onCompleteTaskAndFinish }: VocabTodayFocusWorkProps) {
   const { decks, activeDeck, activeDeckVersion, inheritancePrompt, setActiveDeck, confirmInheritance, dismissInheritance } = useVocabDeck();
   const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
   const completedRef = React.useRef(false);
@@ -29,13 +29,9 @@ export default function VocabTodayFocusWork({ onComplete }: VocabTodayFocusWorkP
     if (!session.ready) return;
     if (session.loading || session.error || session.isBatchReview || session.currentItem) return;
     completedRef.current = true;
-    onComplete?.({
-      memorizedCount: session.memorizedCount,
-      currentBatchNumber: session.currentBatchNumber,
-      totalBatchCount: session.totalBatchCount,
-    });
+    onCompleteTaskAndFinish?.();
   }, [
-    onComplete,
+    onCompleteTaskAndFinish,
     activeDeck,
     session.currentBatchNumber,
     session.currentItem,
@@ -111,7 +107,18 @@ export default function VocabTodayFocusWork({ onComplete }: VocabTodayFocusWorkP
           {session.lastResult ? <ReviewResultPanel result={session.lastResult} /> : null}
 
           {!session.isBatchReview && !session.loading && !session.error && !session.currentItem ? (
-            <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">今天这本词书的单词已经完成了。</div>
+            <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">
+              <div>今天这本词书的单词已经完成了。</div>
+              {onCompleteTaskAndFinish ? (
+                <button
+                  type="button"
+                  onClick={onCompleteTaskAndFinish}
+                  className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
+                >
+                  完成今日单词
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

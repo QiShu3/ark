@@ -138,9 +138,13 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
 
   async function completeTaskAndFinishCurrentFocus() {
     if (!snapshot?.task_id || busy) return;
+    const isUserTaskFocus = snapshot.active_focus_work_type === 'task_focus'
+      && (snapshot.active_task_source_type ?? 'user') === 'user';
     setBusy(true);
     try {
-      await apiJson(`/todo/tasks/${snapshot.task_id}/complete`, { method: 'POST' });
+      if (isUserTaskFocus) {
+        await apiJson(`/todo/tasks/${snapshot.task_id}/complete`, { method: 'POST' });
+      }
       const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/focus-work-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,6 +154,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           progress_snapshot: {
             taskId: snapshot.task_id,
             completedTask: true,
+            appTaskType: snapshot.active_task_app_task_type ?? null,
           },
         }),
       });
@@ -223,7 +228,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
             onPause: snapshot.active_focus_work_type === 'task_focus' ? () => void pauseFocusWork() : undefined,
             onResume: snapshot.active_focus_work_type === 'task_focus' ? () => void resumeFocusWork() : undefined,
             onComplete: (progressSnapshot) => void submitResult('completed', progressSnapshot),
-            onCompleteTaskAndFinish: snapshot.active_focus_work_type === 'task_focus'
+            onCompleteTaskAndFinish: snapshot.task_id
               ? () => void completeTaskAndFinishCurrentFocus()
               : undefined,
             onInterrupt: (progressSnapshot) => void submitResult('interrupted', progressSnapshot),

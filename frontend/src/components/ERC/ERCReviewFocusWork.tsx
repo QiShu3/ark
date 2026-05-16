@@ -8,7 +8,7 @@ import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCReviewFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-export default function ERCReviewFocusWork({ onComplete }: ERCReviewFocusWorkProps) {
+export default function ERCReviewFocusWork({ onCompleteTaskAndFinish }: ERCReviewFocusWorkProps) {
   const [item, setItem] = useState<ERCReviewNext | null>(null);
   const [selected, setSelected] = useState<OptionKey | null>(null);
   const [result, setResult] = useState<ERCReviewSubmitResult | null>(null);
@@ -21,9 +21,6 @@ export default function ERCReviewFocusWork({ onComplete }: ERCReviewFocusWorkPro
       .then((payload) => {
         setItem(payload);
         setError(null);
-        if (!payload.has_item) {
-          onComplete?.({ hasItem: false });
-        }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : '复习题加载失败'));
   };
@@ -38,11 +35,6 @@ export default function ERCReviewFocusWork({ onComplete }: ERCReviewFocusWorkPro
       const nextResult = await submitERCReview(item.question.question_id, selected);
       setResult(nextResult);
       setError(null);
-      onComplete?.({
-        questionId: item.question.question_id,
-        selected,
-        isCorrect: nextResult.is_correct,
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败');
     }
@@ -67,9 +59,16 @@ export default function ERCReviewFocusWork({ onComplete }: ERCReviewFocusWorkPro
           <section className="rounded-2xl border border-white/10 bg-black/22 p-8">
             <h2 className="text-2xl font-semibold text-white">暂无到期复习</h2>
             <p className="mt-3 text-sm text-white/62">今天没有需要复习的阅读题，可以去题库练一篇新的文章。</p>
-            <Link to="/erc/library" className="mt-6 inline-flex rounded-full bg-white px-5 py-3 text-sm text-slate-950">
-              进入题库
-            </Link>
+            <div className="mt-6 flex flex-wrap gap-3">
+              {onCompleteTaskAndFinish ? (
+                <button type="button" onClick={onCompleteTaskAndFinish} className="inline-flex rounded-full bg-white px-5 py-3 text-sm text-slate-950">
+                  完成今日 ERC 复习
+                </button>
+              ) : null}
+              <Link to="/erc/library" className="inline-flex rounded-full border border-white/15 px-5 py-3 text-sm text-white/82">
+                进入题库
+              </Link>
+            </div>
           </section>
         ) : null}
 
