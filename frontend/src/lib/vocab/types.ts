@@ -107,6 +107,14 @@ export type VocabTodaySettingsPayload = {
   total_target_count: number;
 };
 
+export type VocabAppTaskInitPayload = {
+  deck_id: string;
+  daily_target_count: number;
+  default_focus_duration?: number;
+  add_to_today_plan?: boolean;
+  event_id?: string | null;
+};
+
 export type VocabMistakeItem = VocabWordDetail & {
   last_wrong_at: string | null;
   wrong_count: number;

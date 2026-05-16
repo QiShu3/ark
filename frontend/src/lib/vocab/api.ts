@@ -1,5 +1,7 @@
 import { apiJson } from '../api';
+import type { AppTaskStatus } from '../../components/taskTypes';
 import type {
+  VocabAppTaskInitPayload,
   VocabDeck,
   VocabInheritanceApplyResult,
   VocabInheritancePreview,
@@ -22,6 +24,18 @@ export function fetchVocabDecks() {
 
 export function fetchVocabToday(deckId: string) {
   return apiJson<VocabTodaySummary>(`/api/vocab/decks/${deckId}/today`);
+}
+
+export function fetchVocabAppTaskStatus() {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/vocab/status');
+}
+
+export function initializeVocabAppTask(payload: VocabAppTaskInitPayload) {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/vocab/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchVocabOverview(deckId: string) {

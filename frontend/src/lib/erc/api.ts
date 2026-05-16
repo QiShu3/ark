@@ -1,6 +1,8 @@
 import { apiJson } from '../api';
+import type { AppTaskStatus } from '../../components/taskTypes';
 import type { VocabReviewItem, VocabReviewSubmitResult } from '../vocab/types';
 import type {
+  ERCAppTaskInitPayload,
   ERCArticleDetail,
   ERCArticleListItem,
   ERCArticleSubmitResult,
@@ -14,6 +16,18 @@ import type {
 
 export function fetchERCOverview() {
   return apiJson<ERCOverview>('/api/erc/overview');
+}
+
+export function fetchERCAppTaskStatus() {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/erc/status');
+}
+
+export function initializeERCAppTask(payload: ERCAppTaskInitPayload) {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/erc/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchERCSets() {

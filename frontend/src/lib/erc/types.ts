@@ -110,6 +110,14 @@ export interface ERCReviewSubmitResult {
   next_review_at: string | null;
 }
 
+export interface ERCAppTaskInitPayload {
+  review_scope: 'due' | 'mistakes' | 'all';
+  daily_question_target: number;
+  default_focus_duration?: number;
+  add_to_today_plan?: boolean;
+  event_id?: string | null;
+}
+
 export interface ERCMistakeItem {
   article_id: string;
   year: number;

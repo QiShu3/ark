@@ -1,4 +1,5 @@
 import type React from 'react';
+import type { AppTaskId, AppTaskType, TaskSourceType } from '../taskTypes';
 
 export type FocusWorkType = 'vocab_today' | 'erc_review' | 'task_focus';
 export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
@@ -40,6 +41,10 @@ export type FocusWorkSnapshot = {
   focus_work_display_state?: FocusWorkDisplayState | null;
   is_paused?: boolean;
   record_focus?: boolean;
+  active_task_source_type?: TaskSourceType | null;
+  active_task_app_id?: AppTaskId | null;
+  active_task_app_task_type?: AppTaskType | null;
+  active_task_app_config_id?: string | null;
 };
 
 export const FOCUS_WORK_LABELS: Record<FocusWorkType, string> = {

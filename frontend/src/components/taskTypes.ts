@@ -1,4 +1,8 @@
 export type CompletionPeriodType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom_days';
+export type TaskSourceType = 'user' | 'app';
+export type AppTaskId = 'vocab' | 'erc';
+export type AppTaskType = 'vocab_today' | 'erc_review';
+export type AppTaskRuntimeState = 'uninitialized' | 'ready' | 'completed_today' | 'blocked' | 'config_invalid';
 
 export interface CompletionState {
   completion_state: 'permanent' | 'available' | 'period_complete' | 'blocked';
@@ -43,6 +47,21 @@ export interface Task {
   created_at: string;
   updated_at: string;
   completion_state?: CompletionState | null;
+  source_type?: TaskSourceType;
+  app_id?: AppTaskId | null;
+  app_task_type?: AppTaskType | null;
+  app_config_id?: string | null;
+  app_instance_key?: string | null;
+  managed_by_app?: boolean;
+}
+
+export interface AppTaskStatus {
+  state: AppTaskRuntimeState;
+  task_id: string | null;
+  config_id: string | null;
+  completion_state: CompletionState | null;
+  blocked_reason: string | null;
+  config: Record<string, unknown>;
 }
 
 export type AppointmentStoredStatus = 'pending' | 'attended' | 'missed' | 'cancelled';
