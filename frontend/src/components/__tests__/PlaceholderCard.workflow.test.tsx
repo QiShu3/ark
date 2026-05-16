@@ -160,6 +160,42 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.getByTestId('achievement-card')).toBeInTheDocument();
   });
 
+  it('separates app-managed tasks from user-created today tasks', async () => {
+    const user = userEvent.setup();
+    const userTask = buildTask({
+      id: 'task-user',
+      title: '写论文摘要',
+      manually_scheduled_for_today: true,
+      source_type: 'user',
+      managed_by_app: false,
+    });
+    const appTask = buildTask({
+      id: 'task-vocab',
+      title: '今日单词',
+      manually_scheduled_for_today: true,
+      source_type: 'app',
+      app_id: 'vocab',
+      app_task_type: 'vocab_today',
+      app_config_id: 'config-vocab',
+      managed_by_app: true,
+    });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/tasks?limit=100') {
+        return Promise.resolve([userTask, appTask]);
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    await user.click(screen.getByText('安排'));
+    expect((await screen.findAllByText('写论文摘要')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('今日单词').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('今日任务').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('应用任务').length).toBeGreaterThan(0);
+  });
+
   it('hides the duration input for countup focus phases but still submits a default target duration', async () => {
     const user = userEvent.setup();
 
