@@ -318,6 +318,16 @@ async def update_task(
 ) -> TaskOut:
     """更新任务（部分字段）。"""
     patch = body.model_dump(exclude_unset=True)
+    reserved_app_task_fields = {
+        "source_type",
+        "app_id",
+        "app_task_type",
+        "app_config_id",
+        "app_instance_key",
+        "managed_by_app",
+    }
+    if reserved_app_task_fields & patch.keys():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建")
     if not patch:
         return await get_task(request, task_id, user)
 

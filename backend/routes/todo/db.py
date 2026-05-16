@@ -201,7 +201,8 @@ async def init_todo(app: Any) -> None:
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc')),
               CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review')),
-              CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid'))
+              CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid')),
+              CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type)
             );
             """
         )
@@ -231,6 +232,13 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid'));"
         )
+        await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS uniq_app_task_configs_identity;")
+        await conn.execute(
+            """
+            ALTER TABLE app_task_configs
+            ADD CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type);
+            """
+        )
         await conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_app_task_configs_active_unique
@@ -243,7 +251,8 @@ async def init_todo(app: Any) -> None:
             """
             ALTER TABLE tasks
             ADD CONSTRAINT fk_tasks_app_config_id
-            FOREIGN KEY (app_config_id) REFERENCES app_task_configs(id);
+            FOREIGN KEY (app_config_id, user_id, app_id, app_task_type)
+            REFERENCES app_task_configs(id, user_id, app_id, app_task_type);
             """
         )
         await conn.execute(
