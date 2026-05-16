@@ -188,28 +188,37 @@ async def init_vocab_app_task(
 ) -> AppTaskStatusOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        deck_row = await conn.fetchrow("SELECT id FROM vocab_decks WHERE id = $1::uuid", body.deck_id)
-        if deck_row is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="词书不存在")
+        async with conn.transaction():
+            try:
+                deck_id = UUID(body.deck_id)
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="词书不存在") from None
+            deck_row = await conn.fetchrow("SELECT id FROM vocab_decks WHERE id = $1", deck_id)
+            if deck_row is None:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="词书不存在")
+            if body.event_id is not None:
+                event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+                if event_row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
 
-        config = {
-            "deck_id": body.deck_id,
-            "daily_target_count": body.daily_target_count,
-            "default_focus_duration": body.default_focus_duration,
-            "add_to_today_plan": body.add_to_today_plan,
-            "event_id": str(body.event_id) if body.event_id is not None else None,
-        }
-        await _create_or_update_managed_app_task(
-            conn,
-            user_id=int(user.id),
-            app_id="vocab",
-            app_task_type="vocab_today",
-            config=config,
-            target_duration=body.default_focus_duration,
-            add_to_today_plan=body.add_to_today_plan,
-            event_id=body.event_id,
-        )
-        return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="vocab_today")
+            config = {
+                "deck_id": str(deck_id),
+                "daily_target_count": body.daily_target_count,
+                "default_focus_duration": body.default_focus_duration,
+                "add_to_today_plan": body.add_to_today_plan,
+                "event_id": str(body.event_id) if body.event_id is not None else None,
+            }
+            await _create_or_update_managed_app_task(
+                conn,
+                user_id=int(user.id),
+                app_id="vocab",
+                app_task_type="vocab_today",
+                config=config,
+                target_duration=body.default_focus_duration,
+                add_to_today_plan=body.add_to_today_plan,
+                event_id=body.event_id,
+            )
+            return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="vocab_today")
 
 
 @router.get("/app-tasks/erc/status", response_model=AppTaskStatusOut)
@@ -230,24 +239,29 @@ async def init_erc_app_task(
 ) -> AppTaskStatusOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        config = {
-            "review_scope": body.review_scope,
-            "daily_question_target": body.daily_question_target,
-            "default_focus_duration": body.default_focus_duration,
-            "add_to_today_plan": body.add_to_today_plan,
-            "event_id": str(body.event_id) if body.event_id is not None else None,
-        }
-        await _create_or_update_managed_app_task(
-            conn,
-            user_id=int(user.id),
-            app_id="erc",
-            app_task_type="erc_review",
-            config=config,
-            target_duration=body.default_focus_duration,
-            add_to_today_plan=body.add_to_today_plan,
-            event_id=body.event_id,
-        )
-        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
+        async with conn.transaction():
+            if body.event_id is not None:
+                event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+                if event_row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+            config = {
+                "review_scope": body.review_scope,
+                "daily_question_target": body.daily_question_target,
+                "default_focus_duration": body.default_focus_duration,
+                "add_to_today_plan": body.add_to_today_plan,
+                "event_id": str(body.event_id) if body.event_id is not None else None,
+            }
+            await _create_or_update_managed_app_task(
+                conn,
+                user_id=int(user.id),
+                app_id="erc",
+                app_task_type="erc_review",
+                config=config,
+                target_duration=body.default_focus_duration,
+                add_to_today_plan=body.add_to_today_plan,
+                event_id=body.event_id,
+            )
+            return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
 
 
 @router.post("/tasks", response_model=TaskOut)

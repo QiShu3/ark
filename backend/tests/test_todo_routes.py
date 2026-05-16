@@ -165,7 +165,7 @@ class _FakeTodoConn:
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
-        if "SELECT id FROM vocab_decks WHERE id = $1::uuid" in sql:
+        if "SELECT id FROM vocab_decks WHERE id = $1" in sql:
             return {"id": args[0]}
         if "FROM app_task_configs" in sql and "status = 'active'" in sql and "UPDATE app_task_configs" not in sql:
             user_id, app_id, app_task_type = args[0], args[1], args[2]
@@ -201,6 +201,21 @@ class _FakeTodoConn:
             return config
         if "INSERT INTO app_task_configs" in sql:
             now = datetime.now(UTC)
+            existing = next(
+                (
+                    item
+                    for item in self.app_task_configs
+                    if item["user_id"] == args[0]
+                    and item["app_id"] == args[1]
+                    and item["app_task_type"] == args[2]
+                    and item["status"] == "active"
+                ),
+                None,
+            )
+            if existing is not None:
+                existing["config"] = json.loads(args[3])
+                existing["updated_at"] = now
+                return existing
             row = {
                 "id": uuid4(),
                 "user_id": args[0],
@@ -327,7 +342,7 @@ class _FakeTodoConn:
                 ),
                 None,
             )
-        if "UPDATE tasks" in sql and "RETURNING id, user_id, title, content, status" in sql:
+        if "UPDATE tasks" in sql and "RETURNING" in sql and "title, content, status" in sql:
             task_id, user_id = args[-2], args[-1]
             task = next(
                 (
@@ -745,6 +760,40 @@ async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_h
 
 
 @pytest.mark.asyncio
+async def test_vocab_app_task_init_rejects_invalid_deck_id(client, auth_headers):
+    response = await client.post(
+        "/todo/app-tasks/vocab/init",
+        json={
+            "deck_id": "not-a-uuid",
+            "daily_target_count": 20,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "词书不存在"
+
+
+@pytest.mark.asyncio
+async def test_vocab_app_task_init_returns_same_task_on_repeated_init(client, auth_headers, vocab_deck_id):
+    body = {
+        "deck_id": vocab_deck_id,
+        "daily_target_count": 20,
+        "default_focus_duration": 1500,
+        "add_to_today_plan": True,
+    }
+
+    first = await client.post("/todo/app-tasks/vocab/init", json=body, headers=auth_headers)
+    second = await client.post("/todo/app-tasks/vocab/init", json=body, headers=auth_headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["task_id"] == first.json()["task_id"]
+
+
+@pytest.mark.asyncio
 async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_headers):
     response = await client.post(
         "/todo/app-tasks/erc/init",
@@ -770,6 +819,24 @@ async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_hea
     assert task_payload["is_recurring"] is True
     assert task_payload["period_type"] == "daily"
     assert task_payload["max_completions_per_period"] == 1
+
+
+@pytest.mark.asyncio
+async def test_erc_app_task_init_rejects_missing_event(client, auth_headers):
+    response = await client.post(
+        "/todo/app-tasks/erc/init",
+        json={
+            "review_scope": "due",
+            "daily_question_target": 10,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+            "event_id": str(uuid4()),
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "关联事件不存在"
 
 
 @pytest.mark.asyncio

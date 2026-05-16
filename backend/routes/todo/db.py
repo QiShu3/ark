@@ -246,6 +246,13 @@ async def init_todo(app: Any) -> None:
             WHERE status = 'active';
             """
         )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_active_app_managed
+            ON tasks(user_id, app_id, app_task_type)
+            WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE;
+            """
+        )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
         await conn.execute(
             """
