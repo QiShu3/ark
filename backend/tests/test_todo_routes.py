@@ -948,6 +948,27 @@ async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_
 
 
 @pytest.mark.asyncio
+async def test_complete_app_managed_task_rejects_plain_task_complete(client, auth_headers, vocab_deck_id):
+    init_response = await client.post(
+        "/todo/app-tasks/vocab/init",
+        json={
+            "deck_id": vocab_deck_id,
+            "daily_target_count": 20,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+    assert init_response.status_code == 200
+    task_id = init_response.json()["task_id"]
+
+    response = await client.post(f"/todo/tasks/{task_id}/complete", headers=auth_headers)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "应用托管任务必须由子应用专注工作完成"
+
+
+@pytest.mark.asyncio
 async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_headers):
     response = await client.post(
         "/todo/app-tasks/erc/init",

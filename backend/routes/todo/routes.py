@@ -730,6 +730,11 @@ async def complete_task(
             )
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+            if bool(row["managed_by_app"]):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="应用托管任务必须由子应用专注工作完成",
+                )
 
             completion_state = await _build_completion_state(
                 conn,
