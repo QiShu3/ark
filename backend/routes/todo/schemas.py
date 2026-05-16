@@ -9,6 +9,11 @@ from pydantic import BaseModel, Field
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
 TaskType = Literal["focus", "checkin"]
+TaskSourceType = Literal["user", "app"]
+AppTaskId = Literal["vocab", "erc"]
+AppTaskType = Literal["vocab_today", "erc_review"]
+AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
+AppTaskRuntimeState = Literal["uninitialized", "ready", "completed_today", "blocked", "config_invalid"]
 CompletionPeriodType = Literal["once", "daily", "weekly", "monthly", "custom_days"]
 AppointmentStoredStatus = Literal["pending", "attended", "missed", "cancelled"]
 AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed", "cancelled"]
@@ -56,6 +61,12 @@ class TaskCreateRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     start_date: datetime | None = None
     due_date: datetime | None = None
+    source_type: TaskSourceType = "user"
+    app_id: AppTaskId | None = None
+    app_task_type: AppTaskType | None = None
+    app_config_id: UUID | None = None
+    app_instance_key: str | None = Field(default=None, max_length=160)
+    managed_by_app: bool = False
 
 
 class TaskUpdateRequest(BaseModel):
@@ -82,6 +93,12 @@ class TaskUpdateRequest(BaseModel):
     tags: list[str] | None = None
     start_date: datetime | None = None
     due_date: datetime | None = None
+    source_type: TaskSourceType | None = None
+    app_id: AppTaskId | None = None
+    app_task_type: AppTaskType | None = None
+    app_config_id: UUID | None = None
+    app_instance_key: str | None = Field(default=None, max_length=160)
+    managed_by_app: bool | None = None
 
 
 class TaskOut(BaseModel):
@@ -116,6 +133,12 @@ class TaskOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     completion_state: CompletionStateOut | None = None
+    source_type: TaskSourceType = "user"
+    app_id: AppTaskId | None = None
+    app_task_type: AppTaskType | None = None
+    app_config_id: UUID | None = None
+    app_instance_key: str | None = None
+    managed_by_app: bool = False
 
 
 class AppointmentCreateRequest(BaseModel):
@@ -285,6 +308,31 @@ class FocusWorkflowCreateRequest(BaseModel):
     break_duration: int = Field(default=300, ge=60, le=24 * 60 * 60)
 
 
+class AppTaskInitRequest(BaseModel):
+    default_focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
+    add_to_today_plan: bool = True
+    event_id: UUID | None = None
+
+
+class VocabAppTaskInitRequest(AppTaskInitRequest):
+    deck_id: str
+    daily_target_count: int = Field(default=20, ge=1, le=500)
+
+
+class ERCAppTaskInitRequest(AppTaskInitRequest):
+    review_scope: Literal["due", "mistakes", "all"] = "due"
+    daily_question_target: int = Field(default=10, ge=1, le=200)
+
+
+class AppTaskStatusOut(BaseModel):
+    state: AppTaskRuntimeState
+    task_id: UUID | None = None
+    config_id: UUID | None = None
+    completion_state: CompletionStateOut | None = None
+    blocked_reason: str | None = None
+    config: dict[str, object] = Field(default_factory=dict)
+
+
 class FocusWorkflowPhase(BaseModel):
     phase_type: Literal["focus", "break"]
     duration: int = Field(ge=60, le=24 * 60 * 60)
@@ -321,6 +369,10 @@ class FocusWorkflowOut(BaseModel):
     has_minimized_work: bool = False
     is_paused: bool = False
     record_focus: bool = True
+    active_task_source_type: TaskSourceType | None = None
+    active_task_app_id: AppTaskId | None = None
+    active_task_app_task_type: AppTaskType | None = None
+    active_task_app_config_id: UUID | None = None
 
 
 class FocusWorkflowPresetCreateRequest(BaseModel):

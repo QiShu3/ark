@@ -101,6 +101,9 @@ async def create_task(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> TaskOut:
     """创建任务。"""
+    if body.source_type != "user" or body.managed_by_app or body.app_id or body.app_task_type or body.app_config_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建")
+
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = (
@@ -125,14 +128,15 @@ async def create_task(
                 current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                 event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                 weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                start_date, due_date
+                start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
             RETURNING id, user_id, title, content, status, priority, target_duration,
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                       weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                      source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             """,
             int(user.id),
             body.title,
@@ -159,6 +163,12 @@ async def create_task(
             body.tags,
             body.start_date,
             due_date,
+            body.source_type,
+            body.app_id,
+            body.app_task_type,
+            body.app_config_id,
+            body.app_instance_key,
+            body.managed_by_app,
         )
     if row is None:
         raise HTTPException(status_code=500, detail="创建任务失败")
@@ -202,7 +212,8 @@ async def list_tasks(
                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-               actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+               actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+               source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
         FROM tasks
         WHERE {where_sql}
         ORDER BY updated_at DESC
@@ -237,7 +248,8 @@ async def list_calendar_tasks(
                    current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                    event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                    weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                   source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             FROM tasks
             WHERE user_id = $1
               AND is_deleted = FALSE
@@ -276,7 +288,8 @@ async def get_task(
                    current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                    event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                    weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                   actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                   source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             FROM tasks
             WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
             """,
@@ -374,7 +387,8 @@ async def update_task(
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                       weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                      source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             """,
             *args,
             task_id,
@@ -407,7 +421,8 @@ async def move_task_to_today(
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                       weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                      source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             """,
             now,
             task_id,
@@ -442,7 +457,8 @@ async def move_task_out_of_today(
                       current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                       event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                       weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                      actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                      source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
             """,
             next_start,
             next_due,
@@ -472,7 +488,8 @@ async def complete_task(
                        current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                        event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                        weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                       actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                       source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
                 FROM tasks
                 WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)
                 """,
@@ -517,7 +534,8 @@ async def complete_task(
                               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
                               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
                               weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                              actual_duration, start_date, due_date, is_deleted, created_at, updated_at
+                              actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                              source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
                     """,
                     "done",
                     task_id,

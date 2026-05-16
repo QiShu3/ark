@@ -70,6 +70,12 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         is_deleted=bool(row["is_deleted"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        source_type=str(_record_get(row, "source_type", "user") or "user"),
+        app_id=_record_get(row, "app_id"),
+        app_task_type=_record_get(row, "app_task_type"),
+        app_config_id=_record_get(row, "app_config_id"),
+        app_instance_key=_record_get(row, "app_instance_key"),
+        managed_by_app=bool(_record_get(row, "managed_by_app", False)),
     )
 
 

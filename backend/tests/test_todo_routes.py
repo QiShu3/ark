@@ -7,6 +7,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+import httpx
+import pytest
+import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -224,6 +227,12 @@ class _FakeTodoConn:
                 "tags": args[22],
                 "start_date": args[23],
                 "due_date": args[24],
+                "source_type": args[25] if len(args) > 25 else "user",
+                "app_id": args[26] if len(args) > 26 else None,
+                "app_task_type": args[27] if len(args) > 27 else None,
+                "app_config_id": args[28] if len(args) > 28 else None,
+                "app_instance_key": args[29] if len(args) > 29 else None,
+                "managed_by_app": args[30] if len(args) > 30 else False,
                 "actual_duration": 0,
                 "is_deleted": False,
                 "created_at": now,
@@ -550,6 +559,41 @@ def _build_app() -> FastAPI:
     return app
 
 
+@pytest_asyncio.fixture
+async def client(monkeypatch):
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    transport = httpx.ASGITransport(app=_build_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def auth_headers() -> dict[str, str]:
+    return {}
+
+
+@pytest.mark.asyncio
+async def test_task_out_includes_app_managed_metadata(client, auth_headers):
+    task_payload = {
+        "title": "普通任务",
+        "content": None,
+        "is_recurring": False,
+        "period_type": "once",
+    }
+    response = await client.post("/todo/tasks", json=task_payload, headers=auth_headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_type"] == "user"
+    assert payload["app_id"] is None
+    assert payload["app_task_type"] is None
+    assert payload["app_config_id"] is None
+    assert payload["app_instance_key"] is None
+    assert payload["managed_by_app"] is False
+
+
 def _task_row(
     *,
     user_id: int = 7,
@@ -589,6 +633,12 @@ def _task_row(
         "actual_duration": 0,
         "start_date": start_date,
         "due_date": due_date,
+        "source_type": "user",
+        "app_id": None,
+        "app_task_type": None,
+        "app_config_id": None,
+        "app_instance_key": None,
+        "managed_by_app": False,
         "is_deleted": is_deleted,
         "created_at": now,
         "updated_at": now,

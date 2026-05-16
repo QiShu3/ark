@@ -44,11 +44,20 @@ async def init_todo(app: Any) -> None:
               start_date TIMESTAMPTZ NULL,
               due_date TIMESTAMPTZ NULL,
               manually_scheduled_for_today BOOLEAN NOT NULL DEFAULT FALSE,
+              source_type VARCHAR(20) NOT NULL DEFAULT 'user',
+              app_id VARCHAR(40) NULL,
+              app_task_type VARCHAR(80) NULL,
+              app_config_id UUID NULL,
+              app_instance_key VARCHAR(160) NULL,
+              managed_by_app BOOLEAN NOT NULL DEFAULT FALSE,
               is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_tasks_status CHECK (status IN ('todo', 'done')),
               CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin')),
+              CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app')),
+              CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
+              CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review')),
               CONSTRAINT chk_tasks_priority CHECK (priority BETWEEN 0 AND 3),
               CONSTRAINT chk_tasks_target_duration CHECK (target_duration >= 0),
               CONSTRAINT chk_tasks_current_cycle_count CHECK (current_cycle_count >= 0),
@@ -91,6 +100,20 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS manually_scheduled_for_today BOOLEAN NOT NULL DEFAULT FALSE;"
         )
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) NOT NULL DEFAULT 'user';")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_id VARCHAR(40) NULL;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_task_type VARCHAR(80) NULL;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_config_id UUID NULL;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_instance_key VARCHAR(160) NULL;")
+        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS managed_by_app BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_source_type;")
+        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app'));")
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_id;")
+        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));")
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
+        await conn.execute(
+            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review'));"
+        )
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
         await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin'));")
@@ -120,6 +143,57 @@ async def init_todo(app: Any) -> None:
                 OR
                 (cycle_period = 'custom' AND cycle_every_days IS NOT NULL AND cycle_every_days >= 1)
             );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_task_configs (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              app_id VARCHAR(40) NOT NULL,
+              app_task_type VARCHAR(80) NOT NULL,
+              config JSONB NOT NULL DEFAULT '{}'::JSONB,
+              status VARCHAR(20) NOT NULL DEFAULT 'active',
+              created_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc')),
+              CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review')),
+              CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid'))
+            );
+            """
+        )
+        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE;")
+        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS app_id VARCHAR(40) NOT NULL;")
+        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS app_task_type VARCHAR(80) NOT NULL;")
+        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::JSONB;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';"
+        )
+        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS created_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+        )
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+        )
+        await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_id;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc'));"
+        )
+        await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review'));"
+        )
+        await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_status;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid'));"
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_app_task_configs_active_unique
+            ON app_task_configs(user_id, app_id, app_task_type)
+            WHERE status = 'active';
             """
         )
         await conn.execute(
