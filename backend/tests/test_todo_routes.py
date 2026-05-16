@@ -594,6 +594,29 @@ async def test_task_out_includes_app_managed_metadata(client, auth_headers):
     assert payload["managed_by_app"] is False
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"source_type": "app"},
+        {"managed_by_app": True},
+        {"app_id": "vocab"},
+        {"app_task_type": "vocab_today"},
+        {"app_config_id": "00000000-0000-0000-0000-000000000001"},
+        {"app_instance_key": "vocab:vocab_today"},
+    ],
+)
+async def test_create_task_rejects_app_managed_metadata(client, auth_headers, metadata):
+    response = await client.post(
+        "/todo/tasks",
+        json={"title": "普通任务", **metadata},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "应用托管任务只能由子应用初始化创建"
+
+
 def _task_row(
     *,
     user_id: int = 7,

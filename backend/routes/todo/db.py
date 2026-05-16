@@ -58,6 +58,24 @@ async def init_todo(app: Any) -> None:
               CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app')),
               CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
               CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review')),
+              CONSTRAINT chk_tasks_app_metadata_consistency CHECK (
+                  (
+                    source_type = 'user'
+                    AND managed_by_app = FALSE
+                    AND app_id IS NULL
+                    AND app_task_type IS NULL
+                    AND app_config_id IS NULL
+                    AND app_instance_key IS NULL
+                  )
+                  OR
+                  (
+                    source_type = 'app'
+                    AND managed_by_app = TRUE
+                    AND app_id IS NOT NULL
+                    AND app_task_type IS NOT NULL
+                    AND app_config_id IS NOT NULL
+                  )
+              ),
               CONSTRAINT chk_tasks_priority CHECK (priority BETWEEN 0 AND 3),
               CONSTRAINT chk_tasks_target_duration CHECK (target_duration >= 0),
               CONSTRAINT chk_tasks_current_cycle_count CHECK (current_cycle_count >= 0),
@@ -113,6 +131,30 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute(
             "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review'));"
+        )
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_metadata_consistency;")
+        await conn.execute(
+            """
+            ALTER TABLE tasks
+            ADD CONSTRAINT chk_tasks_app_metadata_consistency CHECK (
+                (
+                  source_type = 'user'
+                  AND managed_by_app = FALSE
+                  AND app_id IS NULL
+                  AND app_task_type IS NULL
+                  AND app_config_id IS NULL
+                  AND app_instance_key IS NULL
+                )
+                OR
+                (
+                  source_type = 'app'
+                  AND managed_by_app = TRUE
+                  AND app_id IS NOT NULL
+                  AND app_task_type IS NOT NULL
+                  AND app_config_id IS NOT NULL
+                )
+            );
+            """
         )
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
@@ -194,6 +236,14 @@ async def init_todo(app: Any) -> None:
             CREATE UNIQUE INDEX IF NOT EXISTS idx_app_task_configs_active_unique
             ON app_task_configs(user_id, app_id, app_task_type)
             WHERE status = 'active';
+            """
+        )
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
+        await conn.execute(
+            """
+            ALTER TABLE tasks
+            ADD CONSTRAINT fk_tasks_app_config_id
+            FOREIGN KEY (app_config_id) REFERENCES app_task_configs(id);
             """
         )
         await conn.execute(

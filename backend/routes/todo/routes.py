@@ -101,7 +101,14 @@ async def create_task(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> TaskOut:
     """创建任务。"""
-    if body.source_type != "user" or body.managed_by_app or body.app_id or body.app_task_type or body.app_config_id:
+    if (
+        body.source_type != "user"
+        or body.managed_by_app
+        or body.app_id
+        or body.app_task_type
+        or body.app_config_id
+        or body.app_instance_key
+    ):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建")
 
     pool = _pool_from_request(request)
