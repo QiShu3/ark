@@ -163,12 +163,20 @@ async def _create_or_update_managed_app_task(
     user_id: int,
     app_id: str,
     app_task_type: str,
-    config_id: UUID,
+    config: dict[str, Any],
     target_duration: int,
     add_to_today_plan: bool,
     event_id: UUID | None,
 ) -> asyncpg.Record | dict[str, Any]:
     title = _app_task_title(app_id, app_task_type)
+    config_row = await _create_or_update_app_task_config(
+        conn,
+        user_id=user_id,
+        app_id=app_id,
+        app_task_type=app_task_type,
+        config=config,
+    )
+    config_id = config_row["id"]
     current = await conn.fetchrow(
         """
         SELECT id

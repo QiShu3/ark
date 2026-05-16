@@ -682,6 +682,39 @@ async def test_vocab_app_task_status_starts_uninitialized(client, auth_headers):
 
 
 @pytest.mark.asyncio
+async def test_vocab_app_task_status_includes_config_before_task_exists(monkeypatch, auth_headers, vocab_deck_id):
+    conn = _FakeTodoConn()
+    config_id = uuid4()
+    now = datetime.now(UTC)
+    conn.app_task_configs = [
+        {
+            "id": config_id,
+            "user_id": 7,
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
+            "status": "active",
+            "created_task_id": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    transport = httpx.ASGITransport(app=_build_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "uninitialized"
+    assert payload["task_id"] is None
+    assert payload["config_id"] == str(config_id)
+    assert payload["config"] == {"deck_id": vocab_deck_id, "daily_target_count": 20}
+
+
+@pytest.mark.asyncio
 async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_headers, vocab_deck_id):
     response = await client.post(
         "/todo/app-tasks/vocab/init",
@@ -734,6 +767,9 @@ async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_hea
     assert task_payload["app_id"] == "erc"
     assert task_payload["app_task_type"] == "erc_review"
     assert task_payload["managed_by_app"] is True
+    assert task_payload["is_recurring"] is True
+    assert task_payload["period_type"] == "daily"
+    assert task_payload["max_completions_per_period"] == 1
 
 
 @pytest.mark.asyncio

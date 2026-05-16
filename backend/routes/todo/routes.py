@@ -21,7 +21,6 @@ from .helpers import (
     _close_open_focus_app_work_log,
     _close_open_focus_log,
     _completion_records_for_user,
-    _create_or_update_app_task_config,
     _create_or_update_managed_app_task,
     _create_workflow_with_focus_phase,
     _delivery_eve_completed,
@@ -118,8 +117,16 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
         app_id=app_id,
         app_task_type=app_task_type,
     )
-    if config is None or config["created_task_id"] is None:
+    if config is None:
         return AppTaskStatusOut(state="uninitialized")
+
+    config_dict = _config_payload(config["config"])
+    if config["created_task_id"] is None:
+        return AppTaskStatusOut(
+            state="uninitialized",
+            config_id=config["id"],
+            config=config_dict,
+        )
 
     task_row = await conn.fetchrow(
         """
@@ -136,7 +143,6 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
         config["created_task_id"],
         user_id,
     )
-    config_dict = _config_payload(config["config"])
     if task_row is None:
         return AppTaskStatusOut(
             state="config_invalid",
@@ -193,19 +199,12 @@ async def init_vocab_app_task(
             "add_to_today_plan": body.add_to_today_plan,
             "event_id": str(body.event_id) if body.event_id is not None else None,
         }
-        config_row = await _create_or_update_app_task_config(
-            conn,
-            user_id=int(user.id),
-            app_id="vocab",
-            app_task_type="vocab_today",
-            config=config,
-        )
         await _create_or_update_managed_app_task(
             conn,
             user_id=int(user.id),
             app_id="vocab",
             app_task_type="vocab_today",
-            config_id=config_row["id"],
+            config=config,
             target_duration=body.default_focus_duration,
             add_to_today_plan=body.add_to_today_plan,
             event_id=body.event_id,
@@ -238,19 +237,12 @@ async def init_erc_app_task(
             "add_to_today_plan": body.add_to_today_plan,
             "event_id": str(body.event_id) if body.event_id is not None else None,
         }
-        config_row = await _create_or_update_app_task_config(
-            conn,
-            user_id=int(user.id),
-            app_id="erc",
-            app_task_type="erc_review",
-            config=config,
-        )
         await _create_or_update_managed_app_task(
             conn,
             user_id=int(user.id),
             app_id="erc",
             app_task_type="erc_review",
-            config_id=config_row["id"],
+            config=config,
             target_duration=body.default_focus_duration,
             add_to_today_plan=body.add_to_today_plan,
             event_id=body.event_id,
