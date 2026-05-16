@@ -527,7 +527,23 @@ async def update_task(
     pool = _pool_from_request(request)
     current = await get_task(request, task_id, user)
     if current.managed_by_app:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务不能通过普通任务接口修改")
+        app_outer_fields = {
+            "priority",
+            "target_duration",
+            "event",
+            "event_ids",
+            "event_id",
+            "time_inherits_from_event",
+            "time_overridden",
+            "tags",
+            "start_date",
+            "due_date",
+        }
+        if not set(patch).issubset(app_outer_fields):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="应用托管任务只能修改计划、事件和提醒等外层属性",
+            )
 
     allowed_cols: dict[str, str] = {
         "title": "title",
@@ -556,18 +572,21 @@ async def update_task(
     }
 
     async with pool.acquire() as conn:
-        normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = (
-            _normalize_completion_settings(
-                is_recurring=patch.get("is_recurring", current.is_recurring),
-                period_type=patch.get("period_type", current.period_type),
-                custom_period_days=patch.get("custom_period_days", current.custom_period_days),
-                max_completions_per_period=patch.get("max_completions_per_period", current.max_completions_per_period),
+        if not current.managed_by_app:
+            normalized_is_recurring, normalized_period_type, normalized_custom_period_days, normalized_max = (
+                _normalize_completion_settings(
+                    is_recurring=patch.get("is_recurring", current.is_recurring),
+                    period_type=patch.get("period_type", current.period_type),
+                    custom_period_days=patch.get("custom_period_days", current.custom_period_days),
+                    max_completions_per_period=patch.get(
+                        "max_completions_per_period", current.max_completions_per_period
+                    ),
+                )
             )
-        )
-        patch["is_recurring"] = normalized_is_recurring
-        patch["period_type"] = normalized_period_type
-        patch["custom_period_days"] = normalized_custom_period_days
-        patch["max_completions_per_period"] = normalized_max
+            patch["is_recurring"] = normalized_is_recurring
+            patch["period_type"] = normalized_period_type
+            patch["custom_period_days"] = normalized_custom_period_days
+            patch["max_completions_per_period"] = normalized_max
 
         event_row = await _get_event_for_user(
             conn, user_id=int(user.id), event_id=patch.get("event_id", current.event_id)
@@ -2106,7 +2125,8 @@ async def submit_focus_work_result(
             workflow_task_id = (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) or (
                 row.get("task_id") if hasattr(row, "get") else row["task_id"]
             )
-            if body.result == "completed" and workflow_task_id is not None:
+            completed_task = body.progress_snapshot.get("completedTask") is True
+            if body.result == "completed" and completed_task and workflow_task_id is not None:
                 task_row = await conn.fetchrow(
                     """
                     SELECT id, user_id, status, is_recurring, period_type, custom_period_days,
@@ -2341,6 +2361,24 @@ async def resume_focus_workflow(
                 WHERE id = $1
                 """,
                 row["id"],
+                paused_at,
+            )
+            await conn.execute(
+                """
+                UPDATE focus_logs
+                SET start_time = start_time + (NOW() - $2::timestamptz)
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                int(user.id),
+                paused_at,
+            )
+            await conn.execute(
+                """
+                UPDATE focus_app_work_logs
+                SET start_time = start_time + (NOW() - $2::timestamptz)
+                WHERE user_id = $1 AND end_at IS NULL
+                """,
+                int(user.id),
                 paused_at,
             )
             updated_row = await conn.fetchrow(

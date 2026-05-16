@@ -18,13 +18,15 @@ const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'g
 
 type VocabTodayFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-export default function VocabTodayFocusWork({ onCompleteTaskAndFinish }: VocabTodayFocusWorkProps) {
+export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish }: VocabTodayFocusWorkProps) {
   const { decks, activeDeck, activeDeckVersion, inheritancePrompt, setActiveDeck, confirmInheritance, dismissInheritance } = useVocabDeck();
   const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
   const completedRef = React.useRef(false);
+  const isPaused = workflow?.is_paused === true;
 
   React.useEffect(() => {
     if (completedRef.current) return;
+    if (isPaused) return;
     if (!activeDeck) return;
     if (!session.ready) return;
     if (session.loading || session.error || session.isBatchReview || session.currentItem) return;
@@ -33,6 +35,7 @@ export default function VocabTodayFocusWork({ onCompleteTaskAndFinish }: VocabTo
   }, [
     onCompleteTaskAndFinish,
     activeDeck,
+    isPaused,
     session.currentBatchNumber,
     session.currentItem,
     session.error,
@@ -89,7 +92,7 @@ export default function VocabTodayFocusWork({ onCompleteTaskAndFinish }: VocabTo
                   <button
                     key={action.value}
                     type="button"
-                    disabled={session.submitting}
+                    disabled={isPaused || session.submitting}
                     onClick={() => void session.submit(action.value)}
                     className="rounded-[1.5rem] border border-white/15 bg-white/8 px-5 py-4 text-left transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -112,8 +115,9 @@ export default function VocabTodayFocusWork({ onCompleteTaskAndFinish }: VocabTo
               {onCompleteTaskAndFinish ? (
                 <button
                   type="button"
+                  disabled={isPaused}
                   onClick={onCompleteTaskAndFinish}
-                  className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
+                  className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   完成今日单词
                 </button>

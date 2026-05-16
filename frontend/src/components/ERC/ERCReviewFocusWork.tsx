@@ -8,11 +8,12 @@ import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCReviewFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-export default function ERCReviewFocusWork({ onCompleteTaskAndFinish }: ERCReviewFocusWorkProps) {
+export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }: ERCReviewFocusWorkProps) {
   const [item, setItem] = useState<ERCReviewNext | null>(null);
   const [selected, setSelected] = useState<OptionKey | null>(null);
   const [result, setResult] = useState<ERCReviewSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isPaused = workflow?.is_paused === true;
 
   const loadNext = () => {
     setSelected(null);
@@ -30,6 +31,7 @@ export default function ERCReviewFocusWork({ onCompleteTaskAndFinish }: ERCRevie
   }, []);
 
   const handleSubmit = async () => {
+    if (isPaused) return;
     if (!item?.question || !selected) return;
     try {
       const nextResult = await submitERCReview(item.question.question_id, selected);
@@ -61,7 +63,12 @@ export default function ERCReviewFocusWork({ onCompleteTaskAndFinish }: ERCRevie
             <p className="mt-3 text-sm text-white/62">今天没有需要复习的阅读题，可以去题库练一篇新的文章。</p>
             <div className="mt-6 flex flex-wrap gap-3">
               {onCompleteTaskAndFinish ? (
-                <button type="button" onClick={onCompleteTaskAndFinish} className="inline-flex rounded-full bg-white px-5 py-3 text-sm text-slate-950">
+                <button
+                  type="button"
+                  disabled={isPaused}
+                  onClick={onCompleteTaskAndFinish}
+                  className="inline-flex rounded-full bg-white px-5 py-3 text-sm text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   完成今日 ERC 复习
                 </button>
               ) : null}
@@ -102,7 +109,7 @@ export default function ERCReviewFocusWork({ onCompleteTaskAndFinish }: ERCRevie
                       value={key}
                       aria-label={`${key} ${item.question?.options[key] ?? ''}`}
                       checked={selected === key}
-                      disabled={!!result}
+                      disabled={isPaused || !!result}
                       onChange={() => setSelected(key)}
                       className="mt-1"
                     />
@@ -122,13 +129,18 @@ export default function ERCReviewFocusWork({ onCompleteTaskAndFinish }: ERCRevie
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={!selected || !!result}
+                  disabled={isPaused || !selected || !!result}
                   className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 disabled:opacity-60"
                 >
                   提交答案
                 </button>
                 {result ? (
-                  <button type="button" onClick={loadNext} className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/82">
+                  <button
+                    type="button"
+                    disabled={isPaused}
+                    onClick={loadNext}
+                    className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/82 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     下一题
                   </button>
                 ) : null}

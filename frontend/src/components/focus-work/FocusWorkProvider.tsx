@@ -173,6 +173,10 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     void submitResult('abandoned');
   }
 
+  function completeCurrentFocusRound() {
+    void submitResult('completed', { completedTask: false });
+  }
+
   return (
     <>
       {children}
@@ -223,6 +227,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           busy={busy}
           onPause={() => void pauseFocusWork()}
           onResume={() => void resumeFocusWork()}
+          onCompleteRound={completeCurrentFocusRound}
           onAbandon={abandonCurrentWork}
         >
           {activeDefinition.render({

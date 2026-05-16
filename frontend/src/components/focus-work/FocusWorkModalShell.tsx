@@ -8,6 +8,7 @@ type FocusWorkModalShellProps = {
   busy?: boolean;
   onPause: () => void;
   onResume: () => void;
+  onCompleteRound: () => void;
   onAbandon: () => void;
   children: React.ReactNode;
 };
@@ -20,6 +21,7 @@ export default function FocusWorkModalShell({
   busy = false,
   onPause,
   onResume,
+  onCompleteRound,
   onAbandon,
   children,
 }: FocusWorkModalShellProps) {
@@ -63,6 +65,14 @@ export default function FocusWorkModalShell({
             </button>
             <button
               type="button"
+              onClick={onCompleteRound}
+              disabled={busy}
+              className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm text-blue-100 transition hover:border-blue-300/32 hover:bg-blue-300/16 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              结束本轮专注
+            </button>
+            <button
+              type="button"
               onClick={onAbandon}
               disabled={busy}
               className="rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:bg-white/12 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -71,7 +81,20 @@ export default function FocusWorkModalShell({
             </button>
           </div>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <div className="relative min-h-0 flex-1 overflow-y-auto p-5">
+          <div className={isPaused ? 'pointer-events-none select-none opacity-35' : undefined} aria-hidden={isPaused ? true : undefined}>
+            {children}
+          </div>
+          {isPaused ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 backdrop-blur-sm">
+              <div className="w-[min(28rem,92vw)] rounded-[2rem] border border-white/12 bg-[#0c1016]/92 p-8 text-center shadow-2xl">
+                <div className="text-xs uppercase tracking-[0.24em] text-white/35">Paused</div>
+                <h3 className="mt-4 text-3xl font-semibold text-white">专注已暂停</h3>
+                <p className="mt-3 text-sm leading-6 text-white/60">继续后会从当前阶段接着计时，暂停期间不会提交业务动作。</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </section>
     </div>
   );

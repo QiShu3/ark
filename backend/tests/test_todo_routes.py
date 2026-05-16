@@ -892,7 +892,7 @@ async def test_vocab_app_task_init_returns_same_task_on_repeated_init(client, au
 
 
 @pytest.mark.asyncio
-async def test_update_app_managed_task_rejects_plain_task_patch(client, auth_headers, vocab_deck_id):
+async def test_update_app_managed_task_rejects_business_patch(client, auth_headers, vocab_deck_id):
     init_response = await client.post(
         "/todo/app-tasks/vocab/init",
         json={
@@ -913,7 +913,38 @@ async def test_update_app_managed_task_rejects_plain_task_patch(client, auth_hea
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "应用托管任务不能通过普通任务接口修改"
+    assert response.json()["detail"] == "应用托管任务只能修改计划、事件和提醒等外层属性"
+
+
+@pytest.mark.asyncio
+async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_headers, vocab_deck_id):
+    init_response = await client.post(
+        "/todo/app-tasks/vocab/init",
+        json={
+            "deck_id": vocab_deck_id,
+            "daily_target_count": 20,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+    assert init_response.status_code == 200
+    task_id = init_response.json()["task_id"]
+
+    response = await client.patch(
+        f"/todo/tasks/{task_id}",
+        json={"priority": 2, "target_duration": 900, "tags": ["morning"]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "今日单词"
+    assert payload["source_type"] == "app"
+    assert payload["managed_by_app"] is True
+    assert payload["priority"] == 2
+    assert payload["target_duration"] == 900
+    assert payload["tags"] == ["morning"]
 
 
 @pytest.mark.asyncio
@@ -2403,6 +2434,9 @@ class _WorkflowConn:
         if "SET phase_started_at = phase_started_at + (NOW() - $2::timestamptz)" in sql:
             self.workflow["is_paused"] = False
             self.workflow["paused_at"] = None
+        if "UPDATE focus_logs" in sql and "SET start_time = start_time + (NOW() - $2::timestamptz)" in sql:
+            paused_at = args[1]
+            self.open_focus_log["start_time"] = self.open_focus_log["start_time"] + (datetime.now(UTC) - paused_at)
         if "INSERT INTO completion_records" in sql:
             self.completion_records.append(
                 {
@@ -2697,13 +2731,57 @@ def test_focus_work_result_completed_records_app_managed_task_completion(monkeyp
 
     resp = client.post(
         "/todo/focus/workflow/focus-work-result",
-        json={"focus_work_type": "vocab_today", "result": "completed", "progress_snapshot": {"done": True}},
+        json={
+            "focus_work_type": "vocab_today",
+            "result": "completed",
+            "progress_snapshot": {"completedTask": True, "done": True},
+        },
     )
 
     assert resp.status_code == 200
     assert resp.json()["state"] == "normal"
     assert len(conn.completion_records) == 1
     assert conn.completion_records[0]["subject_id"] == conn.task_id
+
+
+def test_focus_work_result_completed_round_does_not_record_app_managed_task_completion(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.tasks[0].update(
+        {
+            "title": "今日单词",
+            "source_type": "app",
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "app_config_id": uuid4(),
+            "managed_by_app": True,
+            "is_recurring": True,
+            "period_type": "daily",
+            "max_completions_per_period": 1,
+        }
+    )
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "vocab_today",
+            "focus_work_display_state": "fullscreen",
+            "phases": [{"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}],
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/focus/workflow/focus-work-result",
+        json={"focus_work_type": "vocab_today", "result": "completed", "progress_snapshot": {"completedTask": False}},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "normal"
+    assert conn.completion_records == []
 
 
 def test_pause_focus_workflow_marks_task_focus_as_paused(monkeypatch) -> None:
@@ -2781,6 +2859,33 @@ def test_resume_focus_workflow_clears_paused_state(monkeypatch) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["is_paused"] is False
+
+
+def test_resume_focus_workflow_excludes_pause_from_open_focus_log(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    original_start = datetime.now(UTC) - timedelta(minutes=20)
+    paused_at = datetime.now(UTC) - timedelta(minutes=5)
+    conn.open_focus_log["start_time"] = original_start
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "pending_task_selection": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "task_focus",
+            "focus_work_display_state": "fullscreen",
+            "is_paused": True,
+            "paused_at": paused_at,
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/focus/workflow/resume")
+
+    assert resp.status_code == 200
+    assert conn.open_focus_log["start_time"] > original_start
 
 
 def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:

@@ -150,6 +150,43 @@ describe('FocusWorkProvider', () => {
     expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/pause', { method: 'POST' });
   });
 
+  it('ends an app-managed focus round without completing the app task', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({
+      task_id: 'task-vocab',
+      task_title: '今日单词',
+      active_focus_work_type: 'vocab_today',
+      active_task_source_type: 'app',
+      active_task_app_id: 'vocab',
+      active_task_app_task_type: 'vocab_today',
+      focus_work_display_state: 'fullscreen',
+      pending_confirmation: false,
+      pending_task_selection: false,
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+    await user.click(await screen.findByRole('button', { name: '结束本轮专注' }));
+
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/focus/workflow/focus-work-result',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          focus_work_type: 'vocab_today',
+          result: 'completed',
+          progress_snapshot: {
+            completedTask: false,
+          },
+        }),
+      }),
+    );
+    expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
+  });
+
   it('resumes paused app-managed focus work from the modal shell', async () => {
     const user = userEvent.setup();
     mockCurrentWorkflow({
