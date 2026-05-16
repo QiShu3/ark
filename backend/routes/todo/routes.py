@@ -28,6 +28,7 @@ from .helpers import (
     _event_confirmed_appointment_occurrence_count,
     _event_focus_seconds,
     _focus_activity_dates,
+    _focus_work_type_for_task_row,
     _get_active_app_task_config,
     _get_bindable_task,
     _get_default_focus_workflow_preset,
@@ -108,6 +109,18 @@ def _config_payload(config: Any) -> dict[str, object]:
         decoded = json.loads(config)
         return dict(decoded) if isinstance(decoded, dict) else {}
     return {}
+
+
+def _focus_workflow_task_kwargs(task_row: Any | None) -> dict[str, Any]:
+    if task_row is None:
+        return {}
+    return {
+        "task_title": str(task_row["title"]),
+        "task_source_type": task_row.get("source_type") if hasattr(task_row, "get") else task_row["source_type"],
+        "task_app_id": task_row.get("app_id") if hasattr(task_row, "get") else task_row["app_id"],
+        "task_app_task_type": task_row.get("app_task_type") if hasattr(task_row, "get") else task_row["app_task_type"],
+        "task_app_config_id": task_row.get("app_config_id") if hasattr(task_row, "get") else task_row["app_config_id"],
+    }
 
 
 async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_type: str) -> AppTaskStatusOut:
@@ -1815,7 +1828,12 @@ async def start_focus(
     async with pool.acquire() as conn:
         async with conn.transaction():
             task_row = await conn.fetchrow(
-                "SELECT id, target_duration FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+                """
+                SELECT id, title, target_duration, source_type, app_id, app_task_type, app_config_id,
+                       app_instance_key, managed_by_app
+                FROM tasks
+                WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+                """,
                 task_id,
                 int(user.id),
             )
@@ -1848,6 +1866,7 @@ async def start_focus(
                 phases=phases,
                 focus_duration=focus_duration,
                 break_duration=break_duration,
+                task_focus_work_type=_focus_work_type_for_task_row(task_row),
             )
     if row is None:
         raise HTTPException(status_code=500, detail="开始专注失败")
@@ -1865,7 +1884,11 @@ async def create_focus_workflow(
     async with pool.acquire() as conn:
         async with conn.transaction():
             task_row = await conn.fetchrow(
-                "SELECT id, title FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+                """
+                SELECT id, title, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+                FROM tasks
+                WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+                """,
                 body.task_id,
                 int(user.id),
             )
@@ -1881,6 +1904,7 @@ async def create_focus_workflow(
                 phases=phases,
                 focus_duration=int(body.focus_duration),
                 break_duration=int(body.break_duration),
+                task_focus_work_type=_focus_work_type_for_task_row(task_row),
             )
             row = await conn.fetchrow(
                 """
@@ -1894,7 +1918,7 @@ async def create_focus_workflow(
                 """,
                 int(user.id),
             )
-    return _row_to_focus_workflow(row, task_title=str(task_row["title"]))
+    return _row_to_focus_workflow(row, **_focus_workflow_task_kwargs(task_row))
 
 
 @router.post("/focus/workflow/ai-create", response_model=FocusWorkflowOut)
@@ -1923,15 +1947,21 @@ async def get_focus_workflow_current(
             if row is None:
                 return FocusWorkflowOut(state="normal")
             task_title = None
+            task_kwargs: dict[str, Any] = {}
             if row["task_id"] is not None:
                 task_row = await conn.fetchrow(
-                    "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
+                    """
+                    SELECT title, source_type, app_id, app_task_type, app_config_id
+                    FROM tasks
+                    WHERE id = $1 AND user_id = $2
+                    """,
                     row["task_id"],
                     int(user.id),
                 )
                 if task_row is not None:
                     task_title = str(task_row["title"])
-    return _row_to_focus_workflow(row, task_title=task_title)
+                    task_kwargs = _focus_workflow_task_kwargs(task_row)
+    return _row_to_focus_workflow(row, task_title=task_title, **{k: v for k, v in task_kwargs.items() if k != "task_title"})
 
 
 @router.post("/focus/workflow/start-app-work", response_model=FocusWorkflowOut)
@@ -2073,6 +2103,45 @@ async def submit_focus_work_result(
                 result=body.result,
                 progress_snapshot=dict(body.progress_snapshot),
             )
+            workflow_task_id = (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) or (
+                row.get("task_id") if hasattr(row, "get") else row["task_id"]
+            )
+            if body.result == "completed" and workflow_task_id is not None:
+                task_row = await conn.fetchrow(
+                    """
+                    SELECT id, user_id, status, is_recurring, period_type, custom_period_days,
+                           max_completions_per_period, weekday_only, source_type, app_id, app_task_type
+                    FROM tasks
+                    WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+                    """,
+                    workflow_task_id,
+                    int(user.id),
+                )
+                if task_row is not None and task_row["source_type"] == "app":
+                    completed_at = datetime.now(UTC)
+                    completion_state = await _build_completion_state(
+                        conn,
+                        user_id=int(user.id),
+                        subject_type="task",
+                        subject_id=task_row["id"],
+                        is_recurring=bool(task_row["is_recurring"]),
+                        period_type=task_row["period_type"],
+                        custom_period_days=task_row["custom_period_days"],
+                        max_completions_per_period=int(task_row["max_completions_per_period"]),
+                        weekday_only=bool(task_row["weekday_only"]),
+                        permanent_done=str(task_row["status"]) == "done",
+                        now=completed_at,
+                    )
+                    _raise_if_completion_blocked(completion_state, noun="应用任务")
+                    await _insert_completion_record(
+                        conn,
+                        user_id=int(user.id),
+                        subject_type="task",
+                        subject_id=task_row["id"],
+                        completed_at=completed_at,
+                        counted_period_start=completion_state.current_period_start,
+                        counted_period_end=completion_state.current_period_end,
+                    )
 
             phases = _normalize_workflow_phases(
                 row.get("phases") if hasattr(row, "get") else row["phases"],
@@ -2351,6 +2420,7 @@ async def select_focus_workflow_task(
             task_row = await _get_bindable_task(conn, int(user.id), body.task_id)
             if task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="请选择未完成任务")
+            focus_work_type = _focus_work_type_for_task_row(task_row)
             next_row = await _set_workflow_current_phase(
                 conn,
                 row["id"],
@@ -2359,14 +2429,14 @@ async def select_focus_workflow_task(
                 task_id=task_row["id"],
                 runtime_task_id=task_row["id"],
                 pending_task_selection=False,
-                active_focus_work_type="task_focus",
+                active_focus_work_type=focus_work_type,
                 focus_work_display_state="fullscreen",
                 focus_work_result=None,
                 focus_work_progress_snapshot=None,
             )
-            await _start_focus_app_work_log(conn, int(user.id), row["id"], "task_focus", True)
+            await _start_focus_app_work_log(conn, int(user.id), row["id"], focus_work_type, True)
             await _start_focus_log_for_task(conn, int(user.id), task_row["id"])
-    return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
+    return _row_to_focus_workflow(next_row, **_focus_workflow_task_kwargs(task_row))
 
 
 @router.post("/focus/stop", response_model=Any)

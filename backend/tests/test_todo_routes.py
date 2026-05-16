@@ -2194,6 +2194,17 @@ class _WorkflowConn:
                 "title": "Task A",
                 "status": "todo",
                 "is_deleted": False,
+                "is_recurring": False,
+                "period_type": "once",
+                "custom_period_days": None,
+                "max_completions_per_period": 1,
+                "weekday_only": False,
+                "source_type": "user",
+                "app_id": None,
+                "app_task_type": None,
+                "app_config_id": None,
+                "app_instance_key": None,
+                "managed_by_app": False,
             }
         ]
         self.workflow = {
@@ -2225,6 +2236,24 @@ class _WorkflowConn:
             "task_id": self.task_id,
             "start_time": datetime.now(UTC) - timedelta(minutes=10),
         }
+        self.completion_records: list[dict[str, Any]] = []
+
+    async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
+        if "FROM completion_records" in sql and "subject_type = $2" in sql:
+            user_id, subject_type, subject_id = args[0], args[1], args[2]
+            range_start = args[3] if len(args) > 3 else None
+            range_end = args[4] if len(args) > 4 else None
+            rows = [
+                row
+                for row in self.completion_records
+                if row["user_id"] == user_id
+                and row["subject_type"] == subject_type
+                and row["subject_id"] == subject_id
+                and (range_start is None or row["completed_at"] >= range_start)
+                and (range_end is None or row["completed_at"] < range_end)
+            ]
+            return sorted(rows, key=lambda row: row["completed_at"])
+        return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
         if "SELECT title FROM tasks" in sql:
@@ -2237,6 +2266,33 @@ class _WorkflowConn:
             if task is None:
                 return None
             return {"title": task["title"]}
+        if "SELECT title, source_type, app_id, app_task_type, app_config_id" in sql:
+            task_id = args[0]
+            user_id = int(args[1])
+            task = next(
+                (item for item in self.tasks if item["id"] == task_id and int(item["user_id"]) == user_id),
+                None,
+            )
+            if task is None:
+                return None
+            return {
+                "title": task["title"],
+                "source_type": task["source_type"],
+                "app_id": task["app_id"],
+                "app_task_type": task["app_task_type"],
+                "app_config_id": task["app_config_id"],
+            }
+        if "SELECT id, user_id, status, is_recurring" in sql:
+            task_id = args[0]
+            user_id = int(args[1])
+            return next(
+                (
+                    item
+                    for item in self.tasks
+                    if item["id"] == task_id and int(item["user_id"]) == user_id and not item["is_deleted"]
+                ),
+                None,
+            )
         if "SELECT id, title, status FROM tasks" in sql:
             task_id = args[0]
             user_id = int(args[1])
@@ -2262,6 +2318,12 @@ class _WorkflowConn:
                         "status": item["status"],
                         "is_deleted": item["is_deleted"],
                         "title": item["title"],
+                        "source_type": item.get("source_type", "user"),
+                        "app_id": item.get("app_id"),
+                        "app_task_type": item.get("app_task_type"),
+                        "app_config_id": item.get("app_config_id"),
+                        "app_instance_key": item.get("app_instance_key"),
+                        "managed_by_app": item.get("managed_by_app", False),
                     }
                     for item in self.tasks
                     if item["id"] == task_id and int(item["user_id"]) == user_id
@@ -2341,6 +2403,20 @@ class _WorkflowConn:
         if "SET phase_started_at = phase_started_at + (NOW() - $2::timestamptz)" in sql:
             self.workflow["is_paused"] = False
             self.workflow["paused_at"] = None
+        if "INSERT INTO completion_records" in sql:
+            self.completion_records.append(
+                {
+                    "id": uuid4(),
+                    "user_id": args[0],
+                    "subject_type": args[1],
+                    "subject_id": args[2],
+                    "completed_at": args[3],
+                    "counted_period_start": args[4],
+                    "counted_period_end": args[5],
+                    "created_at": datetime.now(UTC),
+                }
+            )
+            return "INSERT 1"
         return "UPDATE 1"
 
     def transaction(self):
@@ -2477,6 +2553,48 @@ def test_get_focus_workflow_current_marks_pending_task_selection_for_unbound_foc
     assert data["pending_task_selection"] is True
     assert data["task_id"] is None
 
+
+def test_get_focus_workflow_current_exposes_app_managed_adapter(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    config_id = uuid4()
+    conn.tasks[0].update(
+        {
+            "title": "今日单词",
+            "source_type": "app",
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "app_config_id": config_id,
+            "managed_by_app": True,
+            "is_recurring": True,
+            "period_type": "daily",
+        }
+    )
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "vocab_today",
+            "focus_work_display_state": "fullscreen",
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.get("/todo/focus/workflow/current")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["active_focus_work_type"] == "vocab_today"
+    assert data["active_task_source_type"] == "app"
+    assert data["active_task_app_id"] == "vocab"
+    assert data["active_task_app_task_type"] == "vocab_today"
+    assert data["active_task_app_config_id"] == str(config_id)
+    assert data["focus_work_display_state"] == "fullscreen"
+
+
 def test_get_focus_workflow_current_finishes_countup_phase_at_two_hours(monkeypatch) -> None:
     conn = _WorkflowConn()
     conn.workflow["pending_confirmation"] = False
@@ -2545,6 +2663,47 @@ def test_select_focus_workflow_task_starts_pending_phase(monkeypatch) -> None:
     assert data["task_id"] == str(next_task_id)
     assert data["pending_task_selection"] is False
     assert conn.inserted_focus_task_id == next_task_id
+
+
+def test_focus_work_result_completed_records_app_managed_task_completion(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.tasks[0].update(
+        {
+            "title": "今日单词",
+            "source_type": "app",
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "app_config_id": uuid4(),
+            "managed_by_app": True,
+            "is_recurring": True,
+            "period_type": "daily",
+            "max_completions_per_period": 1,
+        }
+    )
+    conn.workflow.update(
+        {
+            "pending_confirmation": False,
+            "runtime_task_id": conn.task_id,
+            "active_focus_work_type": "vocab_today",
+            "focus_work_display_state": "fullscreen",
+            "phases": [{"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}],
+        }
+    )
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/focus/workflow/focus-work-result",
+        json={"focus_work_type": "vocab_today", "result": "completed", "progress_snapshot": {"done": True}},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "normal"
+    assert len(conn.completion_records) == 1
+    assert conn.completion_records[0]["subject_id"] == conn.task_id
 
 
 def test_pause_focus_workflow_marks_task_focus_as_paused(monkeypatch) -> None:

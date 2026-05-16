@@ -1203,6 +1203,17 @@ def _should_use_task_focus_runtime(
     return task_id is not None or runtime_task_id is not None
 
 
+def _focus_work_type_for_task_row(task_row: Any | None) -> FocusWorkType:
+    if task_row is None:
+        return "task_focus"
+    app_task_type = _record_get(task_row, "app_task_type")
+    if app_task_type == "vocab_today":
+        return "vocab_today"
+    if app_task_type == "erc_review":
+        return "erc_review"
+    return "task_focus"
+
+
 def _to_jsonb_param(value: Any) -> str:
     """将值转换为可绑定到 jsonb 的字符串参数。"""
     if isinstance(value, str):
@@ -1406,6 +1417,10 @@ def _row_to_focus_workflow(
     row: asyncpg.Record | None,
     *,
     task_title: str | None = None,
+    task_source_type: str | None = None,
+    task_app_id: str | None = None,
+    task_app_task_type: str | None = None,
+    task_app_config_id: UUID | None = None,
     completed_workflow_name: str | None = None,
 ) -> FocusWorkflowOut:
     """将工作流行数据转换为返回模型。"""
@@ -1490,6 +1505,10 @@ def _row_to_focus_workflow(
         has_minimized_work=has_minimized_work,
         is_paused=is_paused,
         record_focus=bool(_record_get(row, "record_focus", True)),
+        active_task_source_type=task_source_type,
+        active_task_app_id=task_app_id,
+        active_task_app_task_type=task_app_task_type,
+        active_task_app_config_id=task_app_config_id,
     )
 
 
@@ -1537,7 +1556,8 @@ async def _get_bindable_task(conn: Any, user_id: int, task_id: UUID | None) -> d
         return None
     return await conn.fetchrow(
         """
-        SELECT id, status, is_deleted, title
+        SELECT id, status, is_deleted, title, source_type, app_id, app_task_type, app_config_id,
+               app_instance_key, managed_by_app
         FROM tasks
         WHERE id = $1 AND user_id = $2
         """,
@@ -1881,6 +1901,7 @@ async def _advance_focus_workflow_to_next_phase(
         if phase_task_id is None:
             next_row = await _set_workflow_waiting_for_task(conn, workflow_id, idx, phase)
             return _row_to_focus_workflow(next_row, task_title=None)
+        focus_work_type = _focus_work_type_for_task_row(task_row)
         next_row = await _set_workflow_current_phase(
             conn,
             workflow_id,
@@ -1889,14 +1910,21 @@ async def _advance_focus_workflow_to_next_phase(
             task_id=task_row["id"],
             runtime_task_id=task_row["id"],
             pending_task_selection=False,
-            active_focus_work_type="task_focus",
+            active_focus_work_type=focus_work_type,
             focus_work_display_state="fullscreen",
             focus_work_result=None,
             focus_work_progress_snapshot=None,
         )
-        await _start_focus_app_work_log(conn, user_id, workflow_id, "task_focus", True)
+        await _start_focus_app_work_log(conn, user_id, workflow_id, focus_work_type, True)
         await _start_focus_log_for_task(conn, user_id, task_row["id"])
-        return _row_to_focus_workflow(next_row, task_title=str(task_row["title"]))
+        return _row_to_focus_workflow(
+            next_row,
+            task_title=str(task_row["title"]),
+            task_source_type=_record_get(task_row, "source_type"),
+            task_app_id=_record_get(task_row, "app_id"),
+            task_app_task_type=_record_get(task_row, "app_task_type"),
+            task_app_config_id=_record_get(task_row, "app_config_id"),
+        )
     return await _complete_focus_workflow(conn, workflow_id, workflow_name)
 
 
@@ -2118,12 +2146,13 @@ async def _create_workflow_with_focus_phase(
     phases: list[dict[str, Any]],
     focus_duration: int,
     break_duration: int,
+    task_focus_work_type: FocusWorkType | None = None,
 ) -> asyncpg.Record:
     """创建活动工作流并进入 focus 阶段。"""
     first_phase = phases[0]
     first_focus_work_type = _phase_focus_work_type_value(first_phase)
     if first_focus_work_type is None and _phase_is_focus(first_phase) and task_id is not None:
-        first_focus_work_type = "task_focus"
+        first_focus_work_type = task_focus_work_type or "task_focus"
     first_record_focus = bool(first_phase.get("record_focus", True))
     first_focus_work_display_state = "fullscreen" if first_focus_work_type is not None else None
     try:
