@@ -138,10 +138,20 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
                actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
                source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
         FROM tasks
-        WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+        WHERE id = $1
+          AND user_id = $2
+          AND source_type = 'app'
+          AND managed_by_app = TRUE
+          AND app_id = $3
+          AND app_task_type = $4
+          AND app_config_id = $5
+          AND is_deleted = FALSE
         """,
         config["created_task_id"],
         user_id,
+        app_id,
+        app_task_type,
+        config["id"],
     )
     if task_row is None:
         return AppTaskStatusOut(
@@ -503,6 +513,8 @@ async def update_task(
 
     pool = _pool_from_request(request)
     current = await get_task(request, task_id, user)
+    if current.managed_by_app:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务不能通过普通任务接口修改")
 
     allowed_cols: dict[str, str] = {
         "title": "title",

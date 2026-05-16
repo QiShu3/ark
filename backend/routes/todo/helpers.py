@@ -161,128 +161,82 @@ async def _create_or_update_managed_app_task(
         config=config,
     )
     config_id = config_row["id"]
-    current = await conn.fetchrow(
-        """
-        SELECT id
-        FROM tasks
-        WHERE user_id = $1
-          AND source_type = 'app'
-          AND app_id = $2
-          AND app_task_type = $3
-          AND managed_by_app = TRUE
-          AND is_deleted = FALSE
-        LIMIT 1
+    row = await conn.fetchrow(
+        f"""
+        INSERT INTO tasks(
+            user_id, title, content, status, priority, target_duration,
+            current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+            event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+            weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+            start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+        ON CONFLICT (user_id, app_id, app_task_type)
+        WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE
+        DO UPDATE SET
+            title = EXCLUDED.title,
+            content = EXCLUDED.content,
+            status = EXCLUDED.status,
+            priority = EXCLUDED.priority,
+            target_duration = EXCLUDED.target_duration,
+            current_cycle_count = EXCLUDED.current_cycle_count,
+            target_cycle_count = EXCLUDED.target_cycle_count,
+            cycle_period = EXCLUDED.cycle_period,
+            cycle_every_days = EXCLUDED.cycle_every_days,
+            event = EXCLUDED.event,
+            event_ids = EXCLUDED.event_ids,
+            event_id = EXCLUDED.event_id,
+            is_recurring = EXCLUDED.is_recurring,
+            period_type = EXCLUDED.period_type,
+            custom_period_days = EXCLUDED.custom_period_days,
+            max_completions_per_period = EXCLUDED.max_completions_per_period,
+            weekday_only = EXCLUDED.weekday_only,
+            time_inherits_from_event = EXCLUDED.time_inherits_from_event,
+            time_overridden = EXCLUDED.time_overridden,
+            manually_scheduled_for_today = EXCLUDED.manually_scheduled_for_today,
+            task_type = EXCLUDED.task_type,
+            tags = EXCLUDED.tags,
+            start_date = EXCLUDED.start_date,
+            due_date = EXCLUDED.due_date,
+            source_type = EXCLUDED.source_type,
+            app_config_id = EXCLUDED.app_config_id,
+            app_instance_key = EXCLUDED.app_instance_key,
+            managed_by_app = EXCLUDED.managed_by_app,
+            updated_at = NOW()
+        RETURNING {TASK_RETURNING_COLUMNS}
         """,
         user_id,
+        title,
+        None,
+        "todo",
+        0,
+        target_duration,
+        0,
+        0,
+        "daily",
+        None,
+        "",
+        [],
+        event_id,
+        True,
+        "daily",
+        None,
+        1,
+        False,
+        False,
+        False,
+        add_to_today_plan,
+        "focus",
+        [],
+        None,
+        None,
+        "app",
         app_id,
         app_task_type,
+        config_id,
+        f"{app_id}:{app_task_type}",
+        True,
     )
-    if current is not None:
-        row = await conn.fetchrow(
-            f"""
-            UPDATE tasks
-            SET title = $1,
-                target_duration = $2,
-                app_config_id = $3,
-                manually_scheduled_for_today = $4,
-                event_id = $5,
-                updated_at = NOW()
-            WHERE id = $6 AND user_id = $7 AND is_deleted = FALSE
-            RETURNING {TASK_RETURNING_COLUMNS}
-            """,
-            title,
-            target_duration,
-            config_id,
-            add_to_today_plan,
-            event_id,
-            current["id"],
-            user_id,
-        )
-    else:
-        try:
-            row = await conn.fetchrow(
-                f"""
-                INSERT INTO tasks(
-                    user_id, title, content, status, priority, target_duration,
-                    current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
-                    event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                    weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
-                    start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
-                RETURNING {TASK_RETURNING_COLUMNS}
-                """,
-                user_id,
-                title,
-                None,
-                "todo",
-                0,
-                target_duration,
-                0,
-                0,
-                "daily",
-                None,
-                "",
-                [],
-                event_id,
-                True,
-                "daily",
-                None,
-                1,
-                False,
-                False,
-                False,
-                add_to_today_plan,
-                "focus",
-                [],
-                None,
-                None,
-                "app",
-                app_id,
-                app_task_type,
-                config_id,
-                f"{app_id}:{app_task_type}",
-                True,
-            )
-        except asyncpg.UniqueViolationError:
-            existing = await conn.fetchrow(
-                """
-                SELECT id
-                FROM tasks
-                WHERE user_id = $1
-                  AND source_type = 'app'
-                  AND app_id = $2
-                  AND app_task_type = $3
-                  AND managed_by_app = TRUE
-                  AND is_deleted = FALSE
-                LIMIT 1
-                """,
-                user_id,
-                app_id,
-                app_task_type,
-            )
-            if existing is None:
-                raise
-            row = await conn.fetchrow(
-                f"""
-                UPDATE tasks
-                SET title = $1,
-                    target_duration = $2,
-                    app_config_id = $3,
-                    manually_scheduled_for_today = $4,
-                    event_id = $5,
-                    updated_at = NOW()
-                WHERE id = $6 AND user_id = $7 AND is_deleted = FALSE
-                RETURNING {TASK_RETURNING_COLUMNS}
-                """,
-                title,
-                target_duration,
-                config_id,
-                add_to_today_plan,
-                event_id,
-                existing["id"],
-                user_id,
-            )
 
     if row is None:
         raise HTTPException(status_code=500, detail="应用托管任务保存失败")

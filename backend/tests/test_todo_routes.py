@@ -229,7 +229,12 @@ class _FakeTodoConn:
             }
             self.app_task_configs.append(row)
             return row
-        if "FROM tasks" in sql and "source_type = 'app'" in sql and "managed_by_app = TRUE" in sql:
+        if (
+            "FROM tasks" in sql
+            and "source_type = 'app'" in sql
+            and "managed_by_app = TRUE" in sql
+            and "app task status task lookup" not in sql
+        ):
             user_id, app_id, app_task_type = args[0], args[1], args[2]
             task = next(
                 (
@@ -246,12 +251,19 @@ class _FakeTodoConn:
             )
             return {"id": task["id"]} if task is not None else None
         if "app task status task lookup" in sql:
-            task_id, user_id = args[0], args[1]
+            task_id, user_id, app_id, app_task_type, config_id = args[0], args[1], args[2], args[3], args[4]
             return next(
                 (
                     task
                     for task in self.tasks
-                    if task["id"] == task_id and task["user_id"] == user_id and not task["is_deleted"]
+                    if task["id"] == task_id
+                    and task["user_id"] == user_id
+                    and task["source_type"] == "app"
+                    and task["managed_by_app"]
+                    and task["app_id"] == app_id
+                    and task["app_task_type"] == app_task_type
+                    and task["app_config_id"] == config_id
+                    and not task["is_deleted"]
                 ),
                 None,
             )
@@ -289,6 +301,57 @@ class _FakeTodoConn:
             )
             return {"id": task["id"]} if task is not None else None
         if "INSERT INTO tasks" in sql:
+            if "ON CONFLICT (user_id, app_id, app_task_type)" in sql and len(args) > 30 and args[25] == "app":
+                existing = next(
+                    (
+                        item
+                        for item in self.tasks
+                        if item["user_id"] == args[0]
+                        and item["source_type"] == "app"
+                        and item["app_id"] == args[26]
+                        and item["app_task_type"] == args[27]
+                        and item["managed_by_app"]
+                        and not item["is_deleted"]
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    field_order = [
+                        "title",
+                        "content",
+                        "status",
+                        "priority",
+                        "target_duration",
+                        "current_cycle_count",
+                        "target_cycle_count",
+                        "cycle_period",
+                        "cycle_every_days",
+                        "event",
+                        "event_ids",
+                        "event_id",
+                        "is_recurring",
+                        "period_type",
+                        "custom_period_days",
+                        "max_completions_per_period",
+                        "weekday_only",
+                        "time_inherits_from_event",
+                        "time_overridden",
+                        "manually_scheduled_for_today",
+                        "task_type",
+                        "tags",
+                        "start_date",
+                        "due_date",
+                        "source_type",
+                        "app_id",
+                        "app_task_type",
+                        "app_config_id",
+                        "app_instance_key",
+                        "managed_by_app",
+                    ]
+                    for index, field in enumerate(field_order, start=1):
+                        existing[field] = args[index]
+                    existing["updated_at"] = datetime.now(UTC)
+                    return existing
             task_id = uuid4()
             now = datetime.now(UTC)
             row = {
@@ -730,6 +793,41 @@ async def test_vocab_app_task_status_includes_config_before_task_exists(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_vocab_app_task_status_rejects_unbound_created_task(monkeypatch, auth_headers, vocab_deck_id):
+    conn = _FakeTodoConn()
+    config_id = uuid4()
+    task_id = uuid4()
+    now = datetime.now(UTC)
+    conn.tasks = [{**_task_row(title="普通任务"), "id": task_id}]
+    conn.app_task_configs = [
+        {
+            "id": config_id,
+            "user_id": 7,
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
+            "status": "active",
+            "created_task_id": task_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    transport = httpx.ASGITransport(app=_build_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "config_invalid"
+    assert payload["task_id"] is None
+    assert payload["config_id"] == str(config_id)
+    assert payload["blocked_reason"] == "应用托管任务不存在"
+
+
+@pytest.mark.asyncio
 async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_headers, vocab_deck_id):
     response = await client.post(
         "/todo/app-tasks/vocab/init",
@@ -791,6 +889,31 @@ async def test_vocab_app_task_init_returns_same_task_on_repeated_init(client, au
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["task_id"] == first.json()["task_id"]
+
+
+@pytest.mark.asyncio
+async def test_update_app_managed_task_rejects_plain_task_patch(client, auth_headers, vocab_deck_id):
+    init_response = await client.post(
+        "/todo/app-tasks/vocab/init",
+        json={
+            "deck_id": vocab_deck_id,
+            "daily_target_count": 20,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+    assert init_response.status_code == 200
+    task_id = init_response.json()["task_id"]
+
+    response = await client.patch(
+        f"/todo/tasks/{task_id}",
+        json={"title": "改坏的标题", "is_recurring": False, "period_type": "once"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "应用托管任务不能通过普通任务接口修改"
 
 
 @pytest.mark.asyncio
