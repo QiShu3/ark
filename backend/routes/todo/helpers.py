@@ -36,6 +36,15 @@ from .schemas import (
 UTC = getattr(timezone, "utc")
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
 
+TASK_RETURNING_COLUMNS = """
+id, user_id, title, content, status, priority, target_duration,
+current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+"""
+
 
 def _row_to_task(row: asyncpg.Record) -> TaskOut:
     """将 asyncpg.Record 转为 TaskOut。"""
@@ -77,6 +86,185 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
         app_instance_key=_record_get(row, "app_instance_key"),
         managed_by_app=bool(_record_get(row, "managed_by_app", False)),
     )
+
+
+def _app_task_title(app_id: str, app_task_type: str) -> str:
+    if app_id == "vocab" and app_task_type == "vocab_today":
+        return "今日单词"
+    if app_id == "erc" and app_task_type == "erc_review":
+        return "ERC 复习"
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="不支持的应用任务类型")
+
+
+async def _get_active_app_task_config(
+    conn: Any,
+    *,
+    user_id: int,
+    app_id: str,
+    app_task_type: str,
+) -> asyncpg.Record | dict[str, Any] | None:
+    return await conn.fetchrow(
+        """
+        SELECT id, user_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+        FROM app_task_configs
+        WHERE user_id = $1 AND app_id = $2 AND app_task_type = $3 AND status = 'active'
+        """,
+        user_id,
+        app_id,
+        app_task_type,
+    )
+
+
+async def _create_or_update_app_task_config(
+    conn: Any,
+    *,
+    user_id: int,
+    app_id: str,
+    app_task_type: str,
+    config: dict[str, Any],
+) -> asyncpg.Record | dict[str, Any]:
+    current = await _get_active_app_task_config(
+        conn,
+        user_id=user_id,
+        app_id=app_id,
+        app_task_type=app_task_type,
+    )
+    if current is not None:
+        return await conn.fetchrow(
+            """
+            UPDATE app_task_configs
+            SET config = $1::jsonb, updated_at = NOW()
+            WHERE id = $2 AND user_id = $3 AND app_id = $4 AND app_task_type = $5 AND status = 'active'
+            RETURNING id, user_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+            """,
+            _to_jsonb_param(config),
+            current["id"],
+            user_id,
+            app_id,
+            app_task_type,
+        )
+
+    return await conn.fetchrow(
+        """
+        INSERT INTO app_task_configs(user_id, app_id, app_task_type, config, status)
+        VALUES ($1, $2, $3, $4::jsonb, 'active')
+        RETURNING id, user_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+        """,
+        user_id,
+        app_id,
+        app_task_type,
+        _to_jsonb_param(config),
+    )
+
+
+async def _create_or_update_managed_app_task(
+    conn: Any,
+    *,
+    user_id: int,
+    app_id: str,
+    app_task_type: str,
+    config_id: UUID,
+    target_duration: int,
+    add_to_today_plan: bool,
+    event_id: UUID | None,
+) -> asyncpg.Record | dict[str, Any]:
+    title = _app_task_title(app_id, app_task_type)
+    current = await conn.fetchrow(
+        """
+        SELECT id
+        FROM tasks
+        WHERE user_id = $1
+          AND source_type = 'app'
+          AND app_id = $2
+          AND app_task_type = $3
+          AND managed_by_app = TRUE
+          AND is_deleted = FALSE
+        LIMIT 1
+        """,
+        user_id,
+        app_id,
+        app_task_type,
+    )
+    if current is not None:
+        row = await conn.fetchrow(
+            f"""
+            UPDATE tasks
+            SET title = $1,
+                target_duration = $2,
+                app_config_id = $3,
+                manually_scheduled_for_today = $4,
+                event_id = $5,
+                updated_at = NOW()
+            WHERE id = $6 AND user_id = $7 AND is_deleted = FALSE
+            RETURNING {TASK_RETURNING_COLUMNS}
+            """,
+            title,
+            target_duration,
+            config_id,
+            add_to_today_plan,
+            event_id,
+            current["id"],
+            user_id,
+        )
+    else:
+        row = await conn.fetchrow(
+            f"""
+            INSERT INTO tasks(
+                user_id, title, content, status, priority, target_duration,
+                current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+            RETURNING {TASK_RETURNING_COLUMNS}
+            """,
+            user_id,
+            title,
+            None,
+            "todo",
+            0,
+            target_duration,
+            0,
+            0,
+            "daily",
+            None,
+            "",
+            [],
+            event_id,
+            True,
+            "daily",
+            None,
+            1,
+            False,
+            False,
+            False,
+            add_to_today_plan,
+            "focus",
+            [],
+            None,
+            None,
+            "app",
+            app_id,
+            app_task_type,
+            config_id,
+            f"{app_id}:{app_task_type}",
+            True,
+        )
+
+    await conn.execute(
+        """
+        UPDATE app_task_configs
+        SET created_task_id = $1, updated_at = NOW()
+        WHERE id = $2 AND user_id = $3 AND app_id = $4 AND app_task_type = $5
+        """,
+        row["id"],
+        config_id,
+        user_id,
+        app_id,
+        app_task_type,
+    )
+    return row
 
 
 def _appointment_status_for_display(status: AppointmentStoredStatus | str, ends_at: datetime) -> AppointmentStatus:

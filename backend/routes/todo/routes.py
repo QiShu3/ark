@@ -21,12 +21,15 @@ from .helpers import (
     _close_open_focus_app_work_log,
     _close_open_focus_log,
     _completion_records_for_user,
+    _create_or_update_app_task_config,
+    _create_or_update_managed_app_task,
     _create_workflow_with_focus_phase,
     _delivery_eve_completed,
     _event_completion_records,
     _event_confirmed_appointment_occurrence_count,
     _event_focus_seconds,
     _focus_activity_dates,
+    _get_active_app_task_config,
     _get_bindable_task,
     _get_default_focus_workflow_preset,
     _get_event_for_user,
@@ -69,6 +72,8 @@ from .schemas import (
     AppointmentOccurrenceOut,
     AppointmentOut,
     AppointmentUpdateRequest,
+    AppTaskStatusOut,
+    ERCAppTaskInitRequest,
     EventCreateRequest,
     EventOut,
     EventUpdateRequest,
@@ -89,9 +94,168 @@ from .schemas import (
     TaskOut,
     TaskStatus,
     TaskUpdateRequest,
+    VocabAppTaskInitRequest,
 )
 
 router = APIRouter(prefix="/todo", tags=["todo"])
+
+
+def _config_payload(config: Any) -> dict[str, object]:
+    if isinstance(config, dict):
+        return dict(config)
+    if isinstance(config, str):
+        import json
+
+        decoded = json.loads(config)
+        return dict(decoded) if isinstance(decoded, dict) else {}
+    return {}
+
+
+async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_type: str) -> AppTaskStatusOut:
+    config = await _get_active_app_task_config(
+        conn,
+        user_id=user_id,
+        app_id=app_id,
+        app_task_type=app_task_type,
+    )
+    if config is None or config["created_task_id"] is None:
+        return AppTaskStatusOut(state="uninitialized")
+
+    task_row = await conn.fetchrow(
+        """
+        -- app task status task lookup
+        SELECT id, user_id, title, content, status, priority, target_duration,
+               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+               weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+               actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+               source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+        FROM tasks
+        WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+        """,
+        config["created_task_id"],
+        user_id,
+    )
+    config_dict = _config_payload(config["config"])
+    if task_row is None:
+        return AppTaskStatusOut(
+            state="config_invalid",
+            config_id=config["id"],
+            blocked_reason="应用托管任务不存在",
+            config=config_dict,
+        )
+
+    task = await _task_with_completion(conn, task_row)
+    completion_state = task.completion_state
+    if completion_state is not None and completion_state.completion_state == "period_complete":
+        state = "completed_today"
+    elif completion_state is not None and completion_state.is_completable_now:
+        state = "ready"
+    else:
+        state = "blocked"
+
+    return AppTaskStatusOut(
+        state=state,
+        task_id=task.id,
+        config_id=config["id"],
+        completion_state=completion_state,
+        blocked_reason=completion_state.blocked_reason if completion_state is not None else None,
+        config=config_dict,
+    )
+
+
+@router.get("/app-tasks/vocab/status", response_model=AppTaskStatusOut)
+async def get_vocab_app_task_status(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppTaskStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="vocab_today")
+
+
+@router.post("/app-tasks/vocab/init", response_model=AppTaskStatusOut)
+async def init_vocab_app_task(
+    request: Request,
+    body: VocabAppTaskInitRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppTaskStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        deck_row = await conn.fetchrow("SELECT id FROM vocab_decks WHERE id = $1::uuid", body.deck_id)
+        if deck_row is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="词书不存在")
+
+        config = {
+            "deck_id": body.deck_id,
+            "daily_target_count": body.daily_target_count,
+            "default_focus_duration": body.default_focus_duration,
+            "add_to_today_plan": body.add_to_today_plan,
+            "event_id": str(body.event_id) if body.event_id is not None else None,
+        }
+        config_row = await _create_or_update_app_task_config(
+            conn,
+            user_id=int(user.id),
+            app_id="vocab",
+            app_task_type="vocab_today",
+            config=config,
+        )
+        await _create_or_update_managed_app_task(
+            conn,
+            user_id=int(user.id),
+            app_id="vocab",
+            app_task_type="vocab_today",
+            config_id=config_row["id"],
+            target_duration=body.default_focus_duration,
+            add_to_today_plan=body.add_to_today_plan,
+            event_id=body.event_id,
+        )
+        return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="vocab_today")
+
+
+@router.get("/app-tasks/erc/status", response_model=AppTaskStatusOut)
+async def get_erc_app_task_status(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppTaskStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
+
+
+@router.post("/app-tasks/erc/init", response_model=AppTaskStatusOut)
+async def init_erc_app_task(
+    request: Request,
+    body: ERCAppTaskInitRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppTaskStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        config = {
+            "review_scope": body.review_scope,
+            "daily_question_target": body.daily_question_target,
+            "default_focus_duration": body.default_focus_duration,
+            "add_to_today_plan": body.add_to_today_plan,
+            "event_id": str(body.event_id) if body.event_id is not None else None,
+        }
+        config_row = await _create_or_update_app_task_config(
+            conn,
+            user_id=int(user.id),
+            app_id="erc",
+            app_task_type="erc_review",
+            config=config,
+        )
+        await _create_or_update_managed_app_task(
+            conn,
+            user_id=int(user.id),
+            app_id="erc",
+            app_task_type="erc_review",
+            config_id=config_row["id"],
+            target_duration=body.default_focus_duration,
+            add_to_today_plan=body.add_to_today_plan,
+            event_id=body.event_id,
+        )
+        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
 
 
 @router.post("/tasks", response_model=TaskOut)

@@ -46,6 +46,7 @@ class _FakeTodoConn:
         self.stats_rows: list[dict[str, Any]] = []
         self.events: list[dict[str, Any]] = []
         self.tasks: list[dict[str, Any]] = []
+        self.app_task_configs: list[dict[str, Any]] = []
         self.appointments: list[dict[str, Any]] = []
         self.appointment_occurrence_results: list[dict[str, Any]] = []
         self.completion_records: list[dict[str, Any]] = []
@@ -164,6 +165,81 @@ class _FakeTodoConn:
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
+        if "SELECT id FROM vocab_decks WHERE id = $1::uuid" in sql:
+            return {"id": args[0]}
+        if "FROM app_task_configs" in sql and "status = 'active'" in sql and "UPDATE app_task_configs" not in sql:
+            user_id, app_id, app_task_type = args[0], args[1], args[2]
+            return next(
+                (
+                    config
+                    for config in self.app_task_configs
+                    if config["user_id"] == user_id
+                    and config["app_id"] == app_id
+                    and config["app_task_type"] == app_task_type
+                    and config["status"] == "active"
+                ),
+                None,
+            )
+        if "UPDATE app_task_configs" in sql and "RETURNING id, user_id, app_id, app_task_type" in sql:
+            config_json, config_id, user_id, app_id, app_task_type = args
+            config = next(
+                (
+                    item
+                    for item in self.app_task_configs
+                    if item["id"] == config_id
+                    and item["user_id"] == user_id
+                    and item["app_id"] == app_id
+                    and item["app_task_type"] == app_task_type
+                    and item["status"] == "active"
+                ),
+                None,
+            )
+            if config is None:
+                return None
+            config["config"] = json.loads(config_json)
+            config["updated_at"] = datetime.now(UTC)
+            return config
+        if "INSERT INTO app_task_configs" in sql:
+            now = datetime.now(UTC)
+            row = {
+                "id": uuid4(),
+                "user_id": args[0],
+                "app_id": args[1],
+                "app_task_type": args[2],
+                "config": json.loads(args[3]),
+                "status": "active",
+                "created_task_id": None,
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.app_task_configs.append(row)
+            return row
+        if "FROM tasks" in sql and "source_type = 'app'" in sql and "managed_by_app = TRUE" in sql:
+            user_id, app_id, app_task_type = args[0], args[1], args[2]
+            task = next(
+                (
+                    item
+                    for item in self.tasks
+                    if item["user_id"] == user_id
+                    and item["source_type"] == "app"
+                    and item["app_id"] == app_id
+                    and item["app_task_type"] == app_task_type
+                    and item["managed_by_app"]
+                    and not item["is_deleted"]
+                ),
+                None,
+            )
+            return {"id": task["id"]} if task is not None else None
+        if "app task status task lookup" in sql:
+            task_id, user_id = args[0], args[1]
+            return next(
+                (
+                    task
+                    for task in self.tasks
+                    if task["id"] == task_id and task["user_id"] == user_id and not task["is_deleted"]
+                ),
+                None,
+            )
         if "INSERT INTO events" in sql:
             event_id = uuid4()
             now = datetime.now(UTC)
@@ -284,6 +360,7 @@ class _FakeTodoConn:
                 "time_inherits_from_event",
                 "time_overridden",
                 "manually_scheduled_for_today",
+                "app_config_id",
                 "task_type",
                 "tags",
                 "start_date",
@@ -468,6 +545,20 @@ class _FakeTodoConn:
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
+        if "UPDATE app_task_configs" in sql and "SET created_task_id = $1" in sql:
+            task_id, config_id, user_id, app_id, app_task_type = args
+            updated = 0
+            for config in self.app_task_configs:
+                if (
+                    config["id"] == config_id
+                    and config["user_id"] == user_id
+                    and config["app_id"] == app_id
+                    and config["app_task_type"] == app_task_type
+                ):
+                    config["created_task_id"] = task_id
+                    config["updated_at"] = datetime.now(UTC)
+                    updated += 1
+            return f"UPDATE {updated}"
         if "UPDATE events" in sql and "SET is_primary = FALSE" in sql:
             user_id = args[0]
             exclude_id = args[1] if len(args) > 1 else None
@@ -573,6 +664,76 @@ async def client(monkeypatch):
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
     return {}
+
+
+@pytest.fixture
+def vocab_deck_id() -> str:
+    return str(uuid4())
+
+
+@pytest.mark.asyncio
+async def test_vocab_app_task_status_starts_uninitialized(client, auth_headers):
+    response = await client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "uninitialized"
+    assert payload["task_id"] is None
+    assert payload["config_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_headers, vocab_deck_id):
+    response = await client.post(
+        "/todo/app-tasks/vocab/init",
+        json={
+            "deck_id": vocab_deck_id,
+            "daily_target_count": 20,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] in {"ready", "completed_today", "blocked"}
+    assert payload["task_id"]
+    assert payload["config_id"]
+    task = await client.get(f"/todo/tasks/{payload['task_id']}", headers=auth_headers)
+    assert task.status_code == 200
+    task_payload = task.json()
+    assert task_payload["title"] == "今日单词"
+    assert task_payload["source_type"] == "app"
+    assert task_payload["app_id"] == "vocab"
+    assert task_payload["app_task_type"] == "vocab_today"
+    assert task_payload["managed_by_app"] is True
+    assert task_payload["is_recurring"] is True
+    assert task_payload["period_type"] == "daily"
+    assert task_payload["max_completions_per_period"] == 1
+
+
+@pytest.mark.asyncio
+async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_headers):
+    response = await client.post(
+        "/todo/app-tasks/erc/init",
+        json={
+            "review_scope": "due",
+            "daily_question_target": 10,
+            "default_focus_duration": 1500,
+            "add_to_today_plan": True,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["task_id"]
+    task = await client.get(f"/todo/tasks/{payload['task_id']}", headers=auth_headers)
+    assert task.status_code == 200
+    task_payload = task.json()
+    assert task_payload["title"] == "ERC 复习"
+    assert task_payload["source_type"] == "app"
+    assert task_payload["app_id"] == "erc"
+    assert task_payload["app_task_type"] == "erc_review"
+    assert task_payload["managed_by_app"] is True
 
 
 @pytest.mark.asyncio
