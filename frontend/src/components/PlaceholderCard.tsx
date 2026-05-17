@@ -59,6 +59,7 @@ interface FocusWorkflow {
   phase_planned_duration?: number | null;
   phase_timer_mode?: 'countdown' | 'countup' | null;
   elapsed_seconds?: number | null;
+  is_paused?: boolean;
   runtime_task_id?: string | null;
   completed_workflow_name?: string | null;
 }
@@ -298,6 +299,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       !focusWorkflow
       || focusWorkflow.state === 'normal'
       || focusWorkflow.pending_task_selection
+      || focusWorkflow.is_paused
       || focusWorkflow.phase_timer_mode === 'countup'
       || focusWorkflow.remaining_seconds === null
       || focusWorkflow.remaining_seconds === undefined
@@ -324,6 +326,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   useEffect(() => {
     const updateTimer = () => {
       const now = Date.now();
+      if (focusWorkflow?.is_paused) {
+        const frozenSeconds = typeof focusWorkflow.remaining_seconds === 'number'
+          ? focusWorkflow.remaining_seconds
+          : focusWorkflow.elapsed_seconds;
+        setFocusDurationStr(typeof frozenSeconds === 'number' ? formatClockTime(frozenSeconds) : '00:00');
+        return;
+      }
+
       if (
         focusWorkflow
         && focusWorkflow.state === 'focus'
@@ -387,6 +397,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     currentFocus,
     focusWorkflow,
     focusWorkflow?.elapsed_seconds,
+    focusWorkflow?.is_paused,
     focusWorkflow?.pending_confirmation,
     focusWorkflow?.pending_task_selection,
     focusWorkflow?.phase_started_at,
@@ -410,6 +421,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       || focusWorkflow.pending_confirmation
       || focusWorkflow.pending_task_selection
     ) {
+      return focusWorkflow;
+    }
+    if (focusWorkflow.is_paused) {
       return focusWorkflow;
     }
     if (focusWorkflow.phase_timer_mode === 'countup') {

@@ -442,6 +442,39 @@ describe('PlaceholderCard workflow UI', () => {
     window.removeEventListener('ark:main-agent-workflow-notification', reminderSpy as EventListener);
   });
 
+  it('keeps the right-panel workflow timer frozen while task focus is paused', async () => {
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflow/current') {
+        return Promise.resolve({
+          state: 'focus',
+          workflow_name: '自定义工作流',
+          current_phase_index: 0,
+          phases: [
+            { phase_type: 'focus', duration: 1500, task_id: 'task-a', focus_work_type: null },
+            { phase_type: 'break', duration: 300 },
+          ],
+          task_id: 'task-a',
+          task_title: '待办任务',
+          active_focus_work_type: 'task_focus',
+          focus_work_display_state: 'fullscreen',
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: 754,
+          is_paused: true,
+        });
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    expect(await screen.findByText('12:34')).toBeInTheDocument();
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    expect(screen.getAllByText('12:34').length).toBeGreaterThan(0);
+  });
+
   it('does not dispatch the same workflow reminder twice across repeated reloads', async () => {
     const reminderSpy = vi.fn();
     window.addEventListener('ark:main-agent-workflow-notification', reminderSpy as EventListener);
