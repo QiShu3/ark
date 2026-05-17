@@ -65,19 +65,19 @@ export default function FocusWorkModalShell({
             </button>
             <button
               type="button"
-              onClick={onCompleteRound}
-              disabled={busy}
-              className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm text-blue-100 transition hover:border-blue-300/32 hover:bg-blue-300/16 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              结束本轮专注
-            </button>
-            <button
-              type="button"
               onClick={onAbandon}
               disabled={busy}
               className="rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:bg-white/12 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               放弃本阶段
+            </button>
+            <button
+              type="button"
+              onClick={onCompleteRound}
+              disabled={busy}
+              className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm text-blue-100 transition hover:border-blue-300/32 hover:bg-blue-300/16 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              结束本轮专注
             </button>
           </div>
         </header>

@@ -200,7 +200,7 @@ describe('PlaceholderCard arrangements', () => {
     expect(await screen.findByRole('dialog', { name: '编辑日程' })).toBeInTheDocument();
   });
 
-  it('keeps summary task cards as enter-task links without focus-task grouping', async () => {
+  it('keeps summary task cards together without focus-task grouping', async () => {
     const user = userEvent.setup();
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/tasks?limit=100') {
@@ -217,7 +217,45 @@ describe('PlaceholderCard arrangements', () => {
 
     expect(await screen.findByText('今日任务')).toBeInTheDocument();
     expect(screen.queryByText('专注任务')).not.toBeInTheDocument();
-    expect(screen.getAllByText('进入任务')).toHaveLength(2);
+    expect(screen.getAllByText('完成任务')).toHaveLength(2);
+  });
+
+  it('shows complete actions for today tasks in the arrangement summary', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/tasks?limit=100') {
+        return Promise.resolve([
+          buildTask({ id: 'task-daily', title: '每日任务1', is_recurring: true, period_type: 'daily' }),
+          buildTask({
+            id: 'task-app',
+            title: '今日单词',
+            is_recurring: true,
+            period_type: 'daily',
+            source_type: 'app',
+            managed_by_app: true,
+          }),
+        ]);
+      }
+      if (path === '/todo/tasks/task-daily/complete' && init?.method === 'POST') {
+        return Promise.resolve(buildTask({ id: 'task-daily', title: '每日任务1', status: 'done' }));
+      }
+      if (path === '/todo/tasks/task-app/complete' && init?.method === 'POST') {
+        return Promise.resolve(buildTask({ id: 'task-app', title: '今日单词', status: 'done' }));
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderArrangementCard();
+    await user.click(screen.getByText('安排'));
+
+    const summaryPane = await screen.findByLabelText('安排总览面板');
+    const userTaskCompleteButton = await within(summaryPane).findByRole('button', { name: '完成任务：每日任务1' });
+    const appTaskCompleteButton = await within(summaryPane).findByRole('button', { name: '完成任务：今日单词' });
+    await user.click(userTaskCompleteButton);
+    await user.click(appTaskCompleteButton);
+
+    expect(mockApiJson).toHaveBeenCalledWith('/todo/tasks/task-daily/complete', { method: 'POST' });
+    expect(mockApiJson).toHaveBeenCalledWith('/todo/tasks/task-app/complete', { method: 'POST' });
   });
 
   it('shows only date-matched daily tasks in the arrangement summary', async () => {
@@ -316,6 +354,30 @@ describe('PlaceholderCard arrangements', () => {
     expect(within(summaryPane).queryByText('已完成会议')).not.toBeInTheDocument();
     expect(within(summaryPane).queryByText('已错过会议')).not.toBeInTheDocument();
     expect(within(summaryPane).queryByText('已取消会议')).not.toBeInTheDocument();
+  });
+
+  it('shows a confirm action for appointments awaiting confirmation in the arrangement summary', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/appointments') {
+        return Promise.resolve([
+          buildAppointment({ id: 'appt-confirm', title: '三天日程', status: 'needs_confirmation', ends_at: dateInThisWeek(3, 14) }),
+        ]);
+      }
+      if (path === '/todo/appointments/appt-confirm/complete' && init?.method === 'POST') {
+        return Promise.resolve(buildAppointment({ id: 'appt-confirm', title: '三天日程', status: 'attended', ends_at: dateInThisWeek(3, 14) }));
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderArrangementCard();
+    await user.click(screen.getByText('安排'));
+
+    const summaryPane = await screen.findByLabelText('安排总览面板');
+    const confirmButton = await within(summaryPane).findByRole('button', { name: '确认日程：三天日程' });
+    await user.click(confirmButton);
+
+    expect(mockApiJson).toHaveBeenCalledWith('/todo/appointments/appt-confirm/complete', { method: 'POST' });
   });
 
   it('filters task tabs by completion period_type instead of legacy cycle_period', async () => {

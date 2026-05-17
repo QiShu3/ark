@@ -101,6 +101,11 @@ describe('FocusWorkProvider', () => {
     expect(await screen.findByText('撰写周报')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '暂停专注' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '完成任务并结束专注' })).toBeInTheDocument();
+    const abandonButton = screen.getByRole('button', { name: '放弃本阶段' });
+    const completeRoundButton = screen.getByRole('button', { name: '结束本轮专注' });
+    expect(
+      abandonButton.compareDocumentPosition(completeRoundButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('renders vocab adapter for app-managed task focus', async () => {

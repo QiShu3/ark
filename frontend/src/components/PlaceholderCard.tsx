@@ -1396,9 +1396,20 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               </span>
             )}
             {summaryEntry ? (
-              <span className="rounded-full border border-blue-300/15 bg-blue-300/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
-                进入任务
-              </span>
+              !_isTaskCompletable(task) ? (
+                <span className="rounded-full border border-blue-300/15 bg-blue-300/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
+                  进入任务
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
+                  className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-300/16"
+                  aria-label={`完成任务：${task.title}`}
+                >
+                  完成任务
+                </button>
+              )
             ) : (
               <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                 {_isTaskCompletable(task) && (
@@ -1477,8 +1488,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             <span className="text-[10px] px-1.5 py-0.5 rounded border bg-white/5 border-white/10 text-white/45">
               {_formatShortDateTime(appointment.ends_at)}
             </span>
-            {_isAppointmentCompletable(appointment) && (
+            {isNeedsConfirmation ? (
               <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); _handleCompleteAppointment(e, appointment); }}
+                className="rounded-full border border-amber-300/25 bg-amber-300/12 px-2 py-0.5 text-[10px] font-semibold text-amber-100 transition hover:border-amber-300/40 hover:bg-amber-300/18"
+                aria-label={`确认日程：${appointment.title}`}
+              >
+                确认
+              </button>
+            ) : _isAppointmentCompletable(appointment) ? (
+              <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); _handleCompleteAppointment(e, appointment); }}
                 className="p-1 rounded hover:bg-green-500/20 text-white/40 hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="完成日程"
@@ -1487,7 +1508,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </button>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="pl-3.5 text-[11px] text-white/40">
