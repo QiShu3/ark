@@ -1,17 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { apiJson } from '../lib/api';
-
-type EventItem = {
-  id: string;
-  user_id: number;
-  name: string;
-  start_date: string;
-  due_at: string;
-  is_primary: boolean;
-  created_at: string;
-  updated_at: string;
-};
+import EventWorkbenchModal from './events/EventWorkbenchModal';
+import type { EventItem } from '../lib/events/types';
 
 type EventFormState = {
   name: string;
@@ -86,6 +77,7 @@ const EventCountdownCard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [workbenchEvent, setWorkbenchEvent] = useState<EventItem | null>(null);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [editForm, setEditForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
 
@@ -295,6 +287,10 @@ const EventCountdownCard: React.FC = () => {
         type="button"
         onClick={() => {
           setError(null);
+          if (primaryEvent) {
+            setWorkbenchEvent(primaryEvent);
+            return;
+          }
           setShowModal(true);
         }}
         className="absolute left-12 top-24 z-20 w-44 h-44 rounded-full border-[6px] border-white/30 bg-black/15 flex flex-col items-center justify-center text-white/90 shadow-[0_0_15px_rgba(255,255,255,0.2)] backdrop-blur-sm transition-colors hover:bg-black/30"
@@ -523,6 +519,14 @@ const EventCountdownCard: React.FC = () => {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {workbenchEvent ? (
+        <EventWorkbenchModal
+          event={workbenchEvent}
+          onClose={() => setWorkbenchEvent(null)}
+          onChanged={refreshAll}
+        />
       ) : null}
     </>
   );

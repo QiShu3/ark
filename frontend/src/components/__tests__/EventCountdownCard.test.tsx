@@ -104,7 +104,7 @@ describe('EventCountdownCard', () => {
     expect(screen.getByText('--')).toBeInTheDocument();
   });
 
-  it('opens editor modal and loads events', async () => {
+  it('opens workbench modal for the primary event', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') {
@@ -112,10 +112,28 @@ describe('EventCountdownCard', () => {
           id: 'event-1',
           user_id: 7,
           name: '论文投稿',
+          start_date: '2026-03-01',
           due_at: '2026-03-21T03:00:00Z',
           is_primary: true,
           created_at: '2026-03-18T00:00:00Z',
           updated_at: '2026-03-18T00:00:00Z',
+        };
+      }
+      if (url === '/todo/events/event-1/workbench') {
+        return {
+          event: {
+            id: 'event-1',
+            user_id: 7,
+            name: '论文投稿',
+            start_date: '2026-03-01',
+            due_at: '2026-03-21T03:00:00Z',
+            is_primary: true,
+            created_at: '2026-03-18T00:00:00Z',
+            updated_at: '2026-03-18T00:00:00Z',
+          },
+          plan_draft: null,
+          created_tasks: [],
+          created_appointments: [],
         };
       }
       if (url === '/todo/events') {
@@ -124,6 +142,7 @@ describe('EventCountdownCard', () => {
             id: 'event-1',
             user_id: 7,
             name: '论文投稿',
+            start_date: '2026-03-01',
             due_at: '2026-03-21T03:00:00Z',
             is_primary: true,
             created_at: '2026-03-18T00:00:00Z',
@@ -138,28 +157,29 @@ describe('EventCountdownCard', () => {
 
     await user.click(await screen.findByRole('button', { name: /论文投稿/i }));
 
-    expect(await screen.findByText('事件编辑')).toBeInTheDocument();
-    expect(screen.getAllByText('论文投稿').length).toBeGreaterThan(0);
-    expect(screen.getByText('主事件')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '事件工作台' })).toBeInTheDocument();
+    expect(screen.getByText('事件总览')).toBeInTheDocument();
+    expect(screen.getByText('开始日期 2026-03-01')).toBeInTheDocument();
   });
 
-  it('creates an event and refreshes the list', async () => {
+  it('creates an event from the empty primary state and refreshes the list', async () => {
     const user = userEvent.setup();
-    const events = [
-      {
-        id: 'event-1',
-        user_id: 7,
-        name: '论文投稿',
-        due_at: '2026-03-21T03:00:00Z',
-        is_primary: true,
-        created_at: '2026-03-18T00:00:00Z',
-        updated_at: '2026-03-18T00:00:00Z',
-      },
-    ];
+    const events: Array<{
+      id: string;
+      user_id: number;
+      name: string;
+      start_date: string;
+      due_at: string;
+      is_primary: boolean;
+      created_at: string;
+      updated_at: string;
+    }> = [];
 
     (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string }) => {
       if (url === '/todo/events/primary') {
-        return events.find((event) => event.is_primary) ?? Promise.reject(new Error('主事件不存在'));
+        const primary = events.find((event) => event.is_primary);
+        if (!primary) throw new Error('主事件不存在');
+        return primary;
       }
       if (url === '/todo/events' && !options) {
         return [...events];
@@ -170,6 +190,7 @@ describe('EventCountdownCard', () => {
           id: 'event-2',
           user_id: 7,
           name: payload.name,
+          start_date: payload.start_date,
           due_at: payload.due_at,
           is_primary: payload.is_primary,
           created_at: '2026-03-19T00:00:00Z',
@@ -187,7 +208,7 @@ describe('EventCountdownCard', () => {
 
     render(<EventCountdownCard />);
 
-    await user.click(await screen.findByRole('button', { name: /论文投稿/i }));
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.type(screen.getByPlaceholderText('例如：论文投稿截止'), '答辩');
     await user.type(screen.getByLabelText('开始日期'), '2026-03-01');
     await user.type(screen.getByLabelText('到期时间'), '2026-03-22T10:00');
