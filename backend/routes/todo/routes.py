@@ -1234,7 +1234,7 @@ async def get_achievement_summary(
         if event_row is None:
             event_row = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+                SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
                 FROM events
                 WHERE user_id = $1 AND is_primary = TRUE
                 """,
@@ -1414,12 +1414,13 @@ async def create_event(
                 )
             row = await conn.fetchrow(
                 """
-                INSERT INTO events(user_id, name, due_at, is_primary)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at
+                INSERT INTO events(user_id, name, start_date, due_at, is_primary)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
                 """,
                 int(user.id),
                 body.name,
+                body.start_date,
                 body.due_at,
                 body.is_primary,
             )
@@ -1438,7 +1439,7 @@ async def list_events(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+            SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
             FROM events
             WHERE user_id = $1
             ORDER BY due_at ASC, created_at DESC
@@ -1458,7 +1459,7 @@ async def get_primary_event(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+            SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
             FROM events
             WHERE user_id = $1 AND is_primary = TRUE
             """,
@@ -1483,7 +1484,7 @@ async def update_event(
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+                SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
                 FROM events
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1496,6 +1497,7 @@ async def update_event(
 
     allowed_cols: dict[str, str] = {
         "name": "name",
+        "start_date": "start_date",
         "due_at": "due_at",
         "is_primary": "is_primary",
     }
@@ -1523,7 +1525,7 @@ async def update_event(
         UPDATE events
         SET {", ".join(sets)}, updated_at = NOW()
         WHERE id = ${event_i} AND user_id = ${user_i}
-        RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at
+        RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
     """
 
     pool = _pool_from_request(request)

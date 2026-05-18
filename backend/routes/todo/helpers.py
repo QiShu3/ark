@@ -444,6 +444,7 @@ def _row_to_event(row: asyncpg.Record) -> EventOut:
         id=row["id"],
         user_id=int(row["user_id"]),
         name=str(row["name"]),
+        start_date=row["start_date"],
         due_at=row["due_at"],
         is_primary=bool(row["is_primary"]),
         created_at=row["created_at"],
@@ -456,7 +457,7 @@ async def _get_event_for_user(conn: Any, *, user_id: int, event_id: UUID | None)
         return None
     row = await conn.fetchrow(
         """
-        SELECT id, user_id, name, due_at, is_primary, created_at, updated_at
+        SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
         FROM events
         WHERE id = $1 AND user_id = $2
         """,

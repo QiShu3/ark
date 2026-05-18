@@ -279,8 +279,9 @@ class _FakeTodoConn:
                 "id": event_id,
                 "user_id": args[0],
                 "name": args[1],
-                "due_at": args[2],
-                "is_primary": args[3],
+                "start_date": args[2],
+                "due_at": args[3],
+                "is_primary": args[4],
                 "created_at": now,
                 "updated_at": now,
             }
@@ -477,23 +478,17 @@ class _FakeTodoConn:
                 None,
             )
             return {"id": appointment["id"]} if appointment is not None else None
-        if "UPDATE events" in sql and "RETURNING id, user_id, name, due_at, is_primary, created_at, updated_at" in sql:
+        if "UPDATE events" in sql and "RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at" in sql:
             event_id, user_id = args[-2], args[-1]
             event = next((item for item in self.events if item["id"] == event_id and item["user_id"] == user_id), None)
             if event is None:
                 return None
             if "name = $1" in sql:
                 event["name"] = args[0]
-            if "due_at = $2" in sql:
-                event["due_at"] = args[1]
-            elif "due_at = $1" in sql:
-                event["due_at"] = args[0]
-            if "is_primary = $3" in sql:
-                event["is_primary"] = args[2]
-            elif "is_primary = $2" in sql:
-                event["is_primary"] = args[1]
-            elif "is_primary = $1" in sql:
-                event["is_primary"] = args[0]
+            for field in ("start_date", "due_at", "is_primary"):
+                match = re.search(rf"{field} = \$(\d+)", sql)
+                if match is not None:
+                    event[field] = args[int(match.group(1)) - 1]
             event["updated_at"] = datetime.now(UTC)
             return event
         if "INSERT INTO appointments" in sql:
@@ -1539,6 +1534,7 @@ def test_create_task_inherits_due_date_from_event_when_not_overridden(monkeypatc
             "id": event_id,
             "user_id": 7,
             "name": "DDL",
+            "start_date": datetime(2026, 4, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1597,13 +1593,53 @@ def test_create_event_can_be_primary(monkeypatch) -> None:
     client = TestClient(app)
 
     due_at = "2026-03-20T08:00:00Z"
-    resp = client.post("/todo/events", json={"name": "DDL", "due_at": due_at, "is_primary": True})
+    resp = client.post(
+        "/todo/events",
+        json={"name": "DDL", "start_date": "2026-03-01", "due_at": due_at, "is_primary": True},
+    )
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "DDL"
     assert data["is_primary"] is True
     assert len(conn.events) == 1
+
+
+def test_create_event_requires_start_date(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post("/todo/events", json={"name": "DDL", "due_at": "2026-03-20T08:00:00Z"})
+
+    assert resp.status_code == 422
+
+
+def test_create_event_persists_start_date(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/todo/events",
+        json={
+            "name": "DDL",
+            "start_date": "2026-03-01",
+            "due_at": "2026-03-20T08:00:00Z",
+            "is_primary": True,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["start_date"] == "2026-03-01"
+    assert conn.events[0]["start_date"].isoformat() == "2026-03-01"
 
 
 def test_list_events_isolated_by_user(monkeypatch) -> None:
@@ -1614,6 +1650,7 @@ def test_list_events_isolated_by_user(monkeypatch) -> None:
             "id": uuid4(),
             "user_id": 7,
             "name": "Mine",
+            "start_date": datetime(2026, 3, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 3, 20, tzinfo=UTC),
             "is_primary": False,
             "created_at": now,
@@ -1623,6 +1660,7 @@ def test_list_events_isolated_by_user(monkeypatch) -> None:
             "id": uuid4(),
             "user_id": 8,
             "name": "Other",
+            "start_date": datetime(2026, 3, 2, tzinfo=UTC).date(),
             "due_at": datetime(2026, 3, 21, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1652,6 +1690,7 @@ def test_update_event_primary_clears_previous_primary(monkeypatch) -> None:
             "id": first_id,
             "user_id": 7,
             "name": "First",
+            "start_date": datetime(2026, 3, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 3, 20, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1661,6 +1700,7 @@ def test_update_event_primary_clears_previous_primary(monkeypatch) -> None:
             "id": second_id,
             "user_id": 7,
             "name": "Second",
+            "start_date": datetime(2026, 3, 2, tzinfo=UTC).date(),
             "due_at": datetime(2026, 3, 21, tzinfo=UTC),
             "is_primary": False,
             "created_at": now,
@@ -1689,6 +1729,7 @@ def test_update_event_propagates_due_at_only_to_non_overridden_arrangements(monk
             "id": event_id,
             "user_id": 7,
             "name": "DDL",
+            "start_date": datetime(2026, 4, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1759,6 +1800,7 @@ def test_delete_primary_event_leaves_no_primary(monkeypatch) -> None:
             "id": event_id,
             "user_id": 7,
             "name": "Main",
+            "start_date": datetime(2026, 3, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 3, 20, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1804,6 +1846,7 @@ def test_achievement_summary_defaults_to_primary_event(monkeypatch) -> None:
             "id": event_id,
             "user_id": 7,
             "name": "论文投稿",
+            "start_date": datetime(2026, 4, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1838,6 +1881,7 @@ def test_achievement_summary_filters_event_completions_and_focus(monkeypatch) ->
             "id": event_id,
             "user_id": 7,
             "name": "论文投稿",
+            "start_date": datetime(2026, 4, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,
@@ -1847,6 +1891,7 @@ def test_achievement_summary_filters_event_completions_and_focus(monkeypatch) ->
             "id": other_event_id,
             "user_id": 7,
             "name": "期末考试",
+            "start_date": datetime(2026, 4, 2, tzinfo=UTC).date(),
             "due_at": datetime(2026, 4, 30, 12, tzinfo=UTC),
             "is_primary": False,
             "created_at": now,
@@ -1927,6 +1972,7 @@ def test_achievement_summary_includes_full_first_version_pool(monkeypatch) -> No
             "id": event_id,
             "user_id": 7,
             "name": "论文投稿",
+            "start_date": datetime(2026, 4, 1, tzinfo=UTC).date(),
             "due_at": due_at,
             "is_primary": True,
             "created_at": datetime(2026, 4, 16, tzinfo=UTC),
@@ -2032,6 +2078,7 @@ def test_achievement_summary_counts_confirmed_appointment_occurrences(monkeypatc
             "id": event_id,
             "user_id": 7,
             "name": "论文投稿",
+            "start_date": datetime(2026, 4, 1, tzinfo=UTC).date(),
             "due_at": datetime(2026, 4, 25, 12, tzinfo=UTC),
             "is_primary": True,
             "created_at": now,

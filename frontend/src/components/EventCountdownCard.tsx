@@ -6,6 +6,7 @@ type EventItem = {
   id: string;
   user_id: number;
   name: string;
+  start_date: string;
   due_at: string;
   is_primary: boolean;
   created_at: string;
@@ -14,12 +15,14 @@ type EventItem = {
 
 type EventFormState = {
   name: string;
+  startDate: string;
   dueAt: string;
   isPrimary: boolean;
 };
 
 const CREATE_EVENT_DEFAULTS: EventFormState = {
   name: '',
+  startDate: '',
   dueAt: '',
   isPrimary: false,
 };
@@ -151,6 +154,7 @@ const EventCountdownCard: React.FC = () => {
     setEditingEventId(event.id);
     setEditForm({
       name: event.name,
+      startDate: event.start_date,
       dueAt: toDateTimeLocal(event.due_at),
       isPrimary: event.is_primary,
     });
@@ -170,6 +174,10 @@ const EventCountdownCard: React.FC = () => {
       setError('请输入事件名称');
       return;
     }
+    if (!createForm.startDate) {
+      setError('请选择开始日期');
+      return;
+    }
     if (!createForm.dueAt) {
       setError('请选择到期时间');
       return;
@@ -183,6 +191,7 @@ const EventCountdownCard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
+          start_date: createForm.startDate,
           due_at: new Date(createForm.dueAt).toISOString(),
           is_primary: createForm.isPrimary,
         }),
@@ -203,6 +212,10 @@ const EventCountdownCard: React.FC = () => {
       setError('请输入事件名称');
       return;
     }
+    if (!editForm.startDate) {
+      setError('请选择开始日期');
+      return;
+    }
     if (!editForm.dueAt) {
       setError('请选择到期时间');
       return;
@@ -216,6 +229,7 @@ const EventCountdownCard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
+          start_date: editForm.startDate,
           due_at: new Date(editForm.dueAt).toISOString(),
           is_primary: editForm.isPrimary,
         }),
@@ -320,8 +334,8 @@ const EventCountdownCard: React.FC = () => {
               </button>
             </div>
 
-            <div className="h-[16.666%] min-h-[150px] border-b border-white/10 p-5 bg-white/[0.03]">
-              <div className="grid h-full grid-cols-[1.4fr_1.1fr_auto_auto] gap-3 items-end">
+            <div className="min-h-[170px] border-b border-white/10 p-5 bg-white/[0.03]">
+              <div className="grid h-full grid-cols-[1.4fr_0.9fr_1.1fr_auto_auto] gap-3 items-end">
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-white/70">事件名称</label>
                   <input
@@ -330,6 +344,16 @@ const EventCountdownCard: React.FC = () => {
                     onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
                     placeholder="例如：论文投稿截止"
                     className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm text-white/70">开始日期</label>
+                  <input
+                    aria-label="开始日期"
+                    type="date"
+                    value={createForm.startDate}
+                    onChange={(event) => setCreateForm((state) => ({ ...state, startDate: event.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
                 <div className="flex flex-col gap-2">
@@ -378,13 +402,23 @@ const EventCountdownCard: React.FC = () => {
                         className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col gap-4"
                       >
                         {isEditing ? (
-                          <div className="grid grid-cols-[1.4fr_1.1fr_auto] gap-3 items-end">
+                          <div className="grid grid-cols-[1.4fr_0.9fr_1.1fr_auto] gap-3 items-end">
                             <div className="flex flex-col gap-2">
                               <label className="text-sm text-white/70">事件名称</label>
                               <input
                                 aria-label="编辑事件名称"
                                 value={editForm.name}
                                 onChange={(current) => setEditForm((state) => ({ ...state, name: current.target.value }))}
+                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm text-white/70">开始日期</label>
+                              <input
+                                aria-label="编辑开始日期"
+                                type="date"
+                                value={editForm.startDate}
+                                onChange={(current) => setEditForm((state) => ({ ...state, startDate: current.target.value }))}
                                 className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                               />
                             </div>
@@ -421,6 +455,9 @@ const EventCountdownCard: React.FC = () => {
                               </div>
                               <div className="mt-2 text-sm text-white/55">
                                 创建于 {formatDateTime(event.created_at)}
+                              </div>
+                              <div className="mt-1 text-sm text-white/65">
+                                开始于 {event.start_date}
                               </div>
                               <div className="mt-1 text-sm text-white/75">
                                 到期于 {formatDateTime(event.due_at)}

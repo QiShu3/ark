@@ -189,13 +189,19 @@ describe('EventCountdownCard', () => {
 
     await user.click(await screen.findByRole('button', { name: /论文投稿/i }));
     await user.type(screen.getByPlaceholderText('例如：论文投稿截止'), '答辩');
+    await user.type(screen.getByLabelText('开始日期'), '2026-03-01');
     await user.type(screen.getByLabelText('到期时间'), '2026-03-22T10:00');
     await user.click(screen.getByRole('button', { name: '添加事件' }));
 
     await waitFor(() => {
-      expect((apiJson as Mock).mock.calls.some(([url, init]: [string, { body?: string }]) => {
+      const createCall = (apiJson as Mock).mock.calls.find(([url, init]: [string, { body?: string }]) => {
         return url === '/todo/events' && Boolean(init?.body);
-      })).toBe(true);
+      });
+      expect(createCall).toBeTruthy();
+      expect(JSON.parse(createCall?.[1].body)).toMatchObject({
+        name: '答辩',
+        start_date: '2026-03-01',
+      });
     });
   });
 });

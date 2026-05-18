@@ -6,6 +6,7 @@ type EventItem = {
   id: string;
   user_id: number;
   name: string;
+  start_date: string;
   due_at: string;
   is_primary: boolean;
   created_at: string;

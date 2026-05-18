@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -216,12 +216,14 @@ class AppointmentOccurrenceConfirmRequest(BaseModel):
 
 class EventCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    start_date: date
     due_at: datetime
     is_primary: bool = False
 
 
 class EventUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    start_date: date | None = None
     due_at: datetime | None = None
     is_primary: bool | None = None
 
@@ -230,6 +232,7 @@ class EventOut(BaseModel):
     id: UUID
     user_id: int
     name: str
+    start_date: date
     due_at: datetime
     is_primary: bool
     created_at: datetime
