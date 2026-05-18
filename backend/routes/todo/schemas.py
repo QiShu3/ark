@@ -10,6 +10,8 @@ TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
 TaskType = Literal["focus", "checkin"]
 TaskSourceType = Literal["user", "app"]
+EventPlanScheduleMode = Literal["from_start", "before_due"]
+EventPlanItemKind = Literal["task", "appointment"]
 AppTaskId = Literal["vocab", "erc"]
 AppTaskType = Literal["vocab_today", "erc_review"]
 AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
@@ -235,6 +237,51 @@ class EventOut(BaseModel):
     start_date: date
     due_at: datetime
     is_primary: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class EventPlanTemplateItemIn(BaseModel):
+    kind: EventPlanItemKind
+    title: str = Field(min_length=1, max_length=255)
+    content: str | None = None
+    offset_days: int = Field(ge=0)
+    sort_order: int = Field(default=0, ge=0)
+
+
+class EventPlanTemplateCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    schedule_mode: EventPlanScheduleMode
+    items: list[EventPlanTemplateItemIn] = Field(default_factory=list)
+
+
+class EventPlanTemplateUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    schedule_mode: EventPlanScheduleMode | None = None
+    items: list[EventPlanTemplateItemIn] | None = None
+
+
+class EventPlanTemplateItemOut(BaseModel):
+    id: UUID
+    template_id: UUID
+    kind: EventPlanItemKind
+    title: str
+    content: str | None
+    offset_days: int
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class EventPlanTemplateOut(BaseModel):
+    id: UUID
+    user_id: int
+    name: str
+    description: str | None
+    schedule_mode: EventPlanScheduleMode
+    items: list[EventPlanTemplateItemOut]
     created_at: datetime
     updated_at: datetime
 

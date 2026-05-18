@@ -51,6 +51,8 @@ class _FakeTodoConn:
         self.appointment_occurrence_results: list[dict[str, Any]] = []
         self.completion_records: list[dict[str, Any]] = []
         self.focus_logs: list[dict[str, Any]] = []
+        self.event_plan_templates: list[dict[str, Any]] = []
+        self.event_plan_template_items: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -62,6 +64,14 @@ class _FakeTodoConn:
             user_id = args[0]
             rows = [event for event in self.events if event["user_id"] == user_id]
             return sorted(rows, key=lambda event: (event["due_at"], -event["created_at"].timestamp()))
+        if "FROM event_plan_templates" in sql and "ORDER BY updated_at DESC" in sql:
+            user_id = args[0]
+            rows = [template for template in self.event_plan_templates if template["user_id"] == user_id]
+            return sorted(rows, key=lambda template: (template["updated_at"], template["created_at"]), reverse=True)
+        if "FROM event_plan_template_items" in sql and "WHERE template_id = $1" in sql:
+            template_id = args[0]
+            rows = [item for item in self.event_plan_template_items if item["template_id"] == template_id]
+            return sorted(rows, key=lambda item: (item["sort_order"], item["created_at"]))
         if "SELECT id FROM tasks WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE" in sql:
             user_id, event_id = args
             return [
@@ -287,6 +297,64 @@ class _FakeTodoConn:
             }
             self.events.append(row)
             return row
+        if "INSERT INTO event_plan_templates" in sql:
+            template_id = uuid4()
+            now = datetime.now(UTC)
+            row = {
+                "id": template_id,
+                "user_id": args[0],
+                "name": args[1],
+                "description": args[2],
+                "schedule_mode": args[3],
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.event_plan_templates.append(row)
+            return row
+        if "INSERT INTO event_plan_template_items" in sql:
+            item_id = uuid4()
+            now = datetime.now(UTC)
+            row = {
+                "id": item_id,
+                "template_id": args[0],
+                "kind": args[1],
+                "title": args[2],
+                "content": args[3],
+                "offset_days": args[4],
+                "sort_order": args[5],
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.event_plan_template_items.append(row)
+            return row
+        if "FROM event_plan_templates" in sql and "WHERE id = $1 AND user_id = $2" in sql:
+            template_id, user_id = args[0], args[1]
+            return next(
+                (
+                    template
+                    for template in self.event_plan_templates
+                    if template["id"] == template_id and template["user_id"] == user_id
+                ),
+                None,
+            )
+        if "UPDATE event_plan_templates" in sql and "RETURNING" in sql:
+            template_id, user_id = args[-2], args[-1]
+            template = next(
+                (
+                    item
+                    for item in self.event_plan_templates
+                    if item["id"] == template_id and item["user_id"] == user_id
+                ),
+                None,
+            )
+            if template is None:
+                return None
+            for field in ("name", "description", "schedule_mode"):
+                match = re.search(rf"{field} = \$(\d+)", sql)
+                if match is not None:
+                    template[field] = args[int(match.group(1)) - 1]
+            template["updated_at"] = datetime.now(UTC)
+            return template
         if "FROM events" in sql and "is_primary = TRUE" in sql:
             user_id = args[0]
             return next((event for event in self.events if event["user_id"] == user_id and event["is_primary"]), None)
@@ -623,6 +691,27 @@ class _FakeTodoConn:
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
+        if sql.startswith("DELETE FROM event_plan_template_items"):
+            template_id = args[0]
+            before = len(self.event_plan_template_items)
+            self.event_plan_template_items = [
+                item for item in self.event_plan_template_items if item["template_id"] != template_id
+            ]
+            return f"DELETE {before - len(self.event_plan_template_items)}"
+        if sql.startswith("DELETE FROM event_plan_templates"):
+            template_id, user_id = args
+            before_templates = len(self.event_plan_templates)
+            self.event_plan_templates = [
+                template
+                for template in self.event_plan_templates
+                if not (template["id"] == template_id and template["user_id"] == user_id)
+            ]
+            deleted = before_templates - len(self.event_plan_templates)
+            if deleted:
+                self.event_plan_template_items = [
+                    item for item in self.event_plan_template_items if item["template_id"] != template_id
+                ]
+            return f"DELETE {deleted}"
         if "UPDATE app_task_configs" in sql and "SET created_task_id = $1" in sql:
             task_id, config_id, user_id, app_id, app_task_type = args
             updated = 0
@@ -1818,6 +1907,63 @@ def test_delete_primary_event_leaves_no_primary(monkeypatch) -> None:
 
     primary_resp = client.get("/todo/events/primary")
     assert primary_resp.status_code == 404
+
+
+def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    create_resp = client.post(
+        "/todo/event-plan-templates",
+        json={
+            "name": "考试复习",
+            "description": "基础考试计划",
+            "schedule_mode": "before_due",
+            "items": [
+                {
+                    "kind": "task",
+                    "title": "完成第一轮复习",
+                    "content": "覆盖全部章节",
+                    "offset_days": 14,
+                    "sort_order": 0,
+                },
+                {
+                    "kind": "appointment",
+                    "title": "模拟考试",
+                    "content": None,
+                    "offset_days": 7,
+                    "sort_order": 1,
+                },
+            ],
+        },
+    )
+
+    assert create_resp.status_code == 200
+    created = create_resp.json()
+    assert created["name"] == "考试复习"
+    assert created["schedule_mode"] == "before_due"
+    assert [item["kind"] for item in created["items"]] == ["task", "appointment"]
+
+    list_resp = client.get("/todo/event-plan-templates")
+    assert list_resp.status_code == 200
+    assert [item["name"] for item in list_resp.json()] == ["考试复习"]
+
+    copy_resp = client.post(f"/todo/event-plan-templates/{created['id']}/copy")
+    assert copy_resp.status_code == 200
+    copied = copy_resp.json()
+    assert copied["id"] != created["id"]
+    assert copied["name"] == "考试复习 副本"
+    assert copied["items"][0]["title"] == "完成第一轮复习"
+
+    delete_resp = client.delete(f"/todo/event-plan-templates/{created['id']}")
+    assert delete_resp.status_code == 200
+
+    list_after_delete = client.get("/todo/event-plan-templates")
+    assert [item["name"] for item in list_after_delete.json()] == ["考试复习 副本"]
 
 
 def test_achievement_summary_without_primary_event_still_returns_global(monkeypatch) -> None:

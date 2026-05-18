@@ -77,6 +77,10 @@ from .schemas import (
     ERCAppTaskInitRequest,
     EventCreateRequest,
     EventOut,
+    EventPlanTemplateCreateRequest,
+    EventPlanTemplateItemOut,
+    EventPlanTemplateOut,
+    EventPlanTemplateUpdateRequest,
     EventUpdateRequest,
     FocusLogCreateRequest,
     FocusLogOut,
@@ -110,6 +114,78 @@ def _config_payload(config: Any) -> dict[str, object]:
         decoded = json.loads(config)
         return dict(decoded) if isinstance(decoded, dict) else {}
     return {}
+
+
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except KeyError:
+        return default
+
+
+def _row_to_event_plan_template_item(row: Any) -> EventPlanTemplateItemOut:
+    return EventPlanTemplateItemOut(
+        id=row["id"],
+        template_id=row["template_id"],
+        kind=row["kind"],
+        title=str(row["title"]),
+        content=row["content"],
+        offset_days=int(row["offset_days"]),
+        sort_order=int(row["sort_order"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_event_plan_template(row: Any, items: list[Any]) -> EventPlanTemplateOut:
+    return EventPlanTemplateOut(
+        id=row["id"],
+        user_id=int(row["user_id"]),
+        name=str(row["name"]),
+        description=row["description"],
+        schedule_mode=row["schedule_mode"],
+        items=[_row_to_event_plan_template_item(item) for item in items],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def _event_plan_template_out(conn: Any, row: Any) -> EventPlanTemplateOut:
+    items = await conn.fetch(
+        """
+        SELECT id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+        FROM event_plan_template_items
+        WHERE template_id = $1
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        row["id"],
+    )
+    return _row_to_event_plan_template(row, items)
+
+
+async def _replace_event_plan_template_items(
+    conn: Any,
+    *,
+    template_id: UUID,
+    items: list[Any],
+) -> None:
+    await conn.execute("DELETE FROM event_plan_template_items WHERE template_id = $1", template_id)
+    for index, item in enumerate(items):
+        await conn.fetchrow(
+            """
+            INSERT INTO event_plan_template_items(template_id, kind, title, content, offset_days, sort_order)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+            """,
+            template_id,
+            item.kind,
+            item.title,
+            item.content,
+            item.offset_days,
+            item.sort_order if item.sort_order is not None else index,
+        )
 
 
 def _focus_workflow_task_kwargs(task_row: Any | None) -> dict[str, Any]:
@@ -1391,6 +1467,203 @@ async def get_achievement_summary(
             ],
         ),
     )
+
+
+@router.get("/event-plan-templates", response_model=list[EventPlanTemplateOut])
+async def list_event_plan_templates(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[EventPlanTemplateOut]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+            FROM event_plan_templates
+            WHERE user_id = $1
+            ORDER BY updated_at DESC, created_at DESC
+            """,
+            int(user.id),
+        )
+        return [await _event_plan_template_out(conn, row) for row in rows]
+
+
+@router.post("/event-plan-templates", response_model=EventPlanTemplateOut)
+async def create_event_plan_template(
+    request: Request,
+    body: EventPlanTemplateCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventPlanTemplateOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                """
+                INSERT INTO event_plan_templates(user_id, name, description, schedule_mode)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                """,
+                int(user.id),
+                body.name.strip(),
+                body.description,
+                body.schedule_mode,
+            )
+            if row is None:
+                raise HTTPException(status_code=500, detail="创建模板失败")
+            await _replace_event_plan_template_items(conn, template_id=row["id"], items=body.items)
+            return await _event_plan_template_out(conn, row)
+
+
+@router.get("/event-plan-templates/{template_id}", response_model=EventPlanTemplateOut)
+async def get_event_plan_template(
+    request: Request,
+    template_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventPlanTemplateOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+            FROM event_plan_templates
+            WHERE id = $1 AND user_id = $2
+            """,
+            template_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+        return await _event_plan_template_out(conn, row)
+
+
+@router.patch("/event-plan-templates/{template_id}", response_model=EventPlanTemplateOut)
+async def update_event_plan_template(
+    request: Request,
+    template_id: UUID,
+    body: EventPlanTemplateUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventPlanTemplateOut:
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        return await get_event_plan_template(request, template_id, user)
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            current = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                FROM event_plan_templates
+                WHERE id = $1 AND user_id = $2
+                """,
+                template_id,
+                int(user.id),
+            )
+            if current is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+            sets: list[str] = []
+            args: list[Any] = []
+            for key in ("name", "description", "schedule_mode"):
+                if key not in patch:
+                    continue
+                args.append(str(patch[key]).strip() if key == "name" else patch[key])
+                sets.append(f"{key} = ${len(args)}")
+            row = current
+            if sets:
+                args.append(template_id)
+                template_i = len(args)
+                args.append(int(user.id))
+                user_i = len(args)
+                row = await conn.fetchrow(
+                    f"""
+                    UPDATE event_plan_templates
+                    SET {", ".join(sets)}, updated_at = NOW()
+                    WHERE id = ${template_i} AND user_id = ${user_i}
+                    RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                    """,
+                    *args,
+                )
+            if row is None:
+                raise HTTPException(status_code=500, detail="更新模板失败")
+            if body.items is not None:
+                await _replace_event_plan_template_items(conn, template_id=template_id, items=body.items)
+            return await _event_plan_template_out(conn, row)
+
+
+@router.post("/event-plan-templates/{template_id}/copy", response_model=EventPlanTemplateOut)
+async def copy_event_plan_template(
+    request: Request,
+    template_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventPlanTemplateOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            source = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                FROM event_plan_templates
+                WHERE id = $1 AND user_id = $2
+                """,
+                template_id,
+                int(user.id),
+            )
+            if source is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+            source_items = await conn.fetch(
+                """
+                SELECT id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+                FROM event_plan_template_items
+                WHERE template_id = $1
+                ORDER BY sort_order ASC, created_at ASC
+                """,
+                template_id,
+            )
+            row = await conn.fetchrow(
+                """
+                INSERT INTO event_plan_templates(user_id, name, description, schedule_mode)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                """,
+                int(user.id),
+                f"{source['name']} 副本",
+                source["description"],
+                source["schedule_mode"],
+            )
+            if row is None:
+                raise HTTPException(status_code=500, detail="复制模板失败")
+            for item in source_items:
+                await conn.fetchrow(
+                    """
+                    INSERT INTO event_plan_template_items(template_id, kind, title, content, offset_days, sort_order)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+                    """,
+                    row["id"],
+                    item["kind"],
+                    item["title"],
+                    item["content"],
+                    item["offset_days"],
+                    item["sort_order"],
+                )
+            return await _event_plan_template_out(conn, row)
+
+
+@router.delete("/event-plan-templates/{template_id}")
+async def delete_event_plan_template(
+    request: Request,
+    template_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        tag = await conn.execute(
+            "DELETE FROM event_plan_templates WHERE id = $1 AND user_id = $2",
+            template_id,
+            int(user.id),
+        )
+    if not tag.startswith("DELETE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+    return {"ok": True}
 
 
 @router.post("/events", response_model=EventOut)

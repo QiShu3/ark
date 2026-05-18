@@ -594,3 +594,37 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_events_primary_per_user ON events(user_id) WHERE is_primary = TRUE;"
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_plan_templates (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              name VARCHAR(255) NOT NULL,
+              description TEXT,
+              schedule_mode VARCHAR(32) NOT NULL CHECK (schedule_mode IN ('from_start', 'before_due')),
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_plan_template_items (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              template_id UUID NOT NULL REFERENCES event_plan_templates(id) ON DELETE CASCADE,
+              kind VARCHAR(32) NOT NULL CHECK (kind IN ('task', 'appointment')),
+              title VARCHAR(255) NOT NULL,
+              content TEXT,
+              offset_days INTEGER NOT NULL CHECK (offset_days >= 0),
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_event_plan_templates_user_updated ON event_plan_templates(user_id, updated_at DESC);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_event_plan_template_items_template_sort ON event_plan_template_items(template_id, sort_order ASC);"
+        )
