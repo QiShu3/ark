@@ -286,6 +286,53 @@ class EventPlanTemplateOut(BaseModel):
     updated_at: datetime
 
 
+class EventPlanTemplateApplyRequest(BaseModel):
+    template_id: UUID
+
+
+class EventPlanDraftItemUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    content: str | None = None
+    scheduled_for: datetime | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    payload: dict[str, object] | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+
+
+class EventPlanDraftItemOut(BaseModel):
+    id: UUID
+    draft_id: UUID
+    kind: EventPlanItemKind
+    title: str
+    content: str | None
+    scheduled_for: datetime | None
+    starts_at: datetime | None
+    ends_at: datetime | None
+    payload: dict[str, object] = Field(default_factory=dict)
+    sort_order: int
+    created_subject_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class EventPlanDraftOut(BaseModel):
+    id: UUID
+    event_id: UUID
+    user_id: int
+    source_template_id: UUID | None
+    items: list[EventPlanDraftItemOut]
+    created_at: datetime
+    updated_at: datetime
+
+
+class EventWorkbenchOut(BaseModel):
+    event: EventOut
+    plan_draft: EventPlanDraftOut | None
+    created_tasks: list[TaskOut]
+    created_appointments: list[AppointmentOut]
+
+
 AchievementStatus = Literal["unlocked", "in_progress", "locked"]
 
 

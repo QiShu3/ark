@@ -628,3 +628,40 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_event_plan_template_items_template_sort ON event_plan_template_items(template_id, sort_order ASC);"
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_plan_drafts (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              source_template_id UUID NULL REFERENCES event_plan_templates(id) ON DELETE SET NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_event_plan_drafts_event ON event_plan_drafts(event_id);"
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_plan_draft_items (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              draft_id UUID NOT NULL REFERENCES event_plan_drafts(id) ON DELETE CASCADE,
+              kind VARCHAR(32) NOT NULL CHECK (kind IN ('task', 'appointment')),
+              title VARCHAR(255) NOT NULL,
+              content TEXT,
+              scheduled_for TIMESTAMPTZ,
+              starts_at TIMESTAMPTZ,
+              ends_at TIMESTAMPTZ,
+              payload_json JSONB NOT NULL DEFAULT '{}',
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_subject_id UUID,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_event_plan_draft_items_draft_sort ON event_plan_draft_items(draft_id, sort_order ASC);"
+        )

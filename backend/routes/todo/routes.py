@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+import json
+from datetime import date, datetime, time, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -77,11 +78,16 @@ from .schemas import (
     ERCAppTaskInitRequest,
     EventCreateRequest,
     EventOut,
+    EventPlanDraftItemOut,
+    EventPlanDraftItemUpdateRequest,
+    EventPlanDraftOut,
+    EventPlanTemplateApplyRequest,
     EventPlanTemplateCreateRequest,
     EventPlanTemplateItemOut,
     EventPlanTemplateOut,
     EventPlanTemplateUpdateRequest,
     EventUpdateRequest,
+    EventWorkbenchOut,
     FocusLogCreateRequest,
     FocusLogOut,
     FocusStatsOut,
@@ -186,6 +192,121 @@ async def _replace_event_plan_template_items(
             item.offset_days,
             item.sort_order if item.sort_order is not None else index,
         )
+
+
+def _payload_dict(value: Any) -> dict[str, object]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str):
+        decoded = json.loads(value)
+        return dict(decoded) if isinstance(decoded, dict) else {}
+    return {}
+
+
+def _row_to_event_plan_draft_item(row: Any) -> EventPlanDraftItemOut:
+    return EventPlanDraftItemOut(
+        id=row["id"],
+        draft_id=row["draft_id"],
+        kind=row["kind"],
+        title=str(row["title"]),
+        content=row["content"],
+        scheduled_for=row["scheduled_for"],
+        starts_at=row["starts_at"],
+        ends_at=row["ends_at"],
+        payload=_payload_dict(_row_value(row, "payload_json", {})),
+        sort_order=int(row["sort_order"]),
+        created_subject_id=row["created_subject_id"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_event_plan_draft(row: Any, items: list[Any]) -> EventPlanDraftOut:
+    return EventPlanDraftOut(
+        id=row["id"],
+        event_id=row["event_id"],
+        user_id=int(row["user_id"]),
+        source_template_id=row["source_template_id"],
+        items=[
+            _row_to_event_plan_draft_item(item)
+            for item in items
+            if _row_value(item, "created_subject_id") is None
+        ],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def _event_plan_draft_out(conn: Any, row: Any | None) -> EventPlanDraftOut | None:
+    if row is None:
+        return None
+    items = await conn.fetch(
+        """
+        SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
+               sort_order, created_subject_id, created_at, updated_at
+        FROM event_plan_draft_items
+        WHERE draft_id = $1
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        row["id"],
+    )
+    return _row_to_event_plan_draft(row, items)
+
+
+def _template_item_datetime(*, event_row: Any, schedule_mode: str, offset_days: int) -> datetime:
+    if schedule_mode == "from_start":
+        scheduled_date = event_row["start_date"] + timedelta(days=offset_days)
+        return datetime.combine(scheduled_date, time(hour=9), tzinfo=UTC)
+    scheduled_date = event_row["due_at"].date() - timedelta(days=offset_days)
+    return datetime.combine(scheduled_date, event_row["due_at"].timetz())
+
+
+async def _event_workbench_out(conn: Any, *, user_id: int, event_row: Any) -> EventWorkbenchOut:
+    draft_row = await conn.fetchrow(
+        """
+        SELECT id, event_id, user_id, source_template_id, created_at, updated_at
+        FROM event_plan_drafts
+        WHERE event_id = $1 AND user_id = $2
+        """,
+        event_row["id"],
+        user_id,
+    )
+    task_rows = await conn.fetch(
+        """
+        SELECT id, user_id, title, content, status, priority, target_duration,
+               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+               weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+               actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+               source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+        FROM tasks
+        WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE
+        ORDER BY due_date ASC NULLS LAST, created_at ASC
+        """,
+        user_id,
+        event_row["id"],
+    )
+    appointment_rows = await conn.fetch(
+        """
+        SELECT id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+               weekday_only, time_inherits_from_event, time_overridden,
+               is_deleted, created_at, updated_at
+        FROM appointments
+        WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE
+        ORDER BY ends_at ASC, created_at ASC
+        """,
+        user_id,
+        event_row["id"],
+    )
+    return EventWorkbenchOut(
+        event=_row_to_event(event_row),
+        plan_draft=await _event_plan_draft_out(conn, draft_row),
+        created_tasks=[await _task_with_completion(conn, row) for row in task_rows],
+        created_appointments=[await _appointment_with_completion(conn, row) for row in appointment_rows],
+    )
 
 
 def _focus_workflow_task_kwargs(task_row: Any | None) -> dict[str, Any]:
@@ -1664,6 +1785,299 @@ async def delete_event_plan_template(
     if not tag.startswith("DELETE ") or tag.endswith(" 0"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
     return {"ok": True}
+
+
+@router.get("/events/{event_id}/workbench", response_model=EventWorkbenchOut)
+async def get_event_workbench(
+    request: Request,
+    event_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventWorkbenchOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+        if event_row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+        return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
+
+
+@router.post("/events/{event_id}/plan-draft/apply-template", response_model=EventWorkbenchOut)
+async def apply_event_plan_template(
+    request: Request,
+    event_id: UUID,
+    body: EventPlanTemplateApplyRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventWorkbenchOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            template_row = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                FROM event_plan_templates
+                WHERE id = $1 AND user_id = $2
+                """,
+                body.template_id,
+                int(user.id),
+            )
+            if template_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+            template_items = await conn.fetch(
+                """
+                SELECT id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+                FROM event_plan_template_items
+                WHERE template_id = $1
+                ORDER BY sort_order ASC, created_at ASC
+                """,
+                body.template_id,
+            )
+            if not template_items:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="模板没有计划项")
+            await conn.execute("DELETE FROM event_plan_drafts WHERE event_id = $1 AND user_id = $2", event_id, int(user.id))
+            draft_row = await conn.fetchrow(
+                """
+                INSERT INTO event_plan_drafts(event_id, user_id, source_template_id)
+                VALUES ($1, $2, $3)
+                RETURNING id, event_id, user_id, source_template_id, created_at, updated_at
+                """,
+                event_id,
+                int(user.id),
+                body.template_id,
+            )
+            if draft_row is None:
+                raise HTTPException(status_code=500, detail="创建计划草稿失败")
+            for item in template_items:
+                scheduled_at = _template_item_datetime(
+                    event_row=event_row,
+                    schedule_mode=str(template_row["schedule_mode"]),
+                    offset_days=int(item["offset_days"]),
+                )
+                starts_at = None
+                ends_at = scheduled_at if item["kind"] == "appointment" else None
+                scheduled_for = scheduled_at if item["kind"] == "task" else None
+                await conn.fetchrow(
+                    """
+                    INSERT INTO event_plan_draft_items(
+                        draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json, sort_order
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+                    RETURNING id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
+                              sort_order, created_subject_id, created_at, updated_at
+                    """,
+                    draft_row["id"],
+                    item["kind"],
+                    item["title"],
+                    item["content"],
+                    scheduled_for,
+                    starts_at,
+                    ends_at,
+                    _to_jsonb_param({}),
+                    item["sort_order"],
+                )
+            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
+
+
+@router.patch("/events/{event_id}/plan-draft/items/{item_id}", response_model=EventWorkbenchOut)
+async def update_event_plan_draft_item(
+    request: Request,
+    event_id: UUID,
+    item_id: UUID,
+    body: EventPlanDraftItemUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventWorkbenchOut:
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        return await get_event_workbench(request, event_id, user)
+    allowed_cols = {
+        "title": "title",
+        "content": "content",
+        "scheduled_for": "scheduled_for",
+        "starts_at": "starts_at",
+        "ends_at": "ends_at",
+        "sort_order": "sort_order",
+    }
+    sets: list[str] = []
+    args: list[Any] = []
+    for key, column in allowed_cols.items():
+        if key not in patch:
+            continue
+        args.append(patch[key])
+        sets.append(f"{column} = ${len(args)}")
+    if "payload" in patch:
+        args.append(_to_jsonb_param(patch["payload"] or {}))
+        sets.append(f"payload_json = ${len(args)}::jsonb")
+    if not sets:
+        return await get_event_workbench(request, event_id, user)
+    args.extend([item_id, event_id, int(user.id)])
+    item_i, event_i, user_i = len(args) - 2, len(args) - 1, len(args)
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            row = await conn.fetchrow(
+                f"""
+                UPDATE event_plan_draft_items epdi
+                SET {", ".join(sets)}, updated_at = NOW()
+                FROM event_plan_drafts epd
+                WHERE epdi.id = ${item_i}
+                  AND epdi.draft_id = epd.id
+                  AND epd.event_id = ${event_i}
+                  AND epd.user_id = ${user_i}
+                  AND epdi.created_subject_id IS NULL
+                RETURNING epdi.id
+                """,
+                *args,
+            )
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿项不存在")
+            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
+
+
+@router.delete("/events/{event_id}/plan-draft/items/{item_id}", response_model=EventWorkbenchOut)
+async def delete_event_plan_draft_item(
+    request: Request,
+    event_id: UUID,
+    item_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventWorkbenchOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            tag = await conn.execute(
+                """
+                DELETE FROM event_plan_draft_items epdi
+                USING event_plan_drafts epd
+                WHERE epdi.id = $1
+                  AND epdi.draft_id = epd.id
+                  AND epd.event_id = $2
+                  AND epd.user_id = $3
+                  AND epdi.created_subject_id IS NULL
+                """,
+                item_id,
+                event_id,
+                int(user.id),
+            )
+            if not tag.startswith("DELETE ") or tag.endswith(" 0"):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿项不存在")
+            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
+
+
+@router.post("/events/{event_id}/plan-draft/generate", response_model=EventWorkbenchOut)
+async def generate_event_plan_draft(
+    request: Request,
+    event_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventWorkbenchOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            draft_row = await conn.fetchrow(
+                """
+                SELECT id, event_id, user_id, source_template_id, created_at, updated_at
+                FROM event_plan_drafts
+                WHERE event_id = $1 AND user_id = $2
+                """,
+                event_id,
+                int(user.id),
+            )
+            if draft_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿不存在")
+            draft_items = await conn.fetch(
+                """
+                SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
+                       sort_order, created_subject_id, created_at, updated_at
+                FROM event_plan_draft_items
+                WHERE draft_id = $1 AND created_subject_id IS NULL
+                ORDER BY sort_order ASC, created_at ASC
+                """,
+                draft_row["id"],
+            )
+            for item in draft_items:
+                payload = _payload_dict(item["payload_json"])
+                if item["kind"] == "task":
+                    due_date = item["scheduled_for"]
+                    task_row = await conn.fetchrow(
+                        """
+                        INSERT INTO tasks(
+                            user_id, title, content, status, priority, target_duration,
+                            current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                            event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                            weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                            start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+                        )
+                        VALUES ($1, $2, $3, 'todo', $4, $5, 0, 0, 'daily', NULL, $6, '{}', $7, FALSE, 'once',
+                                NULL, 1, FALSE, FALSE, FALSE, FALSE, $8, $9, NULL, $10, 'user', NULL, NULL, NULL, NULL, FALSE)
+                        RETURNING id, user_id, title, content, status, priority, target_duration,
+                                  current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+                                  event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                                  weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type, tags,
+                                  actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+                                  source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+                        """,
+                        int(user.id),
+                        item["title"],
+                        item["content"],
+                        int(payload.get("priority", 0)),
+                        int(payload.get("target_duration", 0)),
+                        event_row["name"],
+                        event_id,
+                        str(payload.get("task_type", "focus")),
+                        list(payload.get("tags", [])) if isinstance(payload.get("tags", []), list) else [],
+                        due_date,
+                    )
+                    if task_row is None:
+                        raise HTTPException(status_code=500, detail="生成任务失败")
+                    subject_id = task_row["id"]
+                else:
+                    ends_at = item["ends_at"] or item["scheduled_for"]
+                    if ends_at is None:
+                        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="日程草稿缺少结束时间")
+                    appointment_row = await conn.fetchrow(
+                        """
+                        INSERT INTO appointments(
+                            user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                            event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                            weekday_only, time_inherits_from_event, time_overridden
+                        )
+                        VALUES ($1, $2, $3, 'pending', $4, $5, $6, NULL, $7, FALSE, 'once', NULL, 1, FALSE, FALSE, FALSE)
+                        RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
+                                  event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+                                  weekday_only, time_inherits_from_event, time_overridden,
+                                  is_deleted, created_at, updated_at
+                        """,
+                        int(user.id),
+                        item["title"],
+                        item["content"],
+                        item["starts_at"],
+                        ends_at,
+                        payload.get("repeat_rule"),
+                        event_id,
+                    )
+                    if appointment_row is None:
+                        raise HTTPException(status_code=500, detail="生成日程失败")
+                    subject_id = appointment_row["id"]
+                await conn.execute(
+                    """
+                    UPDATE event_plan_draft_items
+                    SET created_subject_id = $1, updated_at = NOW()
+                    WHERE id = $2 AND draft_id = $3
+                    """,
+                    subject_id,
+                    item["id"],
+                    draft_row["id"],
+                )
+            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
 @router.post("/events", response_model=EventOut)
