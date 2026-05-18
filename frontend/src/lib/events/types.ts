@@ -43,3 +43,26 @@ export type EventWorkbench = {
   created_tasks: Task[];
   created_appointments: Appointment[];
 };
+
+export type EventPlanTemplateItem = {
+  id: string;
+  template_id: string;
+  kind: 'task' | 'appointment';
+  title: string;
+  content: string | null;
+  offset_days: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventPlanTemplate = {
+  id: string;
+  user_id: number;
+  name: string;
+  description: string | null;
+  schedule_mode: 'from_start' | 'before_due';
+  items: EventPlanTemplateItem[];
+  created_at: string;
+  updated_at: string;
+};

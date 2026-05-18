@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 
-import { generateEventPlanDraft, getEventWorkbench } from '../../lib/events/api';
-import type { EventItem, EventWorkbench } from '../../lib/events/types';
+import {
+  applyEventPlanTemplate,
+  generateEventPlanDraft,
+  getEventWorkbench,
+  listEventPlanTemplates,
+} from '../../lib/events/api';
+import type { EventItem, EventPlanTemplate, EventWorkbench } from '../../lib/events/types';
+import EventTemplateManagerModal from './EventTemplateManagerModal';
 
 type EventWorkbenchModalProps = {
   event: EventItem;
@@ -25,6 +31,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,6 +57,19 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     };
   }, [event.id]);
 
+  async function loadTemplates(): Promise<void> {
+    try {
+      const data = await listEventPlanTemplates();
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '模板加载失败');
+    }
+  }
+
+  useEffect(() => {
+    void loadTemplates();
+  }, []);
+
   async function handleGenerate(): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
@@ -58,6 +80,21 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       await Promise.resolve(onChanged?.());
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成正式安排失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleApplyTemplate(): Promise<void> {
+    if (submitting || !selectedTemplateId) return;
+    if (workbench?.plan_draft && !window.confirm('套用新模板会覆盖当前计划草稿，确定继续吗？')) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const nextWorkbench = await applyEventPlanTemplate(event.id, selectedTemplateId);
+      setWorkbench(nextWorkbench);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '套用模板失败');
     } finally {
       setSubmitting(false);
     }
@@ -110,6 +147,42 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   <div>创建于 {formatDateTime(currentEvent.created_at)}</div>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="flex-1">
+                <label className="text-sm font-medium text-white/80">选择计划模板</label>
+                <select
+                  aria-label="选择计划模板"
+                  value={selectedTemplateId}
+                  onChange={(changeEvent) => setSelectedTemplateId(changeEvent.target.value)}
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="">请选择模板</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleApplyTemplate()}
+                disabled={submitting || !selectedTemplateId}
+                className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                套用模板
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTemplateManager(true)}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
+              >
+                管理模板
+              </button>
             </div>
           </section>
 
@@ -187,6 +260,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           </section>
         </div>
       </div>
+      {showTemplateManager ? (
+        <EventTemplateManagerModal
+          templates={templates}
+          onClose={() => setShowTemplateManager(false)}
+          onChanged={loadTemplates}
+        />
+      ) : null}
     </div>
   );
 }
