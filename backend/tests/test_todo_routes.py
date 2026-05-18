@@ -2239,6 +2239,99 @@ def test_generate_event_plan_draft_creates_bound_arrangements(monkeypatch) -> No
     assert data["created_appointments"][0]["event_id"] == event_resp.json()["id"]
 
 
+def test_event_plan_draft_can_be_saved_as_template(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    event_resp = client.post(
+        "/todo/events",
+        json={
+            "name": "高数期末",
+            "start_date": "2026-05-20",
+            "due_at": "2026-06-20T09:00:00Z",
+            "is_primary": True,
+        },
+    )
+    template_resp = client.post(
+        "/todo/event-plan-templates",
+        json={
+            "name": "考试复习",
+            "schedule_mode": "before_due",
+            "items": [
+                {"kind": "task", "title": "完成第一轮复习", "offset_days": 14, "sort_order": 0},
+                {"kind": "appointment", "title": "模拟考试", "offset_days": 7, "sort_order": 1},
+            ],
+        },
+    )
+    client.post(
+        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
+        json={"template_id": template_resp.json()["id"]},
+    )
+
+    save_resp = client.post(
+        f"/todo/events/{event_resp.json()['id']}/plan-draft/save-as-template",
+        json={"name": "我的期末模板", "description": "来自事件草稿", "schedule_mode": "before_due"},
+    )
+
+    assert save_resp.status_code == 200
+    saved = save_resp.json()
+    assert saved["name"] == "我的期末模板"
+    assert saved["description"] == "来自事件草稿"
+    assert saved["schedule_mode"] == "before_due"
+    assert [(item["title"], item["offset_days"]) for item in saved["items"]] == [
+        ("完成第一轮复习", 14),
+        ("模拟考试", 7),
+    ]
+
+
+def test_event_plan_draft_can_update_source_template(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    event_resp = client.post(
+        "/todo/events",
+        json={
+            "name": "高数期末",
+            "start_date": "2026-05-20",
+            "due_at": "2026-06-20T09:00:00Z",
+            "is_primary": True,
+        },
+    )
+    template_resp = client.post(
+        "/todo/event-plan-templates",
+        json={
+            "name": "考试复习",
+            "schedule_mode": "before_due",
+            "items": [{"kind": "task", "title": "完成第一轮复习", "offset_days": 14, "sort_order": 0}],
+        },
+    )
+    apply_resp = client.post(
+        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
+        json={"template_id": template_resp.json()["id"]},
+    )
+    draft_item_id = apply_resp.json()["plan_draft"]["items"][0]["id"]
+    client.patch(
+        f"/todo/events/{event_resp.json()['id']}/plan-draft/items/{draft_item_id}",
+        json={"title": "精修错题"},
+    )
+
+    update_resp = client.post(f"/todo/events/{event_resp.json()['id']}/plan-draft/update-source-template")
+
+    assert update_resp.status_code == 200
+    updated = update_resp.json()
+    assert updated["id"] == template_resp.json()["id"]
+    assert updated["items"][0]["title"] == "精修错题"
+    assert updated["items"][0]["offset_days"] == 14
+
+
 def test_achievement_summary_without_primary_event_still_returns_global(monkeypatch) -> None:
     conn = _FakeTodoConn()
     pool = _FakePool(conn)

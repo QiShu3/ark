@@ -290,6 +290,12 @@ class EventPlanTemplateApplyRequest(BaseModel):
     template_id: UUID
 
 
+class EventPlanDraftSaveAsTemplateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    schedule_mode: EventPlanScheduleMode
+
+
 class EventPlanDraftItemUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     content: str | None = None

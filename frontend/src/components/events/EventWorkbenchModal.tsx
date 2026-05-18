@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 
 import {
   applyEventPlanTemplate,
+  deleteEventPlanDraftItem,
   generateEventPlanDraft,
   getEventWorkbench,
   listEventPlanTemplates,
+  saveEventPlanDraftAsTemplate,
+  updateEventPlanDraftItem,
+  updateEventPlanDraftSourceTemplate,
 } from '../../lib/events/api';
-import type { EventItem, EventPlanTemplate, EventWorkbench } from '../../lib/events/types';
+import type { EventItem, EventPlanDraftItem, EventPlanTemplate, EventWorkbench } from '../../lib/events/types';
 import EventTemplateManagerModal from './EventTemplateManagerModal';
 
 type EventWorkbenchModalProps = {
@@ -27,6 +32,21 @@ function formatDateTime(value: string): string {
   });
 }
 
+function toDateTimeLocal(value: string | null): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const offsetMs = parsed.getTimezoneOffset() * 60 * 1000;
+  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value: string): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 export default function EventWorkbenchModal({ event, onClose, onChanged }: EventWorkbenchModalProps) {
   const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +54,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [editingItem, setEditingItem] = useState<EventPlanDraftItem | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftContent, setDraftContent] = useState('');
+  const [draftTime, setDraftTime] = useState('');
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState('');
+  const [saveTemplateDescription, setSaveTemplateDescription] = useState('');
+  const [saveTemplateMode, setSaveTemplateMode] = useState<'from_start' | 'before_due'>('before_due');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -100,10 +128,138 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
+  function beginEditDraftItem(item: EventPlanDraftItem): void {
+    setEditingItem(item);
+    setDraftTitle(item.title);
+    setDraftContent(item.content ?? '');
+    setDraftTime(toDateTimeLocal(item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for));
+  }
+
+  async function handleSaveDraftItem(): Promise<void> {
+    if (submitting || !editingItem) return;
+    const title = draftTitle.trim();
+    if (!title) {
+      setError('请输入草稿标题');
+      return;
+    }
+    const isoTime = fromDateTimeLocal(draftTime);
+    setSubmitting(true);
+    setError(null);
+    try {
+      const payload = {
+        title,
+        content: draftContent.trim() || null,
+        ...(editingItem.kind === 'appointment'
+          ? { ends_at: isoTime, starts_at: null }
+          : { scheduled_for: isoTime }),
+      };
+      const nextWorkbench = await updateEventPlanDraftItem(event.id, editingItem.id, payload);
+      setWorkbench(nextWorkbench);
+      setEditingItem(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存草稿项失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteDraftItem(item: EventPlanDraftItem): Promise<void> {
+    if (submitting) return;
+    if (!window.confirm(`确定删除“${item.title}”吗？`)) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const nextWorkbench = await deleteEventPlanDraftItem(event.id, item.id);
+      setWorkbench(nextWorkbench);
+      if (editingItem?.id === item.id) setEditingItem(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除草稿项失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSaveAsTemplate(): Promise<void> {
+    if (submitting) return;
+    const name = saveTemplateName.trim();
+    if (!name) {
+      setError('请输入新模板名称');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await saveEventPlanDraftAsTemplate(event.id, {
+        name,
+        description: saveTemplateDescription.trim() || null,
+        schedule_mode: saveTemplateMode,
+      });
+      setShowSaveTemplate(false);
+      setSaveTemplateName('');
+      setSaveTemplateDescription('');
+      await loadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '另存模板失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleUpdateSourceTemplate(): Promise<void> {
+    if (submitting || !workbench?.plan_draft?.source_template_id) return;
+    if (!window.confirm('确定用当前计划草稿覆盖源模板吗？')) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateEventPlanDraftSourceTemplate(event.id);
+      await loadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '回写源模板失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const currentEvent = workbench?.event ?? event;
   const draftItems = workbench?.plan_draft?.items ?? [];
   const taskDrafts = draftItems.filter((item) => item.kind === 'task');
   const appointmentDrafts = draftItems.filter((item) => item.kind === 'appointment');
+  const sourceTemplateName = templates.find((template) => template.id === workbench?.plan_draft?.source_template_id)?.name;
+
+  function renderDraftItem(item: EventPlanDraftItem) {
+    const timeValue = item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for;
+    return (
+      <div key={item.id} className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate font-medium text-white">{item.title}</div>
+            {item.content ? <div className="mt-1 line-clamp-2 text-xs text-white/50">{item.content}</div> : null}
+            {timeValue ? <div className="mt-1 text-xs text-white/40">{formatDateTime(timeValue)}</div> : null}
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <button
+              type="button"
+              onClick={() => beginEditDraftItem(item)}
+              aria-label={`编辑草稿“${item.title}”`}
+              title="编辑草稿"
+              className="rounded-md p-1.5 text-white/55 hover:bg-white/10 hover:text-white"
+            >
+              <Pencil size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteDraftItem(item)}
+              aria-label={`删除草稿“${item.title}”`}
+              title="删除草稿"
+              className="rounded-md p-1.5 text-red-200/75 hover:bg-red-500/15 hover:text-red-100"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -191,37 +347,149 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold">计划草稿</h3>
-                  <p className="mt-1 text-sm text-white/50">模板套用后会先进入这里，生成前不会出现在任务或日程里。</p>
+                  <p className="mt-1 text-sm text-white/50">
+                    {sourceTemplateName ? `来自模板：${sourceTemplateName}` : '模板套用后会先进入这里，生成前不会出现在任务或日程里。'}
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void handleGenerate()}
-                  disabled={submitting || draftItems.length === 0}
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submitting ? '生成中...' : '生成正式安排'}
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSaveTemplate(true)}
+                    disabled={submitting || draftItems.length === 0}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    另存为模板
+                  </button>
+                  {workbench?.plan_draft?.source_template_id ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleUpdateSourceTemplate()}
+                      disabled={submitting || draftItems.length === 0}
+                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      回写源模板
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerate()}
+                    disabled={submitting || draftItems.length === 0}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? '处理中...' : '生成正式安排'}
+                  </button>
+                </div>
               </div>
+
+              {editingItem ? (
+                <div className="mt-4 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
+                  <div className="text-sm font-medium text-blue-100">编辑{editingItem.kind === 'appointment' ? '日程草稿' : '任务草稿'}</div>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    草稿标题
+                    <input
+                      value={draftTitle}
+                      onChange={(changeEvent) => setDraftTitle(changeEvent.target.value)}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    草稿备注
+                    <textarea
+                      value={draftContent}
+                      onChange={(changeEvent) => setDraftContent(changeEvent.target.value)}
+                      className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    草稿时间
+                    <input
+                      type="datetime-local"
+                      value={draftTime}
+                      onChange={(changeEvent) => setDraftTime(changeEvent.target.value)}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingItem(null)}
+                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveDraftItem()}
+                      disabled={submitting}
+                      className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      保存草稿项
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {showSaveTemplate ? (
+                <div className="mt-4 grid gap-3 rounded-lg border border-amber-200/20 bg-amber-300/10 p-3">
+                  <div className="text-sm font-medium text-amber-100">另存当前计划草稿</div>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    新模板名称
+                    <input
+                      value={saveTemplateName}
+                      onChange={(changeEvent) => setSaveTemplateName(changeEvent.target.value)}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    新模板说明
+                    <textarea
+                      value={saveTemplateDescription}
+                      onChange={(changeEvent) => setSaveTemplateDescription(changeEvent.target.value)}
+                      className="min-h-14 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    相对时间模式
+                    <select
+                      value={saveTemplateMode}
+                      onChange={(changeEvent) => setSaveTemplateMode(changeEvent.target.value as 'from_start' | 'before_due')}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    >
+                      <option value="before_due">从截止时间倒推</option>
+                      <option value="from_start">从开始日期顺推</option>
+                    </select>
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowSaveTemplate(false)}
+                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveAsTemplate()}
+                      disabled={submitting}
+                      className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-black hover:bg-amber-200 disabled:opacity-50"
+                    >
+                      确认另存
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-4 grid gap-3">
                 <div>
                   <h4 className="text-sm font-medium text-blue-200">任务草稿</h4>
                   <div className="mt-2 grid gap-2">
-                    {taskDrafts.length ? taskDrafts.map((item) => (
-                      <div key={item.id} className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm">
-                        {item.title}
-                      </div>
-                    )) : <div className="text-sm text-white/40">暂无任务草稿</div>}
+                    {taskDrafts.length ? taskDrafts.map(renderDraftItem) : <div className="text-sm text-white/40">暂无任务草稿</div>}
                   </div>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-teal-200">日程草稿</h4>
                   <div className="mt-2 grid gap-2">
-                    {appointmentDrafts.length ? appointmentDrafts.map((item) => (
-                      <div key={item.id} className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm">
-                        {item.title}
-                      </div>
-                    )) : <div className="text-sm text-white/40">暂无日程草稿</div>}
+                    {appointmentDrafts.length ? appointmentDrafts.map(renderDraftItem) : <div className="text-sm text-white/40">暂无日程草稿</div>}
                   </div>
                 </div>
               </div>

@@ -110,4 +110,166 @@ describe('EventWorkbenchModal', () => {
       expect(screen.getByText('模拟考试')).toBeInTheDocument();
     });
   });
+
+  it('edits draft items and saves draft changes back to templates', async () => {
+    const user = userEvent.setup();
+    const workbenchWithDraft = {
+      event,
+      plan_draft: {
+        id: 'draft-1',
+        event_id: 'event-1',
+        user_id: 7,
+        source_template_id: 'template-1',
+        created_at: '2026-05-18T00:00:00Z',
+        updated_at: '2026-05-18T00:00:00Z',
+        items: [
+          {
+            id: 'draft-item-1',
+            draft_id: 'draft-1',
+            kind: 'task',
+            title: '完成第一轮复习',
+            content: '覆盖全部章节',
+            scheduled_for: '2026-06-06T09:00:00Z',
+            starts_at: null,
+            ends_at: null,
+            payload: {},
+            sort_order: 0,
+            created_subject_id: null,
+            created_at: '2026-05-18T00:00:00Z',
+            updated_at: '2026-05-18T00:00:00Z',
+          },
+          {
+            id: 'draft-item-2',
+            draft_id: 'draft-1',
+            kind: 'appointment',
+            title: '模拟考试',
+            content: null,
+            scheduled_for: null,
+            starts_at: null,
+            ends_at: '2026-06-13T09:00:00Z',
+            payload: {},
+            sort_order: 1,
+            created_subject_id: null,
+            created_at: '2026-05-18T00:00:00Z',
+            updated_at: '2026-05-18T00:00:00Z',
+          },
+        ],
+      },
+      created_tasks: [],
+      created_appointments: [],
+    };
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+      if (url === '/todo/events/event-1/workbench') return workbenchWithDraft;
+      if (url === '/todo/event-plan-templates') {
+        return [
+          {
+            id: 'template-1',
+            user_id: 7,
+            name: '考试复习',
+            description: null,
+            schedule_mode: 'before_due',
+            items: [],
+            created_at: '2026-05-18T00:00:00Z',
+            updated_at: '2026-05-18T00:00:00Z',
+          },
+        ];
+      }
+      if (url === '/todo/events/event-1/plan-draft/items/draft-item-1' && options?.method === 'PATCH') {
+        const expectedScheduledFor = new Date('2026-06-07T10:30').toISOString();
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          title: '精修错题',
+          content: '错题本',
+          scheduled_for: expectedScheduledFor,
+        });
+        return {
+          ...workbenchWithDraft,
+          plan_draft: {
+            ...workbenchWithDraft.plan_draft,
+            items: [
+              {
+                ...workbenchWithDraft.plan_draft.items[0],
+                title: '精修错题',
+                content: '错题本',
+                scheduled_for: expectedScheduledFor,
+              },
+              workbenchWithDraft.plan_draft.items[1],
+            ],
+          },
+        };
+      }
+      if (url === '/todo/events/event-1/plan-draft/items/draft-item-2' && options?.method === 'DELETE') {
+        return {
+          ...workbenchWithDraft,
+          plan_draft: {
+            ...workbenchWithDraft.plan_draft,
+            items: [workbenchWithDraft.plan_draft.items[0]],
+          },
+        };
+      }
+      if (url === '/todo/events/event-1/plan-draft/save-as-template' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          name: '我的复习模板',
+          description: '稳定复用',
+          schedule_mode: 'before_due',
+        });
+        return {
+          id: 'template-2',
+          user_id: 7,
+          name: '我的复习模板',
+          description: '稳定复用',
+          schedule_mode: 'before_due',
+          items: [],
+          created_at: '2026-05-18T00:00:00Z',
+          updated_at: '2026-05-18T00:00:00Z',
+        };
+      }
+      if (url === '/todo/events/event-1/plan-draft/update-source-template' && options?.method === 'POST') {
+        return {
+          id: 'template-1',
+          user_id: 7,
+          name: '考试复习',
+          description: null,
+          schedule_mode: 'before_due',
+          items: [],
+          created_at: '2026-05-18T00:00:00Z',
+          updated_at: '2026-05-18T00:00:00Z',
+        };
+      }
+      return {};
+    });
+
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: '编辑草稿“完成第一轮复习”' }));
+    await user.clear(screen.getByLabelText('草稿标题'));
+    await user.type(screen.getByLabelText('草稿标题'), '精修错题');
+    await user.clear(screen.getByLabelText('草稿备注'));
+    await user.type(screen.getByLabelText('草稿备注'), '错题本');
+    await user.clear(screen.getByLabelText('草稿时间'));
+    await user.type(screen.getByLabelText('草稿时间'), '2026-06-07T10:30');
+    await user.click(screen.getByRole('button', { name: '保存草稿项' }));
+
+    expect(await screen.findByText('精修错题')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '删除草稿“模拟考试”' }));
+    await waitFor(() => {
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/items/draft-item-2', { method: 'DELETE' });
+    });
+
+    await user.click(screen.getByRole('button', { name: '另存为模板' }));
+    await user.type(screen.getByLabelText('新模板名称'), '我的复习模板');
+    await user.type(screen.getByLabelText('新模板说明'), '稳定复用');
+    await user.click(screen.getByRole('button', { name: '确认另存' }));
+
+    await waitFor(() => {
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/save-as-template', expect.any(Object));
+    });
+
+    await user.click(screen.getByRole('button', { name: '回写源模板' }));
+    await waitFor(() => {
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/update-source-template', { method: 'POST' });
+    });
+  });
 });

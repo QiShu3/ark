@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Pencil } from 'lucide-react';
 
 import {
   copyEventPlanTemplate,
   createEventPlanTemplate,
   deleteEventPlanTemplate,
+  updateEventPlanTemplate,
   type EventPlanTemplateInput,
   type EventPlanTemplateItemInput,
 } from '../../lib/events/api';
@@ -28,6 +30,11 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
   const [description, setDescription] = useState('');
   const [scheduleMode, setScheduleMode] = useState<'from_start' | 'before_due'>('before_due');
   const [items, setItems] = useState<EventPlanTemplateItemInput[]>([{ ...DEFAULT_ITEM }]);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editScheduleMode, setEditScheduleMode] = useState<'from_start' | 'before_due'>('before_due');
+  const [editItems, setEditItems] = useState<EventPlanTemplateItemInput[]>([{ ...DEFAULT_ITEM }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,8 +42,12 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
     setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
 
-  async function handleCreate(): Promise<void> {
-    const cleanedItems = items
+  function updateEditItem(index: number, patch: Partial<EventPlanTemplateItemInput>): void {
+    setEditItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  }
+
+  function cleanItems(inputItems: EventPlanTemplateItemInput[]): EventPlanTemplateItemInput[] {
+    return inputItems
       .map((item, index) => ({
         ...item,
         title: item.title.trim(),
@@ -45,6 +56,10 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
         sort_order: index,
       }))
       .filter((item) => item.title);
+  }
+
+  async function handleCreate(): Promise<void> {
+    const cleanedItems = cleanItems(items);
     const payload: EventPlanTemplateInput = {
       name: name.trim(),
       description: description.trim() || null,
@@ -69,6 +84,51 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
       await Promise.resolve(onChanged());
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建模板失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function beginEdit(template: EventPlanTemplate): void {
+    setEditingTemplateId(template.id);
+    setEditName(template.name);
+    setEditDescription(template.description ?? '');
+    setEditScheduleMode(template.schedule_mode);
+    setEditItems(template.items.length ? template.items.map((item, index) => ({
+      kind: item.kind,
+      title: item.title,
+      content: item.content ?? '',
+      offset_days: item.offset_days,
+      sort_order: index,
+    })) : [{ ...DEFAULT_ITEM }]);
+    setError(null);
+  }
+
+  async function handleUpdate(): Promise<void> {
+    if (!editingTemplateId) return;
+    const cleanedItems = cleanItems(editItems);
+    const payload: EventPlanTemplateInput = {
+      name: editName.trim(),
+      description: editDescription.trim() || null,
+      schedule_mode: editScheduleMode,
+      items: cleanedItems,
+    };
+    if (!payload.name) {
+      setError('请输入模板名称');
+      return;
+    }
+    if (payload.items.length === 0) {
+      setError('至少保留一个模板项');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateEventPlanTemplate(editingTemplateId, payload);
+      setEditingTemplateId(null);
+      await Promise.resolve(onChanged());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存模板失败');
     } finally {
       setSubmitting(false);
     }
@@ -210,6 +270,98 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
 
           <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <h4 className="font-semibold">已有模板</h4>
+            {editingTemplateId ? (
+              <div className="mt-3 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
+                <div className="text-sm font-medium text-blue-100">编辑模板</div>
+                <label className="grid gap-2 text-sm text-white/70">
+                  编辑模板名称
+                  <input
+                    value={editName}
+                    onChange={(event) => setEditName(event.target.value)}
+                    className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-white/70">
+                  编辑模板说明
+                  <textarea
+                    value={editDescription}
+                    onChange={(event) => setEditDescription(event.target.value)}
+                    className="min-h-14 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-white/70">
+                  编辑时间模式
+                  <select
+                    value={editScheduleMode}
+                    onChange={(event) => setEditScheduleMode(event.target.value as 'from_start' | 'before_due')}
+                    className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
+                  >
+                    <option value="before_due">从截止时间倒推</option>
+                    <option value="from_start">从开始日期顺推</option>
+                  </select>
+                </label>
+                <div className="grid gap-2">
+                  {editItems.map((item, index) => (
+                    <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
+                      <div className="grid grid-cols-[96px_1fr_92px] gap-2">
+                        <select
+                          value={item.kind}
+                          onChange={(event) => updateEditItem(index, { kind: event.target.value as 'task' | 'appointment' })}
+                          className="rounded-lg border border-white/10 bg-[#121826] px-2 py-2 text-sm text-white"
+                        >
+                          <option value="task">任务</option>
+                          <option value="appointment">日程</option>
+                        </select>
+                        <input
+                          value={item.title}
+                          onChange={(event) => updateEditItem(index, { title: event.target.value })}
+                          aria-label={index === 0 ? '编辑模板项标题' : `编辑模板项标题 ${index + 1}`}
+                          className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.offset_days}
+                          onChange={(event) => updateEditItem(index, { offset_days: Number(event.target.value) })}
+                          aria-label={index === 0 ? '编辑相对天数' : `编辑相对天数 ${index + 1}`}
+                          className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                        />
+                      </div>
+                      <input
+                        value={item.content ?? ''}
+                        onChange={(event) => updateEditItem(index, { content: event.target.value })}
+                        aria-label={index === 0 ? '编辑模板项备注' : `编辑模板项备注 ${index + 1}`}
+                        className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setEditItems((current) => [...current, { ...DEFAULT_ITEM, sort_order: current.length }])}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                  >
+                    添加编辑项
+                  </button>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTemplateId(null)}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleUpdate()}
+                    disabled={submitting}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    保存模板
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="mt-3 grid gap-2">
               {templates.length ? templates.map((template) => (
                 <div key={template.id} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
@@ -218,6 +370,15 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                     {template.schedule_mode === 'before_due' ? '截止前倒推' : '开始后顺推'} · {template.items.length} 项
                   </div>
                   <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => beginEdit(template)}
+                      aria-label={`编辑“${template.name}”`}
+                      title="编辑模板"
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-white/70 hover:bg-white/10"
+                    >
+                      <Pencil size={14} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => void handleCopy(template.id)}
