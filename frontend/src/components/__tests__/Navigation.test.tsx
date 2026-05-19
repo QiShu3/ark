@@ -111,4 +111,18 @@ describe('Navigation', () => {
     expect(screen.getByRole('button', { name: 'Apps' })).toBeDisabled();
     expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
   });
+
+  it('clears the current session and redirects to login when logging out', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockResolvedValue(null);
+
+    renderNavigation('/apps');
+
+    await user.click(screen.getByRole('button', { name: '退出登录' }));
+
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(useAuthStore.getState().expiresAt).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/login');
+  });
 });

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { Calendar } from 'lucide-react';
+import { Calendar, LogOut } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
@@ -21,6 +21,7 @@ const Navigation: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
   const setUser = useAuthStore((s) => s.setUser);
+  const clearSession = useAuthStore((s) => s.clear);
 
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -40,6 +41,7 @@ const Navigation: React.FC = () => {
         return;
       }
       setWorkflowSnapshot(snapshot);
+      if (isFocusWorkNavigationLocked(snapshot)) setShowCalendarModal(false);
     } catch {
       setWorkflowSnapshot(null);
     }
@@ -97,13 +99,14 @@ const Navigation: React.FC = () => {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (focusNavigationLocked) setShowCalendarModal(false);
-  }, [focusNavigationLocked]);
-
   function navigateUnlessLocked(path: string) {
     if (focusNavigationLocked) return;
     navigate(path);
+  }
+
+  function handleLogout() {
+    clearSession();
+    navigate('/login', { replace: true });
   }
 
   return (
@@ -164,15 +167,26 @@ const Navigation: React.FC = () => {
 
         {/* 用户头像区域 */}
         {user ? (
-          <div className="relative group cursor-pointer">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-white/20">
-              {user.username.charAt(0).toUpperCase()}
+          <div className="flex items-center gap-3">
+            <div className="relative group cursor-pointer">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-white/20">
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+
+              {/* 悬停显示的用户名 */}
+              <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+                {user.username}
+              </div>
             </div>
-            
-            {/* 悬停显示的用户名 */}
-            <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-              {user.username}
-            </div>
+            <button
+              type="button"
+              aria-label="退出登录"
+              title="退出登录"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-300/70"
+              onClick={handleLogout}
+            >
+              <LogOut size={16} aria-hidden="true" />
+            </button>
           </div>
         ) : (
           <button 
