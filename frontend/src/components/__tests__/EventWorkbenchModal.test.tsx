@@ -23,6 +23,103 @@ const event: EventItem = {
 };
 
 describe('EventWorkbenchModal', () => {
+  it('shows event management actions and the event achievement summary', async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    const nonPrimaryEvent = { ...event, is_primary: false };
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+      if (url === '/todo/events/event-1/workbench') {
+        return {
+          event: nonPrimaryEvent,
+          plan_draft: null,
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/event-plan-templates') return [];
+      if (url === '/todo/achievements/summary?event_id=event-1') {
+        return {
+          active_event: nonPrimaryEvent,
+          event_achievements: {
+            title: '事件成就',
+            summary_text: '高数期末 的当前进展',
+            stats: {
+              unlocked_count: 1,
+              in_progress_count: 2,
+              primary_metric_value: 3600,
+              primary_metric_label: '事件专注秒数',
+            },
+            latest_unlocked: [
+              {
+                id: 'event-first-push',
+                title: '首次推进',
+                description: '第一次完成绑定到该事件的任务或日程。',
+                status: 'unlocked',
+                current_value: 1,
+                target_value: 1,
+                progress_text: '1 / 1',
+              },
+            ],
+            upcoming: [
+              {
+                id: 'event-focus-2h',
+                title: '进入状态',
+                description: '围绕该事件累计专注 2 小时。',
+                status: 'in_progress',
+                current_value: 3600,
+                target_value: 7200,
+                progress_text: '1h / 2h',
+              },
+            ],
+          },
+          global_achievements: {
+            title: '全局成就',
+            summary_text: '始终显示的长期累计进度',
+            stats: {
+              unlocked_count: 0,
+              in_progress_count: 1,
+              primary_metric_value: 3600,
+              primary_metric_label: '总专注秒数',
+            },
+            latest_unlocked: [],
+            upcoming: [
+              {
+                id: 'global-focus-10h',
+                title: '稳定专注',
+                description: '累计专注 10 小时。',
+                status: 'in_progress',
+                current_value: 3600,
+                target_value: 36000,
+                progress_text: '1h / 10h',
+              },
+            ],
+          },
+        };
+      }
+      if (url === '/todo/events/event-1' && options?.method === 'PATCH') {
+        expect(JSON.parse(options.body || '{}')).toEqual({ is_primary: true });
+        return { ...nonPrimaryEvent, is_primary: true };
+      }
+      return {};
+    });
+    vi.stubGlobal('confirm', vi.fn(() => true));
+
+    render(<EventWorkbenchModal event={nonPrimaryEvent} onClose={vi.fn()} onChanged={onChanged} />);
+
+    expect(await screen.findByText('事件总览')).toBeInTheDocument();
+    expect(await screen.findByText('高数期末 的当前进展')).toBeInTheDocument();
+    expect(screen.getByText('最近解锁：首次推进')).toBeInTheDocument();
+    expect(screen.getByText('下一步：进入状态 · 1h / 2h')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '设为主事件' }));
+
+    await waitFor(() => {
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1', expect.objectContaining({ method: 'PATCH' }));
+      expect(onChanged).toHaveBeenCalled();
+    });
+  });
+
   it('applies a template and renders generated plan draft sections', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
@@ -47,6 +144,24 @@ describe('EventWorkbenchModal', () => {
             updated_at: '2026-05-18T00:00:00Z',
           },
         ];
+      }
+      if (url === '/todo/achievements/summary?event_id=event-1') {
+        return {
+          active_event: event,
+          event_achievements: null,
+          global_achievements: {
+            title: '全局成就',
+            summary_text: '始终显示的长期累计进度',
+            stats: {
+              unlocked_count: 0,
+              in_progress_count: 0,
+              primary_metric_value: 0,
+              primary_metric_label: '总专注秒数',
+            },
+            latest_unlocked: [],
+            upcoming: [],
+          },
+        };
       }
       if (url === '/todo/events/event-1/plan-draft/apply-template' && options?.method === 'POST') {
         expect(JSON.parse(options.body || '{}')).toEqual({ template_id: 'template-1' });
@@ -174,6 +289,24 @@ describe('EventWorkbenchModal', () => {
             updated_at: '2026-05-18T00:00:00Z',
           },
         ];
+      }
+      if (url === '/todo/achievements/summary?event_id=event-1') {
+        return {
+          active_event: event,
+          event_achievements: null,
+          global_achievements: {
+            title: '全局成就',
+            summary_text: '始终显示的长期累计进度',
+            stats: {
+              unlocked_count: 0,
+              in_progress_count: 0,
+              primary_metric_value: 0,
+              primary_metric_label: '总专注秒数',
+            },
+            latest_unlocked: [],
+            upcoming: [],
+          },
+        };
       }
       if (url === '/todo/events/event-1/plan-draft/items/draft-item-1' && options?.method === 'PATCH') {
         const expectedScheduledFor = new Date('2026-06-07T10:30').toISOString();

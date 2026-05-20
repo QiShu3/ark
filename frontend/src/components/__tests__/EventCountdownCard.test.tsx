@@ -162,7 +162,7 @@ describe('EventCountdownCard', () => {
     expect(screen.getByText('开始日期 2026-03-01')).toBeInTheDocument();
   });
 
-  it('creates an event from the empty primary state and refreshes the list', async () => {
+  it('creates a primary event from the empty state and opens its workbench', async () => {
     const user = userEvent.setup();
     const events: Array<{
       id: string;
@@ -186,7 +186,7 @@ describe('EventCountdownCard', () => {
       }
       if (url === '/todo/events' && options?.body) {
         const payload = JSON.parse(options.body);
-        events.push({
+        const created = {
           id: 'event-2',
           user_id: 7,
           name: payload.name,
@@ -195,14 +195,24 @@ describe('EventCountdownCard', () => {
           is_primary: payload.is_primary,
           created_at: '2026-03-19T00:00:00Z',
           updated_at: '2026-03-19T00:00:00Z',
-        });
+        };
+        events.push(created);
         if (payload.is_primary) {
           for (const event of events) {
             if (event.id !== 'event-2') event.is_primary = false;
           }
         }
-        return events[events.length - 1];
+        return created;
       }
+      if (url === '/todo/events/event-2/workbench') {
+        return {
+          event: events[0],
+          plan_draft: null,
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/event-plan-templates') return [];
       return {};
     });
 
@@ -222,7 +232,47 @@ describe('EventCountdownCard', () => {
       expect(JSON.parse(createCall?.[1].body)).toMatchObject({
         name: '答辩',
         start_date: '2026-03-01',
+        is_primary: true,
       });
     });
+    expect(await screen.findByRole('dialog', { name: '事件工作台' })).toBeInTheDocument();
+    expect(screen.getByText('事件总览')).toBeInTheDocument();
+  });
+
+  it('opens a workbench from the event list when no primary event is set', async () => {
+    const user = userEvent.setup();
+    const eventWithoutPrimary = {
+      id: 'event-3',
+      user_id: 7,
+      name: '毕业设计',
+      start_date: '2026-03-01',
+      due_at: '2026-04-20T10:00:00Z',
+      is_primary: false,
+      created_at: '2026-03-19T00:00:00Z',
+      updated_at: '2026-03-19T00:00:00Z',
+    };
+
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [eventWithoutPrimary];
+      if (url === '/todo/events/event-3/workbench') {
+        return {
+          event: eventWithoutPrimary,
+          plan_draft: null,
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/event-plan-templates') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(await screen.findByRole('button', { name: '打开工作台：毕业设计' }));
+
+    expect(await screen.findByRole('dialog', { name: '事件工作台' })).toBeInTheDocument();
+    expect(screen.getByText('毕业设计')).toBeInTheDocument();
   });
 });

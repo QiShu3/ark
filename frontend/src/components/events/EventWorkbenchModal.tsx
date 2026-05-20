@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 
+import type { AchievementSummary } from '../achievementTypes';
+import { apiJson } from '../../lib/api';
 import {
   applyEventPlanTemplate,
   deleteEventPlanDraftItem,
@@ -18,6 +20,20 @@ type EventWorkbenchModalProps = {
   event: EventItem;
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
+};
+
+type EventEditFormState = {
+  name: string;
+  startDate: string;
+  dueAt: string;
+  isPrimary: boolean;
+};
+
+const EMPTY_EVENT_EDIT_FORM: EventEditFormState = {
+  name: '',
+  startDate: '',
+  dueAt: '',
+  isPrimary: false,
 };
 
 function formatDateTime(value: string): string {
@@ -62,6 +78,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [saveTemplateName, setSaveTemplateName] = useState('');
   const [saveTemplateDescription, setSaveTemplateDescription] = useState('');
   const [saveTemplateMode, setSaveTemplateMode] = useState<'from_start' | 'before_due'>('before_due');
+  const [achievementSummary, setAchievementSummary] = useState<AchievementSummary | null>(null);
+  const [loadingAchievement, setLoadingAchievement] = useState(false);
+  const [editingEventDetails, setEditingEventDetails] = useState(false);
+  const [eventEditForm, setEventEditForm] = useState<EventEditFormState>(EMPTY_EVENT_EDIT_FORM);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,6 +117,27 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   useEffect(() => {
     void loadTemplates();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingAchievement(true);
+    void apiJson<AchievementSummary>(`/todo/achievements/summary?event_id=${event.id}`)
+      .then((data) => {
+        if (cancelled) return;
+        setAchievementSummary(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('Failed to load event achievement summary', err);
+        setAchievementSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAchievement(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [event.id]);
 
   async function handleGenerate(): Promise<void> {
     if (submitting) return;
@@ -221,10 +262,111 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   }
 
   const currentEvent = workbench?.event ?? event;
+  const eventAchievements = achievementSummary?.event_achievements ?? null;
   const draftItems = workbench?.plan_draft?.items ?? [];
   const taskDrafts = draftItems.filter((item) => item.kind === 'task');
   const appointmentDrafts = draftItems.filter((item) => item.kind === 'appointment');
   const sourceTemplateName = templates.find((template) => template.id === workbench?.plan_draft?.source_template_id)?.name;
+
+  function beginEditEventDetails(): void {
+    setEditingEventDetails(true);
+    setEventEditForm({
+      name: currentEvent.name,
+      startDate: currentEvent.start_date,
+      dueAt: toDateTimeLocal(currentEvent.due_at),
+      isPrimary: currentEvent.is_primary,
+    });
+    setError(null);
+  }
+
+  function cancelEditEventDetails(): void {
+    setEditingEventDetails(false);
+    setEventEditForm(EMPTY_EVENT_EDIT_FORM);
+    setError(null);
+  }
+
+  function updateCurrentEvent(updatedEvent: EventItem): void {
+    setWorkbench((current) => (
+      current
+        ? { ...current, event: updatedEvent }
+        : { event: updatedEvent, plan_draft: null, created_tasks: [], created_appointments: [] }
+    ));
+  }
+
+  async function handleSetPrimaryEvent(): Promise<void> {
+    if (submitting || currentEvent.is_primary) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const updatedEvent = await apiJson<EventItem>(`/todo/events/${currentEvent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_primary: true }),
+      });
+      updateCurrentEvent(updatedEvent);
+      await Promise.resolve(onChanged?.());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '设置主事件失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSaveEventDetails(): Promise<void> {
+    if (submitting) return;
+    const name = eventEditForm.name.trim();
+    const dueAt = fromDateTimeLocal(eventEditForm.dueAt);
+    if (!name) {
+      setError('请输入事件名称');
+      return;
+    }
+    if (!eventEditForm.startDate) {
+      setError('请选择开始日期');
+      return;
+    }
+    if (!dueAt) {
+      setError('请选择截止时间');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const updatedEvent = await apiJson<EventItem>(`/todo/events/${currentEvent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          start_date: eventEditForm.startDate,
+          due_at: dueAt,
+          is_primary: eventEditForm.isPrimary,
+        }),
+      });
+      updateCurrentEvent(updatedEvent);
+      setEditingEventDetails(false);
+      await Promise.resolve(onChanged?.());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存事件失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteEvent(): Promise<void> {
+    if (submitting) return;
+    if (!window.confirm(`确定删除“${currentEvent.name}”吗？`)) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await apiJson(`/todo/events/${currentEvent.id}`, { method: 'DELETE' });
+      await Promise.resolve(onChanged?.());
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除事件失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   function renderDraftItem(item: EventPlanDraftItem) {
     const timeValue = item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for;
@@ -303,7 +445,96 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   <div>创建于 {formatDateTime(currentEvent.created_at)}</div>
                 </div>
               </div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                {!currentEvent.is_primary ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleSetPrimaryEvent()}
+                    disabled={submitting}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    设为主事件
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={beginEditEventDetails}
+                  disabled={submitting}
+                  className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  编辑事件
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteEvent()}
+                  disabled={submitting}
+                  className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  删除事件
+                </button>
+              </div>
             </div>
+            {editingEventDetails ? (
+              <div className="mt-4 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
+                <div className="text-sm font-medium text-blue-100">编辑事件信息</div>
+                <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr]">
+                  <label className="grid gap-1 text-xs text-white/60">
+                    事件名称
+                    <input
+                      value={eventEditForm.name}
+                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, name: changeEvent.target.value }))}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    开始日期
+                    <input
+                      type="date"
+                      value={eventEditForm.startDate}
+                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, startDate: changeEvent.target.value }))}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    截止时间
+                    <input
+                      type="datetime-local"
+                      value={eventEditForm.dueAt}
+                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, dueAt: changeEvent.target.value }))}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-sm text-white/70">
+                    <input
+                      type="checkbox"
+                      checked={eventEditForm.isPrimary}
+                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, isPrimary: changeEvent.target.checked }))}
+                      className="h-4 w-4 rounded border-white/20 bg-white/5"
+                    />
+                    主事件
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelEditEventDetails}
+                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveEventDetails()}
+                      disabled={submitting}
+                      className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                    >
+                      保存事件
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
@@ -524,7 +755,33 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
           <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <h3 className="text-base font-semibold">成就摘要</h3>
-            <p className="mt-2 text-sm text-white/50">第一版沿用现有自动成就，后续会接入更完整的成就浏览。</p>
+            {loadingAchievement ? (
+              <p className="mt-2 text-sm text-white/50">成就加载中...</p>
+            ) : eventAchievements ? (
+              <div className="mt-3 grid gap-3 text-sm">
+                <div className="rounded-lg bg-white/[0.05] px-3 py-2">
+                  <div className="font-medium text-white">
+                    {eventAchievements.summary_text ?? `${currentEvent.name} 的当前进展`}
+                  </div>
+                  <div className="mt-1 text-white/50">
+                    已解锁 {eventAchievements.stats.unlocked_count} 个 · 进行中 {eventAchievements.stats.in_progress_count} 个
+                  </div>
+                </div>
+                {eventAchievements.latest_unlocked[0] ? (
+                  <div className="rounded-lg border border-emerald-300/15 bg-emerald-400/10 px-3 py-2 text-emerald-100">
+                    最近解锁：{eventAchievements.latest_unlocked[0].title}
+                  </div>
+                ) : null}
+                {eventAchievements.upcoming[0] ? (
+                  <div className="rounded-lg border border-blue-300/15 bg-blue-400/10 px-3 py-2 text-blue-100">
+                    下一步：{eventAchievements.upcoming[0].title}
+                    {eventAchievements.upcoming[0].progress_text ? ` · ${eventAchievements.upcoming[0].progress_text}` : ''}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-white/50">暂无事件成就进度，完成相关任务或专注后会自动更新。</p>
+            )}
           </section>
         </div>
       </div>
