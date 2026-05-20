@@ -17,10 +17,6 @@ vi.mock('../../hooks/vocab/useVocabTodaySession', () => ({
   useVocabTodaySession,
 }));
 
-vi.mock('./DeckSwitcher', () => ({
-  default: () => <div>Deck switcher</div>,
-}));
-
 function mockReadyCompletedSession() {
   useVocabDeck.mockReturnValue({
     decks: [],
@@ -36,7 +32,19 @@ function mockReadyCompletedSession() {
     loading: false,
     error: null,
     isBatchReview: false,
-    currentItem: null,
+    currentItem: {
+      id: 'word-1',
+      word: 'apple',
+      deck_id: 'deck-1',
+      us_pronunciation: 'ˈæpəl',
+      uk_pronunciation: 'ˈæpəl',
+      translations: [{ pos: 'n.', translation: '苹果' }],
+      phrases: [],
+      sentences: [],
+      prompt_type: 'en_to_zh',
+      review_mode: 'review',
+      mastery_score: 42,
+    },
     currentBatchNumber: 1,
     totalBatchCount: 1,
     memorizedCount: 10,
@@ -76,8 +84,30 @@ describe('VocabTodayFocusWork', () => {
     );
 
     await waitFor(() => {
-      expect(useVocabTodaySession).toHaveBeenCalled();
+    expect(useVocabTodaySession).toHaveBeenCalled();
     });
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('removes the vocab title and deck switch entry from the focus view', () => {
+    const { queryByText, getByText } = render(
+      <VocabTodayFocusWork
+        workflow={{
+          state: 'focus',
+          active_focus_work_type: 'vocab_today',
+          focus_work_display_state: 'fullscreen',
+          is_paused: false,
+        }}
+        recordFocus
+        onCompleteTaskAndFinish={vi.fn()}
+        onComplete={vi.fn()}
+        onInterrupt={vi.fn()}
+      />,
+    );
+
+    expect(getByText('apple')).toBeInTheDocument();
+    expect(getByText('第 1 批 / 共 1 批')).toBeInTheDocument();
+    expect(queryByText('今日单词')).not.toBeInTheDocument();
+    expect(queryByText('切换词书')).not.toBeInTheDocument();
   });
 });
