@@ -253,6 +253,10 @@ class EventPlanTemplateCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
     schedule_mode: EventPlanScheduleMode
+    default_event_name: str | None = None
+    default_start_date: date | None = None
+    default_due_at: datetime | None = None
+    default_is_primary: bool | None = None
     items: list[EventPlanTemplateItemIn] = Field(default_factory=list)
 
 
@@ -260,6 +264,10 @@ class EventPlanTemplateUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     schedule_mode: EventPlanScheduleMode | None = None
+    default_event_name: str | None = None
+    default_start_date: date | None = None
+    default_due_at: datetime | None = None
+    default_is_primary: bool | None = None
     items: list[EventPlanTemplateItemIn] | None = None
 
 
@@ -281,6 +289,10 @@ class EventPlanTemplateOut(BaseModel):
     name: str
     description: str | None
     schedule_mode: EventPlanScheduleMode
+    default_event_name: str | None
+    default_start_date: date | None
+    default_due_at: datetime | None
+    default_is_primary: bool | None
     items: list[EventPlanTemplateItemOut]
     created_at: datetime
     updated_at: datetime

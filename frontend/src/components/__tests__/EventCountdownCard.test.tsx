@@ -104,6 +104,173 @@ describe('EventCountdownCard', () => {
     expect(screen.getByText('--')).toBeInTheDocument();
   });
 
+  it('creates an event with a selected template and opens the workbench with the draft', async () => {
+    const user = userEvent.setup();
+    const createdEvents: Array<{
+      id: string;
+      user_id: number;
+      name: string;
+      start_date: string;
+      due_at: string;
+      is_primary: boolean;
+      created_at: string;
+      updated_at: string;
+    }> = [];
+    const template = {
+      id: 'template-1',
+      user_id: 7,
+      name: '考试复习',
+      description: null,
+      schedule_mode: 'before_due' as const,
+      default_event_name: '高数期末',
+      default_start_date: '2026-05-20',
+      default_due_at: new Date('2026-06-20T10:00').toISOString(),
+      default_is_primary: true,
+      items: [
+        {
+          id: 'template-item-1',
+          template_id: 'template-1',
+          kind: 'task' as const,
+          title: '第一轮复习',
+          content: null,
+          offset_days: 0,
+          sort_order: 0,
+          created_at: '2026-05-18T00:00:00Z',
+          updated_at: '2026-05-18T00:00:00Z',
+        },
+      ],
+      created_at: '2026-05-18T00:00:00Z',
+      updated_at: '2026-05-18T00:00:00Z',
+    };
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') {
+        const primary = createdEvents.find((event) => event.is_primary);
+        if (!primary) throw new Error('主事件不存在');
+        return primary;
+      }
+      if (url === '/todo/events' && !options) return [...createdEvents];
+      if (url === '/todo/event-plan-templates') return [template];
+      if (url === '/todo/events' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        const created = {
+          id: 'event-2',
+          user_id: 7,
+          name: payload.name,
+          start_date: payload.start_date,
+          due_at: payload.due_at,
+          is_primary: payload.is_primary,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+        createdEvents.push(created);
+        if (payload.is_primary) {
+          for (const event of createdEvents) {
+            if (event.id !== created.id) event.is_primary = false;
+          }
+        }
+        return created;
+      }
+      if (url === '/todo/events/event-2/plan-draft/apply-template' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toEqual({ template_id: 'template-1' });
+        return {
+          event: createdEvents[0],
+          plan_draft: {
+            id: 'draft-1',
+            event_id: 'event-2',
+            user_id: 7,
+            source_template_id: 'template-1',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-19T00:00:00Z',
+            items: [
+              {
+                id: 'draft-item-1',
+                draft_id: 'draft-1',
+                kind: 'task',
+                title: '第一轮复习',
+                content: null,
+                scheduled_for: '2026-06-08T10:00:00Z',
+                starts_at: null,
+                ends_at: null,
+                payload: {},
+                sort_order: 0,
+                created_subject_id: null,
+                created_at: '2026-05-19T00:00:00Z',
+                updated_at: '2026-05-19T00:00:00Z',
+              },
+            ],
+          },
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/events/event-2/workbench') {
+        return {
+          event: createdEvents[0],
+          plan_draft: {
+            id: 'draft-1',
+            event_id: 'event-2',
+            user_id: 7,
+            source_template_id: 'template-1',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-19T00:00:00Z',
+            items: [
+              {
+                id: 'draft-item-1',
+                draft_id: 'draft-1',
+                kind: 'task',
+                title: '第一轮复习',
+                content: null,
+                scheduled_for: '2026-06-08T10:00:00Z',
+                starts_at: null,
+                ends_at: null,
+                payload: {},
+                sort_order: 0,
+                created_subject_id: null,
+                created_at: '2026-05-19T00:00:00Z',
+                updated_at: '2026-05-19T00:00:00Z',
+              },
+            ],
+          },
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-1');
+    await waitFor(() => {
+      expect(screen.getByLabelText('事件名称')).toHaveValue('高数期末');
+      expect(screen.getByLabelText('开始日期')).toHaveValue('2026-05-20');
+      expect(screen.getByLabelText('到期时间')).toHaveValue('2026-06-20T10:00');
+    });
+    await user.click(screen.getByRole('button', { name: '套用模板' }));
+
+    expect(await screen.findByRole('dialog', { name: '事件工作台' })).toBeInTheDocument();
+    expect(screen.getByText('第一轮复习')).toBeInTheDocument();
+  });
+
+  it('opens the template workbench from the gear button in the event editor', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '进入模板工作台' }));
+
+    expect(await screen.findByRole('dialog', { name: '模板工作台' })).toBeInTheDocument();
+  });
+
   it('opens workbench modal for the primary event', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {

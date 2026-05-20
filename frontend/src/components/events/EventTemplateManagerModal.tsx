@@ -25,14 +25,37 @@ const DEFAULT_ITEM: EventPlanTemplateItemInput = {
   sort_order: 0,
 };
 
+function toDateTimeLocal(value: string | null | undefined): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const offsetMs = parsed.getTimezoneOffset() * 60 * 1000;
+  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value: string): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 export default function EventTemplateManagerModal({ templates, onClose, onChanged }: EventTemplateManagerModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [defaultEventName, setDefaultEventName] = useState('');
+  const [defaultStartDate, setDefaultStartDate] = useState('');
+  const [defaultDueAt, setDefaultDueAt] = useState('');
+  const [defaultIsPrimary, setDefaultIsPrimary] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<'from_start' | 'before_due'>('before_due');
   const [items, setItems] = useState<EventPlanTemplateItemInput[]>([{ ...DEFAULT_ITEM }]);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editDefaultEventName, setEditDefaultEventName] = useState('');
+  const [editDefaultStartDate, setEditDefaultStartDate] = useState('');
+  const [editDefaultDueAt, setEditDefaultDueAt] = useState('');
+  const [editDefaultIsPrimary, setEditDefaultIsPrimary] = useState(false);
   const [editScheduleMode, setEditScheduleMode] = useState<'from_start' | 'before_due'>('before_due');
   const [editItems, setEditItems] = useState<EventPlanTemplateItemInput[]>([{ ...DEFAULT_ITEM }]);
   const [submitting, setSubmitting] = useState(false);
@@ -64,14 +87,14 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
       name: name.trim(),
       description: description.trim() || null,
       schedule_mode: scheduleMode,
+      default_event_name: defaultEventName.trim() || null,
+      default_start_date: defaultStartDate || null,
+      default_due_at: fromDateTimeLocal(defaultDueAt),
+      default_is_primary: defaultIsPrimary,
       items: cleanedItems,
     };
     if (!payload.name) {
       setError('请输入模板名称');
-      return;
-    }
-    if (payload.items.length === 0) {
-      setError('至少添加一个模板项');
       return;
     }
     setSubmitting(true);
@@ -80,6 +103,10 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
       await createEventPlanTemplate(payload);
       setName('');
       setDescription('');
+      setDefaultEventName('');
+      setDefaultStartDate('');
+      setDefaultDueAt('');
+      setDefaultIsPrimary(false);
       setItems([{ ...DEFAULT_ITEM }]);
       await Promise.resolve(onChanged());
     } catch (err) {
@@ -93,6 +120,10 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
     setEditingTemplateId(template.id);
     setEditName(template.name);
     setEditDescription(template.description ?? '');
+    setEditDefaultEventName(template.default_event_name ?? '');
+    setEditDefaultStartDate(template.default_start_date ?? '');
+    setEditDefaultDueAt(toDateTimeLocal(template.default_due_at));
+    setEditDefaultIsPrimary(template.default_is_primary ?? false);
     setEditScheduleMode(template.schedule_mode);
     setEditItems(template.items.length ? template.items.map((item, index) => ({
       kind: item.kind,
@@ -111,14 +142,14 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
       name: editName.trim(),
       description: editDescription.trim() || null,
       schedule_mode: editScheduleMode,
+      default_event_name: editDefaultEventName.trim() || null,
+      default_start_date: editDefaultStartDate || null,
+      default_due_at: fromDateTimeLocal(editDefaultDueAt),
+      default_is_primary: editDefaultIsPrimary,
       items: cleanedItems,
     };
     if (!payload.name) {
       setError('请输入模板名称');
-      return;
-    }
-    if (payload.items.length === 0) {
-      setError('至少保留一个模板项');
       return;
     }
     setSubmitting(true);
@@ -165,7 +196,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="模板管理"
+      aria-label="模板工作台"
       className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur-sm"
       onClick={onClose}
     >
@@ -174,7 +205,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex h-14 items-center justify-between border-b border-white/10 px-5">
-          <h3 className="font-semibold">模板管理</h3>
+          <h3 className="font-semibold">模板工作台</h3>
           <button type="button" onClick={onClose} className="rounded-full px-3 py-2 text-white/60 hover:bg-white/10">
             关闭
           </button>
@@ -182,7 +213,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
 
         <div className="grid flex-1 gap-4 overflow-y-auto p-5 lg:grid-cols-[1fr_1fr]">
           <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <h4 className="font-semibold">新建模板</h4>
+            <h4 className="font-semibold">新建事件模板</h4>
             {error ? <div className="mt-3 rounded-lg bg-red-500/10 p-2 text-sm text-red-200">{error}</div> : null}
             <div className="mt-3 grid gap-3">
               <label className="grid gap-2 text-sm text-white/70">
@@ -201,6 +232,46 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                   className="min-h-16 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
                 />
               </label>
+              <div className="grid gap-3 border-t border-white/10 pt-3">
+                <div className="text-sm font-medium text-white/80">事件信息</div>
+                <label className="grid gap-2 text-sm text-white/70">
+                  默认事件名称
+                  <input
+                    value={defaultEventName}
+                    onChange={(event) => setDefaultEventName(event.target.value)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                  />
+                </label>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="grid gap-2 text-sm text-white/70">
+                    默认开始日期
+                    <input
+                      type="date"
+                      value={defaultStartDate}
+                      onChange={(event) => setDefaultStartDate(event.target.value)}
+                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm text-white/70">
+                    默认到期时间
+                    <input
+                      type="datetime-local"
+                      value={defaultDueAt}
+                      onChange={(event) => setDefaultDueAt(event.target.value)}
+                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                    />
+                  </label>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-white/70">
+                  <input
+                    type="checkbox"
+                    checked={defaultIsPrimary}
+                    onChange={(event) => setDefaultIsPrimary(event.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-white/5"
+                  />
+                  默认设为主事件
+                </label>
+              </div>
               <label className="grid gap-2 text-sm text-white/70">
                 时间模式
                 <select
@@ -214,6 +285,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
               </label>
 
               <div className="grid gap-2">
+                <div className="text-sm font-medium text-white/80">工作台内容</div>
                 {items.map((item, index) => (
                   <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
                     <div className="grid grid-cols-[120px_1fr_96px] gap-2">
@@ -253,7 +325,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                   onClick={() => setItems((current) => [...current, { ...DEFAULT_ITEM, sort_order: current.length }])}
                   className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
                 >
-                  添加模板项
+                  添加工作台内容
                 </button>
               </div>
 
@@ -263,16 +335,16 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                 disabled={submitting}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
               >
-                创建模板
+                创建事件模板
               </button>
             </div>
           </section>
 
           <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <h4 className="font-semibold">已有模板</h4>
+            <h4 className="font-semibold">已有事件模板</h4>
             {editingTemplateId ? (
               <div className="mt-3 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
-                <div className="text-sm font-medium text-blue-100">编辑模板</div>
+                <div className="text-sm font-medium text-blue-100">编辑事件模板</div>
                 <label className="grid gap-2 text-sm text-white/70">
                   编辑模板名称
                   <input
@@ -289,6 +361,46 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                     className="min-h-14 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
                   />
                 </label>
+                <div className="grid gap-3 border-t border-white/10 pt-3">
+                  <div className="text-sm font-medium text-white/80">事件信息</div>
+                  <label className="grid gap-2 text-sm text-white/70">
+                    编辑默认事件名称
+                    <input
+                      value={editDefaultEventName}
+                      onChange={(event) => setEditDefaultEventName(event.target.value)}
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
+                    />
+                  </label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-2 text-sm text-white/70">
+                      编辑默认开始日期
+                      <input
+                        type="date"
+                        value={editDefaultStartDate}
+                        onChange={(event) => setEditDefaultStartDate(event.target.value)}
+                        className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm text-white/70">
+                      编辑默认到期时间
+                      <input
+                        type="datetime-local"
+                        value={editDefaultDueAt}
+                        onChange={(event) => setEditDefaultDueAt(event.target.value)}
+                        className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white"
+                      />
+                    </label>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-white/70">
+                    <input
+                      type="checkbox"
+                      checked={editDefaultIsPrimary}
+                      onChange={(event) => setEditDefaultIsPrimary(event.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/5"
+                    />
+                    编辑默认设为主事件
+                  </label>
+                </div>
                 <label className="grid gap-2 text-sm text-white/70">
                   编辑时间模式
                   <select
@@ -301,6 +413,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                   </select>
                 </label>
                 <div className="grid gap-2">
+                  <div className="text-sm font-medium text-white/80">工作台内容</div>
                   {editItems.map((item, index) => (
                     <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
                       <div className="grid grid-cols-[96px_1fr_92px] gap-2">
@@ -315,7 +428,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                         <input
                           value={item.title}
                           onChange={(event) => updateEditItem(index, { title: event.target.value })}
-                          aria-label={index === 0 ? '编辑模板项标题' : `编辑模板项标题 ${index + 1}`}
+                          aria-label={index === 0 ? '编辑工作台内容标题' : `编辑工作台内容标题 ${index + 1}`}
                           className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
                         />
                         <input
@@ -330,7 +443,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                       <input
                         value={item.content ?? ''}
                         onChange={(event) => updateEditItem(index, { content: event.target.value })}
-                        aria-label={index === 0 ? '编辑模板项备注' : `编辑模板项备注 ${index + 1}`}
+                        aria-label={index === 0 ? '编辑工作台内容备注' : `编辑工作台内容备注 ${index + 1}`}
                         className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
                       />
                     </div>
@@ -340,7 +453,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                     onClick={() => setEditItems((current) => [...current, { ...DEFAULT_ITEM, sort_order: current.length }])}
                     className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
                   >
-                    添加编辑项
+                    添加工作台内容
                   </button>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -357,7 +470,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                     disabled={submitting}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
                   >
-                    保存模板
+                    保存事件模板
                   </button>
                 </div>
               </div>
@@ -367,7 +480,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                 <div key={template.id} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
                   <div className="font-medium">{template.name}</div>
                   <div className="mt-1 text-xs text-white/50">
-                    {template.schedule_mode === 'before_due' ? '截止前倒推' : '开始后顺推'} · {template.items.length} 项
+                    {template.schedule_mode === 'before_due' ? '截止前倒推' : '开始后顺推'} · 工作台内容 {template.items.length} 条
                   </div>
                   <div className="mt-3 flex gap-2">
                     <button

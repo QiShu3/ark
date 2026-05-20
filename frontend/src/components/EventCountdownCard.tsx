@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Settings } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
+import { applyEventPlanTemplate, listEventPlanTemplates } from '../lib/events/api';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
-import type { EventItem } from '../lib/events/types';
+import EventTemplateManagerModal from './events/EventTemplateManagerModal';
+import type { EventItem, EventPlanTemplate } from '../lib/events/types';
 
 type EventFormState = {
   name: string;
@@ -16,6 +19,13 @@ const CREATE_EVENT_DEFAULTS: EventFormState = {
   startDate: '',
   dueAt: '',
   isPrimary: true,
+};
+
+type EventCreatePayload = {
+  name: string;
+  start_date: string;
+  due_at: string;
+  is_primary: boolean;
 };
 
 function toDateTimeLocal(value: string | null | undefined): string {
@@ -78,6 +88,10 @@ const EventCountdownCard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [workbenchEvent, setWorkbenchEvent] = useState<EventItem | null>(null);
+  const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [editForm, setEditForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
 
@@ -95,6 +109,7 @@ const EventCountdownCard: React.FC = () => {
   useEffect(() => {
     if (!showModal) return;
     void loadEvents();
+    void loadTemplates();
   }, [showModal]);
 
   const countdownText = useMemo(() => {
@@ -134,6 +149,37 @@ const EventCountdownCard: React.FC = () => {
     }
   }
 
+  async function loadTemplates(): Promise<void> {
+    setLoadingTemplates(true);
+    try {
+      const data = await listEventPlanTemplates();
+      const nextTemplates = Array.isArray(data) ? data : [];
+      setTemplates(nextTemplates);
+      setSelectedTemplateId((current) => (
+        current && nextTemplates.some((template) => template.id === current) ? current : ''
+      ));
+    } catch (err) {
+      console.error('Failed to load event plan templates', err);
+      setError(err instanceof Error ? err.message : '模板加载失败');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
+  function handleSelectTemplate(templateId: string): void {
+    setSelectedTemplateId(templateId);
+    const template = templates.find((current) => current.id === templateId);
+    if (!template) return;
+    const templateDueAt = toDateTimeLocal(template.default_due_at);
+    setCreateForm((state) => ({
+      ...state,
+      name: state.name || template.default_event_name || '',
+      startDate: state.startDate || template.default_start_date || '',
+      dueAt: state.dueAt || templateDueAt,
+      isPrimary: template.default_is_primary ?? state.isPrimary,
+    }));
+  }
+
   async function refreshAll(): Promise<void> {
     await Promise.all([loadPrimaryEvent(), loadEvents()]);
   }
@@ -159,42 +205,85 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
   }
 
-  async function handleCreateEvent(): Promise<void> {
-    if (submitting) return;
+  function buildCreatePayload(): EventCreatePayload | null {
     const name = createForm.name.trim();
     if (!name) {
       setError('请输入事件名称');
-      return;
+      return null;
     }
     if (!createForm.startDate) {
       setError('请选择开始日期');
-      return;
+      return null;
     }
     if (!createForm.dueAt) {
       setError('请选择到期时间');
+      return null;
+    }
+
+    return {
+      name,
+      start_date: createForm.startDate,
+      due_at: new Date(createForm.dueAt).toISOString(),
+      is_primary: createForm.isPrimary,
+    };
+  }
+
+  async function createEvent(payload: EventCreatePayload): Promise<EventItem> {
+    return apiJson<EventItem>('/todo/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async function finishCreatedEvent(event: EventItem): Promise<void> {
+    resetCreateForm();
+    cancelEdit();
+    setSelectedTemplateId('');
+    setShowModal(false);
+    await refreshAll();
+    setWorkbenchEvent(event);
+  }
+
+  async function handleCreateEvent(): Promise<void> {
+    if (submitting) return;
+    const payload = buildCreatePayload();
+    if (!payload) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const createdEvent = await createEvent(payload);
+      await finishCreatedEvent(createdEvent);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建事件失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleCreateWithTemplate(): Promise<void> {
+    if (submitting) return;
+    const payload = buildCreatePayload();
+    if (!payload) return;
+    if (!selectedTemplateId) {
+      setError('请选择事件模板');
       return;
     }
 
     setSubmitting(true);
     setError(null);
     try {
-      const createdEvent = await apiJson<EventItem>('/todo/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          start_date: createForm.startDate,
-          due_at: new Date(createForm.dueAt).toISOString(),
-          is_primary: createForm.isPrimary,
-        }),
-      });
-      resetCreateForm();
-      cancelEdit();
-      setShowModal(false);
-      await refreshAll();
-      setWorkbenchEvent(createdEvent);
+      const createdEvent = await createEvent(payload);
+      const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+      if (selectedTemplate && selectedTemplate.items.length === 0) {
+        await finishCreatedEvent(createdEvent);
+        return;
+      }
+      const workbench = await applyEventPlanTemplate(createdEvent.id, selectedTemplateId);
+      await finishCreatedEvent(workbench.event ?? createdEvent);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建事件失败');
+      setError(err instanceof Error ? err.message : '套用模板失败');
     } finally {
       setSubmitting(false);
     }
@@ -333,8 +422,8 @@ const EventCountdownCard: React.FC = () => {
               </button>
             </div>
 
-            <div className="min-h-[170px] border-b border-white/10 p-5 bg-white/[0.03]">
-              <div className="grid h-full grid-cols-[1.4fr_0.9fr_1.1fr_auto_auto] gap-3 items-end">
+            <div className="min-h-[220px] border-b border-white/10 p-5 bg-white/[0.03]">
+              <div className="grid gap-3 md:grid-cols-[1.35fr_0.95fr_1.15fr]">
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-white/70">事件名称</label>
                   <input
@@ -365,6 +454,9 @@ const EventCountdownCard: React.FC = () => {
                     className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   />
                 </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-end gap-3">
                 <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
                   <input
                     type="checkbox"
@@ -374,7 +466,44 @@ const EventCountdownCard: React.FC = () => {
                   />
                   设为主事件
                 </label>
+                <div className="min-w-[180px] flex-1 flex flex-col gap-2">
+                  <label className="text-sm text-white/70">事件模板</label>
+                  <select
+                    aria-label="事件模板"
+                    value={selectedTemplateId}
+                    onChange={(event) => handleSelectTemplate(event.target.value)}
+                    disabled={loadingTemplates}
+                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">{loadingTemplates ? '模板加载中...' : '选择事件模板'}</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateWithTemplate()}
+                    disabled={submitting || loadingTemplates || !selectedTemplateId}
+                    className="px-4 py-2 rounded-lg bg-amber-300 text-black font-semibold hover:bg-amber-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    套用模板
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateManager(true)}
+                    aria-label="进入模板工作台"
+                    title="进入模板工作台"
+                    className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                  >
+                    <Settings size={18} />
+                  </button>
+                </div>
                 <button
+                  type="button"
                   onClick={handleCreateEvent}
                   disabled={submitting}
                   className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
@@ -541,6 +670,14 @@ const EventCountdownCard: React.FC = () => {
           event={workbenchEvent}
           onClose={() => setWorkbenchEvent(null)}
           onChanged={refreshAll}
+        />
+      ) : null}
+
+      {showTemplateManager ? (
+        <EventTemplateManagerModal
+          templates={templates}
+          onClose={() => setShowTemplateManager(false)}
+          onChanged={loadTemplates}
         />
       ) : null}
     </>

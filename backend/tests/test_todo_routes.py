@@ -330,6 +330,10 @@ class _FakeTodoConn:
                 "name": args[1],
                 "description": args[2],
                 "schedule_mode": args[3],
+                "default_event_name": args[4] if len(args) > 4 else None,
+                "default_start_date": args[5] if len(args) > 5 else None,
+                "default_due_at": args[6] if len(args) > 6 else None,
+                "default_is_primary": args[7] if len(args) > 7 else None,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -406,7 +410,15 @@ class _FakeTodoConn:
             )
             if template is None:
                 return None
-            for field in ("name", "description", "schedule_mode"):
+            for field in (
+                "name",
+                "description",
+                "schedule_mode",
+                "default_event_name",
+                "default_start_date",
+                "default_due_at",
+                "default_is_primary",
+            ):
                 match = re.search(rf"{field} = \$(\d+)", sql)
                 if match is not None:
                     template[field] = args[int(match.group(1)) - 1]
@@ -2092,6 +2104,10 @@ def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
             "name": "考试复习",
             "description": "基础考试计划",
             "schedule_mode": "before_due",
+            "default_event_name": "高数期末",
+            "default_start_date": "2026-05-20",
+            "default_due_at": "2026-06-20T09:00:00Z",
+            "default_is_primary": True,
             "items": [
                 {
                     "kind": "task",
@@ -2115,6 +2131,10 @@ def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
     created = create_resp.json()
     assert created["name"] == "考试复习"
     assert created["schedule_mode"] == "before_due"
+    assert created["default_event_name"] == "高数期末"
+    assert created["default_start_date"] == "2026-05-20"
+    assert created["default_due_at"] == "2026-06-20T09:00:00Z"
+    assert created["default_is_primary"] is True
     assert [item["kind"] for item in created["items"]] == ["task", "appointment"]
 
     list_resp = client.get("/todo/event-plan-templates")
@@ -2126,6 +2146,10 @@ def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
     copied = copy_resp.json()
     assert copied["id"] != created["id"]
     assert copied["name"] == "考试复习 副本"
+    assert copied["default_event_name"] == "高数期末"
+    assert copied["default_start_date"] == "2026-05-20"
+    assert copied["default_due_at"] == "2026-06-20T09:00:00Z"
+    assert copied["default_is_primary"] is True
     assert copied["items"][0]["title"] == "完成第一轮复习"
 
     delete_resp = client.delete(f"/todo/event-plan-templates/{created['id']}")
@@ -2282,6 +2306,10 @@ def test_event_plan_draft_can_be_saved_as_template(monkeypatch) -> None:
     assert saved["name"] == "我的期末模板"
     assert saved["description"] == "来自事件草稿"
     assert saved["schedule_mode"] == "before_due"
+    assert saved["default_event_name"] == "高数期末"
+    assert saved["default_start_date"] == "2026-05-20"
+    assert saved["default_due_at"] == "2026-06-20T09:00:00Z"
+    assert saved["default_is_primary"] is True
     assert [(item["title"], item["offset_days"]) for item in saved["items"]] == [
         ("完成第一轮复习", 14),
         ("模拟考试", 7),

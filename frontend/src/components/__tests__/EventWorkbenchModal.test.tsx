@@ -217,7 +217,7 @@ describe('EventWorkbenchModal', () => {
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
     await screen.findByText('事件总览');
-    await user.selectOptions(await screen.findByLabelText('选择计划模板'), 'template-1');
+    await user.selectOptions(await screen.findByLabelText('选择事件模板'), 'template-1');
     await user.click(screen.getByRole('button', { name: '套用模板' }));
 
     await waitFor(() => {
@@ -375,26 +375,26 @@ describe('EventWorkbenchModal', () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
-    await user.click(await screen.findByRole('button', { name: '编辑草稿“完成第一轮复习”' }));
-    await user.clear(screen.getByLabelText('草稿标题'));
-    await user.type(screen.getByLabelText('草稿标题'), '精修错题');
-    await user.clear(screen.getByLabelText('草稿备注'));
-    await user.type(screen.getByLabelText('草稿备注'), '错题本');
-    await user.clear(screen.getByLabelText('草稿时间'));
-    await user.type(screen.getByLabelText('草稿时间'), '2026-06-07T10:30');
-    await user.click(screen.getByRole('button', { name: '保存草稿项' }));
+    await user.click(await screen.findByRole('button', { name: '编辑工作台内容“完成第一轮复习”' }));
+    await user.clear(screen.getByLabelText('内容标题'));
+    await user.type(screen.getByLabelText('内容标题'), '精修错题');
+    await user.clear(screen.getByLabelText('内容备注'));
+    await user.type(screen.getByLabelText('内容备注'), '错题本');
+    await user.clear(screen.getByLabelText('内容时间'));
+    await user.type(screen.getByLabelText('内容时间'), '2026-06-07T10:30');
+    await user.click(screen.getByRole('button', { name: '保存工作台内容' }));
 
     expect(await screen.findByText('精修错题')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '删除草稿“模拟考试”' }));
+    await user.click(screen.getByRole('button', { name: '删除工作台内容“模拟考试”' }));
     await waitFor(() => {
       expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/items/draft-item-2', { method: 'DELETE' });
     });
 
-    await user.click(screen.getByRole('button', { name: '另存为模板' }));
-    await user.type(screen.getByLabelText('新模板名称'), '我的复习模板');
-    await user.type(screen.getByLabelText('新模板说明'), '稳定复用');
-    await user.click(screen.getByRole('button', { name: '确认另存' }));
+    await user.click(screen.getByRole('button', { name: '另存为事件模板' }));
+    await user.type(screen.getByLabelText('新事件模板名称'), '我的复习模板');
+    await user.type(screen.getByLabelText('新事件模板说明'), '稳定复用');
+    await user.click(screen.getByRole('button', { name: '确认另存事件模板' }));
 
     await waitFor(() => {
       expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/save-as-template', expect.any(Object));

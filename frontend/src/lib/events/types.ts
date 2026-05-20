@@ -62,6 +62,10 @@ export type EventPlanTemplate = {
   name: string;
   description: string | null;
   schedule_mode: 'from_start' | 'before_due';
+  default_event_name?: string | null;
+  default_start_date?: string | null;
+  default_due_at?: string | null;
+  default_is_primary?: boolean | null;
   items: EventPlanTemplateItem[];
   created_at: string;
   updated_at: string;

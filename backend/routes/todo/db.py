@@ -602,11 +602,19 @@ async def init_todo(app: Any) -> None:
               name VARCHAR(255) NOT NULL,
               description TEXT,
               schedule_mode VARCHAR(32) NOT NULL CHECK (schedule_mode IN ('from_start', 'before_due')),
+              default_event_name VARCHAR(255),
+              default_start_date DATE,
+              default_due_at TIMESTAMPTZ,
+              default_is_primary BOOLEAN,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
             """
         )
+        await conn.execute("ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS default_event_name VARCHAR(255);")
+        await conn.execute("ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS default_start_date DATE;")
+        await conn.execute("ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS default_due_at TIMESTAMPTZ;")
+        await conn.execute("ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS default_is_primary BOOLEAN;")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS event_plan_template_items (

@@ -153,6 +153,10 @@ def _row_to_event_plan_template(row: Any, items: list[Any]) -> EventPlanTemplate
         name=str(row["name"]),
         description=row["description"],
         schedule_mode=row["schedule_mode"],
+        default_event_name=_row_value(row, "default_event_name"),
+        default_start_date=_row_value(row, "default_start_date"),
+        default_due_at=_row_value(row, "default_due_at"),
+        default_is_primary=_row_value(row, "default_is_primary"),
         items=[_row_to_event_plan_template_item(item) for item in items],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -274,7 +278,7 @@ def _draft_item_datetime(row: Any) -> datetime | None:
 def _draft_item_offset_days(*, event_row: Any, schedule_mode: str, item_row: Any) -> int:
     item_at = _draft_item_datetime(item_row)
     if item_at is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="计划草稿项缺少时间")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作台内容缺少时间")
     if schedule_mode == "from_start":
         return max(0, (item_at.date() - event_row["start_date"]).days)
     return max(0, (event_row["due_at"].date() - item_at.date()).days)
@@ -1641,7 +1645,8 @@ async def list_event_plan_templates(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+            SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                   default_due_at, default_is_primary, created_at, updated_at
             FROM event_plan_templates
             WHERE user_id = $1
             ORDER BY updated_at DESC, created_at DESC
@@ -1662,14 +1667,22 @@ async def create_event_plan_template(
         async with conn.transaction():
             row = await conn.fetchrow(
                 """
-                INSERT INTO event_plan_templates(user_id, name, description, schedule_mode)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                INSERT INTO event_plan_templates(
+                    user_id, name, description, schedule_mode,
+                    default_event_name, default_start_date, default_due_at, default_is_primary
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                          default_due_at, default_is_primary, created_at, updated_at
                 """,
                 int(user.id),
                 body.name.strip(),
                 body.description,
                 body.schedule_mode,
+                body.default_event_name.strip() if body.default_event_name else None,
+                body.default_start_date,
+                body.default_due_at,
+                body.default_is_primary,
             )
             if row is None:
                 raise HTTPException(status_code=500, detail="创建模板失败")
@@ -1687,7 +1700,8 @@ async def get_event_plan_template(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+            SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                   default_due_at, default_is_primary, created_at, updated_at
             FROM event_plan_templates
             WHERE id = $1 AND user_id = $2
             """,
@@ -1714,7 +1728,8 @@ async def update_event_plan_template(
         async with conn.transaction():
             current = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                       default_due_at, default_is_primary, created_at, updated_at
                 FROM event_plan_templates
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1725,10 +1740,21 @@ async def update_event_plan_template(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
             sets: list[str] = []
             args: list[Any] = []
-            for key in ("name", "description", "schedule_mode"):
+            for key in (
+                "name",
+                "description",
+                "schedule_mode",
+                "default_event_name",
+                "default_start_date",
+                "default_due_at",
+                "default_is_primary",
+            ):
                 if key not in patch:
                     continue
-                args.append(str(patch[key]).strip() if key == "name" else patch[key])
+                value = patch[key]
+                if key in {"name", "default_event_name"} and value is not None:
+                    value = str(value).strip()
+                args.append(value)
                 sets.append(f"{key} = ${len(args)}")
             row = current
             if sets:
@@ -1741,7 +1767,8 @@ async def update_event_plan_template(
                     UPDATE event_plan_templates
                     SET {", ".join(sets)}, updated_at = NOW()
                     WHERE id = ${template_i} AND user_id = ${user_i}
-                    RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                    RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                              default_due_at, default_is_primary, created_at, updated_at
                     """,
                     *args,
                 )
@@ -1763,7 +1790,8 @@ async def copy_event_plan_template(
         async with conn.transaction():
             source = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                       default_due_at, default_is_primary, created_at, updated_at
                 FROM event_plan_templates
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1783,14 +1811,22 @@ async def copy_event_plan_template(
             )
             row = await conn.fetchrow(
                 """
-                INSERT INTO event_plan_templates(user_id, name, description, schedule_mode)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                INSERT INTO event_plan_templates(
+                    user_id, name, description, schedule_mode,
+                    default_event_name, default_start_date, default_due_at, default_is_primary
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                          default_due_at, default_is_primary, created_at, updated_at
                 """,
                 int(user.id),
                 f"{source['name']} 副本",
                 source["description"],
                 source["schedule_mode"],
+                source["default_event_name"],
+                source["default_start_date"],
+                source["default_due_at"],
+                source["default_is_primary"],
             )
             if row is None:
                 raise HTTPException(status_code=500, detail="复制模板失败")
@@ -1858,7 +1894,8 @@ async def apply_event_plan_template(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
             template_row = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                       default_due_at, default_is_primary, created_at, updated_at
                 FROM event_plan_templates
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1877,7 +1914,7 @@ async def apply_event_plan_template(
                 body.template_id,
             )
             if not template_items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="模板没有计划项")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="事件模板没有工作台内容")
             await conn.execute("DELETE FROM event_plan_drafts WHERE event_id = $1 AND user_id = $2", event_id, int(user.id))
             draft_row = await conn.fetchrow(
                 """
@@ -1890,7 +1927,7 @@ async def apply_event_plan_template(
                 body.template_id,
             )
             if draft_row is None:
-                raise HTTPException(status_code=500, detail="创建计划草稿失败")
+                raise HTTPException(status_code=500, detail="创建工作台内容失败")
             for item in template_items:
                 scheduled_at = _template_item_datetime(
                     event_row=event_row,
@@ -1976,7 +2013,7 @@ async def update_event_plan_draft_item(
                 *args,
             )
             if row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿项不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
             return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
@@ -2008,7 +2045,7 @@ async def delete_event_plan_draft_item(
                 int(user.id),
             )
             if not tag.startswith("DELETE ") or tag.endswith(" 0"):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿项不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
             return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
@@ -2035,7 +2072,7 @@ async def save_event_plan_draft_as_template(
                 int(user.id),
             )
             if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
             items = await _draft_items_for_template(
                 conn,
                 draft_id=draft_row["id"],
@@ -2043,17 +2080,25 @@ async def save_event_plan_draft_as_template(
                 schedule_mode=body.schedule_mode,
             )
             if not items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="计划草稿没有可保存的项目")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可保存的工作台内容")
             row = await conn.fetchrow(
                 """
-                INSERT INTO event_plan_templates(user_id, name, description, schedule_mode)
-                VALUES ($1, $2, $3, $4)
-                RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                INSERT INTO event_plan_templates(
+                    user_id, name, description, schedule_mode,
+                    default_event_name, default_start_date, default_due_at, default_is_primary
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                          default_due_at, default_is_primary, created_at, updated_at
                 """,
                 int(user.id),
                 body.name.strip(),
                 body.description,
                 body.schedule_mode,
+                event_row["name"],
+                event_row["start_date"],
+                event_row["due_at"],
+                event_row["is_primary"],
             )
             if row is None:
                 raise HTTPException(status_code=500, detail="另存模板失败")
@@ -2083,12 +2128,13 @@ async def update_event_plan_draft_source_template(
                 int(user.id),
             )
             if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
             if draft_row["source_template_id"] is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="计划草稿没有源模板")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="工作台内容没有源模板")
             template_row = await conn.fetchrow(
                 """
-                SELECT id, user_id, name, description, schedule_mode, created_at, updated_at
+                SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                       default_due_at, default_is_primary, created_at, updated_at
                 FROM event_plan_templates
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -2104,14 +2150,23 @@ async def update_event_plan_draft_source_template(
                 schedule_mode=str(template_row["schedule_mode"]),
             )
             if not items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="计划草稿没有可回写的项目")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可回写的工作台内容")
             updated_row = await conn.fetchrow(
                 """
                 UPDATE event_plan_templates
-                SET updated_at = NOW()
-                WHERE id = $1 AND user_id = $2
-                RETURNING id, user_id, name, description, schedule_mode, created_at, updated_at
+                SET default_event_name = $1,
+                    default_start_date = $2,
+                    default_due_at = $3,
+                    default_is_primary = $4,
+                    updated_at = NOW()
+                WHERE id = $5 AND user_id = $6
+                RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
+                          default_due_at, default_is_primary, created_at, updated_at
                 """,
+                event_row["name"],
+                event_row["start_date"],
+                event_row["due_at"],
+                event_row["is_primary"],
                 draft_row["source_template_id"],
                 int(user.id),
             )
@@ -2143,7 +2198,7 @@ async def generate_event_plan_draft(
                 int(user.id),
             )
             if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="计划草稿不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
             draft_items = await conn.fetch(
                 """
                 SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
