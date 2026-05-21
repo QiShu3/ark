@@ -10,6 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from routes.auth_routes import get_current_user
 
 from .db import _pool_from_request
+from .event_store import (
+    create_event_row,
+    delete_event_row,
+    get_primary_event_row,
+    list_event_rows,
+    update_event_row,
+)
 from .helpers import (
     UTC,
     _achievement_item,
@@ -43,7 +50,6 @@ from .helpers import (
     _normalize_focus_end_at,
     _normalize_timer_mode,
     _normalize_workflow_phases,
-    _propagate_event_due_at,
     _raise_if_completion_blocked,
     _resolve_appointment_ends_at,
     _resolve_appointment_occurrences,
@@ -2296,27 +2302,7 @@ async def create_event(
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            if body.is_primary:
-                await conn.execute(
-                    """
-                    UPDATE events
-                    SET is_primary = FALSE, updated_at = NOW()
-                    WHERE user_id = $1 AND is_primary = TRUE
-                    """,
-                    int(user.id),
-                )
-            row = await conn.fetchrow(
-                """
-                INSERT INTO events(user_id, name, start_date, due_at, is_primary)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
-                """,
-                int(user.id),
-                body.name,
-                body.start_date,
-                body.due_at,
-                body.is_primary,
-            )
+            row = await create_event_row(conn, user_id=int(user.id), body=body)
     if row is None:
         raise HTTPException(status_code=500, detail="创建事件失败")
     return _row_to_event(row)
@@ -2330,15 +2316,7 @@ async def list_events(
     """列出当前用户全部事件。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
-            FROM events
-            WHERE user_id = $1
-            ORDER BY due_at ASC, created_at DESC
-            """,
-            int(user.id),
-        )
+        rows = await list_event_rows(conn, user_id=int(user.id))
     return [_row_to_event(row) for row in rows]
 
 
@@ -2350,14 +2328,7 @@ async def get_primary_event(
     """获取当前用户主事件。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
-            FROM events
-            WHERE user_id = $1 AND is_primary = TRUE
-            """,
-            int(user.id),
-        )
+        row = await get_primary_event_row(conn, user_id=int(user.id))
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="主事件不存在")
     return _row_to_event(row)
@@ -2372,71 +2343,10 @@ async def update_event(
 ) -> EventOut:
     """更新事件。"""
     patch = body.model_dump(exclude_unset=True)
-    if not patch:
-        pool = _pool_from_request(request)
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
-                FROM events
-                WHERE id = $1 AND user_id = $2
-                """,
-                event_id,
-                int(user.id),
-            )
-        if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-        return _row_to_event(row)
-
-    allowed_cols: dict[str, str] = {
-        "name": "name",
-        "start_date": "start_date",
-        "due_at": "due_at",
-        "is_primary": "is_primary",
-    }
-
-    sets: list[str] = []
-    args: list[Any] = []
-    is_primary = patch.get("is_primary")
-
-    for key, value in patch.items():
-        col = allowed_cols.get(key)
-        if col is None:
-            continue
-        args.append(value)
-        sets.append(f"{col} = ${len(args)}")
-
-    if not sets:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可更新字段")
-
-    args.append(event_id)
-    event_i = len(args)
-    args.append(int(user.id))
-    user_i = len(args)
-
-    sql = f"""
-        UPDATE events
-        SET {", ".join(sets)}, updated_at = NOW()
-        WHERE id = ${event_i} AND user_id = ${user_i}
-        RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at
-    """
-
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            if is_primary is True:
-                await conn.execute(
-                    """
-                    UPDATE events
-                    SET is_primary = FALSE, updated_at = NOW()
-                    WHERE user_id = $1 AND is_primary = TRUE AND id <> $2
-                    """,
-                    int(user.id),
-                    event_id,
-                )
-            row = await conn.fetchrow(sql, *args)
-            if row is not None and patch.get("due_at") is not None:
-                await _propagate_event_due_at(conn, user_id=int(user.id), event_id=event_id, due_at=row["due_at"])
+            row = await update_event_row(conn, user_id=int(user.id), event_id=event_id, patch=patch)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
     return _row_to_event(row)
@@ -2451,11 +2361,7 @@ async def delete_event(
     """删除事件。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        tag = await conn.execute(
-            "DELETE FROM events WHERE id = $1 AND user_id = $2",
-            event_id,
-            int(user.id),
-        )
+        tag = await delete_event_row(conn, user_id=int(user.id), event_id=event_id)
     if not tag.startswith("DELETE ") or tag.endswith(" 0"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
     return {"ok": True}
