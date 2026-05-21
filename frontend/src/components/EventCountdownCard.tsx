@@ -1,8 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Settings } from 'lucide-react';
 
-import { apiJson } from '../lib/api';
-import { applyEventPlanTemplate, listEventPlanTemplates } from '../lib/events/api';
+import {
+  applyEventPlanTemplate,
+  createEvent,
+  deleteEvent,
+  getPrimaryEvent,
+  listEventPlanTemplates,
+  listEvents,
+  updateEvent,
+  type EventCreateInput,
+} from '../lib/events/api';
 import { formatEventDateTime, getCountdownDisplay, getCountdownTone, toDateTimeLocalValue } from '../lib/events/dateTime';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import EventTemplateManagerModal from './events/EventTemplateManagerModal';
@@ -20,13 +28,6 @@ const CREATE_EVENT_DEFAULTS: EventFormState = {
   startDate: '',
   dueAt: '',
   isPrimary: true,
-};
-
-type EventCreatePayload = {
-  name: string;
-  start_date: string;
-  due_at: string;
-  is_primary: boolean;
 };
 
 const EventCountdownCard: React.FC = () => {
@@ -75,7 +76,7 @@ const EventCountdownCard: React.FC = () => {
 
   async function loadPrimaryEvent(): Promise<void> {
     try {
-      const event = await apiJson<EventItem>('/todo/events/primary');
+      const event = await getPrimaryEvent();
       setPrimaryEvent(event);
     } catch (err) {
       if (err instanceof Error && err.message === '主事件不存在') {
@@ -90,7 +91,7 @@ const EventCountdownCard: React.FC = () => {
   async function loadEvents(): Promise<void> {
     setLoading(true);
     try {
-      const data = await apiJson<EventItem[]>('/todo/events');
+      const data = await listEvents();
       setEvents(data);
     } catch (err) {
       console.error('Failed to load events', err);
@@ -156,7 +157,7 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
   }
 
-  function buildCreatePayload(): EventCreatePayload | null {
+  function buildCreatePayload(): EventCreateInput | null {
     const name = createForm.name.trim();
     if (!name) {
       setError('请输入事件名称');
@@ -177,14 +178,6 @@ const EventCountdownCard: React.FC = () => {
       due_at: new Date(createForm.dueAt).toISOString(),
       is_primary: createForm.isPrimary,
     };
-  }
-
-  async function createEvent(payload: EventCreatePayload): Promise<EventItem> {
-    return apiJson<EventItem>('/todo/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
   }
 
   async function finishCreatedEvent(event: EventItem): Promise<void> {
@@ -259,15 +252,11 @@ const EventCountdownCard: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await apiJson<EventItem>(`/todo/events/${editingEventId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          start_date: editForm.startDate,
-          due_at: new Date(editForm.dueAt).toISOString(),
-          is_primary: editForm.isPrimary,
-        }),
+      await updateEvent(editingEventId, {
+        name,
+        start_date: editForm.startDate,
+        due_at: new Date(editForm.dueAt).toISOString(),
+        is_primary: editForm.isPrimary,
       });
       cancelEdit();
       await refreshAll();
@@ -283,11 +272,7 @@ const EventCountdownCard: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await apiJson<EventItem>(`/todo/events/${eventId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_primary: true }),
-      });
+      await updateEvent(eventId, { is_primary: true });
       if (editingEventId === eventId) {
         cancelEdit();
       }
@@ -305,7 +290,7 @@ const EventCountdownCard: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await apiJson(`/todo/events/${eventId}`, { method: 'DELETE' });
+      await deleteEvent(eventId);
       if (editingEventId === eventId) {
         cancelEdit();
       }

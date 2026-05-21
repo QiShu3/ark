@@ -6,11 +6,13 @@ import { apiJson } from '../../lib/api';
 import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } from '../../lib/events/dateTime';
 import {
   applyEventPlanTemplate,
+  deleteEvent as deleteEventById,
   deleteEventPlanDraftItem,
   generateEventPlanDraft,
   getEventWorkbench,
   listEventPlanTemplates,
   saveEventPlanDraftAsTemplate,
+  updateEvent,
   updateEventPlanDraftItem,
   updateEventPlanDraftSourceTemplate,
 } from '../../lib/events/api';
@@ -272,11 +274,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setSubmitting(true);
     setError(null);
     try {
-      const updatedEvent = await apiJson<EventItem>(`/todo/events/${currentEvent.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_primary: true }),
-      });
+      const updatedEvent = await updateEvent(currentEvent.id, { is_primary: true });
       updateCurrentEvent(updatedEvent);
       await Promise.resolve(onChanged?.());
     } catch (err) {
@@ -306,15 +304,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setSubmitting(true);
     setError(null);
     try {
-      const updatedEvent = await apiJson<EventItem>(`/todo/events/${currentEvent.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          start_date: eventEditForm.startDate,
-          due_at: dueAt,
-          is_primary: eventEditForm.isPrimary,
-        }),
+      const updatedEvent = await updateEvent(currentEvent.id, {
+        name,
+        start_date: eventEditForm.startDate,
+        due_at: dueAt,
+        is_primary: eventEditForm.isPrimary,
       });
       updateCurrentEvent(updatedEvent);
       setEditingEventDetails(false);
@@ -332,7 +326,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setSubmitting(true);
     setError(null);
     try {
-      await apiJson(`/todo/events/${currentEvent.id}`, { method: 'DELETE' });
+      await deleteEventById(currentEvent.id);
       await Promise.resolve(onChanged?.());
       onClose();
     } catch (err) {

@@ -1,5 +1,38 @@
 import { apiJson } from '../api';
-import type { EventPlanDraftItem, EventPlanTemplate, EventWorkbench } from './types';
+import type { EventItem, EventPlanDraftItem, EventPlanTemplate, EventWorkbench } from './types';
+
+export type EventCreateInput = Pick<EventItem, 'name' | 'start_date' | 'due_at' | 'is_primary'>;
+export type EventUpdateInput = Partial<EventCreateInput>;
+
+export function listEvents(): Promise<EventItem[]> {
+  return apiJson<EventItem[]>('/todo/events');
+}
+
+export function getPrimaryEvent(): Promise<EventItem> {
+  return apiJson<EventItem>('/todo/events/primary');
+}
+
+export function createEvent(input: EventCreateInput): Promise<EventItem> {
+  return apiJson<EventItem>('/todo/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateEvent(eventId: string, input: EventUpdateInput): Promise<EventItem> {
+  return apiJson<EventItem>(`/todo/events/${eventId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteEvent(eventId: string): Promise<{ ok: boolean }> {
+  return apiJson<{ ok: boolean }>(`/todo/events/${eventId}`, {
+    method: 'DELETE',
+  });
+}
 
 export function getEventWorkbench(eventId: string): Promise<EventWorkbench> {
   return apiJson<EventWorkbench>(`/todo/events/${eventId}/workbench`);
