@@ -19,6 +19,7 @@ import {
   fromDateTimeLocalValue,
   getCountdownDisplay,
   getCountdownTone,
+  toDateTimeLocalValue,
 } from '../lib/events/dateTime';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import type { EventItem, EventPlanTemplate } from '../lib/events/types';
@@ -46,7 +47,7 @@ const CREATE_EVENT_DEFAULTS: EventFormState = {
   name: '',
   startDate: '',
   dueAt: '',
-  isPrimary: true,
+  isPrimary: false,
 };
 
 const EventCountdownCard: React.FC = () => {
@@ -61,6 +62,9 @@ const EventCountdownCard: React.FC = () => {
   const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
+  const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateStatus, setTemplateStatus] = useState<string | null>(null);
   const [templateConflict, setTemplateConflict] = useState<TemplateConflictState | null>(null);
@@ -79,6 +83,7 @@ const EventCountdownCard: React.FC = () => {
   useEffect(() => {
     if (!showModal) return;
     void loadEvents();
+    void loadTemplates();
   }, [showModal]);
 
   const countdownText = useMemo(() => {
@@ -118,6 +123,54 @@ const EventCountdownCard: React.FC = () => {
     }
   }
 
+  async function loadTemplates(): Promise<void> {
+    setLoadingTemplates(true);
+    try {
+      const data = await listEventPlanTemplates();
+      const nextTemplates = Array.isArray(data) ? data : [];
+      setTemplates(nextTemplates);
+      setSelectedTemplateId((current) => (
+        current && nextTemplates.some((template) => template.id === current) ? current : ''
+      ));
+    } catch (err) {
+      console.error('Failed to load event plan templates', err);
+      setError(err instanceof Error ? err.message : '模板加载失败');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
+  function buildCreateWorkbenchItems(template: EventPlanTemplate | undefined): CreateWorkbenchItemState[] {
+    if (!template) return [];
+    return template.items.map((item) => ({
+      kind: item.kind,
+      title: item.title,
+      content: item.content ?? '',
+      offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
+    }));
+  }
+
+  function applyTemplateToCreateForm(template: EventPlanTemplate): void {
+    setCreateForm({
+      name: template.default_event_name || template.name,
+      startDate: template.default_start_date || '',
+      dueAt: toDateTimeLocalValue(template.default_due_at),
+      isPrimary: template.default_is_primary ?? CREATE_EVENT_DEFAULTS.isPrimary,
+    });
+    setCreateWorkbenchItems(buildCreateWorkbenchItems(template));
+    setTemplateStatus(null);
+    setError(null);
+  }
+
+  function handleApplyTemplate(): void {
+    const template = templates.find((current) => current.id === selectedTemplateId);
+    if (!template) {
+      setError('请选择事件模板');
+      return;
+    }
+    applyTemplateToCreateForm(template);
+  }
+
   function updateCreateWorkbenchItem(index: number, patch: Partial<CreateWorkbenchItemState>): void {
     setCreateWorkbenchItems((current) => (
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
@@ -135,8 +188,19 @@ const EventCountdownCard: React.FC = () => {
     setCreateWorkbenchItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  function previewWorkbenchItemTime(item: CreateWorkbenchItemState): string | null {
+  function previewWorkbenchItemTime(
+    item: CreateWorkbenchItemState,
+    template: EventPlanTemplate | undefined,
+  ): string | null {
+    const scheduleMode = template?.schedule_mode ?? 'before_due';
     const offsetDays = Math.max(0, Math.floor(item.offsetDays || 0));
+    if (scheduleMode === 'from_start') {
+      if (!createForm.startDate) return null;
+      const [year, month, day] = createForm.startDate.split('-').map(Number);
+      if (!year || !month || !day) return null;
+      const scheduledMs = Date.UTC(year, month - 1, day + offsetDays, 9, 0, 0);
+      return new Date(scheduledMs).toISOString();
+    }
     if (!createForm.dueAt) return null;
     const dueDate = new Date(createForm.dueAt);
     if (Number.isNaN(dueDate.getTime())) return null;
@@ -151,6 +215,7 @@ const EventCountdownCard: React.FC = () => {
   function resetCreateForm(): void {
     setCreateForm(CREATE_EVENT_DEFAULTS);
     setCreateWorkbenchItems([]);
+    setSelectedTemplateId('');
     setTemplateStatus(null);
     setTemplateConflict(null);
   }
@@ -205,7 +270,8 @@ const EventCountdownCard: React.FC = () => {
   async function createWorkbenchItemsForEvent(eventId: string, items: CreateWorkbenchItemState[]): Promise<void> {
     for (let index = 0; index < items.length; index += 1) {
       const formItem = items[index];
-      const scheduledAt = previewWorkbenchItemTime(formItem);
+      const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+      const scheduledAt = previewWorkbenchItemTime(formItem, selectedTemplate);
       const payload: EventPlanDraftItemCreateInput = {
         kind: formItem.kind,
         title: formItem.title.trim(),
@@ -355,6 +421,8 @@ const EventCountdownCard: React.FC = () => {
       : countdownTone === 'expired'
         ? 'text-red-400'
         : 'text-sky-300';
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+
   function openWorkbench(event: EventItem): void {
     resetCreateForm();
     setShowCreateEditor(false);
@@ -415,6 +483,36 @@ const EventCountdownCard: React.FC = () => {
               {showCreateEditor ? (
                 <div className="flex flex-col gap-4">
                   <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-4">
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <div className="min-w-[220px] flex-1 flex flex-col gap-2">
+                          <label className="text-sm text-white/70">事件模板</label>
+                          <select
+                            aria-label="事件模板"
+                            value={selectedTemplateId}
+                            onChange={(event) => setSelectedTemplateId(event.target.value)}
+                            disabled={loadingTemplates}
+                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <option value="">{loadingTemplates ? '模板加载中...' : '选择事件模板'}</option>
+                            {templates.map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {template.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleApplyTemplate}
+                          disabled={loadingTemplates || !selectedTemplateId}
+                          className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          套用模板
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr_auto] md:items-end">
                       <div className="flex flex-col gap-2">
                         <label className="text-sm text-white/70">事件名称</label>
@@ -464,7 +562,9 @@ const EventCountdownCard: React.FC = () => {
                         <p className="mt-1 text-sm text-white/45">
                           {createWorkbenchItems.length > 0
                             ? '工作台内容'
-                            : '可从空白工作台开始添加内容'}
+                            : selectedTemplate
+                              ? '暂无工作台内容'
+                              : '可从空白工作台开始添加内容'}
                         </p>
                       </div>
                       <button
@@ -479,7 +579,7 @@ const EventCountdownCard: React.FC = () => {
                     {createWorkbenchItems.length > 0 ? (
                       <div className="grid gap-3 border-t border-blue-300/20 pt-4">
                         {createWorkbenchItems.map((item, index) => {
-                          const previewTime = previewWorkbenchItemTime(item);
+                          const previewTime = previewWorkbenchItemTime(item, selectedTemplate);
                           return (
                             <div
                               key={`${item.kind}-${index}`}

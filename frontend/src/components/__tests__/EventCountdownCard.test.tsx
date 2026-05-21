@@ -162,7 +162,7 @@ describe('EventCountdownCard', () => {
     expect(apiJson).not.toHaveBeenCalledWith('/todo/events/event-2/plan-draft/apply-template', expect.anything());
   });
 
-  it('does not show template controls in the add-event editor', async () => {
+  it('shows template apply controls without the template workbench gear in the add-event editor', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') throw new Error('主事件不存在');
@@ -176,7 +176,60 @@ describe('EventCountdownCard', () => {
     await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.click(screen.getByRole('button', { name: '添加事件' }));
 
-    expect(screen.queryByLabelText('事件模板')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('事件模板')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '套用模板' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '进入模板工作台' })).not.toBeInTheDocument();
+  });
+
+  it('applies an event template to the add-event editor', async () => {
+    const user = userEvent.setup();
+    const template = {
+      id: 'template-1',
+      user_id: 7,
+      name: '考试复习',
+      description: null,
+      schedule_mode: 'before_due' as const,
+      default_event_name: '高数期末',
+      default_start_date: '2026-05-20',
+      default_due_at: new Date('2026-06-20T10:00').toISOString(),
+      default_is_primary: true,
+      items: [
+        {
+          id: 'template-item-1',
+          template_id: 'template-1',
+          kind: 'task' as const,
+          title: '第一轮复习',
+          content: '错题本',
+          offset_days: 14,
+          sort_order: 0,
+          created_at: '2026-05-18T00:00:00Z',
+          updated_at: '2026-05-18T00:00:00Z',
+        },
+      ],
+      created_at: '2026-05-18T00:00:00Z',
+      updated_at: '2026-05-18T00:00:00Z',
+    };
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [template];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-1');
+    await user.click(screen.getByRole('button', { name: '套用模板' }));
+
+    expect(screen.getByLabelText('事件名称')).toHaveValue('高数期末');
+    expect(screen.getByLabelText('开始日期')).toHaveValue('2026-05-20');
+    expect(screen.getByLabelText('到期时间')).toHaveValue('2026-06-20T10:00');
+    expect(screen.getByRole('checkbox', { name: '设为主事件' })).toBeChecked();
+    expect(screen.getByLabelText('内容标题')).toHaveValue('第一轮复习');
+    expect(screen.getByLabelText('内容备注')).toHaveValue('错题本');
+    expect(screen.getByLabelText('相对天数')).toHaveValue(14);
     expect(screen.queryByRole('button', { name: '进入模板工作台' })).not.toBeInTheDocument();
   });
 
@@ -198,7 +251,6 @@ describe('EventCountdownCard', () => {
     expect(screen.queryByLabelText('到期时间')).not.toBeInTheDocument();
     expect(screen.queryByText('设为主事件')).not.toBeInTheDocument();
     expect(screen.queryByText('事件模板')).not.toBeInTheDocument();
-    expect(screen.queryByText('套用模板')).not.toBeInTheDocument();
     expect(screen.queryByText('进入模板工作台')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '添加事件' }));
@@ -207,6 +259,23 @@ describe('EventCountdownCard', () => {
     expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
     expect(screen.getByLabelText('到期时间')).toBeInTheDocument();
     expect(screen.getByText('设为主事件')).toBeInTheDocument();
+  });
+
+  it('does not mark a new event as primary by default', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+
+    expect(screen.getByRole('checkbox', { name: '设为主事件' })).not.toBeChecked();
   });
 
   it('shows the event workbench shell in the add-event editor', async () => {
@@ -309,7 +378,7 @@ describe('EventCountdownCard', () => {
           default_event_name: '高数期末',
           default_start_date: '2026-05-20',
           default_due_at: expect.any(String),
-          default_is_primary: true,
+          default_is_primary: false,
           items: [
             {
               kind: 'task',
