@@ -349,6 +349,24 @@ describe('EventCountdownCard', () => {
     expect(screen.getByLabelText('相对天数')).toHaveValue(14);
   });
 
+  it('shows the event workbench shell before a template is selected', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+
+    expect(screen.getByText('事件工作台')).toBeInTheDocument();
+    expect(screen.getByText('暂无工作台内容')).toBeInTheDocument();
+  });
+
   it('shows an empty event workbench shell in the add-event panel when the template has no items', async () => {
     const user = userEvent.setup();
     const template = {
@@ -379,7 +397,7 @@ describe('EventCountdownCard', () => {
     await user.selectOptions(screen.getByLabelText('事件模板'), 'template-empty');
 
     expect(screen.getByRole('heading', { name: '事件工作台' })).toBeInTheDocument();
-    expect(screen.getByText('暂无工作台内容')).toBeInTheDocument();
+    expect(screen.getAllByText('暂无工作台内容')).toHaveLength(2);
   });
 
   it('opens the overview first when clicking the primary event', async () => {

@@ -467,64 +467,68 @@ const EventCountdownCard: React.FC = () => {
                       </label>
                     </div>
 
-                  {selectedTemplate ? (
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-4">
-                      <div>
-                        <h4 className="text-base font-semibold text-white">事件工作台</h4>
-                        <p className="mt-1 text-sm text-white/45">
-                          {createWorkbenchItems.length > 0 ? '工作台内容' : '暂无工作台内容'}
-                        </p>
-                      </div>
-                      {createWorkbenchItems.length > 0 ? (
-                        <div className="grid gap-3 border-t border-blue-300/20 pt-4">
-                          {createWorkbenchItems.map((item, index) => {
-                            const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
-                            return (
-                              <div
-                                key={`${item.kind}-${index}`}
-                                className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
-                              >
-                                <div className="grid gap-2 md:grid-cols-[76px_1fr_96px]">
-                                  <div className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70">
-                                    {item.kind === 'appointment' ? '日程' : '任务'}
-                                  </div>
-                                  <input
-                                    aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
-                                    value={item.title}
-                                    onChange={(event) => updateCreateWorkbenchItem(index, { title: event.target.value })}
-                                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                  />
-                                  <input
-                                    aria-label={index === 0 ? '相对天数' : `相对天数 ${index + 1}`}
-                                    type="number"
-                                    min={0}
-                                    value={item.offsetDays}
-                                    onChange={(event) => updateCreateWorkbenchItem(index, {
-                                      offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                                    })}
-                                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                  />
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-white">事件工作台</h4>
+                      <p className="mt-1 text-sm text-white/45">
+                        {selectedTemplate
+                          ? (createWorkbenchItems.length > 0 ? '工作台内容' : '暂无工作台内容')
+                          : '选择模板后会显示工作台内容'}
+                      </p>
+                    </div>
+                    {selectedTemplate && createWorkbenchItems.length > 0 ? (
+                      <div className="grid gap-3 border-t border-blue-300/20 pt-4">
+                        {createWorkbenchItems.map((item, index) => {
+                          const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
+                          return (
+                            <div
+                              key={`${item.kind}-${index}`}
+                              className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
+                            >
+                              <div className="grid gap-2 md:grid-cols-[76px_1fr_96px]">
+                                <div className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70">
+                                  {item.kind === 'appointment' ? '日程' : '任务'}
                                 </div>
                                 <input
-                                  aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}
-                                  value={item.content}
-                                  onChange={(event) => updateCreateWorkbenchItem(index, { content: event.target.value })}
+                                  aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
+                                  value={item.title}
+                                  onChange={(event) => updateCreateWorkbenchItem(index, { title: event.target.value })}
                                   className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                                 />
-                                {previewTime ? (
-                                  <div className="text-xs text-white/45">
-                                    时间预览 {formatEventDateTime(previewTime)}
-                                  </div>
-                                ) : null}
+                                <input
+                                  aria-label={index === 0 ? '相对天数' : `相对天数 ${index + 1}`}
+                                  type="number"
+                                  min={0}
+                                  value={item.offsetDays}
+                                  onChange={(event) => updateCreateWorkbenchItem(index, {
+                                    offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                                  })}
+                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                />
                               </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                              <input
+                                aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}
+                                value={item.content}
+                                onChange={(event) => updateCreateWorkbenchItem(index, { content: event.target.value })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              />
+                              {previewTime ? (
+                                <div className="text-xs text-white/45">
+                                  时间预览 {formatEventDateTime(previewTime)}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-white/45">
+                        暂无工作台内容
+                      </div>
+                    )}
+                  </div>
 
-                    <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={cancelCreate}
