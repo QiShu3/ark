@@ -131,9 +131,12 @@ describe('PlaceholderCard workflow UI', () => {
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
     await user.type(await screen.findByLabelText('工作流名称'), '深度工作');
-    await user.selectOptions(screen.getByLabelText('默认专注计时方式'), 'countup');
+    expect(screen.queryByLabelText('默认专注计时方式')).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('阶段 1 计时方式'), 'countup');
     await user.selectOptions(screen.getByLabelText('阶段 1 绑定任务'), task.id);
+    expect(screen.queryByLabelText('阶段 1 绑定专注工作')).not.toBeInTheDocument();
+    expect(screen.queryByText('背单词：今日单词')).not.toBeInTheDocument();
+    expect(screen.queryByText('ERC：开始复习')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '创建工作流' }));
 
     await waitFor(() => {
@@ -147,6 +150,7 @@ describe('PlaceholderCard workflow UI', () => {
         timer_mode: 'countup',
         task_id: task.id,
       });
+      expect(body.phases[0]).not.toHaveProperty('focus_work_type');
     });
   });
 
@@ -334,21 +338,30 @@ describe('PlaceholderCard workflow UI', () => {
     });
   });
 
-  it('reorders phases and updates the live summary', async () => {
+  it('keeps workflow phases as fixed focus and break steps', async () => {
     const user = userEvent.setup();
 
     renderCard();
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
     await user.type(await screen.findByLabelText('工作流名称'), '新的节奏');
-    await user.click(screen.getByRole('button', { name: '新增阶段' }));
+    await user.click(screen.getByRole('button', { name: '新增专注阶段' }));
 
-    expect(screen.getByText('共 3 个阶段 · 专注 30min · 休息 5min')).toBeInTheDocument();
-    expect(screen.getByText('1.专注 25min · 2.休息 5min · 3.专注 5min')).toBeInTheDocument();
+    expect(screen.queryByLabelText('阶段 1 类型')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '上移阶段 3' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '下移阶段 1' })).not.toBeInTheDocument();
+    expect(screen.getByText('专注阶段 1')).toBeInTheDocument();
+    expect(screen.getByText('配套休息 1')).toBeInTheDocument();
+    expect(screen.getByText('专注阶段 2')).toBeInTheDocument();
+    expect(screen.getByText('配套休息 2')).toBeInTheDocument();
+    expect(screen.getByText('共 4 个阶段 · 专注 30min · 休息 10min')).toBeInTheDocument();
+    expect(screen.getByText('1.专注 25min · 2.休息 5min · 3.专注 5min · 4.休息 5min')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '上移阶段 3' }));
+    await user.click(screen.getByRole('button', { name: '删除专注阶段 2' }));
 
-    expect(screen.getByText('1.专注 25min · 2.专注 5min · 3.休息 5min')).toBeInTheDocument();
+    expect(screen.queryByText('专注阶段 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('配套休息 2')).not.toBeInTheDocument();
+    expect(screen.getByText('1.专注 25min · 2.休息 5min')).toBeInTheDocument();
   });
 
   it('prompts before closing when the workflow draft has unsaved changes', async () => {

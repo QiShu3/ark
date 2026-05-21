@@ -25,7 +25,6 @@ type WorkflowPresetModalProps = {
   onDeletePreset: (presetId: string) => void;
   onUpdateForm: (updater: (state: WorkflowFormState) => WorkflowFormState) => void;
   onAddPhase: () => void;
-  onMovePhase: (index: number, direction: -1 | 1) => void;
   onRemovePhase: (index: number) => void;
   onSubmit: () => void;
   onReset: () => void;
@@ -48,7 +47,6 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
   onDeletePreset,
   onUpdateForm,
   onAddPhase,
-  onMovePhase,
   onRemovePhase,
   onSubmit,
   onReset,
@@ -59,6 +57,27 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
     () => getWorkflowTaskOptions(tasks, isTaskHiddenFromActionList),
     [tasks, isTaskHiddenFromActionList],
   );
+  const phaseGroups = React.useMemo(() => {
+    const groups: Array<{
+      focusPhase: WorkflowFormPhase;
+      breakPhase: WorkflowFormPhase | null;
+      focusIndex: number;
+      breakIndex: number;
+      groupIndex: number;
+    }> = [];
+    for (let index = 0; index < workflowForm.phases.length; index += 2) {
+      const focusPhase = workflowForm.phases[index];
+      if (!focusPhase) continue;
+      groups.push({
+        focusPhase,
+        breakPhase: workflowForm.phases[index + 1] ?? null,
+        focusIndex: index,
+        breakIndex: index + 1,
+        groupIndex: index / 2,
+      });
+    }
+    return groups;
+  }, [workflowForm.phases]);
 
   if (!open) {
     return null;
@@ -75,7 +94,6 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
         if (updated.phase_type === 'break') {
           updated.timer_mode = 'countdown';
           updated.task_id = null;
-          updated.focus_work_type = null;
         }
         return updated;
       });
@@ -220,140 +238,80 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                 />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label htmlFor="workflow-default-timer-mode" className="text-xs text-white/60">默认专注计时方式</label>
-                <select
-                  id="workflow-default-timer-mode"
-                  aria-label="默认专注计时方式"
-                  value={workflowForm.defaultFocusTimerMode}
-                  onChange={(e) => {
-                    const mode = e.target.value as 'countdown' | 'countup';
-                    onUpdateForm((state) => ({
-                      ...state,
-                      defaultFocusTimerMode: mode,
-                      phases: state.phases.map((phase) => (
-                        phase.phase_type === 'focus' && phase.timer_mode === state.defaultFocusTimerMode
-                          ? { ...phase, timer_mode: mode }
-                          : phase
-                      )),
-                    }));
-                  }}
-                  className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <option value="countdown">倒计时</option>
-                  <option value="countup">正计时</option>
-                </select>
-              </div>
-
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/60">阶段配置</span>
-                <button onClick={onAddPhase} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">新增阶段</button>
+                <button onClick={onAddPhase} className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20">新增专注阶段</button>
               </div>
 
               <div className="flex flex-col gap-2">
-                {workflowForm.phases.map((phase, index) => (
-                  <div key={`${phase.phase_type}-${index}`} className="grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                {phaseGroups.map(({ focusPhase, breakPhase, focusIndex, breakIndex, groupIndex }) => (
+                  <div
+                    key={`focus-group-${groupIndex}`}
+                    className="grid grid-cols-1 gap-3 rounded-xl border border-blue-300/20 bg-blue-400/10 p-3"
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-white/45">阶段 {index + 1}</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          aria-label={`上移阶段 ${index + 1}`}
-                          onClick={() => onMovePhase(index, -1)}
-                          disabled={index === 0}
-                          className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          上移
-                        </button>
-                        <button
-                          aria-label={`下移阶段 ${index + 1}`}
-                          onClick={() => onMovePhase(index, 1)}
-                          disabled={index === workflowForm.phases.length - 1}
-                          className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          下移
-                        </button>
-                      </div>
+                      <span className="text-xs font-medium text-blue-100">专注阶段 {groupIndex + 1}</span>
+                      <button
+                        aria-label={`删除专注阶段 ${groupIndex + 1}`}
+                        onClick={() => onRemovePhase(focusIndex)}
+                        className="px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={phaseGroups.length <= 1}
+                      >
+                        删除
+                      </button>
                     </div>
 
-                    <select
-                      aria-label={`阶段 ${index + 1} 类型`}
-                      value={phase.phase_type}
-                      onChange={(e) => updatePhase(index, { phase_type: e.target.value as 'focus' | 'break' })}
-                      className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    >
-                      <option value="focus">专注</option>
-                      <option value="break">休息</option>
-                    </select>
-
-                    {phase.phase_type === 'focus' && phase.timer_mode === 'countup' ? (
-                      <div className="grid grid-cols-[1fr_auto] gap-2">
-                        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white/60 flex items-center">
-                          正计时阶段不需要单独设置时长
-                        </div>
-                        <button
-                          onClick={() => onRemovePhase(index)}
-                          className="px-2 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs"
-                          disabled={workflowForm.phases.length <= 1}
-                        >
-                          删除
-                        </button>
+                    {focusPhase.timer_mode === 'countup' ? (
+                      <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white/60 flex items-center">
+                        正计时阶段不需要单独设置时长
                       </div>
                     ) : (
-                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input
+                        aria-label={`阶段 ${focusIndex + 1} 时长（分钟）`}
+                        type="number"
+                        min={1}
+                        value={Math.round(focusPhase.duration / 60)}
+                        onChange={(e) => updatePhase(focusIndex, { duration: Math.max(60, Number(e.target.value || 1) * 60) })}
+                        className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    )}
+
+                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                      <select
+                        aria-label={`阶段 ${focusIndex + 1} 计时方式`}
+                        value={focusPhase.timer_mode}
+                        onChange={(e) => updatePhase(focusIndex, { timer_mode: e.target.value as 'countdown' | 'countup' })}
+                        className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      >
+                        <option value="countdown">倒计时</option>
+                        <option value="countup">正计时</option>
+                      </select>
+                      <select
+                        aria-label={`阶段 ${focusIndex + 1} 绑定任务`}
+                        value={focusPhase.task_id ?? ''}
+                        onChange={(e) => updatePhase(focusIndex, { task_id: e.target.value || null })}
+                        className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      >
+                        <option value="">运行时选择任务</option>
+                        {availableTasks.map((task) => (
+                          <option key={task.id} value={task.id}>{task.title}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {breakPhase ? (
+                      <div className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                        <span className="text-xs text-white/45">配套休息 {groupIndex + 1}</span>
                         <input
-                          aria-label={`阶段 ${index + 1} 时长（分钟）`}
+                          aria-label={`配套休息 ${groupIndex + 1} 时长（分钟）`}
                           type="number"
                           min={1}
-                          value={Math.round(phase.duration / 60)}
-                          onChange={(e) => updatePhase(index, { duration: Math.max(60, Number(e.target.value || 1) * 60) })}
+                          value={Math.round(breakPhase.duration / 60)}
+                          onChange={(e) => updatePhase(breakIndex, { duration: Math.max(60, Number(e.target.value || 1) * 60) })}
                           className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
-                        <button
-                          onClick={() => onRemovePhase(index)}
-                          className="px-2 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-xs"
-                          disabled={workflowForm.phases.length <= 1}
-                        >
-                          删除
-                        </button>
                       </div>
-                    )}
-
-                    {phase.phase_type === 'focus' ? (
-                      <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
-                        <select
-                          aria-label={`阶段 ${index + 1} 计时方式`}
-                          value={phase.timer_mode}
-                          onChange={(e) => updatePhase(index, { timer_mode: e.target.value as 'countdown' | 'countup' })}
-                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        >
-                          <option value="countdown">倒计时</option>
-                          <option value="countup">正计时</option>
-                        </select>
-                        <select
-                          aria-label={`阶段 ${index + 1} 绑定任务`}
-                          value={phase.task_id ?? ''}
-                          onChange={(e) => updatePhase(index, { task_id: e.target.value || null })}
-                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        >
-                          <option value="">运行时选择任务</option>
-                          {availableTasks.map((task) => (
-                            <option key={task.id} value={task.id}>{task.title}</option>
-                          ))}
-                        </select>
-                        <select
-                          aria-label={`阶段 ${index + 1} 绑定专注工作`}
-                          value={phase.focus_work_type ?? ''}
-                          onChange={(e) => updatePhase(index, { focus_work_type: (e.target.value || null) as WorkflowFormPhase['focus_work_type'] })}
-                          className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        >
-                          <option value="">不绑定页面专注工作</option>
-                          <option value="vocab_today">背单词：今日单词</option>
-                          <option value="erc_review">ERC：开始复习</option>
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-white/45 px-1">休息阶段不绑定任务，固定使用倒计时。</div>
-                    )}
+                    ) : null}
                   </div>
                 ))}
               </div>

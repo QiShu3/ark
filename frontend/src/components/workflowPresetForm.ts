@@ -32,52 +32,72 @@ export type WorkflowFormPhase = {
   duration: number;
   timer_mode: WorkflowTimerMode;
   task_id: string | null;
-  focus_work_type: FocusWorkType | null;
 };
 
 export type WorkflowFormState = {
   name: string;
-  defaultFocusTimerMode: WorkflowTimerMode;
   phases: WorkflowFormPhase[];
   isDefault: boolean;
 };
 
+type WorkflowPhaseDraft = {
+  duration: number;
+  timer_mode?: WorkflowTimerMode | null;
+  task_id?: string | null;
+};
+
+export function normalizeWorkflowFormPhases(
+  phases: WorkflowPhaseDraft[],
+  defaultFocusTimerMode: WorkflowTimerMode = 'countdown',
+): WorkflowFormPhase[] {
+  const normalized: WorkflowFormPhase[] = [];
+  for (let index = 0; index < phases.length; index += 2) {
+    const focusPhase = phases[index];
+    const breakPhase = phases[index + 1];
+    if (!focusPhase) continue;
+    normalized.push({
+      phase_type: 'focus',
+      duration: focusPhase.duration,
+      timer_mode: focusPhase.timer_mode ?? defaultFocusTimerMode,
+      task_id: focusPhase.task_id ?? null,
+    });
+    normalized.push({
+      phase_type: 'break',
+      duration: breakPhase?.duration ?? 5 * 60,
+      timer_mode: 'countdown',
+      task_id: null,
+    });
+  }
+  return normalized;
+}
+
 export function createDefaultWorkflowForm(isDefault: boolean): WorkflowFormState {
   return {
     name: '',
-    defaultFocusTimerMode: 'countdown',
-    phases: [
-      { phase_type: 'focus', duration: 25 * 60, timer_mode: 'countdown', task_id: null, focus_work_type: null },
-      { phase_type: 'break', duration: 5 * 60, timer_mode: 'countdown', task_id: null, focus_work_type: null },
-    ],
+    phases: normalizeWorkflowFormPhases([
+      { duration: 25 * 60, timer_mode: 'countdown', task_id: null },
+      { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+    ]),
     isDefault,
   };
 }
 
 export function createWorkflowFormFromPreset(preset: WorkflowPreset): WorkflowFormState {
+  const defaultFocusTimerMode = preset.default_focus_timer_mode ?? 'countdown';
+  const phases: WorkflowPhaseDraft[] = preset.phases.length
+    ? preset.phases
+    : [
+        {
+          duration: preset.focus_duration,
+          timer_mode: defaultFocusTimerMode,
+          task_id: null,
+        },
+        { duration: preset.break_duration, timer_mode: 'countdown', task_id: null },
+      ];
+
   return {
     name: preset.name,
-    defaultFocusTimerMode: preset.default_focus_timer_mode ?? 'countdown',
-    phases: preset.phases.length
-      ? preset.phases.map((phase) => ({
-          phase_type: phase.phase_type,
-          duration: phase.duration,
-          timer_mode: phase.phase_type === 'focus'
-            ? (phase.timer_mode ?? preset.default_focus_timer_mode ?? 'countdown')
-            : 'countdown',
-          task_id: phase.phase_type === 'focus' ? (phase.task_id ?? null) : null,
-          focus_work_type: phase.phase_type === 'focus' ? (phase.focus_work_type ?? null) : null,
-        }))
-      : [
-          {
-            phase_type: 'focus',
-            duration: preset.focus_duration,
-            timer_mode: preset.default_focus_timer_mode ?? 'countdown',
-            task_id: null,
-            focus_work_type: null,
-          },
-          { phase_type: 'break', duration: preset.break_duration, timer_mode: 'countdown', task_id: null, focus_work_type: null },
-        ],
+    phases: normalizeWorkflowFormPhases(phases, defaultFocusTimerMode),
     isDefault: preset.is_default,
   };
 }
@@ -126,22 +146,6 @@ export function buildWorkflowPreview(form: WorkflowFormState): {
     sequence: form.phases
       .map((phase, index) => `${index + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`)
       .join(' · '),
-  };
-}
-
-export function moveWorkflowPhase(form: WorkflowFormState, index: number, direction: -1 | 1): WorkflowFormState {
-  const targetIndex = index + direction;
-  if (targetIndex < 0 || targetIndex >= form.phases.length) {
-    return form;
-  }
-
-  const phases = form.phases.map((phase) => ({ ...phase }));
-  const [moved] = phases.splice(index, 1);
-  phases.splice(targetIndex, 0, moved);
-
-  return {
-    ...form,
-    phases,
   };
 }
 

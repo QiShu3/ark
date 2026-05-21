@@ -22,7 +22,7 @@ import {
   createWorkflowCopyDraft,
   createWorkflowFormFromPreset,
   isWorkflowFormDirty,
-  moveWorkflowPhase,
+  normalizeWorkflowFormPhases,
   type WorkflowFormState,
   type WorkflowPreset,
 } from './workflowPresetForm';
@@ -962,32 +962,31 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
 
   function _addWorkflowPhase() {
     setWorkflowForm((s) => {
-      const last = s.phases[s.phases.length - 1];
-      const nextType: 'focus' | 'break' = last?.phase_type === 'focus' ? 'break' : 'focus';
       return {
         ...s,
-        phases: [
+        phases: normalizeWorkflowFormPhases([
           ...s.phases,
           {
-            phase_type: nextType,
             duration: 5 * 60,
-            timer_mode: nextType === 'focus' ? s.defaultFocusTimerMode : 'countdown',
+            timer_mode: 'countdown',
             task_id: null,
-            focus_work_type: null,
           },
-        ],
+          { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+        ]),
       };
     });
   }
 
-  function _moveWorkflowPhase(index: number, direction: -1 | 1) {
-    setWorkflowForm((state) => moveWorkflowPhase(state, index, direction));
-  }
-
   function _removeWorkflowPhase(index: number) {
     setWorkflowForm((s) => {
-      if (s.phases.length <= 1) return s;
-      return { ...s, phases: s.phases.filter((_, i) => i !== index) };
+      if (s.phases.length <= 2) return s;
+      const groupStart = index % 2 === 0 ? index : index - 1;
+      return {
+        ...s,
+        phases: normalizeWorkflowFormPhases(
+          s.phases.filter((_, i) => i !== groupStart && i !== groupStart + 1),
+        ),
+      };
     });
   }
 
@@ -1031,6 +1030,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
     const focusDuration = workflowForm.phases.find((phase) => phase.phase_type === 'focus')?.duration ?? 1500;
     const breakDuration = workflowForm.phases.find((phase) => phase.phase_type === 'break')?.duration ?? 300;
+    const defaultFocusTimerMode = workflowForm.phases.find((phase) => phase.phase_type === 'focus')?.timer_mode ?? 'countdown';
     setWorkflowSubmitting(true);
     setWorkflowError(null);
     try {
@@ -1041,11 +1041,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           duration: Math.round(phase.duration),
           timer_mode: phase.phase_type === 'focus' ? phase.timer_mode : undefined,
           task_id: phase.phase_type === 'focus' ? phase.task_id : undefined,
-          focus_work_type: phase.phase_type === 'focus' ? phase.focus_work_type : undefined,
         })),
         focus_duration: Math.round(focusDuration),
         break_duration: Math.round(breakDuration),
-        default_focus_timer_mode: workflowForm.defaultFocusTimerMode,
+        default_focus_timer_mode: defaultFocusTimerMode,
         is_default: workflowForm.isDefault,
       });
       if (editingWorkflowId) {
@@ -2090,7 +2089,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
           onDeletePreset={_deleteWorkflowPreset}
           onUpdateForm={setWorkflowForm}
           onAddPhase={_addWorkflowPhase}
-          onMovePhase={_moveWorkflowPhase}
           onRemovePhase={_removeWorkflowPhase}
           onSubmit={_submitWorkflowPreset}
           onReset={_resetWorkflowForm}
