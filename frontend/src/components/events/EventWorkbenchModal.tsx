@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 
 import type { AchievementSummary } from '../achievementTypes';
 import { apiJson } from '../../lib/api';
+import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } from '../../lib/events/dateTime';
 import {
   applyEventPlanTemplate,
   deleteEventPlanDraftItem,
@@ -35,33 +36,6 @@ const EMPTY_EVENT_EDIT_FORM: EventEditFormState = {
   dueAt: '',
   isPrimary: false,
 };
-
-function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function toDateTimeLocal(value: string | null): string {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const offsetMs = parsed.getTimezoneOffset() * 60 * 1000;
-  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function fromDateTimeLocal(value: string): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
 
 export default function EventWorkbenchModal({ event, onClose, onChanged }: EventWorkbenchModalProps) {
   const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
@@ -173,7 +147,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setEditingItem(item);
     setDraftTitle(item.title);
     setDraftContent(item.content ?? '');
-    setDraftTime(toDateTimeLocal(item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for));
+    setDraftTime(toDateTimeLocalValue(item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for));
   }
 
   async function handleSaveDraftItem(): Promise<void> {
@@ -183,7 +157,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       setError('请输入草稿标题');
       return;
     }
-    const isoTime = fromDateTimeLocal(draftTime);
+    const isoTime = fromDateTimeLocalValue(draftTime);
     setSubmitting(true);
     setError(null);
     try {
@@ -273,7 +247,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setEventEditForm({
       name: currentEvent.name,
       startDate: currentEvent.start_date,
-      dueAt: toDateTimeLocal(currentEvent.due_at),
+      dueAt: toDateTimeLocalValue(currentEvent.due_at),
       isPrimary: currentEvent.is_primary,
     });
     setError(null);
@@ -315,7 +289,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   async function handleSaveEventDetails(): Promise<void> {
     if (submitting) return;
     const name = eventEditForm.name.trim();
-    const dueAt = fromDateTimeLocal(eventEditForm.dueAt);
+    const dueAt = fromDateTimeLocalValue(eventEditForm.dueAt);
     if (!name) {
       setError('请输入事件名称');
       return;
@@ -376,7 +350,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           <div className="min-w-0">
             <div className="truncate font-medium text-white">{item.title}</div>
             {item.content ? <div className="mt-1 line-clamp-2 text-xs text-white/50">{item.content}</div> : null}
-            {timeValue ? <div className="mt-1 text-xs text-white/40">{formatDateTime(timeValue)}</div> : null}
+            {timeValue ? <div className="mt-1 text-xs text-white/40">{formatEventDateTime(timeValue)}</div> : null}
           </div>
           <div className="flex shrink-0 gap-1">
             <button
@@ -440,9 +414,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 <h3 className="text-base font-semibold">事件总览</h3>
                 <div className="mt-3 grid gap-2 text-sm text-white/70 sm:grid-cols-2">
                   <div>开始日期 {currentEvent.start_date}</div>
-                  <div>截止时间 {formatDateTime(currentEvent.due_at)}</div>
+                  <div>截止时间 {formatEventDateTime(currentEvent.due_at)}</div>
                   <div>{currentEvent.is_primary ? '主事件' : '非主事件'}</div>
-                  <div>创建于 {formatDateTime(currentEvent.created_at)}</div>
+                  <div>创建于 {formatEventDateTime(currentEvent.created_at)}</div>
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap justify-end gap-2">

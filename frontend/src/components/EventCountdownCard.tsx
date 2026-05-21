@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
 import { applyEventPlanTemplate, listEventPlanTemplates } from '../lib/events/api';
+import { formatEventDateTime, getCountdownDisplay, getCountdownTone, toDateTimeLocalValue } from '../lib/events/dateTime';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import EventTemplateManagerModal from './events/EventTemplateManagerModal';
 import type { EventItem, EventPlanTemplate } from '../lib/events/types';
@@ -27,56 +28,6 @@ type EventCreatePayload = {
   due_at: string;
   is_primary: boolean;
 };
-
-function toDateTimeLocal(value: string | null | undefined): string {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const localTime = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
-  return localTime.toISOString().slice(0, 16);
-}
-
-function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '--';
-  return parsed.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function getCountdownDisplay(dueAt: string, nowMs: number): string {
-  const dueMs = new Date(dueAt).getTime();
-  if (Number.isNaN(dueMs)) return '--';
-  const diff = Math.abs(dueMs - nowMs);
-  if (diff <= 60 * 60 * 1000) {
-    const totalSeconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
-  }
-  if (diff <= 24 * 60 * 60 * 1000) {
-    const totalMinutes = Math.floor(diff / (60 * 1000));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
-  }
-  const totalHours = Math.floor(diff / (60 * 60 * 1000));
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-  return `${days}d ${String(hours).padStart(2, '0')}h`;
-}
-
-function getCountdownTone(dueAt: string, nowMs: number): 'upcoming' | 'due' | 'expired' {
-  const dueMs = new Date(dueAt).getTime();
-  if (Number.isNaN(dueMs)) return 'upcoming';
-  const diff = dueMs - nowMs;
-  if (Math.abs(diff) <= 60 * 1000) return 'due';
-  return diff > 0 ? 'upcoming' : 'expired';
-}
 
 const EventCountdownCard: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
@@ -170,7 +121,7 @@ const EventCountdownCard: React.FC = () => {
     setSelectedTemplateId(templateId);
     const template = templates.find((current) => current.id === templateId);
     if (!template) return;
-    const templateDueAt = toDateTimeLocal(template.default_due_at);
+    const templateDueAt = toDateTimeLocalValue(template.default_due_at);
     setCreateForm((state) => ({
       ...state,
       name: state.name || template.default_event_name || '',
@@ -193,7 +144,7 @@ const EventCountdownCard: React.FC = () => {
     setEditForm({
       name: event.name,
       startDate: event.start_date,
-      dueAt: toDateTimeLocal(event.due_at),
+      dueAt: toDateTimeLocalValue(event.due_at),
       isPrimary: event.is_primary,
     });
     setError(null);
@@ -582,13 +533,13 @@ const EventCountdownCard: React.FC = () => {
                                 ) : null}
                               </div>
                               <div className="mt-2 text-sm text-white/55">
-                                创建于 {formatDateTime(event.created_at)}
+                                创建于 {formatEventDateTime(event.created_at)}
                               </div>
                               <div className="mt-1 text-sm text-white/65">
                                 开始于 {event.start_date}
                               </div>
                               <div className="mt-1 text-sm text-white/75">
-                                到期于 {formatDateTime(event.due_at)}
+                                到期于 {formatEventDateTime(event.due_at)}
                               </div>
                             </div>
                             <div className="text-right">

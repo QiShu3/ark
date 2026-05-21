@@ -9,6 +9,7 @@ import {
   type EventPlanTemplateInput,
   type EventPlanTemplateItemInput,
 } from '../../lib/events/api';
+import { fromDateTimeLocalValue, toDateTimeLocalValue } from '../../lib/events/dateTime';
 import type { EventPlanTemplate } from '../../lib/events/types';
 
 type EventTemplateManagerModalProps = {
@@ -24,21 +25,6 @@ const DEFAULT_ITEM: EventPlanTemplateItemInput = {
   offset_days: 0,
   sort_order: 0,
 };
-
-function toDateTimeLocal(value: string | null | undefined): string {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const offsetMs = parsed.getTimezoneOffset() * 60 * 1000;
-  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function fromDateTimeLocal(value: string): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
 
 export default function EventTemplateManagerModal({ templates, onClose, onChanged }: EventTemplateManagerModalProps) {
   const [name, setName] = useState('');
@@ -89,7 +75,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
       schedule_mode: scheduleMode,
       default_event_name: defaultEventName.trim() || null,
       default_start_date: defaultStartDate || null,
-      default_due_at: fromDateTimeLocal(defaultDueAt),
+      default_due_at: fromDateTimeLocalValue(defaultDueAt),
       default_is_primary: defaultIsPrimary,
       items: cleanedItems,
     };
@@ -122,7 +108,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
     setEditDescription(template.description ?? '');
     setEditDefaultEventName(template.default_event_name ?? '');
     setEditDefaultStartDate(template.default_start_date ?? '');
-    setEditDefaultDueAt(toDateTimeLocal(template.default_due_at));
+    setEditDefaultDueAt(toDateTimeLocalValue(template.default_due_at));
     setEditDefaultIsPrimary(template.default_is_primary ?? false);
     setEditScheduleMode(template.schedule_mode);
     setEditItems(template.items.length ? template.items.map((item, index) => ({
@@ -144,7 +130,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
       schedule_mode: editScheduleMode,
       default_event_name: editDefaultEventName.trim() || null,
       default_start_date: editDefaultStartDate || null,
-      default_due_at: fromDateTimeLocal(editDefaultDueAt),
+      default_due_at: fromDateTimeLocalValue(editDefaultDueAt),
       default_is_primary: editDefaultIsPrimary,
       items: cleanedItems,
     };
