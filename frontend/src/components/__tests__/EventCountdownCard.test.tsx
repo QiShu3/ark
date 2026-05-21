@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import '@testing-library/jest-dom';
@@ -116,32 +116,6 @@ describe('EventCountdownCard', () => {
       created_at: string;
       updated_at: string;
     }> = [];
-    const template = {
-      id: 'template-1',
-      user_id: 7,
-      name: '考试复习',
-      description: null,
-      schedule_mode: 'before_due' as const,
-      default_event_name: '高数期末',
-      default_start_date: '2026-05-20',
-      default_due_at: new Date('2026-06-20T10:00').toISOString(),
-      default_is_primary: true,
-      items: [
-        {
-          id: 'template-item-1',
-          template_id: 'template-1',
-          kind: 'task' as const,
-          title: '第一轮复习',
-          content: null,
-          offset_days: 0,
-          sort_order: 0,
-          created_at: '2026-05-18T00:00:00Z',
-          updated_at: '2026-05-18T00:00:00Z',
-        },
-      ],
-      created_at: '2026-05-18T00:00:00Z',
-      updated_at: '2026-05-18T00:00:00Z',
-    };
 
     (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
       if (url === '/todo/events/primary') {
@@ -150,7 +124,6 @@ describe('EventCountdownCard', () => {
         return primary;
       }
       if (url === '/todo/events' && !options) return [...createdEvents];
-      if (url === '/todo/event-plan-templates') return [template];
       if (url === '/todo/events' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
         const created = {
@@ -171,71 +144,6 @@ describe('EventCountdownCard', () => {
         }
         return created;
       }
-      if (url === '/todo/events/event-2/plan-draft/apply-template' && options?.method === 'POST') {
-        expect(JSON.parse(options.body || '{}')).toEqual({ template_id: 'template-1' });
-        return {
-          event: createdEvents[0],
-          plan_draft: {
-            id: 'draft-1',
-            event_id: 'event-2',
-            user_id: 7,
-            source_template_id: 'template-1',
-            created_at: '2026-05-19T00:00:00Z',
-            updated_at: '2026-05-19T00:00:00Z',
-            items: [
-              {
-                id: 'draft-item-1',
-                draft_id: 'draft-1',
-                kind: 'task',
-                title: '第一轮复习',
-                content: null,
-                scheduled_for: '2026-06-08T10:00:00Z',
-                starts_at: null,
-                ends_at: null,
-                payload: {},
-                sort_order: 0,
-                created_subject_id: null,
-                created_at: '2026-05-19T00:00:00Z',
-                updated_at: '2026-05-19T00:00:00Z',
-              },
-            ],
-          },
-          created_tasks: [],
-          created_appointments: [],
-        };
-      }
-      if (url === '/todo/events/event-2/workbench') {
-        return {
-          event: createdEvents[0],
-          plan_draft: {
-            id: 'draft-1',
-            event_id: 'event-2',
-            user_id: 7,
-            source_template_id: 'template-1',
-            created_at: '2026-05-19T00:00:00Z',
-            updated_at: '2026-05-19T00:00:00Z',
-            items: [
-              {
-                id: 'draft-item-1',
-                draft_id: 'draft-1',
-                kind: 'task',
-                title: '第一轮复习',
-                content: null,
-                scheduled_for: '2026-06-08T10:00:00Z',
-                starts_at: null,
-                ends_at: null,
-                payload: {},
-                sort_order: 0,
-                created_subject_id: null,
-                created_at: '2026-05-19T00:00:00Z',
-                updated_at: '2026-05-19T00:00:00Z',
-              },
-            ],
-          },
-          created_tasks: [],
-          created_appointments: [],
-        };
-      }
       return {};
     });
 
@@ -243,29 +151,18 @@ describe('EventCountdownCard', () => {
 
     await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.click(screen.getByRole('button', { name: '添加事件' }));
-    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-1');
-    await waitFor(() => {
-      expect(screen.getByLabelText('事件名称')).toHaveValue('高数期末');
-      expect(screen.getByLabelText('开始日期')).toHaveValue('2026-05-20');
-      expect(screen.getByLabelText('到期时间')).toHaveValue('2026-06-20T10:00');
-    });
-    await user.clear(screen.getByLabelText('内容标题'));
-    await user.type(screen.getByLabelText('内容标题'), '精修错题');
+    await user.type(screen.getByLabelText('事件名称'), '高数期末');
+    await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
+    await user.type(screen.getByLabelText('到期时间'), '2026-06-20T10:00');
     await user.click(screen.getByRole('button', { name: '创建事件' }));
 
     const overview = await screen.findByRole('dialog', { name: '事件总览' });
     expect(within(overview).getByText('高数期末')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '事件工作台' })).not.toBeInTheDocument();
-    expect(apiJson).toHaveBeenCalledWith(
-      '/todo/events/event-2/plan-draft/items/draft-item-1',
-      expect.objectContaining({
-        method: 'PATCH',
-        body: expect.stringContaining('精修错题'),
-      }),
-    );
+    expect(apiJson).not.toHaveBeenCalledWith('/todo/events/event-2/plan-draft/apply-template', expect.anything());
   });
 
-  it('opens the template workbench from the gear button in the add-event editor', async () => {
+  it('does not show template controls in the add-event editor', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') throw new Error('主事件不存在');
@@ -278,9 +175,9 @@ describe('EventCountdownCard', () => {
 
     await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.click(screen.getByRole('button', { name: '添加事件' }));
-    await user.click(screen.getByRole('button', { name: '进入模板工作台' }));
 
-    expect(await screen.findByRole('dialog', { name: '模板工作台' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('事件模板')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '进入模板工作台' })).not.toBeInTheDocument();
   });
 
   it('opens the event metadata editor only after clicking add event', async () => {
@@ -312,174 +209,7 @@ describe('EventCountdownCard', () => {
     expect(screen.getByText('设为主事件')).toBeInTheDocument();
   });
 
-  it('shows the selected template workbench content in the add-event panel', async () => {
-    const user = userEvent.setup();
-    const template = {
-      id: 'template-1',
-      user_id: 7,
-      name: '考试复习',
-      description: null,
-      schedule_mode: 'before_due' as const,
-      default_event_name: '高数期末',
-      default_start_date: '2026-05-20',
-      default_due_at: new Date('2026-06-20T10:00').toISOString(),
-      default_is_primary: true,
-      items: [
-        {
-          id: 'template-item-1',
-          template_id: 'template-1',
-          kind: 'task' as const,
-          title: '第一轮复习',
-          content: '错题本',
-          offset_days: 14,
-          sort_order: 0,
-          created_at: '2026-05-18T00:00:00Z',
-          updated_at: '2026-05-18T00:00:00Z',
-        },
-      ],
-      created_at: '2026-05-18T00:00:00Z',
-      updated_at: '2026-05-18T00:00:00Z',
-    };
-    (apiJson as Mock).mockImplementation(async (url: string) => {
-      if (url === '/todo/events/primary') throw new Error('主事件不存在');
-      if (url === '/todo/events') return [];
-      if (url === '/todo/event-plan-templates') return [template];
-      return {};
-    });
-
-    render(<EventCountdownCard />);
-
-    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
-    await user.click(screen.getByRole('button', { name: '添加事件' }));
-    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-1');
-
-    expect(screen.getByText('工作台内容')).toBeInTheDocument();
-    expect(screen.getByLabelText('内容标题')).toHaveValue('第一轮复习');
-    expect(screen.getByLabelText('内容备注')).toHaveValue('错题本');
-    expect(screen.getByLabelText('相对天数')).toHaveValue(14);
-  });
-
-  it('lets the add-event panel add workbench content before creating the event', async () => {
-    const user = userEvent.setup();
-    const template = {
-      id: 'template-1',
-      user_id: 7,
-      name: '考试复习',
-      description: null,
-      schedule_mode: 'before_due' as const,
-      default_event_name: '高数期末',
-      default_start_date: '2026-05-20',
-      default_due_at: new Date('2026-06-20T10:00').toISOString(),
-      default_is_primary: true,
-      items: [
-        {
-          id: 'template-item-1',
-          template_id: 'template-1',
-          kind: 'task' as const,
-          title: '第一轮复习',
-          content: '错题本',
-          offset_days: 14,
-          sort_order: 0,
-          created_at: '2026-05-18T00:00:00Z',
-          updated_at: '2026-05-18T00:00:00Z',
-        },
-      ],
-      created_at: '2026-05-18T00:00:00Z',
-      updated_at: '2026-05-18T00:00:00Z',
-    };
-    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
-      if (url === '/todo/events/primary') throw new Error('主事件不存在');
-      if (url === '/todo/events' && !options) return [];
-      if (url === '/todo/event-plan-templates') return [template];
-      if (url === '/todo/events' && options?.method === 'POST') {
-        const payload = JSON.parse(options.body || '{}');
-        return {
-          id: 'event-2',
-          user_id: 7,
-          name: payload.name,
-          start_date: payload.start_date,
-          due_at: payload.due_at,
-          is_primary: payload.is_primary,
-          created_at: '2026-05-19T00:00:00Z',
-          updated_at: '2026-05-19T00:00:00Z',
-        };
-      }
-      if (url === '/todo/events/event-2/plan-draft/apply-template') {
-        return {
-          event: {
-            id: 'event-2',
-            user_id: 7,
-            name: '高数期末',
-            start_date: '2026-05-20',
-            due_at: '2026-06-20T10:00:00.000Z',
-            is_primary: true,
-            created_at: '2026-05-19T00:00:00Z',
-            updated_at: '2026-05-19T00:00:00Z',
-          },
-          plan_draft: {
-            id: 'draft-1',
-            event_id: 'event-2',
-            user_id: 7,
-            source_template_id: 'template-1',
-            created_at: '2026-05-19T00:00:00Z',
-            updated_at: '2026-05-19T00:00:00Z',
-            items: [
-              {
-                id: 'draft-item-1',
-                draft_id: 'draft-1',
-                kind: 'task',
-                title: '第一轮复习',
-                content: '错题本',
-                scheduled_for: '2026-06-06T10:00:00Z',
-                starts_at: null,
-                ends_at: null,
-                payload: {},
-                sort_order: 0,
-                created_subject_id: null,
-                created_at: '2026-05-19T00:00:00Z',
-                updated_at: '2026-05-19T00:00:00Z',
-              },
-            ],
-          },
-          created_tasks: [],
-          created_appointments: [],
-        };
-      }
-      if (url === '/todo/events/event-2/plan-draft/items' && options?.method === 'POST') {
-        expect(JSON.parse(options.body || '{}')).toMatchObject({
-          kind: 'appointment',
-          title: '模拟考试',
-          content: '提前半小时到场',
-          ends_at: '2026-06-13T10:00:00.000Z',
-          sort_order: 1,
-        });
-        return {};
-      }
-      return {};
-    });
-
-    render(<EventCountdownCard />);
-
-    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
-    await user.click(screen.getByRole('button', { name: '添加事件' }));
-    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-1');
-    await user.click(screen.getByRole('button', { name: '添加工作台内容' }));
-    await user.selectOptions(screen.getByLabelText('内容类型 2'), 'appointment');
-    await user.type(screen.getByLabelText('内容标题 2'), '模拟考试');
-    await user.type(screen.getByLabelText('内容备注 2'), '提前半小时到场');
-    await user.clear(screen.getByLabelText('相对天数 2'));
-    await user.type(screen.getByLabelText('相对天数 2'), '7');
-    await user.click(screen.getByRole('button', { name: '创建事件' }));
-
-    await waitFor(() => {
-      expect(apiJson).toHaveBeenCalledWith(
-        '/todo/events/event-2/plan-draft/items',
-        expect.objectContaining({ method: 'POST' }),
-      );
-    });
-  });
-
-  it('shows the event workbench shell before a template is selected', async () => {
+  it('shows the event workbench shell in the add-event editor', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') throw new Error('主事件不存在');
@@ -564,39 +294,6 @@ describe('EventCountdownCard', () => {
       '/todo/events/event-blank/plan-draft/items',
       expect.objectContaining({ method: 'POST' }),
     );
-  });
-
-  it('shows an empty event workbench shell in the add-event panel when the template has no items', async () => {
-    const user = userEvent.setup();
-    const template = {
-      id: 'template-empty',
-      user_id: 7,
-      name: '验收模板',
-      description: null,
-      schedule_mode: 'before_due' as const,
-      default_event_name: '高数期末',
-      default_start_date: '2026-05-20',
-      default_due_at: new Date('2026-06-20T10:00').toISOString(),
-      default_is_primary: true,
-      items: [],
-      created_at: '2026-05-18T00:00:00Z',
-      updated_at: '2026-05-18T00:00:00Z',
-    };
-    (apiJson as Mock).mockImplementation(async (url: string) => {
-      if (url === '/todo/events/primary') throw new Error('主事件不存在');
-      if (url === '/todo/events') return [];
-      if (url === '/todo/event-plan-templates') return [template];
-      return {};
-    });
-
-    render(<EventCountdownCard />);
-
-    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
-    await user.click(screen.getByRole('button', { name: '添加事件' }));
-    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-empty');
-
-    expect(screen.getByRole('heading', { name: '事件工作台' })).toBeInTheDocument();
-    expect(screen.getAllByText('暂无工作台内容')).toHaveLength(2);
   });
 
   it('opens the overview first when clicking the primary event', async () => {

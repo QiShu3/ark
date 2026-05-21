@@ -1,23 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Settings, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 
 import {
-  applyEventPlanTemplate,
   createEvent,
   createEventPlanDraftItem,
-  deleteEventPlanDraftItem,
   getPrimaryEvent,
-  listEventPlanTemplates,
   listEvents,
-  updateEventPlanDraftItem,
   type EventCreateInput,
   type EventPlanDraftItemCreateInput,
-  type EventPlanDraftItemInput,
 } from '../lib/events/api';
-import { formatEventDateTime, getCountdownDisplay, getCountdownTone, toDateTimeLocalValue } from '../lib/events/dateTime';
+import { formatEventDateTime, getCountdownDisplay, getCountdownTone } from '../lib/events/dateTime';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
-import EventTemplateManagerModal from './events/EventTemplateManagerModal';
-import type { EventItem, EventPlanTemplate, EventWorkbench } from '../lib/events/types';
+import type { EventItem } from '../lib/events/types';
 
 type EventFormState = {
   name: string;
@@ -49,10 +43,6 @@ const EventCountdownCard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workbenchEvent, setWorkbenchEvent] = useState<EventItem | null>(null);
-  const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
-  const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
@@ -71,7 +61,6 @@ const EventCountdownCard: React.FC = () => {
   useEffect(() => {
     if (!showModal) return;
     void loadEvents();
-    void loadTemplates();
   }, [showModal]);
 
   const countdownText = useMemo(() => {
@@ -111,61 +100,6 @@ const EventCountdownCard: React.FC = () => {
     }
   }
 
-  async function loadTemplates(): Promise<void> {
-    setLoadingTemplates(true);
-    try {
-      const data = await listEventPlanTemplates();
-      const nextTemplates = Array.isArray(data) ? data : [];
-      setTemplates(nextTemplates);
-      setSelectedTemplateId((current) => (
-        current && nextTemplates.some((template) => template.id === current) ? current : ''
-      ));
-    } catch (err) {
-      console.error('Failed to load event plan templates', err);
-      setError(err instanceof Error ? err.message : '模板加载失败');
-    } finally {
-      setLoadingTemplates(false);
-    }
-  }
-
-  function handleSelectTemplate(templateId: string): void {
-    setSelectedTemplateId(templateId);
-    const template = templates.find((current) => current.id === templateId);
-    if (!template) {
-      setCreateWorkbenchItems([]);
-      return;
-    }
-    const templateDueAt = toDateTimeLocalValue(template.default_due_at);
-    setCreateWorkbenchItems(buildCreateWorkbenchItems(template));
-    setCreateForm((state) => ({
-      ...state,
-      name: state.name || template.default_event_name || '',
-      startDate: state.startDate || template.default_start_date || '',
-      dueAt: state.dueAt || templateDueAt,
-      isPrimary: template.default_is_primary ?? state.isPrimary,
-    }));
-  }
-
-  function getCreateDefaultsFromTemplate(template: EventPlanTemplate | undefined): EventFormState {
-    if (!template) return CREATE_EVENT_DEFAULTS;
-    return {
-      name: template.default_event_name || '',
-      startDate: template.default_start_date || '',
-      dueAt: toDateTimeLocalValue(template.default_due_at),
-      isPrimary: template.default_is_primary ?? CREATE_EVENT_DEFAULTS.isPrimary,
-    };
-  }
-
-  function buildCreateWorkbenchItems(template: EventPlanTemplate | undefined): CreateWorkbenchItemState[] {
-    if (!template) return [];
-    return template.items.map((item) => ({
-      kind: item.kind,
-      title: item.title,
-      content: item.content ?? '',
-      offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
-    }));
-  }
-
   function updateCreateWorkbenchItem(index: number, patch: Partial<CreateWorkbenchItemState>): void {
     setCreateWorkbenchItems((current) => (
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
@@ -183,19 +117,8 @@ const EventCountdownCard: React.FC = () => {
     setCreateWorkbenchItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  function previewWorkbenchItemTime(
-    template: EventPlanTemplate | undefined,
-    item: CreateWorkbenchItemState,
-  ): string | null {
-    const scheduleMode = template?.schedule_mode ?? 'before_due';
+  function previewWorkbenchItemTime(item: CreateWorkbenchItemState): string | null {
     const offsetDays = Math.max(0, Math.floor(item.offsetDays || 0));
-    if (scheduleMode === 'from_start') {
-      if (!createForm.startDate) return null;
-      const [year, month, day] = createForm.startDate.split('-').map(Number);
-      if (!year || !month || !day) return null;
-      const scheduledMs = Date.UTC(year, month - 1, day + offsetDays, 9, 0, 0);
-      return new Date(scheduledMs).toISOString();
-    }
     if (!createForm.dueAt) return null;
     const dueDate = new Date(createForm.dueAt);
     if (Number.isNaN(dueDate.getTime())) return null;
@@ -213,14 +136,6 @@ const EventCountdownCard: React.FC = () => {
   }
 
   function beginCreate(): void {
-    const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-    setCreateWorkbenchItems(buildCreateWorkbenchItems(selectedTemplate));
-    setCreateForm((state) => {
-      if (state.name || state.startDate || state.dueAt || state.isPrimary !== CREATE_EVENT_DEFAULTS.isPrimary) {
-        return state;
-      }
-      return getCreateDefaultsFromTemplate(selectedTemplate);
-    });
     setShowCreateEditor(true);
     setError(null);
   }
@@ -228,14 +143,12 @@ const EventCountdownCard: React.FC = () => {
   function cancelCreate(): void {
     setShowCreateEditor(false);
     resetCreateForm();
-    setSelectedTemplateId('');
     setError(null);
   }
 
   function closeModal(): void {
     setShowModal(false);
     cancelCreate();
-    setShowTemplateManager(false);
     setError(null);
   }
 
@@ -265,44 +178,13 @@ const EventCountdownCard: React.FC = () => {
   async function finishCreatedEvent(): Promise<void> {
     resetCreateForm();
     setShowCreateEditor(false);
-    setSelectedTemplateId('');
-    setShowTemplateManager(false);
     await refreshAll();
   }
 
-  async function syncCreatedWorkbenchItems(
-    eventId: string,
-    workbench: EventWorkbench,
-    template: EventPlanTemplate | undefined,
-    items: CreateWorkbenchItemState[],
-  ): Promise<EventWorkbench> {
-    const draftItems = workbench.plan_draft?.items ?? [];
-    let nextWorkbench = workbench;
-    const sharedLength = Math.min(items.length, draftItems.length);
-    for (let index = 0; index < sharedLength; index += 1) {
+  async function createWorkbenchItemsForEvent(eventId: string, items: CreateWorkbenchItemState[]): Promise<void> {
+    for (let index = 0; index < items.length; index += 1) {
       const formItem = items[index];
-      const draftItem = draftItems[index];
-      const scheduledAt = previewWorkbenchItemTime(template, formItem);
-      const patch: EventPlanDraftItemInput = {
-        title: formItem.title.trim(),
-        content: formItem.content.trim() || null,
-      };
-      if (scheduledAt) {
-        if (draftItem.kind === 'appointment') {
-          patch.starts_at = null;
-          patch.ends_at = scheduledAt;
-        } else {
-          patch.scheduled_for = scheduledAt;
-        }
-      }
-      nextWorkbench = await updateEventPlanDraftItem(eventId, draftItem.id, patch);
-    }
-    for (let index = sharedLength; index < draftItems.length; index += 1) {
-      nextWorkbench = await deleteEventPlanDraftItem(eventId, draftItems[index].id);
-    }
-    for (let index = sharedLength; index < items.length; index += 1) {
-      const formItem = items[index];
-      const scheduledAt = previewWorkbenchItemTime(template, formItem);
+      const scheduledAt = previewWorkbenchItemTime(formItem);
       const payload: EventPlanDraftItemCreateInput = {
         kind: formItem.kind,
         title: formItem.title.trim(),
@@ -317,9 +199,8 @@ const EventCountdownCard: React.FC = () => {
           payload.scheduled_for = scheduledAt;
         }
       }
-      nextWorkbench = await createEventPlanDraftItem(eventId, payload);
+      await createEventPlanDraftItem(eventId, payload);
     }
-    return nextWorkbench;
   }
 
   async function submitCreateEvent(): Promise<void> {
@@ -328,10 +209,7 @@ const EventCountdownCard: React.FC = () => {
     if (!payload) {
       return;
     }
-    const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-    const workbenchItems = createWorkbenchItems.length
-      ? createWorkbenchItems
-      : buildCreateWorkbenchItems(selectedTemplate);
+    const workbenchItems = createWorkbenchItems;
     if (workbenchItems.some((item) => !item.title.trim())) {
       setError('请输入工作台内容标题');
       setShowCreateEditor(true);
@@ -343,10 +221,7 @@ const EventCountdownCard: React.FC = () => {
     try {
       const createdEvent = await createEvent(payload);
       if (workbenchItems.length > 0) {
-        const workbench = selectedTemplate && selectedTemplate.items.length > 0
-          ? await applyEventPlanTemplate(createdEvent.id, selectedTemplate.id)
-          : { event: createdEvent, plan_draft: null, created_tasks: [], created_appointments: [] };
-        const syncedWorkbench = await syncCreatedWorkbenchItems(createdEvent.id, workbench, selectedTemplate, workbenchItems);
+        await createWorkbenchItemsForEvent(createdEvent.id, workbenchItems);
         await finishCreatedEvent();
         return;
       }
@@ -368,14 +243,10 @@ const EventCountdownCard: React.FC = () => {
       : countdownTone === 'expired'
         ? 'text-red-400'
         : 'text-sky-300';
-  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-
   function openWorkbench(event: EventItem): void {
     resetCreateForm();
-    setSelectedTemplateId('');
     setShowCreateEditor(false);
     setShowModal(false);
-    setShowTemplateManager(false);
     setError(null);
     setWorkbenchEvent(event);
   }
@@ -430,37 +301,6 @@ const EventCountdownCard: React.FC = () => {
 
               {showCreateEditor ? (
                 <div className="flex flex-col gap-4">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex flex-wrap items-end gap-3">
-                      <div className="min-w-[220px] flex-1 flex flex-col gap-2">
-                        <label className="text-sm text-white/70">事件模板</label>
-                        <select
-                          aria-label="事件模板"
-                          value={selectedTemplateId}
-                          onChange={(event) => handleSelectTemplate(event.target.value)}
-                          disabled={loadingTemplates}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <option value="">{loadingTemplates ? '模板加载中...' : '选择事件模板'}</option>
-                          {templates.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowTemplateManager(true)}
-                        aria-label="进入模板工作台"
-                        title="进入模板工作台"
-                        className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                      >
-                        <Settings size={18} />
-                      </button>
-                    </div>
-                  </div>
-
                   <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-4">
                     <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr_auto] md:items-end">
                       <div className="flex flex-col gap-2">
@@ -511,9 +351,7 @@ const EventCountdownCard: React.FC = () => {
                         <p className="mt-1 text-sm text-white/45">
                           {createWorkbenchItems.length > 0
                             ? '工作台内容'
-                            : selectedTemplate
-                              ? '暂无工作台内容'
-                              : '可从空白工作台开始添加内容'}
+                            : '可从空白工作台开始添加内容'}
                         </p>
                       </div>
                       <button
@@ -528,7 +366,7 @@ const EventCountdownCard: React.FC = () => {
                     {createWorkbenchItems.length > 0 ? (
                       <div className="grid gap-3 border-t border-blue-300/20 pt-4">
                         {createWorkbenchItems.map((item, index) => {
-                          const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
+                          const previewTime = previewWorkbenchItemTime(item);
                           return (
                             <div
                               key={`${item.kind}-${index}`}
@@ -680,13 +518,6 @@ const EventCountdownCard: React.FC = () => {
         />
       ) : null}
 
-      {showTemplateManager ? (
-        <EventTemplateManagerModal
-          templates={templates}
-          onClose={() => setShowTemplateManager(false)}
-          onChanged={loadTemplates}
-        />
-      ) : null}
     </>
   );
 };
