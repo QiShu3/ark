@@ -349,6 +349,39 @@ describe('EventCountdownCard', () => {
     expect(screen.getByLabelText('相对天数')).toHaveValue(14);
   });
 
+  it('shows an empty event workbench shell in the add-event panel when the template has no items', async () => {
+    const user = userEvent.setup();
+    const template = {
+      id: 'template-empty',
+      user_id: 7,
+      name: '验收模板',
+      description: null,
+      schedule_mode: 'before_due' as const,
+      default_event_name: '高数期末',
+      default_start_date: '2026-05-20',
+      default_due_at: new Date('2026-06-20T10:00').toISOString(),
+      default_is_primary: true,
+      items: [],
+      created_at: '2026-05-18T00:00:00Z',
+      updated_at: '2026-05-18T00:00:00Z',
+    };
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [template];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    await user.selectOptions(screen.getByLabelText('事件模板'), 'template-empty');
+
+    expect(screen.getByRole('heading', { name: '事件工作台' })).toBeInTheDocument();
+    expect(screen.getByText('暂无工作台内容')).toBeInTheDocument();
+  });
+
   it('opens the overview first when clicking the primary event', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
