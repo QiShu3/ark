@@ -158,7 +158,7 @@ describe('EventCountdownCard', () => {
 
     const overview = await screen.findByRole('dialog', { name: '事件总览' });
     expect(within(overview).getByText('高数期末')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: '事件工作台' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '安排' })).not.toBeInTheDocument();
     expect(apiJson).not.toHaveBeenCalledWith('/todo/events/event-2/plan-draft/apply-template', expect.anything());
   });
 
@@ -227,9 +227,11 @@ describe('EventCountdownCard', () => {
     expect(screen.getByLabelText('开始日期')).toHaveValue('2026-05-20');
     expect(screen.getByLabelText('到期时间')).toHaveValue('2026-06-20T10:00');
     expect(screen.getByRole('checkbox', { name: '设为主事件' })).toBeChecked();
-    expect(screen.getByLabelText('内容标题')).toHaveValue('第一轮复习');
-    expect(screen.getByLabelText('内容备注')).toHaveValue('错题本');
-    expect(screen.getByLabelText('相对天数')).toHaveValue(14);
+    expect(screen.getByRole('button', { name: '第一轮复习' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '第一轮复习' }));
+    expect(screen.getByLabelText('任务标题')).toHaveValue('第一轮复习');
+    expect(screen.getByLabelText('任务备注')).toHaveValue('错题本');
+    expect(screen.getByLabelText('任务相对天数')).toHaveValue(14);
     expect(screen.queryByRole('button', { name: '进入模板工作台' })).not.toBeInTheDocument();
   });
 
@@ -278,7 +280,7 @@ describe('EventCountdownCard', () => {
     expect(screen.getByRole('checkbox', { name: '设为主事件' })).not.toBeChecked();
   });
 
-  it('shows the event workbench shell in the add-event editor', async () => {
+  it('shows the arrangement shell in the add-event editor', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') throw new Error('主事件不存在');
@@ -292,9 +294,69 @@ describe('EventCountdownCard', () => {
     await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.click(screen.getByRole('button', { name: '添加事件' }));
 
-    expect(screen.getByText('事件工作台')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '添加工作台内容' })).toBeInTheDocument();
-    expect(screen.getByText('暂无工作台内容')).toBeInTheDocument();
+    expect(screen.getByText('安排')).toBeInTheDocument();
+    expect(screen.getByText('安排内容')).toBeInTheDocument();
+    expect(screen.getByText('任务')).toBeInTheDocument();
+    expect(screen.getByText('日程')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加任务' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加日程' })).toBeInTheDocument();
+  });
+
+  it('places add-event actions in the modal footer', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+
+    const dialog = screen.getByRole('dialog', { name: '添加事件' });
+    const actions = within(dialog).getByRole('group', { name: '添加事件操作' });
+
+    expect(within(actions).getByRole('button', { name: '取消' })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: '保存为模板' })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: '创建事件' })).toBeInTheDocument();
+    expect(actions).toHaveClass('border-t');
+  });
+
+  it('adds and re-edits task and schedule arrangement content in the add-event editor', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [];
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+
+    await user.click(screen.getByRole('button', { name: '添加任务' }));
+    await user.type(screen.getByLabelText('任务标题'), '准备资料');
+    await user.type(screen.getByLabelText('任务备注'), '先整理清单');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
+
+    await user.click(screen.getByRole('button', { name: '添加日程' }));
+    await user.type(screen.getByLabelText('日程标题'), '模拟考试');
+    await user.click(screen.getByRole('button', { name: '保存日程' }));
+
+    expect(screen.getByRole('button', { name: '准备资料' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '准备资料' }));
+    await user.clear(screen.getByLabelText('任务标题'));
+    await user.type(screen.getByLabelText('任务标题'), '准备资料清单');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
+
+    expect(screen.getByRole('button', { name: '准备资料清单' })).toBeInTheDocument();
   });
 
   it('creates blank workbench content without selecting an event template', async () => {
@@ -352,9 +414,10 @@ describe('EventCountdownCard', () => {
     await user.type(screen.getByLabelText('事件名称'), '空白事件');
     await user.type(screen.getByLabelText('开始日期'), '2026-05-21');
     await user.type(screen.getByLabelText('到期时间'), '2026-05-25T18:30');
-    await user.click(screen.getByRole('button', { name: '添加工作台内容' }));
-    await user.type(screen.getByLabelText('内容标题'), '准备资料');
-    await user.type(screen.getByLabelText('内容备注'), '先整理清单');
+    await user.click(screen.getByRole('button', { name: '添加任务' }));
+    await user.type(screen.getByLabelText('任务标题'), '准备资料');
+    await user.type(screen.getByLabelText('任务备注'), '先整理清单');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
     await user.click(screen.getByRole('button', { name: '创建事件' }));
 
     const overview = await screen.findByRole('dialog', { name: '事件总览' });
@@ -414,11 +477,12 @@ describe('EventCountdownCard', () => {
     await user.type(screen.getByLabelText('事件名称'), '高数期末');
     await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
     await user.type(screen.getByLabelText('到期时间'), '2026-06-20T10:00');
-    await user.click(screen.getByRole('button', { name: '添加工作台内容' }));
-    await user.type(screen.getByLabelText('内容标题'), '准备资料');
-    await user.type(screen.getByLabelText('内容备注'), '先整理清单');
-    await user.clear(screen.getByLabelText('相对天数'));
-    await user.type(screen.getByLabelText('相对天数'), '3');
+    await user.click(screen.getByRole('button', { name: '添加任务' }));
+    await user.type(screen.getByLabelText('任务标题'), '准备资料');
+    await user.type(screen.getByLabelText('任务备注'), '先整理清单');
+    await user.clear(screen.getByLabelText('任务相对天数'));
+    await user.type(screen.getByLabelText('任务相对天数'), '3');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
     await user.click(screen.getByRole('button', { name: '保存为模板' }));
 
     expect(await screen.findByText('已保存为模板')).toBeInTheDocument();
@@ -544,7 +608,7 @@ describe('EventCountdownCard', () => {
 
     const overview = await screen.findByRole('dialog', { name: '事件总览' });
     expect(overview).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: '事件工作台' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '安排' })).not.toBeInTheDocument();
     expect(within(overview).getByText('论文投稿')).toBeInTheDocument();
     expect(within(overview).getByText('毕业设计')).toBeInTheDocument();
     expect(within(overview).getByRole('button', { name: '添加事件' })).toBeInTheDocument();
@@ -596,7 +660,7 @@ describe('EventCountdownCard', () => {
     await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.click(await screen.findByRole('button', { name: /毕业设计/ }));
 
-    expect(await screen.findByRole('dialog', { name: '事件工作台' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '安排' })).toBeInTheDocument();
     expect(screen.getByText('毕业设计')).toBeInTheDocument();
   });
 });

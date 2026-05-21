@@ -217,13 +217,98 @@ describe('EventWorkbenchModal', () => {
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
     await screen.findByText('事件总览');
+    expect(screen.getByRole('dialog', { name: '安排' })).toBeInTheDocument();
     await user.selectOptions(await screen.findByLabelText('选择事件模板'), 'template-1');
     await user.click(screen.getByRole('button', { name: '套用模板' }));
 
     await waitFor(() => {
-      expect(screen.getByText('完成第一轮复习')).toBeInTheDocument();
-      expect(screen.getByText('模拟考试')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '完成第一轮复习' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
     });
+  });
+
+  it('adds task and schedule arrangement content from the created-event arrangement modal', async () => {
+    const user = userEvent.setup();
+    const draftItems: Array<Record<string, unknown>> = [];
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+      if (url === '/todo/events/event-1/workbench') {
+        return {
+          event,
+          plan_draft: null,
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/event-plan-templates') return [];
+      if (url === '/todo/achievements/summary?event_id=event-1') {
+        return {
+          active_event: event,
+          event_achievements: null,
+          global_achievements: {
+            title: '全局成就',
+            summary_text: '始终显示的长期累计进度',
+            stats: {
+              unlocked_count: 0,
+              in_progress_count: 0,
+              primary_metric_value: 0,
+              primary_metric_label: '总专注秒数',
+            },
+            latest_unlocked: [],
+            upcoming: [],
+          },
+        };
+      }
+      if (url === '/todo/events/event-1/plan-draft/items' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        draftItems.push({
+          id: `draft-item-${draftItems.length + 1}`,
+          draft_id: 'draft-1',
+          content: null,
+          scheduled_for: null,
+          starts_at: null,
+          ends_at: null,
+          payload: {},
+          created_subject_id: null,
+          created_at: '2026-05-18T00:00:00Z',
+          updated_at: '2026-05-18T00:00:00Z',
+          ...payload,
+        });
+        return {
+          event,
+          plan_draft: {
+            id: 'draft-1',
+            event_id: 'event-1',
+            user_id: 7,
+            source_template_id: null,
+            created_at: '2026-05-18T00:00:00Z',
+            updated_at: '2026-05-18T00:00:00Z',
+            items: [...draftItems],
+          },
+          created_tasks: [],
+          created_appointments: [],
+        };
+      }
+      return {};
+    });
+
+    render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
+
+    expect(await screen.findByText('安排内容')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '添加任务' }));
+    await user.type(screen.getByLabelText('任务标题'), '完成第一轮复习');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
+
+    await user.click(screen.getByRole('button', { name: '添加日程' }));
+    await user.type(screen.getByLabelText('日程标题'), '模拟考试');
+    await user.click(screen.getByRole('button', { name: '保存日程' }));
+
+    expect(screen.getByRole('button', { name: '完成第一轮复习' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/events/event-1/plan-draft/items',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('edits draft items and saves draft changes back to templates', async () => {
@@ -375,18 +460,19 @@ describe('EventWorkbenchModal', () => {
     vi.stubGlobal('confirm', vi.fn(() => true));
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
-    await user.click(await screen.findByRole('button', { name: '编辑工作台内容“完成第一轮复习”' }));
-    await user.clear(screen.getByLabelText('内容标题'));
-    await user.type(screen.getByLabelText('内容标题'), '精修错题');
-    await user.clear(screen.getByLabelText('内容备注'));
-    await user.type(screen.getByLabelText('内容备注'), '错题本');
-    await user.clear(screen.getByLabelText('内容时间'));
-    await user.type(screen.getByLabelText('内容时间'), '2026-06-07T10:30');
-    await user.click(screen.getByRole('button', { name: '保存工作台内容' }));
+    await user.click(await screen.findByRole('button', { name: '完成第一轮复习' }));
+    await user.clear(screen.getByLabelText('任务标题'));
+    await user.type(screen.getByLabelText('任务标题'), '精修错题');
+    await user.clear(screen.getByLabelText('任务备注'));
+    await user.type(screen.getByLabelText('任务备注'), '错题本');
+    await user.clear(screen.getByLabelText('任务时间'));
+    await user.type(screen.getByLabelText('任务时间'), '2026-06-07T10:30');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     expect(await screen.findByText('精修错题')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '删除工作台内容“模拟考试”' }));
+    await user.click(screen.getByRole('button', { name: '模拟考试' }));
+    await user.click(screen.getByRole('button', { name: '删除日程' }));
     await waitFor(() => {
       expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/items/draft-item-2', { method: 'DELETE' });
     });

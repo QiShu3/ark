@@ -62,8 +62,8 @@ describe('EventTemplateManagerModal', () => {
     await user.clear(screen.getByLabelText('编辑默认到期时间'));
     await user.type(screen.getByLabelText('编辑默认到期时间'), '2026-06-25T10:00');
     await user.click(screen.getByLabelText('编辑默认设为主事件'));
-    await user.clear(screen.getByLabelText('编辑工作台内容标题'));
-    await user.type(screen.getByLabelText('编辑工作台内容标题'), '精修错题');
+    await user.clear(screen.getByLabelText('编辑安排内容标题'));
+    await user.type(screen.getByLabelText('编辑安排内容标题'), '精修错题');
     await user.clear(screen.getByLabelText('编辑相对天数'));
     await user.type(screen.getByLabelText('编辑相对天数'), '10');
     await user.click(screen.getByRole('button', { name: '保存事件模板' }));

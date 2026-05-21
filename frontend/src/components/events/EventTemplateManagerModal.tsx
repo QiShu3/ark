@@ -271,7 +271,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
               </label>
 
               <div className="grid gap-2">
-                <div className="text-sm font-medium text-white/80">工作台内容</div>
+                <div className="text-sm font-medium text-white/80">安排内容</div>
                 {items.map((item, index) => (
                   <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
                     <div className="grid grid-cols-[120px_1fr_96px] gap-2">
@@ -311,7 +311,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                   onClick={() => setItems((current) => [...current, { ...DEFAULT_ITEM, sort_order: current.length }])}
                   className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
                 >
-                  添加工作台内容
+                  添加安排内容
                 </button>
               </div>
 
@@ -399,7 +399,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                   </select>
                 </label>
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium text-white/80">工作台内容</div>
+                  <div className="text-sm font-medium text-white/80">安排内容</div>
                   {editItems.map((item, index) => (
                     <div key={index} className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
                       <div className="grid grid-cols-[96px_1fr_92px] gap-2">
@@ -414,7 +414,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                         <input
                           value={item.title}
                           onChange={(event) => updateEditItem(index, { title: event.target.value })}
-                          aria-label={index === 0 ? '编辑工作台内容标题' : `编辑工作台内容标题 ${index + 1}`}
+                          aria-label={index === 0 ? '编辑安排内容标题' : `编辑安排内容标题 ${index + 1}`}
                           className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
                         />
                         <input
@@ -429,7 +429,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                       <input
                         value={item.content ?? ''}
                         onChange={(event) => updateEditItem(index, { content: event.target.value })}
-                        aria-label={index === 0 ? '编辑工作台内容备注' : `编辑工作台内容备注 ${index + 1}`}
+                        aria-label={index === 0 ? '编辑安排内容备注' : `编辑安排内容备注 ${index + 1}`}
                         className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
                       />
                     </div>
@@ -439,7 +439,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                     onClick={() => setEditItems((current) => [...current, { ...DEFAULT_ITEM, sort_order: current.length }])}
                     className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
                   >
-                    添加工作台内容
+                    添加安排内容
                   </button>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -466,7 +466,7 @@ export default function EventTemplateManagerModal({ templates, onClose, onChange
                 <div key={template.id} className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
                   <div className="font-medium">{template.name}</div>
                   <div className="mt-1 text-xs text-white/50">
-                    {template.schedule_mode === 'before_due' ? '截止前倒推' : '开始后顺推'} · 工作台内容 {template.items.length} 条
+                    {template.schedule_mode === 'before_due' ? '截止前倒推' : '开始后顺推'} · 安排内容 {template.items.length} 条
                   </div>
                   <div className="mt-3 flex gap-2">
                     <button

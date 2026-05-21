@@ -285,7 +285,7 @@ def _draft_item_datetime(row: Any) -> datetime | None:
 def _draft_item_offset_days(*, event_row: Any, schedule_mode: str, item_row: Any) -> int:
     item_at = _draft_item_datetime(item_row)
     if item_at is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作台内容缺少时间")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="安排内容缺少时间")
     if schedule_mode == "from_start":
         return max(0, (item_at.date() - event_row["start_date"]).days)
     return max(0, (event_row["due_at"].date() - item_at.date()).days)
@@ -1921,7 +1921,7 @@ async def apply_event_plan_template(
                 body.template_id,
             )
             if not template_items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="事件模板没有工作台内容")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="事件模板没有安排内容")
             await conn.execute("DELETE FROM event_plan_drafts WHERE event_id = $1 AND user_id = $2", event_id, int(user.id))
             draft_row = await conn.fetchrow(
                 """
@@ -1934,7 +1934,7 @@ async def apply_event_plan_template(
                 body.template_id,
             )
             if draft_row is None:
-                raise HTTPException(status_code=500, detail="创建工作台内容失败")
+                raise HTTPException(status_code=500, detail="创建安排内容失败")
             for item in template_items:
                 scheduled_at = _template_item_datetime(
                     event_row=event_row,
@@ -2000,7 +2000,7 @@ async def create_event_plan_draft_item(
                     None,
                 )
             if draft_row is None:
-                raise HTTPException(status_code=500, detail="创建工作台内容失败")
+                raise HTTPException(status_code=500, detail="创建安排内容失败")
             await conn.fetchrow(
                 """
                 INSERT INTO event_plan_draft_items(
@@ -2077,7 +2077,7 @@ async def update_event_plan_draft_item(
                 *args,
             )
             if row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
             return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
@@ -2109,7 +2109,7 @@ async def delete_event_plan_draft_item(
                 int(user.id),
             )
             if not tag.startswith("DELETE ") or tag.endswith(" 0"):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
             return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
@@ -2136,7 +2136,7 @@ async def save_event_plan_draft_as_template(
                 int(user.id),
             )
             if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
             items = await _draft_items_for_template(
                 conn,
                 draft_id=draft_row["id"],
@@ -2144,7 +2144,7 @@ async def save_event_plan_draft_as_template(
                 schedule_mode=body.schedule_mode,
             )
             if not items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可保存的工作台内容")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可保存的安排内容")
             row = await conn.fetchrow(
                 """
                 INSERT INTO event_plan_templates(
@@ -2192,9 +2192,9 @@ async def update_event_plan_draft_source_template(
                 int(user.id),
             )
             if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
             if draft_row["source_template_id"] is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="工作台内容没有源模板")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="安排内容没有源模板")
             template_row = await conn.fetchrow(
                 """
                 SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
@@ -2214,7 +2214,7 @@ async def update_event_plan_draft_source_template(
                 schedule_mode=str(template_row["schedule_mode"]),
             )
             if not items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可回写的工作台内容")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可回写的安排内容")
             updated_row = await conn.fetchrow(
                 """
                 UPDATE event_plan_templates
@@ -2262,7 +2262,7 @@ async def generate_event_plan_draft(
                 int(user.id),
             )
             if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作台内容不存在")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
             draft_items = await conn.fetch(
                 """
                 SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,

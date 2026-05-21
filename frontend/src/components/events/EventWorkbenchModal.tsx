@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
 
 import type { AchievementSummary } from '../achievementTypes';
 import { apiJson } from '../../lib/api';
 import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } from '../../lib/events/dateTime';
 import {
   applyEventPlanTemplate,
+  createEventPlanDraftItem,
   deleteEvent as deleteEventById,
   deleteEventPlanDraftItem,
   generateEventPlanDraft,
@@ -47,6 +47,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [editingItem, setEditingItem] = useState<EventPlanDraftItem | null>(null);
+  const [newDraftKind, setNewDraftKind] = useState<EventPlanDraftItem['kind'] | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftTime, setDraftTime] = useState('');
@@ -71,7 +72,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : '事件工作台加载失败');
+        setError(err instanceof Error ? err.message : '安排加载失败');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -132,7 +133,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   async function handleApplyTemplate(): Promise<void> {
     if (submitting || !selectedTemplateId) return;
-    if (workbench?.plan_draft && !window.confirm('套用新事件模板会覆盖当前工作台内容，确定继续吗？')) return;
+    if (workbench?.plan_draft && !window.confirm('套用新事件模板会覆盖当前安排内容，确定继续吗？')) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -147,16 +148,35 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   function beginEditDraftItem(item: EventPlanDraftItem): void {
     setEditingItem(item);
+    setNewDraftKind(null);
     setDraftTitle(item.title);
     setDraftContent(item.content ?? '');
     setDraftTime(toDateTimeLocalValue(item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for));
   }
 
+  function beginAddDraftItem(kind: EventPlanDraftItem['kind']): void {
+    setEditingItem(null);
+    setNewDraftKind(kind);
+    setDraftTitle('');
+    setDraftContent('');
+    setDraftTime('');
+    setError(null);
+  }
+
+  function cancelDraftEditor(): void {
+    setEditingItem(null);
+    setNewDraftKind(null);
+    setDraftTitle('');
+    setDraftContent('');
+    setDraftTime('');
+  }
+
   async function handleSaveDraftItem(): Promise<void> {
-    if (submitting || !editingItem) return;
+    const draftKind = editingItem?.kind ?? newDraftKind;
+    if (submitting || !draftKind) return;
     const title = draftTitle.trim();
     if (!title) {
-      setError('请输入草稿标题');
+      setError(`请输入${draftKind === 'appointment' ? '日程' : '任务'}标题`);
       return;
     }
     const isoTime = fromDateTimeLocalValue(draftTime);
@@ -166,15 +186,21 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       const payload = {
         title,
         content: draftContent.trim() || null,
-        ...(editingItem.kind === 'appointment'
+        ...(draftKind === 'appointment'
           ? { ends_at: isoTime, starts_at: null }
           : { scheduled_for: isoTime }),
       };
-      const nextWorkbench = await updateEventPlanDraftItem(event.id, editingItem.id, payload);
+      const nextWorkbench = editingItem
+        ? await updateEventPlanDraftItem(event.id, editingItem.id, payload)
+        : await createEventPlanDraftItem(event.id, {
+          kind: draftKind,
+          ...payload,
+          sort_order: draftItems.length,
+        });
       setWorkbench(nextWorkbench);
-      setEditingItem(null);
+      cancelDraftEditor();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存工作台内容失败');
+      setError(err instanceof Error ? err.message : '保存安排内容失败');
     } finally {
       setSubmitting(false);
     }
@@ -188,9 +214,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     try {
       const nextWorkbench = await deleteEventPlanDraftItem(event.id, item.id);
       setWorkbench(nextWorkbench);
-      if (editingItem?.id === item.id) setEditingItem(null);
+      if (editingItem?.id === item.id) cancelDraftEditor();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '删除工作台内容失败');
+      setError(err instanceof Error ? err.message : '删除安排内容失败');
     } finally {
       setSubmitting(false);
     }
@@ -224,7 +250,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   async function handleUpdateSourceTemplate(): Promise<void> {
     if (submitting || !workbench?.plan_draft?.source_template_id) return;
-    if (!window.confirm('确定用当前工作台内容覆盖源模板吗？')) return;
+    if (!window.confirm('确定用当前安排内容覆盖源模板吗？')) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -336,36 +362,104 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
-  function renderDraftItem(item: EventPlanDraftItem) {
-    const timeValue = item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for;
+  function renderDraftEditor(kind: EventPlanDraftItem['kind']) {
+    const activeKind = editingItem?.kind ?? newDraftKind;
+    if (activeKind !== kind) return null;
+    const label = kind === 'appointment' ? '日程' : '任务';
+    const timeValue = fromDateTimeLocalValue(draftTime);
     return (
-      <div key={item.id} className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate font-medium text-white">{item.title}</div>
-            {item.content ? <div className="mt-1 line-clamp-2 text-xs text-white/50">{item.content}</div> : null}
-            {timeValue ? <div className="mt-1 text-xs text-white/40">{formatEventDateTime(timeValue)}</div> : null}
-          </div>
-          <div className="flex shrink-0 gap-1">
+      <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
+        <label className="grid gap-1 text-xs text-white/60">
+          {label}标题
+          <input
+            aria-label={`${label}标题`}
+            value={draftTitle}
+            onChange={(changeEvent) => setDraftTitle(changeEvent.target.value)}
+            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="grid gap-1 text-xs text-white/60">
+          {label}备注
+          <textarea
+            aria-label={`${label}备注`}
+            value={draftContent}
+            onChange={(changeEvent) => setDraftContent(changeEvent.target.value)}
+            className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="grid gap-1 text-xs text-white/60">
+          {label}时间
+          <input
+            aria-label={`${label}时间`}
+            type="datetime-local"
+            value={draftTime}
+            onChange={(changeEvent) => setDraftTime(changeEvent.target.value)}
+            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+          />
+        </label>
+        {timeValue ? <div className="text-xs text-white/45">时间预览 {formatEventDateTime(timeValue)}</div> : null}
+        <div className="flex flex-wrap justify-end gap-2">
+          {editingItem ? (
             <button
               type="button"
-              onClick={() => beginEditDraftItem(item)}
-              aria-label={`编辑工作台内容“${item.title}”`}
-              title="编辑工作台内容"
-              className="rounded-md p-1.5 text-white/55 hover:bg-white/10 hover:text-white"
+              onClick={() => void handleDeleteDraftItem(editingItem)}
+              className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
             >
-              <Pencil size={15} />
+              删除{label}
             </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteDraftItem(item)}
-              aria-label={`删除工作台内容“${item.title}”`}
-              title="删除工作台内容"
-              className="rounded-md p-1.5 text-red-200/75 hover:bg-red-500/15 hover:text-red-100"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={cancelDraftEditor}
+            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSaveDraftItem()}
+            disabled={submitting}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            保存{label}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderDraftItem(item: EventPlanDraftItem) {
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => beginEditDraftItem(item)}
+        className="min-h-10 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
+      >
+        {item.title}
+      </button>
+    );
+  }
+
+  function renderDraftColumn(kind: EventPlanDraftItem['kind'], items: EventPlanDraftItem[]) {
+    const label = kind === 'appointment' ? '日程' : '任务';
+    return (
+      <div className="flex min-h-[160px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <div className="text-sm font-medium text-white/80">{label}</div>
+        <div className="mt-3 grid flex-1 content-start gap-2">
+          {items.map((item) => (
+            editingItem?.id === item.id ? (
+              <div key={item.id}>{renderDraftEditor(kind)}</div>
+            ) : renderDraftItem(item)
+          ))}
+          {newDraftKind === kind ? renderDraftEditor(kind) : null}
+          <button
+            type="button"
+            onClick={() => beginAddDraftItem(kind)}
+            className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-left text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+          >
+            添加{label}
+          </button>
         </div>
       </div>
     );
@@ -376,7 +470,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 px-5 py-20 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label="事件工作台"
+      aria-label="安排"
       onClick={onClose}
     >
       <div
@@ -385,14 +479,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-white/[0.04] px-5">
           <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-white/45">事件工作台</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-white/45">安排</div>
             <h2 className="mt-1 text-xl font-semibold">{currentEvent.name}</h2>
           </div>
           <button
             type="button"
             className="rounded-full px-3 py-2 text-white/60 hover:bg-white/10 hover:text-white"
             onClick={onClose}
-            aria-label="关闭事件工作台"
+            aria-label="关闭安排"
           >
             关闭
           </button>
@@ -545,7 +639,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold">工作台内容</h3>
+                  <h3 className="text-base font-semibold">安排内容</h3>
                   <p className="mt-1 text-sm text-white/50">
                     {sourceTemplateName ? `来自事件模板：${sourceTemplateName}` : '暂无模板来源'}
                   </p>
@@ -580,57 +674,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 </div>
               </div>
 
-              {editingItem ? (
-                <div className="mt-4 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
-                  <div className="text-sm font-medium text-blue-100">编辑{editingItem.kind === 'appointment' ? '日程内容' : '任务内容'}</div>
-                  <label className="grid gap-1 text-xs text-white/60">
-                    内容标题
-                    <input
-                      value={draftTitle}
-                      onChange={(changeEvent) => setDraftTitle(changeEvent.target.value)}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs text-white/60">
-                    内容备注
-                    <textarea
-                      value={draftContent}
-                      onChange={(changeEvent) => setDraftContent(changeEvent.target.value)}
-                      className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs text-white/60">
-                    内容时间
-                    <input
-                      type="datetime-local"
-                      value={draftTime}
-                      onChange={(changeEvent) => setDraftTime(changeEvent.target.value)}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingItem(null)}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveDraftItem()}
-                      disabled={submitting}
-                      className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      保存工作台内容
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
               {showSaveTemplate ? (
                 <div className="mt-4 grid gap-3 rounded-lg border border-amber-200/20 bg-amber-300/10 p-3">
-                  <div className="text-sm font-medium text-amber-100">另存当前工作台内容</div>
+                  <div className="text-sm font-medium text-amber-100">另存当前安排内容</div>
                   <label className="grid gap-1 text-xs text-white/60">
                     新事件模板名称
                     <input
@@ -678,19 +724,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 </div>
               ) : null}
 
-              <div className="mt-4 grid gap-3">
-                <div>
-                  <h4 className="text-sm font-medium text-blue-200">任务内容</h4>
-                  <div className="mt-2 grid gap-2">
-                    {taskDrafts.length ? taskDrafts.map(renderDraftItem) : <div className="text-sm text-white/40">暂无任务内容</div>}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-teal-200">日程内容</h4>
-                  <div className="mt-2 grid gap-2">
-                    {appointmentDrafts.length ? appointmentDrafts.map(renderDraftItem) : <div className="text-sm text-white/40">暂无日程内容</div>}
-                  </div>
-                </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {renderDraftColumn('task', taskDrafts)}
+                {renderDraftColumn('appointment', appointmentDrafts)}
               </div>
             </section>
 

@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
 
 import {
   createEventPlanTemplate,
@@ -38,6 +37,10 @@ type CreateWorkbenchItemState = {
   offsetDays: number;
 };
 
+type CreateArrangementEditorState = CreateWorkbenchItemState & {
+  index: number | null;
+};
+
 type TemplateConflictState = {
   template: EventPlanTemplate;
   payload: EventPlanTemplateInput;
@@ -68,6 +71,7 @@ const EventCountdownCard: React.FC = () => {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateStatus, setTemplateStatus] = useState<string | null>(null);
   const [templateConflict, setTemplateConflict] = useState<TemplateConflictState | null>(null);
+  const [createArrangementEditor, setCreateArrangementEditor] = useState<CreateArrangementEditorState | null>(null);
 
   useEffect(() => {
     void loadPrimaryEvent();
@@ -158,6 +162,7 @@ const EventCountdownCard: React.FC = () => {
       isPrimary: template.default_is_primary ?? CREATE_EVENT_DEFAULTS.isPrimary,
     });
     setCreateWorkbenchItems(buildCreateWorkbenchItems(template));
+    setCreateArrangementEditor(null);
     setTemplateStatus(null);
     setError(null);
   }
@@ -171,21 +176,64 @@ const EventCountdownCard: React.FC = () => {
     applyTemplateToCreateForm(template);
   }
 
-  function updateCreateWorkbenchItem(index: number, patch: Partial<CreateWorkbenchItemState>): void {
-    setCreateWorkbenchItems((current) => (
-      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
-    ));
-  }
-
-  function addCreateWorkbenchItem(): void {
-    setCreateWorkbenchItems((current) => [
-      ...current,
-      { kind: 'task', title: '', content: '', offsetDays: 0 },
-    ]);
-  }
-
   function removeCreateWorkbenchItem(index: number): void {
     setCreateWorkbenchItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function beginAddCreateArrangementItem(kind: CreateWorkbenchItemState['kind']): void {
+    setCreateArrangementEditor({
+      kind,
+      index: null,
+      title: '',
+      content: '',
+      offsetDays: 0,
+    });
+    setError(null);
+  }
+
+  function beginEditCreateArrangementItem(index: number): void {
+    const item = createWorkbenchItems[index];
+    if (!item) return;
+    setCreateArrangementEditor({
+      ...item,
+      index,
+    });
+    setError(null);
+  }
+
+  function cancelCreateArrangementEditor(): void {
+    setCreateArrangementEditor(null);
+    setError(null);
+  }
+
+  function saveCreateArrangementItem(): void {
+    if (!createArrangementEditor) return;
+    const label = createArrangementEditor.kind === 'appointment' ? '日程' : '任务';
+    const nextItem: CreateWorkbenchItemState = {
+      kind: createArrangementEditor.kind,
+      title: createArrangementEditor.title.trim(),
+      content: createArrangementEditor.content.trim(),
+      offsetDays: Math.max(0, Math.floor(createArrangementEditor.offsetDays || 0)),
+    };
+    if (!nextItem.title) {
+      setError(`请输入${label}标题`);
+      return;
+    }
+    setCreateWorkbenchItems((current) => {
+      if (createArrangementEditor.index === null) return [...current, nextItem];
+      return current.map((item, itemIndex) => (
+        itemIndex === createArrangementEditor.index ? nextItem : item
+      ));
+    });
+    setCreateArrangementEditor(null);
+    setError(null);
+  }
+
+  function deleteCreateArrangementItem(): void {
+    if (!createArrangementEditor || createArrangementEditor.index === null) return;
+    removeCreateWorkbenchItem(createArrangementEditor.index);
+    setCreateArrangementEditor(null);
+    setError(null);
   }
 
   function previewWorkbenchItemTime(
@@ -218,6 +266,7 @@ const EventCountdownCard: React.FC = () => {
     setSelectedTemplateId('');
     setTemplateStatus(null);
     setTemplateConflict(null);
+    setCreateArrangementEditor(null);
   }
 
   function beginCreate(): void {
@@ -299,7 +348,7 @@ const EventCountdownCard: React.FC = () => {
       sort_order: index,
     }));
     if (items.some((item) => !item.title)) {
-      setError('请输入工作台内容标题');
+      setError('请输入安排内容标题');
       return null;
     }
     return items;
@@ -389,7 +438,7 @@ const EventCountdownCard: React.FC = () => {
     }
     const workbenchItems = createWorkbenchItems;
     if (workbenchItems.some((item) => !item.title.trim())) {
-      setError('请输入工作台内容标题');
+      setError('请输入安排内容标题');
       setShowCreateEditor(true);
       return;
     }
@@ -429,6 +478,120 @@ const EventCountdownCard: React.FC = () => {
     setShowModal(false);
     setError(null);
     setWorkbenchEvent(event);
+  }
+
+  function renderCreateArrangementEditor(kind: CreateWorkbenchItemState['kind']) {
+    if (!createArrangementEditor || createArrangementEditor.kind !== kind) return null;
+    const label = kind === 'appointment' ? '日程' : '任务';
+    const previewTime = previewWorkbenchItemTime(createArrangementEditor, selectedTemplate);
+    return (
+      <div className="grid gap-2 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
+        <label className="grid gap-1 text-xs text-white/60">
+          {label}标题
+          <input
+            aria-label={`${label}标题`}
+            value={createArrangementEditor.title}
+            onChange={(event) => setCreateArrangementEditor((current) => (
+              current ? { ...current, title: event.target.value } : current
+            ))}
+            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        </label>
+        <label className="grid gap-1 text-xs text-white/60">
+          {label}备注
+          <input
+            aria-label={`${label}备注`}
+            value={createArrangementEditor.content}
+            onChange={(event) => setCreateArrangementEditor((current) => (
+              current ? { ...current, content: event.target.value } : current
+            ))}
+            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        </label>
+        <label className="grid gap-1 text-xs text-white/60">
+          {label}相对天数
+          <input
+            aria-label={`${label}相对天数`}
+            type="number"
+            min={0}
+            value={createArrangementEditor.offsetDays}
+            onChange={(event) => setCreateArrangementEditor((current) => (
+              current
+                ? { ...current, offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)) }
+                : current
+            ))}
+            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        </label>
+        {previewTime ? (
+          <div className="text-xs text-white/45">时间预览 {formatEventDateTime(previewTime)}</div>
+        ) : null}
+        <div className="flex flex-wrap justify-end gap-2">
+          {createArrangementEditor.index !== null ? (
+            <button
+              type="button"
+              onClick={deleteCreateArrangementItem}
+              className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
+            >
+              删除{label}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={cancelCreateArrangementEditor}
+            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={saveCreateArrangementItem}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            保存{label}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderCreateArrangementColumn(kind: CreateWorkbenchItemState['kind']) {
+    const label = kind === 'appointment' ? '日程' : '任务';
+    const items = createWorkbenchItems
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.kind === kind);
+
+    return (
+      <div className="flex min-h-[132px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <div className="text-sm font-medium text-white/80">{label}</div>
+        <div className="mt-3 grid flex-1 content-start gap-2">
+          {items.map(({ item, index }) => (
+            createArrangementEditor?.index === index ? (
+              <div key={`${kind}-${index}`}>{renderCreateArrangementEditor(kind)}</div>
+            ) : (
+              <button
+                key={`${kind}-${index}`}
+                type="button"
+                onClick={() => beginEditCreateArrangementItem(index)}
+                className="min-h-10 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
+              >
+                {item.title || `未命名${label}`}
+              </button>
+            )
+          ))}
+          {createArrangementEditor?.kind === kind && createArrangementEditor.index === null
+            ? renderCreateArrangementEditor(kind)
+            : null}
+          <button
+            type="button"
+            onClick={() => beginAddCreateArrangementItem(kind)}
+            className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-left text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+          >
+            添加{label}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -482,7 +645,6 @@ const EventCountdownCard: React.FC = () => {
 
               {showCreateEditor ? (
                 <div className="flex flex-col gap-4">
-                  <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-4">
                     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                       <div className="flex flex-wrap items-end gap-3">
                         <div className="min-w-[220px] flex-1 flex flex-col gap-2">
@@ -555,122 +717,17 @@ const EventCountdownCard: React.FC = () => {
                       </label>
                     </div>
 
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h4 className="text-base font-semibold text-white">事件工作台</h4>
-                        <p className="mt-1 text-sm text-white/45">
-                          {createWorkbenchItems.length > 0
-                            ? '工作台内容'
-                            : selectedTemplate
-                              ? '暂无工作台内容'
-                              : '可从空白工作台开始添加内容'}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={addCreateWorkbenchItem}
-                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white"
-                      >
-                        <Plus size={15} />
-                        添加工作台内容
-                      </button>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-white">安排</h4>
+                      <p className="mt-1 text-sm text-white/45">安排内容</p>
                     </div>
-                    {createWorkbenchItems.length > 0 ? (
-                      <div className="grid gap-3 border-t border-blue-300/20 pt-4">
-                        {createWorkbenchItems.map((item, index) => {
-                          const previewTime = previewWorkbenchItemTime(item, selectedTemplate);
-                          return (
-                            <div
-                              key={`${item.kind}-${index}`}
-                              className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
-                            >
-                              <div className="grid gap-2 md:grid-cols-[88px_1fr_96px_auto]">
-                                <select
-                                  aria-label={index === 0 ? '内容类型' : `内容类型 ${index + 1}`}
-                                  value={item.kind}
-                                  onChange={(event) => updateCreateWorkbenchItem(index, {
-                                    kind: event.target.value as CreateWorkbenchItemState['kind'],
-                                  })}
-                                  className="h-10 rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                >
-                                  <option value="task">任务</option>
-                                  <option value="appointment">日程</option>
-                                </select>
-                                <input
-                                  aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
-                                  value={item.title}
-                                  onChange={(event) => updateCreateWorkbenchItem(index, { title: event.target.value })}
-                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                />
-                                <input
-                                  aria-label={index === 0 ? '相对天数' : `相对天数 ${index + 1}`}
-                                  type="number"
-                                  min={0}
-                                  value={item.offsetDays}
-                                  onChange={(event) => updateCreateWorkbenchItem(index, {
-                                    offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                                  })}
-                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeCreateWorkbenchItem(index)}
-                                  aria-label={index === 0 ? '删除工作台内容' : `删除工作台内容 ${index + 1}`}
-                                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-red-200/75 hover:bg-red-500/15 hover:text-red-100"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                              <input
-                                aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}
-                                value={item.content}
-                                onChange={(event) => updateCreateWorkbenchItem(index, { content: event.target.value })}
-                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                              {previewTime ? (
-                                <div className="text-xs text-white/45">
-                                  时间预览 {formatEventDateTime(previewTime)}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-white/45">
-                        暂无工作台内容
-                      </div>
-                    )}
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {renderCreateArrangementColumn('task')}
+                      {renderCreateArrangementColumn('appointment')}
+                    </div>
                   </div>
 
-                  <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={cancelCreate}
-                        disabled={submitting || savingTemplate}
-                        className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
-                      >
-                        取消
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleSaveTemplate()}
-                        disabled={submitting || savingTemplate}
-                        className="px-3 py-2 rounded-lg border border-blue-300/20 bg-blue-500/10 text-blue-100 hover:bg-blue-500/20 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {savingTemplate ? '保存中...' : '保存为模板'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleCreateEvent()}
-                        disabled={submitting || savingTemplate}
-                        className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {submitting ? '提交中...' : '创建事件'}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -727,6 +784,40 @@ const EventCountdownCard: React.FC = () => {
                 </div>
               )}
             </div>
+            {showCreateEditor ? (
+              <div
+                role="group"
+                aria-label="添加事件操作"
+                className="shrink-0 border-t border-white/10 bg-[#1a1a1a]/95 px-5 py-4"
+              >
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelCreate}
+                    disabled={submitting || savingTemplate}
+                    className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveTemplate()}
+                    disabled={submitting || savingTemplate}
+                    className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingTemplate ? '保存中...' : '保存为模板'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateEvent()}
+                    disabled={submitting || savingTemplate}
+                    className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? '提交中...' : '创建事件'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
