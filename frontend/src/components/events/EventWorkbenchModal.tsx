@@ -6,6 +6,7 @@ import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } fro
 import {
   deleteEvent as deleteEventById,
   getEventWorkbench,
+  listEvents,
   updateEvent,
 } from '../../lib/events/api';
 import {
@@ -17,7 +18,7 @@ import {
   updateEventArrangementTask,
 } from '../../lib/events/arrangementApi';
 import type { EventItem, EventWorkbench } from '../../lib/events/types';
-import type { Appointment, Task } from '../taskTypes';
+import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';
 
 type EventWorkbenchModalProps = {
   event: EventItem;
@@ -38,11 +39,81 @@ type EditingArrangement =
   | { kind: 'task'; item: Task }
   | { kind: 'appointment'; item: Appointment };
 
+type TaskArrangementFormState = {
+  title: string;
+  content: string;
+  priority: 0 | 1 | 2 | 3;
+  targetMinutes: number;
+  event: string;
+  eventId: string;
+  periodType: CompletionPeriodType;
+  customPeriodDays: number;
+  maxCompletionsPerPeriod: number;
+  weekdayOnly: boolean;
+  timeInheritsFromEvent: boolean;
+  timeOverridden: boolean;
+  taskType: 'focus' | 'checkin';
+  tagsText: string;
+  startDate: string;
+  dueDate: string;
+};
+
+type AppointmentArrangementFormState = {
+  title: string;
+  content: string;
+  status: AppointmentStoredStatus;
+  startsAt: string;
+  endsAt: string;
+  repeatRule: string;
+  eventId: string;
+  periodType: CompletionPeriodType;
+  customPeriodDays: number;
+  maxCompletionsPerPeriod: number;
+  weekdayOnly: boolean;
+  timeInheritsFromEvent: boolean;
+  timeOverridden: boolean;
+};
+
 const EMPTY_EVENT_EDIT_FORM: EventEditFormState = {
   name: '',
   startDate: '',
   dueAt: '',
   isPrimary: false,
+};
+
+const EMPTY_TASK_ARRANGEMENT_FORM: TaskArrangementFormState = {
+  title: '',
+  content: '',
+  priority: 0,
+  targetMinutes: 0,
+  event: '',
+  eventId: '',
+  periodType: 'once',
+  customPeriodDays: 1,
+  maxCompletionsPerPeriod: 1,
+  weekdayOnly: false,
+  timeInheritsFromEvent: false,
+  timeOverridden: false,
+  taskType: 'focus',
+  tagsText: '',
+  startDate: '',
+  dueDate: '',
+};
+
+const EMPTY_APPOINTMENT_ARRANGEMENT_FORM: AppointmentArrangementFormState = {
+  title: '',
+  content: '',
+  status: 'pending',
+  startsAt: '',
+  endsAt: '',
+  repeatRule: '',
+  eventId: '',
+  periodType: 'once',
+  customPeriodDays: 1,
+  maxCompletionsPerPeriod: 1,
+  weekdayOnly: false,
+  timeInheritsFromEvent: false,
+  timeOverridden: false,
 };
 
 export default function EventWorkbenchModal({ event, onClose, onChanged }: EventWorkbenchModalProps) {
@@ -51,9 +122,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [submitting, setSubmitting] = useState(false);
   const [editingArrangement, setEditingArrangement] = useState<EditingArrangement | null>(null);
   const [newArrangementKind, setNewArrangementKind] = useState<ArrangementKind | null>(null);
-  const [arrangementTitle, setArrangementTitle] = useState('');
-  const [arrangementContent, setArrangementContent] = useState('');
-  const [arrangementTime, setArrangementTime] = useState('');
+  const [taskArrangementForm, setTaskArrangementForm] = useState<TaskArrangementFormState>(EMPTY_TASK_ARRANGEMENT_FORM);
+  const [appointmentArrangementForm, setAppointmentArrangementForm] = useState<AppointmentArrangementFormState>(
+    EMPTY_APPOINTMENT_ARRANGEMENT_FORM,
+  );
+  const [arrangementEvents, setArrangementEvents] = useState<EventItem[]>([]);
   const [achievementSummary, setAchievementSummary] = useState<AchievementSummary | null>(null);
   const [loadingAchievement, setLoadingAchievement] = useState(false);
   const [editingEventDetails, setEditingEventDetails] = useState(false);
@@ -102,29 +175,161 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     };
   }, [event.id]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void listEvents()
+      .then((items) => {
+        if (cancelled) return;
+        setArrangementEvents(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setArrangementEvents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const currentEvent = workbench?.event ?? event;
+  const eventOptions = arrangementEvents.some((item) => item.id === currentEvent.id)
+    ? arrangementEvents
+    : [currentEvent, ...arrangementEvents];
+  const eventAchievements = achievementSummary?.event_achievements ?? null;
+  const taskArrangements = workbench?.created_tasks ?? [];
+  const appointmentArrangements = workbench?.created_appointments ?? [];
+
+  function getEventOption(eventId: string): EventItem | null {
+    return eventOptions.find((item) => item.id === eventId) ?? null;
+  }
+
+  function buildDefaultTaskArrangementForm(selectedEvent: EventItem): TaskArrangementFormState {
+    return {
+      ...EMPTY_TASK_ARRANGEMENT_FORM,
+      event: selectedEvent.name,
+      eventId: selectedEvent.id,
+    };
+  }
+
+  function buildTaskArrangementForm(task: Task): TaskArrangementFormState {
+    return {
+      title: task.title,
+      content: task.content ?? '',
+      priority: task.priority as 0 | 1 | 2 | 3,
+      targetMinutes: Math.round(task.target_duration / 60),
+      event: task.event || '',
+      eventId: task.event_id ?? '',
+      periodType: task.period_type ?? 'once',
+      customPeriodDays: task.custom_period_days ?? 1,
+      maxCompletionsPerPeriod: task.max_completions_per_period ?? 1,
+      weekdayOnly: task.weekday_only ?? false,
+      timeInheritsFromEvent: task.time_inherits_from_event ?? false,
+      timeOverridden: task.time_overridden ?? false,
+      taskType: task.task_type || 'focus',
+      tagsText: task.tags.join(', '),
+      startDate: toDateTimeLocalValue(task.start_date),
+      dueDate: toDateTimeLocalValue(task.due_date),
+    };
+  }
+
+  function buildDefaultAppointmentArrangementForm(selectedEvent: EventItem): AppointmentArrangementFormState {
+    return {
+      ...EMPTY_APPOINTMENT_ARRANGEMENT_FORM,
+      eventId: selectedEvent.id,
+    };
+  }
+
+  function buildAppointmentArrangementForm(appointment: Appointment): AppointmentArrangementFormState {
+    return {
+      title: appointment.title,
+      content: appointment.content ?? '',
+      status: appointment.status === 'needs_confirmation' ? 'pending' : appointment.status,
+      startsAt: toDateTimeLocalValue(appointment.starts_at),
+      endsAt: toDateTimeLocalValue(appointment.ends_at),
+      repeatRule: appointment.repeat_rule ?? '',
+      eventId: appointment.event_id ?? '',
+      periodType: appointment.period_type ?? 'once',
+      customPeriodDays: appointment.custom_period_days ?? 1,
+      maxCompletionsPerPeriod: appointment.max_completions_per_period ?? 1,
+      weekdayOnly: appointment.weekday_only ?? false,
+      timeInheritsFromEvent: appointment.time_inherits_from_event ?? false,
+      timeOverridden: appointment.time_overridden ?? false,
+    };
+  }
+
+  function syncTaskEventSelection(form: TaskArrangementFormState, eventId: string): TaskArrangementFormState {
+    const selectedEvent = getEventOption(eventId);
+    if (!selectedEvent) {
+      return {
+        ...form,
+        event: '',
+        eventId: '',
+        timeInheritsFromEvent: false,
+        timeOverridden: false,
+      };
+    }
+    const inheritedDueDate = toDateTimeLocalValue(selectedEvent.due_at);
+    const shouldFollowEvent = !form.timeOverridden || !form.dueDate;
+    return {
+      ...form,
+      event: selectedEvent.name,
+      eventId: selectedEvent.id,
+      dueDate: shouldFollowEvent ? inheritedDueDate : form.dueDate,
+      timeInheritsFromEvent: true,
+      timeOverridden: shouldFollowEvent ? false : form.timeOverridden,
+    };
+  }
+
+  function syncAppointmentEventSelection(
+    form: AppointmentArrangementFormState,
+    eventId: string,
+  ): AppointmentArrangementFormState {
+    const selectedEvent = getEventOption(eventId);
+    if (!selectedEvent) {
+      return {
+        ...form,
+        eventId: '',
+        timeInheritsFromEvent: false,
+        timeOverridden: false,
+      };
+    }
+    const inheritedEndsAt = toDateTimeLocalValue(selectedEvent.due_at);
+    const shouldFollowEvent = !form.timeOverridden || !form.endsAt;
+    return {
+      ...form,
+      eventId: selectedEvent.id,
+      endsAt: shouldFollowEvent ? inheritedEndsAt : form.endsAt,
+      timeInheritsFromEvent: true,
+      timeOverridden: shouldFollowEvent ? false : form.timeOverridden,
+    };
+  }
+
   function cancelArrangementEditor(): void {
     setEditingArrangement(null);
     setNewArrangementKind(null);
-    setArrangementTitle('');
-    setArrangementContent('');
-    setArrangementTime('');
+    setTaskArrangementForm(EMPTY_TASK_ARRANGEMENT_FORM);
+    setAppointmentArrangementForm(EMPTY_APPOINTMENT_ARRANGEMENT_FORM);
   }
 
   function beginAddArrangement(kind: ArrangementKind): void {
     setEditingArrangement(null);
     setNewArrangementKind(kind);
-    setArrangementTitle('');
-    setArrangementContent('');
-    setArrangementTime('');
+    if (kind === 'task') {
+      setTaskArrangementForm(buildDefaultTaskArrangementForm(currentEvent));
+    } else {
+      setAppointmentArrangementForm(buildDefaultAppointmentArrangementForm(currentEvent));
+    }
     setError(null);
   }
 
   function beginEditArrangement(next: EditingArrangement): void {
     setEditingArrangement(next);
     setNewArrangementKind(null);
-    setArrangementTitle(next.item.title);
-    setArrangementContent(next.item.content ?? '');
-    setArrangementTime(toDateTimeLocalValue(next.kind === 'appointment' ? next.item.ends_at : next.item.due_date));
+    if (next.kind === 'task') {
+      setTaskArrangementForm(buildTaskArrangementForm(next.item));
+    } else {
+      setAppointmentArrangementForm(buildAppointmentArrangementForm(next.item));
+    }
     setError(null);
   }
 
@@ -192,31 +397,73 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   async function handleSaveArrangement(): Promise<void> {
     const kind = editingArrangement?.kind ?? newArrangementKind;
     if (submitting || !kind) return;
-    const title = arrangementTitle.trim();
+    const title = kind === 'task' ? taskArrangementForm.title.trim() : appointmentArrangementForm.title.trim();
     if (!title) {
       setError(`请输入${kind === 'appointment' ? '日程' : '任务'}标题`);
       return;
     }
-    const isoTime = fromDateTimeLocalValue(arrangementTime);
-    if (kind === 'appointment' && !isoTime) {
-      setError('请选择日程时间');
+    const taskStartDate = fromDateTimeLocalValue(taskArrangementForm.startDate);
+    const taskDueDate = fromDateTimeLocalValue(taskArrangementForm.dueDate);
+    const appointmentStartsAt = fromDateTimeLocalValue(appointmentArrangementForm.startsAt);
+    const appointmentEndsAt = fromDateTimeLocalValue(appointmentArrangementForm.endsAt);
+    if (kind === 'appointment' && !appointmentEndsAt) {
+      setError('请选择结束时间');
       return;
     }
-    const payload = {
-      title,
-      content: arrangementContent.trim() || null,
-      time: isoTime,
-    };
+    const customPeriodDays = kind === 'task'
+      ? (taskArrangementForm.periodType === 'custom_days' ? Math.max(1, Math.floor(taskArrangementForm.customPeriodDays || 1)) : null)
+      : (
+        appointmentArrangementForm.periodType === 'custom_days'
+          ? Math.max(1, Math.floor(appointmentArrangementForm.customPeriodDays || 1))
+          : null
+      );
+    const tags = taskArrangementForm.tagsText
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
     setSubmitting(true);
     setError(null);
     try {
       if (kind === 'task') {
+        const payload = {
+          title,
+          content: taskArrangementForm.content.trim() || null,
+          priority: taskArrangementForm.priority,
+          targetDuration: Math.max(0, Math.round(taskArrangementForm.targetMinutes * 60)),
+          event: taskArrangementForm.event.trim(),
+          eventId: taskArrangementForm.eventId || null,
+          periodType: taskArrangementForm.periodType,
+          customPeriodDays,
+          maxCompletionsPerPeriod: Math.max(1, Math.floor(taskArrangementForm.maxCompletionsPerPeriod || 1)),
+          weekdayOnly: taskArrangementForm.weekdayOnly,
+          timeInheritsFromEvent: taskArrangementForm.timeInheritsFromEvent,
+          timeOverridden: taskArrangementForm.timeOverridden,
+          taskType: taskArrangementForm.taskType,
+          tags,
+          startDate: taskStartDate,
+          dueDate: taskDueDate,
+        };
         if (editingArrangement?.kind === 'task') {
           replaceTask(await updateEventArrangementTask(currentEvent, editingArrangement.item.id, payload));
         } else {
           appendTask(await createEventArrangementTask(currentEvent, payload));
         }
-      } else if (isoTime) {
+      } else if (appointmentEndsAt) {
+        const payload = {
+          title,
+          content: appointmentArrangementForm.content.trim() || null,
+          status: appointmentArrangementForm.status,
+          startsAt: appointmentStartsAt,
+          endsAt: appointmentEndsAt,
+          repeatRule: appointmentArrangementForm.repeatRule.trim() || null,
+          eventId: appointmentArrangementForm.eventId || null,
+          periodType: appointmentArrangementForm.periodType,
+          customPeriodDays,
+          maxCompletionsPerPeriod: Math.max(1, Math.floor(appointmentArrangementForm.maxCompletionsPerPeriod || 1)),
+          weekdayOnly: appointmentArrangementForm.weekdayOnly,
+          timeInheritsFromEvent: appointmentArrangementForm.timeInheritsFromEvent,
+          timeOverridden: appointmentArrangementForm.timeOverridden,
+        };
         if (editingArrangement?.kind === 'appointment') {
           replaceAppointment(await updateEventArrangementAppointment(currentEvent, editingArrangement.item.id, payload));
         } else {
@@ -253,11 +500,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       setSubmitting(false);
     }
   }
-
-  const currentEvent = workbench?.event ?? event;
-  const eventAchievements = achievementSummary?.event_achievements ?? null;
-  const taskArrangements = workbench?.created_tasks ?? [];
-  const appointmentArrangements = workbench?.created_appointments ?? [];
 
   function beginEditEventDetails(): void {
     setEditingEventDetails(true);
@@ -355,38 +597,377 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     const activeKind = editingArrangement?.kind ?? newArrangementKind;
     if (activeKind !== kind) return null;
     const label = kind === 'appointment' ? '日程' : '任务';
-    const timeValue = fromDateTimeLocalValue(arrangementTime);
+    const previewTime = kind === 'appointment'
+      ? fromDateTimeLocalValue(appointmentArrangementForm.endsAt)
+      : fromDateTimeLocalValue(taskArrangementForm.dueDate);
     return (
       <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
-        <label className="grid gap-1 text-xs text-white/60">
-          {label}标题
-          <input
-            aria-label={`${label}标题`}
-            value={arrangementTitle}
-            onChange={(changeEvent) => setArrangementTitle(changeEvent.target.value)}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <label className="grid gap-1 text-xs text-white/60">
-          {label}备注
-          <textarea
-            aria-label={`${label}备注`}
-            value={arrangementContent}
-            onChange={(changeEvent) => setArrangementContent(changeEvent.target.value)}
-            className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <label className="grid gap-1 text-xs text-white/60">
-          {label}时间
-          <input
-            aria-label={`${label}时间`}
-            type="datetime-local"
-            value={arrangementTime}
-            onChange={(changeEvent) => setArrangementTime(changeEvent.target.value)}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        {timeValue ? <div className="text-xs text-white/45">时间预览 {formatEventDateTime(timeValue)}</div> : null}
+        {kind === 'task' ? (
+          <>
+            <label className="grid gap-1 text-xs text-white/60">
+              标题
+              <input
+                aria-label="标题"
+                value={taskArrangementForm.title}
+                onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, title: changeEvent.target.value }))}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs text-white/60">
+                任务类型
+                <select
+                  aria-label="任务类型"
+                  value={taskArrangementForm.taskType}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, taskType: changeEvent.target.value as 'focus' | 'checkin' }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                >
+                  <option value="focus">专注任务</option>
+                  <option value="checkin">快速打卡</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-white/60">
+                优先级
+                <select
+                  aria-label="优先级"
+                  value={taskArrangementForm.priority}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, priority: Number(changeEvent.target.value) as 0 | 1 | 2 | 3 }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                >
+                  <option value={0}>0 低</option>
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3 高</option>
+                </select>
+              </label>
+            </div>
+            <label className="grid gap-1 text-xs text-white/60">
+              备注
+              <textarea
+                aria-label="备注"
+                value={taskArrangementForm.content}
+                onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, content: changeEvent.target.value }))}
+                className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs text-white/60">
+                目标时长（分钟）
+                <input
+                  aria-label="目标时长（分钟）"
+                  type="number"
+                  min={0}
+                  value={taskArrangementForm.targetMinutes}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, targetMinutes: Number(changeEvent.target.value) }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-white/60">
+                开始日期
+                <input
+                  aria-label="开始日期"
+                  type="datetime-local"
+                  value={taskArrangementForm.startDate}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, startDate: changeEvent.target.value }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-white/60">
+                截止日期
+                <input
+                  aria-label="截止日期"
+                  type="datetime-local"
+                  value={taskArrangementForm.dueDate}
+                  onChange={(changeEvent) => {
+                    const nextValue = changeEvent.target.value;
+                    setTaskArrangementForm((state) => {
+                      const selectedEvent = getEventOption(state.eventId);
+                      const inheritedValue = selectedEvent ? toDateTimeLocalValue(selectedEvent.due_at) : '';
+                      return {
+                        ...state,
+                        dueDate: nextValue,
+                        timeInheritsFromEvent: Boolean(selectedEvent),
+                        timeOverridden: Boolean(selectedEvent) && nextValue !== inheritedValue,
+                      };
+                    });
+                  }}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+            </div>
+            <label className="grid gap-1 text-xs text-white/60">
+              关联事件
+              <select
+                aria-label="关联事件"
+                value={taskArrangementForm.eventId}
+                onChange={(changeEvent) => (
+                  setTaskArrangementForm((state) => syncTaskEventSelection(state, changeEvent.target.value))
+                )}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              >
+                <option value="">不绑定事件</option>
+                {eventOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.is_primary ? `当前事件：${option.name}` : option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs text-white/60">
+                完成周期
+                <select
+                  aria-label="完成周期"
+                  value={taskArrangementForm.periodType}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, periodType: changeEvent.target.value as CompletionPeriodType }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                >
+                  <option value="once">一次性</option>
+                  <option value="daily">每天</option>
+                  <option value="weekly">每周</option>
+                  <option value="monthly">每月</option>
+                  <option value="custom_days">自定义天数</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-white/60">
+                单周期最多完成次数
+                <input
+                  aria-label="单周期最多完成次数"
+                  type="number"
+                  min={1}
+                  value={taskArrangementForm.maxCompletionsPerPeriod}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, maxCompletionsPerPeriod: Number(changeEvent.target.value) }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+            </div>
+            {taskArrangementForm.periodType === 'custom_days' ? (
+              <label className="grid gap-1 text-xs text-white/60">
+                自定义完成周期（天）
+                <input
+                  aria-label="自定义完成周期（天）"
+                  type="number"
+                  min={1}
+                  value={taskArrangementForm.customPeriodDays}
+                  onChange={(changeEvent) => (
+                    setTaskArrangementForm((state) => ({ ...state, customPeriodDays: Number(changeEvent.target.value) }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+            ) : null}
+            <label className="flex items-center gap-2 text-xs text-white/70">
+              <input
+                aria-label="仅工作日可完成"
+                type="checkbox"
+                checked={taskArrangementForm.weekdayOnly}
+                onChange={(changeEvent) => (
+                  setTaskArrangementForm((state) => ({ ...state, weekdayOnly: changeEvent.target.checked }))
+                )}
+                className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+              />
+              仅工作日可完成
+            </label>
+            <label className="grid gap-1 text-xs text-white/60">
+              标签
+              <input
+                aria-label="标签"
+                value={taskArrangementForm.tagsText}
+                onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, tagsText: changeEvent.target.value }))}
+                placeholder="逗号分隔，例如：学习,arxiv"
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white placeholder:text-white/30"
+              />
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="grid gap-1 text-xs text-white/60">
+              标题
+              <input
+                aria-label="标题"
+                value={appointmentArrangementForm.title}
+                onChange={(changeEvent) => (
+                  setAppointmentArrangementForm((state) => ({ ...state, title: changeEvent.target.value }))
+                )}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <label className="grid gap-1 text-xs text-white/60">
+              状态
+              <select
+                aria-label="状态"
+                value={appointmentArrangementForm.status}
+                onChange={(changeEvent) => (
+                  setAppointmentArrangementForm((state) => ({
+                    ...state,
+                    status: changeEvent.target.value as AppointmentStoredStatus,
+                  }))
+                )}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              >
+                <option value="pending">待出席</option>
+                <option value="attended">已出席</option>
+                <option value="missed">已错过</option>
+                <option value="cancelled">已取消</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs text-white/60">
+              备注
+              <textarea
+                aria-label="备注"
+                value={appointmentArrangementForm.content}
+                onChange={(changeEvent) => (
+                  setAppointmentArrangementForm((state) => ({ ...state, content: changeEvent.target.value }))
+                )}
+                className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs text-white/60">
+                开始时间
+                <input
+                  aria-label="开始时间"
+                  type="datetime-local"
+                  value={appointmentArrangementForm.startsAt}
+                  onChange={(changeEvent) => (
+                    setAppointmentArrangementForm((state) => ({ ...state, startsAt: changeEvent.target.value }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-white/60">
+                结束时间
+                <input
+                  aria-label="结束时间"
+                  type="datetime-local"
+                  value={appointmentArrangementForm.endsAt}
+                  onChange={(changeEvent) => {
+                    const nextValue = changeEvent.target.value;
+                    setAppointmentArrangementForm((state) => {
+                      const selectedEvent = getEventOption(state.eventId);
+                      const inheritedValue = selectedEvent ? toDateTimeLocalValue(selectedEvent.due_at) : '';
+                      return {
+                        ...state,
+                        endsAt: nextValue,
+                        timeInheritsFromEvent: Boolean(selectedEvent),
+                        timeOverridden: Boolean(selectedEvent) && nextValue !== inheritedValue,
+                      };
+                    });
+                  }}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+            </div>
+            <label className="grid gap-1 text-xs text-white/60">
+              关联事件
+              <select
+                aria-label="关联事件"
+                value={appointmentArrangementForm.eventId}
+                onChange={(changeEvent) => (
+                  setAppointmentArrangementForm((state) => syncAppointmentEventSelection(state, changeEvent.target.value))
+                )}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              >
+                <option value="">不绑定事件</option>
+                {eventOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.is_primary ? `当前事件：${option.name}` : option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs text-white/60">
+              重复规则
+              <input
+                aria-label="重复规则"
+                value={appointmentArrangementForm.repeatRule}
+                onChange={(changeEvent) => (
+                  setAppointmentArrangementForm((state) => ({ ...state, repeatRule: changeEvent.target.value }))
+                )}
+                placeholder="例如：weekly"
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white placeholder:text-white/30"
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs text-white/60">
+                完成周期
+                <select
+                  aria-label="完成周期"
+                  value={appointmentArrangementForm.periodType}
+                  onChange={(changeEvent) => (
+                    setAppointmentArrangementForm((state) => ({
+                      ...state,
+                      periodType: changeEvent.target.value as CompletionPeriodType,
+                    }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                >
+                  <option value="once">一次性</option>
+                  <option value="daily">每天</option>
+                  <option value="weekly">每周</option>
+                  <option value="monthly">每月</option>
+                  <option value="custom_days">自定义天数</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-white/60">
+                单周期最多完成次数
+                <input
+                  aria-label="单周期最多完成次数"
+                  type="number"
+                  min={1}
+                  value={appointmentArrangementForm.maxCompletionsPerPeriod}
+                  onChange={(changeEvent) => (
+                    setAppointmentArrangementForm((state) => ({
+                      ...state,
+                      maxCompletionsPerPeriod: Number(changeEvent.target.value),
+                    }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+            </div>
+            {appointmentArrangementForm.periodType === 'custom_days' ? (
+              <label className="grid gap-1 text-xs text-white/60">
+                自定义完成周期（天）
+                <input
+                  aria-label="自定义完成周期（天）"
+                  type="number"
+                  min={1}
+                  value={appointmentArrangementForm.customPeriodDays}
+                  onChange={(changeEvent) => (
+                    setAppointmentArrangementForm((state) => ({ ...state, customPeriodDays: Number(changeEvent.target.value) }))
+                  )}
+                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                />
+              </label>
+            ) : null}
+            <label className="flex items-center gap-2 text-xs text-white/70">
+              <input
+                aria-label="仅工作日可完成"
+                type="checkbox"
+                checked={appointmentArrangementForm.weekdayOnly}
+                onChange={(changeEvent) => (
+                  setAppointmentArrangementForm((state) => ({ ...state, weekdayOnly: changeEvent.target.checked }))
+                )}
+                className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+              />
+              仅工作日可完成
+            </label>
+          </>
+        )}
+        {previewTime ? <div className="text-xs text-white/45">时间预览 {formatEventDateTime(previewTime)}</div> : null}
         <div className="flex flex-wrap justify-end gap-2">
           {editingArrangement ? (
             <button

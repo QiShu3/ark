@@ -24,6 +24,17 @@ const event: EventItem = {
   updated_at: '2026-05-18T00:00:00Z',
 };
 
+const secondaryEvent: EventItem = {
+  id: 'event-2',
+  user_id: 7,
+  name: '测试一',
+  start_date: '2026-05-21',
+  due_at: '2026-06-18T09:00:00Z',
+  is_primary: false,
+  created_at: '2026-05-18T00:00:00Z',
+  updated_at: '2026-05-18T00:00:00Z',
+};
+
 const eventTask: Task = {
   id: 'task-1',
   user_id: 7,
@@ -218,6 +229,7 @@ describe('EventWorkbenchModal', () => {
           created_appointments: [eventAppointment],
         };
       }
+      if (url === '/todo/events') return [event, secondaryEvent];
       if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
       return {};
     });
@@ -260,6 +272,7 @@ describe('EventWorkbenchModal', () => {
           created_appointments: appointments,
         };
       }
+      if (url === '/todo/events') return [event, secondaryEvent];
       if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
       if (url === '/todo/tasks' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
@@ -307,14 +320,14 @@ describe('EventWorkbenchModal', () => {
 
     expect(await screen.findByText('安排内容')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务标题'), '精修错题');
-    await user.type(screen.getByLabelText('任务备注'), '错题本');
-    await user.type(screen.getByLabelText('任务时间'), '2026-06-07T10:30');
+    await user.type(screen.getByLabelText('标题'), '精修错题');
+    await user.type(screen.getByLabelText('备注'), '错题本');
+    await user.type(screen.getByLabelText('截止日期'), '2026-06-07T10:30');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     await user.click(screen.getByRole('button', { name: '添加日程' }));
-    await user.type(screen.getByLabelText('日程标题'), '模拟考试');
-    await user.type(screen.getByLabelText('日程时间'), '2026-06-13T09:00');
+    await user.type(screen.getByLabelText('标题'), '模拟考试');
+    await user.type(screen.getByLabelText('结束时间'), '2026-06-13T09:00');
     await user.click(screen.getByRole('button', { name: '保存日程' }));
 
     expect(screen.getByRole('button', { name: '精修错题' })).toBeInTheDocument();
@@ -341,23 +354,77 @@ describe('EventWorkbenchModal', () => {
           created_appointments: appointments,
         };
       }
+      if (url === '/todo/events') return [event, secondaryEvent];
       if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
       if (url === '/todo/tasks/task-1' && options?.method === 'PATCH') {
+        const expectedStartDate = new Date('2026-06-01T08:00').toISOString();
         const expectedDueDate = new Date('2026-06-07T10:30').toISOString();
         expect(JSON.parse(options.body || '{}')).toMatchObject({
           title: '精修错题',
           content: '错题本',
+          priority: 2,
+          target_duration: 2700,
+          task_type: 'checkin',
+          start_date: expectedStartDate,
           due_date: expectedDueDate,
-          event: '高数期末',
-          event_id: 'event-1',
+          event: '测试一',
+          event_id: 'event-2',
+          is_recurring: true,
+          period_type: 'weekly',
+          max_completions_per_period: 2,
+          weekday_only: true,
+          tags: ['数学', '错题'],
         });
         tasks[0] = {
           ...tasks[0],
           title: '精修错题',
           content: '错题本',
+          priority: 2,
+          target_duration: 2700,
+          task_type: 'checkin',
+          start_date: expectedStartDate,
           due_date: expectedDueDate,
+          event: '测试一',
+          event_id: 'event-2',
+          is_recurring: true,
+          period_type: 'weekly',
+          max_completions_per_period: 2,
+          weekday_only: true,
+          tags: ['数学', '错题'],
         };
         return tasks[0];
+      }
+      if (url === '/todo/appointments/appointment-1' && options?.method === 'PATCH') {
+        const expectedStartsAt = new Date('2026-06-12T09:00').toISOString();
+        const expectedEndsAt = new Date('2026-06-12T11:00').toISOString();
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          title: '模拟考试改期',
+          content: '带准考证',
+          status: 'attended',
+          starts_at: expectedStartsAt,
+          ends_at: expectedEndsAt,
+          repeat_rule: 'weekly',
+          event_id: 'event-2',
+          is_recurring: true,
+          period_type: 'monthly',
+          max_completions_per_period: 2,
+          weekday_only: true,
+        });
+        appointments[0] = {
+          ...appointments[0],
+          title: '模拟考试改期',
+          content: '带准考证',
+          status: 'attended',
+          starts_at: expectedStartsAt,
+          ends_at: expectedEndsAt,
+          repeat_rule: 'weekly',
+          event_id: 'event-2',
+          is_recurring: true,
+          period_type: 'monthly',
+          max_completions_per_period: 2,
+          weekday_only: true,
+        };
+        return appointments[0];
       }
       if (url === '/todo/appointments/appointment-1' && options?.method === 'DELETE') {
         appointments.splice(0, appointments.length);
@@ -371,22 +438,76 @@ describe('EventWorkbenchModal', () => {
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: '完成第一轮复习' }));
-    await user.clear(screen.getByLabelText('任务标题'));
-    await user.type(screen.getByLabelText('任务标题'), '精修错题');
-    await user.clear(screen.getByLabelText('任务备注'));
-    await user.type(screen.getByLabelText('任务备注'), '错题本');
-    await user.clear(screen.getByLabelText('任务时间'));
-    await user.type(screen.getByLabelText('任务时间'), '2026-06-07T10:30');
+    expect(screen.getByLabelText('任务类型')).toBeInTheDocument();
+    expect(screen.getByLabelText('优先级')).toBeInTheDocument();
+    expect(screen.getByLabelText('目标时长（分钟）')).toBeInTheDocument();
+    expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('截止日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('关联事件')).toBeInTheDocument();
+    expect(screen.getByLabelText('完成周期')).toBeInTheDocument();
+    expect(screen.getByLabelText('单周期最多完成次数')).toBeInTheDocument();
+    expect(screen.getByLabelText('仅工作日可完成')).toBeInTheDocument();
+    expect(screen.getByLabelText('标签')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('标题'));
+    await user.type(screen.getByLabelText('标题'), '精修错题');
+    await user.selectOptions(screen.getByLabelText('任务类型'), 'checkin');
+    await user.selectOptions(screen.getByLabelText('优先级'), '2');
+    await user.clear(screen.getByLabelText('备注'));
+    await user.type(screen.getByLabelText('备注'), '错题本');
+    await user.clear(screen.getByLabelText('目标时长（分钟）'));
+    await user.type(screen.getByLabelText('目标时长（分钟）'), '45');
+    await user.clear(screen.getByLabelText('开始日期'));
+    await user.type(screen.getByLabelText('开始日期'), '2026-06-01T08:00');
+    await user.clear(screen.getByLabelText('截止日期'));
+    await user.type(screen.getByLabelText('截止日期'), '2026-06-07T10:30');
+    await user.selectOptions(screen.getByLabelText('关联事件'), 'event-2');
+    await user.selectOptions(screen.getByLabelText('完成周期'), 'weekly');
+    await user.clear(screen.getByLabelText('单周期最多完成次数'));
+    await user.type(screen.getByLabelText('单周期最多完成次数'), '2');
+    await user.click(screen.getByLabelText('仅工作日可完成'));
+    await user.clear(screen.getByLabelText('标签'));
+    await user.type(screen.getByLabelText('标签'), '数学, 错题');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     expect(await screen.findByRole('button', { name: '精修错题' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '模拟考试' }));
+    expect(screen.getByLabelText('状态')).toBeInTheDocument();
+    expect(screen.getByLabelText('开始时间')).toBeInTheDocument();
+    expect(screen.getByLabelText('结束时间')).toBeInTheDocument();
+    expect(screen.getByLabelText('关联事件')).toBeInTheDocument();
+    expect(screen.getByLabelText('重复规则')).toBeInTheDocument();
+    expect(screen.getByLabelText('完成周期')).toBeInTheDocument();
+    expect(screen.getByLabelText('单周期最多完成次数')).toBeInTheDocument();
+    expect(screen.getByLabelText('仅工作日可完成')).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('标题'));
+    await user.type(screen.getByLabelText('标题'), '模拟考试改期');
+    await user.selectOptions(screen.getByLabelText('状态'), 'attended');
+    await user.clear(screen.getByLabelText('备注'));
+    await user.type(screen.getByLabelText('备注'), '带准考证');
+    await user.clear(screen.getByLabelText('开始时间'));
+    await user.type(screen.getByLabelText('开始时间'), '2026-06-12T09:00');
+    await user.clear(screen.getByLabelText('结束时间'));
+    await user.type(screen.getByLabelText('结束时间'), '2026-06-12T11:00');
+    await user.selectOptions(screen.getByLabelText('关联事件'), 'event-2');
+    await user.clear(screen.getByLabelText('重复规则'));
+    await user.type(screen.getByLabelText('重复规则'), 'weekly');
+    await user.selectOptions(screen.getByLabelText('完成周期'), 'monthly');
+    await user.clear(screen.getByLabelText('单周期最多完成次数'));
+    await user.type(screen.getByLabelText('单周期最多完成次数'), '2');
+    await user.click(screen.getByLabelText('仅工作日可完成'));
+    await user.click(screen.getByRole('button', { name: '保存日程' }));
+
+    expect(await screen.findByRole('button', { name: '模拟考试改期' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '模拟考试改期' }));
     await user.click(screen.getByRole('button', { name: '删除日程' }));
 
     await waitFor(() => {
       expect(apiJson).toHaveBeenCalledWith('/todo/appointments/appointment-1', { method: 'DELETE' });
     });
-    expect(screen.queryByRole('button', { name: '模拟考试' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '模拟考试改期' })).not.toBeInTheDocument();
   });
 });
