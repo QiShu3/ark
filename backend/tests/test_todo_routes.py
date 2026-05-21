@@ -2219,6 +2219,46 @@ def test_apply_event_plan_template_creates_single_draft(monkeypatch) -> None:
     assert next_draft["items"][0]["scheduled_for"] == "2026-05-20T09:00:00Z"
 
 
+def test_event_plan_draft_can_create_item(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    event_resp = client.post(
+        "/todo/events",
+        json={
+            "name": "高数期末",
+            "start_date": "2026-05-20",
+            "due_at": "2026-06-20T09:00:00Z",
+            "is_primary": True,
+        },
+    )
+
+    create_resp = client.post(
+        f"/todo/events/{event_resp.json()['id']}/plan-draft/items",
+        json={
+            "kind": "appointment",
+            "title": "模拟考试",
+            "content": "提前半小时到场",
+            "starts_at": None,
+            "ends_at": "2026-06-13T09:00:00Z",
+            "sort_order": 0,
+        },
+    )
+
+    assert create_resp.status_code == 200
+    draft = create_resp.json()["plan_draft"]
+    assert draft["source_template_id"] is None
+    assert len(draft["items"]) == 1
+    assert draft["items"][0]["kind"] == "appointment"
+    assert draft["items"][0]["title"] == "模拟考试"
+    assert draft["items"][0]["content"] == "提前半小时到场"
+    assert draft["items"][0]["ends_at"] == "2026-06-13T09:00:00Z"
+
+
 def test_generate_event_plan_draft_creates_bound_arrangements(monkeypatch) -> None:
     conn = _FakeTodoConn()
     pool = _FakePool(conn)

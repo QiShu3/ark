@@ -308,6 +308,17 @@ class EventPlanDraftSaveAsTemplateRequest(BaseModel):
     schedule_mode: EventPlanScheduleMode
 
 
+class EventPlanDraftItemCreateRequest(BaseModel):
+    kind: EventPlanItemKind
+    title: str = Field(min_length=1, max_length=255)
+    content: str | None = None
+    scheduled_for: datetime | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    payload: dict[str, object] | None = None
+    sort_order: int = Field(default=0, ge=0)
+
+
 class EventPlanDraftItemUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     content: str | None = None

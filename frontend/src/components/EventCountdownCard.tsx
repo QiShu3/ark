@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Plus, Settings, Trash2 } from 'lucide-react';
 
 import {
   applyEventPlanTemplate,
   createEvent,
+  createEventPlanDraftItem,
+  deleteEventPlanDraftItem,
   getPrimaryEvent,
   listEventPlanTemplates,
   listEvents,
   updateEventPlanDraftItem,
   type EventCreateInput,
+  type EventPlanDraftItemCreateInput,
   type EventPlanDraftItemInput,
 } from '../lib/events/api';
 import { formatEventDateTime, getCountdownDisplay, getCountdownTone, toDateTimeLocalValue } from '../lib/events/dateTime';
@@ -169,13 +172,24 @@ const EventCountdownCard: React.FC = () => {
     ));
   }
 
+  function addCreateWorkbenchItem(): void {
+    setCreateWorkbenchItems((current) => [
+      ...current,
+      { kind: 'task', title: '', content: '', offsetDays: 0 },
+    ]);
+  }
+
+  function removeCreateWorkbenchItem(index: number): void {
+    setCreateWorkbenchItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
   function previewWorkbenchItemTime(
     template: EventPlanTemplate | undefined,
     item: CreateWorkbenchItemState,
   ): string | null {
-    if (!template) return null;
+    const scheduleMode = template?.schedule_mode ?? 'before_due';
     const offsetDays = Math.max(0, Math.floor(item.offsetDays || 0));
-    if (template.schedule_mode === 'from_start') {
+    if (scheduleMode === 'from_start') {
       if (!createForm.startDate) return null;
       const [year, month, day] = createForm.startDate.split('-').map(Number);
       if (!year || !month || !day) return null;
@@ -248,25 +262,24 @@ const EventCountdownCard: React.FC = () => {
     };
   }
 
-  async function finishCreatedEvent(event: EventItem): Promise<void> {
+  async function finishCreatedEvent(): Promise<void> {
     resetCreateForm();
     setShowCreateEditor(false);
     setSelectedTemplateId('');
-    setShowModal(false);
     setShowTemplateManager(false);
     await refreshAll();
-    setWorkbenchEvent(event);
   }
 
   async function syncCreatedWorkbenchItems(
     eventId: string,
     workbench: EventWorkbench,
-    template: EventPlanTemplate,
+    template: EventPlanTemplate | undefined,
     items: CreateWorkbenchItemState[],
   ): Promise<EventWorkbench> {
     const draftItems = workbench.plan_draft?.items ?? [];
     let nextWorkbench = workbench;
-    for (let index = 0; index < Math.min(items.length, draftItems.length); index += 1) {
+    const sharedLength = Math.min(items.length, draftItems.length);
+    for (let index = 0; index < sharedLength; index += 1) {
       const formItem = items[index];
       const draftItem = draftItems[index];
       const scheduledAt = previewWorkbenchItemTime(template, formItem);
@@ -284,6 +297,28 @@ const EventCountdownCard: React.FC = () => {
       }
       nextWorkbench = await updateEventPlanDraftItem(eventId, draftItem.id, patch);
     }
+    for (let index = sharedLength; index < draftItems.length; index += 1) {
+      nextWorkbench = await deleteEventPlanDraftItem(eventId, draftItems[index].id);
+    }
+    for (let index = sharedLength; index < items.length; index += 1) {
+      const formItem = items[index];
+      const scheduledAt = previewWorkbenchItemTime(template, formItem);
+      const payload: EventPlanDraftItemCreateInput = {
+        kind: formItem.kind,
+        title: formItem.title.trim(),
+        content: formItem.content.trim() || null,
+        sort_order: index,
+      };
+      if (scheduledAt) {
+        if (formItem.kind === 'appointment') {
+          payload.starts_at = null;
+          payload.ends_at = scheduledAt;
+        } else {
+          payload.scheduled_for = scheduledAt;
+        }
+      }
+      nextWorkbench = await createEventPlanDraftItem(eventId, payload);
+    }
     return nextWorkbench;
   }
 
@@ -294,10 +329,10 @@ const EventCountdownCard: React.FC = () => {
       return;
     }
     const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-    const workbenchItems = selectedTemplate
-      ? (createWorkbenchItems.length ? createWorkbenchItems : buildCreateWorkbenchItems(selectedTemplate))
-      : [];
-    if (selectedTemplate && workbenchItems.some((item) => !item.title.trim())) {
+    const workbenchItems = createWorkbenchItems.length
+      ? createWorkbenchItems
+      : buildCreateWorkbenchItems(selectedTemplate);
+    if (workbenchItems.some((item) => !item.title.trim())) {
       setError('请输入工作台内容标题');
       setShowCreateEditor(true);
       return;
@@ -307,13 +342,15 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
     try {
       const createdEvent = await createEvent(payload);
-      if (selectedTemplate && selectedTemplate.items.length > 0) {
-        const workbench = await applyEventPlanTemplate(createdEvent.id, selectedTemplate.id);
+      if (workbenchItems.length > 0) {
+        const workbench = selectedTemplate && selectedTemplate.items.length > 0
+          ? await applyEventPlanTemplate(createdEvent.id, selectedTemplate.id)
+          : { event: createdEvent, plan_draft: null, created_tasks: [], created_appointments: [] };
         const syncedWorkbench = await syncCreatedWorkbenchItems(createdEvent.id, workbench, selectedTemplate, workbenchItems);
-        await finishCreatedEvent(syncedWorkbench.event ?? createdEvent);
+        await finishCreatedEvent();
         return;
       }
-      await finishCreatedEvent(createdEvent);
+      await finishCreatedEvent();
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建事件失败');
     } finally {
@@ -468,15 +505,27 @@ const EventCountdownCard: React.FC = () => {
                     </div>
 
                   <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-4">
-                    <div>
-                      <h4 className="text-base font-semibold text-white">事件工作台</h4>
-                      <p className="mt-1 text-sm text-white/45">
-                        {selectedTemplate
-                          ? (createWorkbenchItems.length > 0 ? '工作台内容' : '暂无工作台内容')
-                          : '选择模板后会显示工作台内容'}
-                      </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-base font-semibold text-white">事件工作台</h4>
+                        <p className="mt-1 text-sm text-white/45">
+                          {createWorkbenchItems.length > 0
+                            ? '工作台内容'
+                            : selectedTemplate
+                              ? '暂无工作台内容'
+                              : '可从空白工作台开始添加内容'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addCreateWorkbenchItem}
+                        className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white"
+                      >
+                        <Plus size={15} />
+                        添加工作台内容
+                      </button>
                     </div>
-                    {selectedTemplate && createWorkbenchItems.length > 0 ? (
+                    {createWorkbenchItems.length > 0 ? (
                       <div className="grid gap-3 border-t border-blue-300/20 pt-4">
                         {createWorkbenchItems.map((item, index) => {
                           const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
@@ -485,10 +534,18 @@ const EventCountdownCard: React.FC = () => {
                               key={`${item.kind}-${index}`}
                               className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
                             >
-                              <div className="grid gap-2 md:grid-cols-[76px_1fr_96px]">
-                                <div className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70">
-                                  {item.kind === 'appointment' ? '日程' : '任务'}
-                                </div>
+                              <div className="grid gap-2 md:grid-cols-[88px_1fr_96px_auto]">
+                                <select
+                                  aria-label={index === 0 ? '内容类型' : `内容类型 ${index + 1}`}
+                                  value={item.kind}
+                                  onChange={(event) => updateCreateWorkbenchItem(index, {
+                                    kind: event.target.value as CreateWorkbenchItemState['kind'],
+                                  })}
+                                  className="h-10 rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                >
+                                  <option value="task">任务</option>
+                                  <option value="appointment">日程</option>
+                                </select>
                                 <input
                                   aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
                                   value={item.title}
@@ -505,6 +562,14 @@ const EventCountdownCard: React.FC = () => {
                                   })}
                                   className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                                 />
+                                <button
+                                  type="button"
+                                  onClick={() => removeCreateWorkbenchItem(index)}
+                                  aria-label={index === 0 ? '删除工作台内容' : `删除工作台内容 ${index + 1}`}
+                                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-red-200/75 hover:bg-red-500/15 hover:text-red-100"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
                               </div>
                               <input
                                 aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}

@@ -84,6 +84,7 @@ from .schemas import (
     ERCAppTaskInitRequest,
     EventCreateRequest,
     EventOut,
+    EventPlanDraftItemCreateRequest,
     EventPlanDraftItemOut,
     EventPlanDraftItemUpdateRequest,
     EventPlanDraftOut,
@@ -1962,6 +1963,63 @@ async def apply_event_plan_template(
                     _to_jsonb_param({}),
                     item["sort_order"],
                 )
+            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
+
+
+@router.post("/events/{event_id}/plan-draft/items", response_model=EventWorkbenchOut)
+async def create_event_plan_draft_item(
+    request: Request,
+    event_id: UUID,
+    body: EventPlanDraftItemCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventWorkbenchOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            draft_row = await conn.fetchrow(
+                """
+                SELECT id, event_id, user_id, source_template_id, created_at, updated_at
+                FROM event_plan_drafts
+                WHERE event_id = $1 AND user_id = $2
+                """,
+                event_id,
+                int(user.id),
+            )
+            if draft_row is None:
+                draft_row = await conn.fetchrow(
+                    """
+                    INSERT INTO event_plan_drafts(event_id, user_id, source_template_id)
+                    VALUES ($1, $2, $3)
+                    RETURNING id, event_id, user_id, source_template_id, created_at, updated_at
+                    """,
+                    event_id,
+                    int(user.id),
+                    None,
+                )
+            if draft_row is None:
+                raise HTTPException(status_code=500, detail="创建工作台内容失败")
+            await conn.fetchrow(
+                """
+                INSERT INTO event_plan_draft_items(
+                    draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json, sort_order
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+                RETURNING id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
+                          sort_order, created_subject_id, created_at, updated_at
+                """,
+                draft_row["id"],
+                body.kind,
+                body.title.strip(),
+                body.content,
+                body.scheduled_for,
+                body.starts_at,
+                body.ends_at,
+                _to_jsonb_param(body.payload or {}),
+                body.sort_order,
+            )
             return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 

@@ -49,6 +49,19 @@ export type EventPlanDraftItemInput = Partial<Pick<
   'title' | 'content' | 'scheduled_for' | 'starts_at' | 'ends_at' | 'payload' | 'sort_order'
 >>;
 
+export type EventPlanDraftItemCreateInput = Pick<EventPlanDraftItem, 'kind' | 'title'> & EventPlanDraftItemInput;
+
+export function createEventPlanDraftItem(
+  eventId: string,
+  input: EventPlanDraftItemCreateInput,
+): Promise<EventWorkbench> {
+  return apiJson<EventWorkbench>(`/todo/events/${eventId}/plan-draft/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
 export function updateEventPlanDraftItem(
   eventId: string,
   itemId: string,
