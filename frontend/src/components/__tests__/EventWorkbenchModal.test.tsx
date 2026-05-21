@@ -1,11 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import '@testing-library/jest-dom';
 
 import EventWorkbenchModal from '../events/EventWorkbenchModal';
 import { apiJson } from '../../lib/api';
 import type { EventItem } from '../../lib/events/types';
+import type { Appointment, Task } from '../taskTypes';
 
 vi.mock('../../lib/api', () => ({
   apiJson: vi.fn(),
@@ -22,7 +23,85 @@ const event: EventItem = {
   updated_at: '2026-05-18T00:00:00Z',
 };
 
+const eventTask: Task = {
+  id: 'task-1',
+  user_id: 7,
+  title: '完成第一轮复习',
+  content: '覆盖全部章节',
+  status: 'todo',
+  priority: 0,
+  target_duration: 0,
+  current_cycle_count: 0,
+  target_cycle_count: 0,
+  cycle_period: 'daily',
+  cycle_every_days: null,
+  event: '高数期末',
+  event_ids: [],
+  event_id: 'event-1',
+  is_recurring: false,
+  period_type: 'once',
+  custom_period_days: null,
+  max_completions_per_period: 1,
+  weekday_only: false,
+  time_inherits_from_event: false,
+  time_overridden: true,
+  manually_scheduled_for_today: false,
+  task_type: 'focus',
+  tags: [],
+  actual_duration: 0,
+  start_date: null,
+  due_date: '2026-06-06T09:00:00Z',
+  is_deleted: false,
+  created_at: '2026-05-18T00:00:00Z',
+  updated_at: '2026-05-18T00:00:00Z',
+};
+
+const eventAppointment: Appointment = {
+  id: 'appointment-1',
+  user_id: 7,
+  title: '模拟考试',
+  content: null,
+  status: 'pending',
+  starts_at: null,
+  ends_at: '2026-06-13T09:00:00Z',
+  repeat_rule: null,
+  linked_task_id: null,
+  event_id: 'event-1',
+  is_recurring: false,
+  period_type: 'once',
+  custom_period_days: null,
+  max_completions_per_period: 1,
+  weekday_only: false,
+  time_inherits_from_event: false,
+  time_overridden: true,
+  is_deleted: false,
+  created_at: '2026-05-18T00:00:00Z',
+  updated_at: '2026-05-18T00:00:00Z',
+};
+
+const emptyAchievementSummary = {
+  active_event: event,
+  event_achievements: null,
+  global_achievements: {
+    title: '全局成就',
+    summary_text: '始终显示的长期累计进度',
+    stats: {
+      unlocked_count: 0,
+      in_progress_count: 0,
+      primary_metric_value: 0,
+      primary_metric_label: '总专注秒数',
+    },
+    latest_unlocked: [],
+    upcoming: [],
+  },
+};
+
 describe('EventWorkbenchModal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('shows event management actions and the event achievement summary', async () => {
     const user = userEvent.setup();
     const onChanged = vi.fn();
@@ -120,174 +199,101 @@ describe('EventWorkbenchModal', () => {
     });
   });
 
-  it('applies a template and renders generated plan draft sections', async () => {
-    const user = userEvent.setup();
-    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+  it('renders real event arrangements without template or generate controls', async () => {
+    (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/event-1/workbench') {
         return {
           event,
-          plan_draft: null,
-          created_tasks: [],
-          created_appointments: [],
-        };
-      }
-      if (url === '/todo/event-plan-templates') {
-        return [
-          {
-            id: 'template-1',
-            user_id: 7,
-            name: '考试复习',
-            description: null,
-            schedule_mode: 'before_due',
-            items: [],
-            created_at: '2026-05-18T00:00:00Z',
-            updated_at: '2026-05-18T00:00:00Z',
-          },
-        ];
-      }
-      if (url === '/todo/achievements/summary?event_id=event-1') {
-        return {
-          active_event: event,
-          event_achievements: null,
-          global_achievements: {
-            title: '全局成就',
-            summary_text: '始终显示的长期累计进度',
-            stats: {
-              unlocked_count: 0,
-              in_progress_count: 0,
-              primary_metric_value: 0,
-              primary_metric_label: '总专注秒数',
-            },
-            latest_unlocked: [],
-            upcoming: [],
-          },
-        };
-      }
-      if (url === '/todo/events/event-1/plan-draft/apply-template' && options?.method === 'POST') {
-        expect(JSON.parse(options.body || '{}')).toEqual({ template_id: 'template-1' });
-        return {
-          event,
           plan_draft: {
-            id: 'draft-1',
+            id: 'legacy-draft',
             event_id: 'event-1',
             user_id: 7,
             source_template_id: 'template-1',
             created_at: '2026-05-18T00:00:00Z',
             updated_at: '2026-05-18T00:00:00Z',
-            items: [
-              {
-                id: 'draft-item-1',
-                draft_id: 'draft-1',
-                kind: 'task',
-                title: '完成第一轮复习',
-                content: null,
-                scheduled_for: '2026-06-06T09:00:00Z',
-                starts_at: null,
-                ends_at: null,
-                payload: {},
-                sort_order: 0,
-                created_subject_id: null,
-                created_at: '2026-05-18T00:00:00Z',
-                updated_at: '2026-05-18T00:00:00Z',
-              },
-              {
-                id: 'draft-item-2',
-                draft_id: 'draft-1',
-                kind: 'appointment',
-                title: '模拟考试',
-                content: null,
-                scheduled_for: null,
-                starts_at: null,
-                ends_at: '2026-06-13T09:00:00Z',
-                payload: {},
-                sort_order: 1,
-                created_subject_id: null,
-                created_at: '2026-05-18T00:00:00Z',
-                updated_at: '2026-05-18T00:00:00Z',
-              },
-            ],
+            items: [],
           },
-          created_tasks: [],
-          created_appointments: [],
+          created_tasks: [eventTask],
+          created_appointments: [eventAppointment],
         };
       }
+      if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
       return {};
     });
 
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
-    await screen.findByText('事件总览');
-    expect(screen.getByRole('dialog', { name: '安排' })).toBeInTheDocument();
-    await user.selectOptions(await screen.findByLabelText('选择事件模板'), 'template-1');
-    await user.click(screen.getByRole('button', { name: '套用模板' }));
+    expect(await screen.findByText('安排内容')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '完成第一轮复习' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加任务' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加日程' })).toBeInTheDocument();
+    expect(screen.queryByText('选择事件模板')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '套用模板' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '模板工作台' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '另存为事件模板' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '回写源模板' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '生成正式安排' })).not.toBeInTheDocument();
+    expect(screen.queryByText('已创建安排')).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '完成第一轮复习' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
+      expect(apiJson).not.toHaveBeenCalledWith('/todo/event-plan-templates');
     });
   });
 
-  it('adds task and schedule arrangement content from the created-event arrangement modal', async () => {
+  it('creates real task and schedule arrangements from the arrangement page', async () => {
     const user = userEvent.setup();
-    const draftItems: Array<Record<string, unknown>> = [];
+    const tasks: Task[] = [];
+    const appointments: Appointment[] = [];
 
     (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
       if (url === '/todo/events/event-1/workbench') {
         return {
           event,
           plan_draft: null,
-          created_tasks: [],
-          created_appointments: [],
+          created_tasks: tasks,
+          created_appointments: appointments,
         };
       }
-      if (url === '/todo/event-plan-templates') return [];
-      if (url === '/todo/achievements/summary?event_id=event-1') {
-        return {
-          active_event: event,
-          event_achievements: null,
-          global_achievements: {
-            title: '全局成就',
-            summary_text: '始终显示的长期累计进度',
-            stats: {
-              unlocked_count: 0,
-              in_progress_count: 0,
-              primary_metric_value: 0,
-              primary_metric_label: '总专注秒数',
-            },
-            latest_unlocked: [],
-            upcoming: [],
-          },
-        };
-      }
-      if (url === '/todo/events/event-1/plan-draft/items' && options?.method === 'POST') {
+      if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
+      if (url === '/todo/tasks' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
-        draftItems.push({
-          id: `draft-item-${draftItems.length + 1}`,
-          draft_id: 'draft-1',
-          content: null,
-          scheduled_for: null,
-          starts_at: null,
-          ends_at: null,
-          payload: {},
-          created_subject_id: null,
-          created_at: '2026-05-18T00:00:00Z',
-          updated_at: '2026-05-18T00:00:00Z',
-          ...payload,
+        expect(payload).toMatchObject({
+          title: '精修错题',
+          content: '错题本',
+          event: '高数期末',
+          event_id: 'event-1',
+          period_type: 'once',
+          task_type: 'focus',
         });
-        return {
-          event,
-          plan_draft: {
-            id: 'draft-1',
-            event_id: 'event-1',
-            user_id: 7,
-            source_template_id: null,
-            created_at: '2026-05-18T00:00:00Z',
-            updated_at: '2026-05-18T00:00:00Z',
-            items: [...draftItems],
-          },
-          created_tasks: [],
-          created_appointments: [],
+        const createdTask = {
+          ...eventTask,
+          id: 'task-created',
+          title: payload.title,
+          content: payload.content,
+          due_date: payload.due_date,
         };
+        tasks.push(createdTask);
+        return createdTask;
+      }
+      if (url === '/todo/appointments' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        expect(payload).toMatchObject({
+          title: '模拟考试',
+          content: null,
+          event_id: 'event-1',
+          period_type: 'once',
+          status: 'pending',
+        });
+        const createdAppointment = {
+          ...eventAppointment,
+          id: 'appointment-created',
+          title: payload.title,
+          content: payload.content,
+          ends_at: payload.ends_at,
+        };
+        appointments.push(createdAppointment);
+        return createdAppointment;
       }
       return {};
     });
@@ -296,168 +302,67 @@ describe('EventWorkbenchModal', () => {
 
     expect(await screen.findByText('安排内容')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务标题'), '完成第一轮复习');
+    await user.type(screen.getByLabelText('任务标题'), '精修错题');
+    await user.type(screen.getByLabelText('任务备注'), '错题本');
+    await user.type(screen.getByLabelText('任务时间'), '2026-06-07T10:30');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     await user.click(screen.getByRole('button', { name: '添加日程' }));
     await user.type(screen.getByLabelText('日程标题'), '模拟考试');
+    await user.type(screen.getByLabelText('日程时间'), '2026-06-13T09:00');
     await user.click(screen.getByRole('button', { name: '保存日程' }));
 
-    expect(screen.getByRole('button', { name: '完成第一轮复习' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '精修错题' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
-    expect(apiJson).toHaveBeenCalledWith(
+    expect(apiJson).toHaveBeenCalledWith('/todo/tasks', expect.objectContaining({ method: 'POST' }));
+    expect(apiJson).toHaveBeenCalledWith('/todo/appointments', expect.objectContaining({ method: 'POST' }));
+    expect(apiJson).not.toHaveBeenCalledWith(
       '/todo/events/event-1/plan-draft/items',
-      expect.objectContaining({ method: 'POST' }),
+      expect.anything(),
     );
   });
 
-  it('edits draft items and saves draft changes back to templates', async () => {
+  it('edits and deletes real event arrangements', async () => {
     const user = userEvent.setup();
-    const workbenchWithDraft = {
-      event,
-      plan_draft: {
-        id: 'draft-1',
-        event_id: 'event-1',
-        user_id: 7,
-        source_template_id: 'template-1',
-        created_at: '2026-05-18T00:00:00Z',
-        updated_at: '2026-05-18T00:00:00Z',
-        items: [
-          {
-            id: 'draft-item-1',
-            draft_id: 'draft-1',
-            kind: 'task',
-            title: '完成第一轮复习',
-            content: '覆盖全部章节',
-            scheduled_for: '2026-06-06T09:00:00Z',
-            starts_at: null,
-            ends_at: null,
-            payload: {},
-            sort_order: 0,
-            created_subject_id: null,
-            created_at: '2026-05-18T00:00:00Z',
-            updated_at: '2026-05-18T00:00:00Z',
-          },
-          {
-            id: 'draft-item-2',
-            draft_id: 'draft-1',
-            kind: 'appointment',
-            title: '模拟考试',
-            content: null,
-            scheduled_for: null,
-            starts_at: null,
-            ends_at: '2026-06-13T09:00:00Z',
-            payload: {},
-            sort_order: 1,
-            created_subject_id: null,
-            created_at: '2026-05-18T00:00:00Z',
-            updated_at: '2026-05-18T00:00:00Z',
-          },
-        ],
-      },
-      created_tasks: [],
-      created_appointments: [],
-    };
+    const tasks: Task[] = [{ ...eventTask }];
+    const appointments: Appointment[] = [{ ...eventAppointment }];
 
     (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
-      if (url === '/todo/events/event-1/workbench') return workbenchWithDraft;
-      if (url === '/todo/event-plan-templates') {
-        return [
-          {
-            id: 'template-1',
-            user_id: 7,
-            name: '考试复习',
-            description: null,
-            schedule_mode: 'before_due',
-            items: [],
-            created_at: '2026-05-18T00:00:00Z',
-            updated_at: '2026-05-18T00:00:00Z',
-          },
-        ];
-      }
-      if (url === '/todo/achievements/summary?event_id=event-1') {
+      if (url === '/todo/events/event-1/workbench') {
         return {
-          active_event: event,
-          event_achievements: null,
-          global_achievements: {
-            title: '全局成就',
-            summary_text: '始终显示的长期累计进度',
-            stats: {
-              unlocked_count: 0,
-              in_progress_count: 0,
-              primary_metric_value: 0,
-              primary_metric_label: '总专注秒数',
-            },
-            latest_unlocked: [],
-            upcoming: [],
-          },
+          event,
+          plan_draft: null,
+          created_tasks: tasks,
+          created_appointments: appointments,
         };
       }
-      if (url === '/todo/events/event-1/plan-draft/items/draft-item-1' && options?.method === 'PATCH') {
-        const expectedScheduledFor = new Date('2026-06-07T10:30').toISOString();
+      if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
+      if (url === '/todo/tasks/task-1' && options?.method === 'PATCH') {
+        const expectedDueDate = new Date('2026-06-07T10:30').toISOString();
         expect(JSON.parse(options.body || '{}')).toMatchObject({
           title: '精修错题',
           content: '错题本',
-          scheduled_for: expectedScheduledFor,
+          due_date: expectedDueDate,
+          event: '高数期末',
+          event_id: 'event-1',
         });
-        return {
-          ...workbenchWithDraft,
-          plan_draft: {
-            ...workbenchWithDraft.plan_draft,
-            items: [
-              {
-                ...workbenchWithDraft.plan_draft.items[0],
-                title: '精修错题',
-                content: '错题本',
-                scheduled_for: expectedScheduledFor,
-              },
-              workbenchWithDraft.plan_draft.items[1],
-            ],
-          },
+        tasks[0] = {
+          ...tasks[0],
+          title: '精修错题',
+          content: '错题本',
+          due_date: expectedDueDate,
         };
+        return tasks[0];
       }
-      if (url === '/todo/events/event-1/plan-draft/items/draft-item-2' && options?.method === 'DELETE') {
-        return {
-          ...workbenchWithDraft,
-          plan_draft: {
-            ...workbenchWithDraft.plan_draft,
-            items: [workbenchWithDraft.plan_draft.items[0]],
-          },
-        };
-      }
-      if (url === '/todo/events/event-1/plan-draft/save-as-template' && options?.method === 'POST') {
-        expect(JSON.parse(options.body || '{}')).toMatchObject({
-          name: '我的复习模板',
-          description: '稳定复用',
-          schedule_mode: 'before_due',
-        });
-        return {
-          id: 'template-2',
-          user_id: 7,
-          name: '我的复习模板',
-          description: '稳定复用',
-          schedule_mode: 'before_due',
-          items: [],
-          created_at: '2026-05-18T00:00:00Z',
-          updated_at: '2026-05-18T00:00:00Z',
-        };
-      }
-      if (url === '/todo/events/event-1/plan-draft/update-source-template' && options?.method === 'POST') {
-        return {
-          id: 'template-1',
-          user_id: 7,
-          name: '考试复习',
-          description: null,
-          schedule_mode: 'before_due',
-          items: [],
-          created_at: '2026-05-18T00:00:00Z',
-          updated_at: '2026-05-18T00:00:00Z',
-        };
+      if (url === '/todo/appointments/appointment-1' && options?.method === 'DELETE') {
+        appointments.splice(0, appointments.length);
+        return { ok: true };
       }
       return {};
     });
 
     vi.stubGlobal('confirm', vi.fn(() => true));
+
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: '完成第一轮复习' }));
@@ -469,26 +374,14 @@ describe('EventWorkbenchModal', () => {
     await user.type(screen.getByLabelText('任务时间'), '2026-06-07T10:30');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
-    expect(await screen.findByText('精修错题')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '精修错题' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '模拟考试' }));
     await user.click(screen.getByRole('button', { name: '删除日程' }));
-    await waitFor(() => {
-      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/items/draft-item-2', { method: 'DELETE' });
-    });
-
-    await user.click(screen.getByRole('button', { name: '另存为事件模板' }));
-    await user.type(screen.getByLabelText('新事件模板名称'), '我的复习模板');
-    await user.type(screen.getByLabelText('新事件模板说明'), '稳定复用');
-    await user.click(screen.getByRole('button', { name: '确认另存事件模板' }));
 
     await waitFor(() => {
-      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/save-as-template', expect.any(Object));
+      expect(apiJson).toHaveBeenCalledWith('/todo/appointments/appointment-1', { method: 'DELETE' });
     });
-
-    await user.click(screen.getByRole('button', { name: '回写源模板' }));
-    await waitFor(() => {
-      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/plan-draft/update-source-template', { method: 'POST' });
-    });
+    expect(screen.queryByRole('button', { name: '模拟考试' })).not.toBeInTheDocument();
   });
 });

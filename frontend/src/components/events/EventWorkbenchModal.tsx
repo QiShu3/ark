@@ -4,20 +4,20 @@ import type { AchievementSummary } from '../achievementTypes';
 import { apiJson } from '../../lib/api';
 import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } from '../../lib/events/dateTime';
 import {
-  applyEventPlanTemplate,
-  createEventPlanDraftItem,
   deleteEvent as deleteEventById,
-  deleteEventPlanDraftItem,
-  generateEventPlanDraft,
   getEventWorkbench,
-  listEventPlanTemplates,
-  saveEventPlanDraftAsTemplate,
   updateEvent,
-  updateEventPlanDraftItem,
-  updateEventPlanDraftSourceTemplate,
 } from '../../lib/events/api';
-import type { EventItem, EventPlanDraftItem, EventPlanTemplate, EventWorkbench } from '../../lib/events/types';
-import EventTemplateManagerModal from './EventTemplateManagerModal';
+import {
+  createEventArrangementAppointment,
+  createEventArrangementTask,
+  deleteEventArrangementAppointment,
+  deleteEventArrangementTask,
+  updateEventArrangementAppointment,
+  updateEventArrangementTask,
+} from '../../lib/events/arrangementApi';
+import type { EventItem, EventWorkbench } from '../../lib/events/types';
+import type { Appointment, Task } from '../taskTypes';
 
 type EventWorkbenchModalProps = {
   event: EventItem;
@@ -32,6 +32,12 @@ type EventEditFormState = {
   isPrimary: boolean;
 };
 
+type ArrangementKind = 'task' | 'appointment';
+
+type EditingArrangement =
+  | { kind: 'task'; item: Task }
+  | { kind: 'appointment'; item: Appointment };
+
 const EMPTY_EVENT_EDIT_FORM: EventEditFormState = {
   name: '',
   startDate: '',
@@ -43,18 +49,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [showTemplateManager, setShowTemplateManager] = useState(false);
-  const [editingItem, setEditingItem] = useState<EventPlanDraftItem | null>(null);
-  const [newDraftKind, setNewDraftKind] = useState<EventPlanDraftItem['kind'] | null>(null);
-  const [draftTitle, setDraftTitle] = useState('');
-  const [draftContent, setDraftContent] = useState('');
-  const [draftTime, setDraftTime] = useState('');
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [saveTemplateName, setSaveTemplateName] = useState('');
-  const [saveTemplateDescription, setSaveTemplateDescription] = useState('');
-  const [saveTemplateMode, setSaveTemplateMode] = useState<'from_start' | 'before_due'>('before_due');
+  const [editingArrangement, setEditingArrangement] = useState<EditingArrangement | null>(null);
+  const [newArrangementKind, setNewArrangementKind] = useState<ArrangementKind | null>(null);
+  const [arrangementTitle, setArrangementTitle] = useState('');
+  const [arrangementContent, setArrangementContent] = useState('');
+  const [arrangementTime, setArrangementTime] = useState('');
   const [achievementSummary, setAchievementSummary] = useState<AchievementSummary | null>(null);
   const [loadingAchievement, setLoadingAchievement] = useState(false);
   const [editingEventDetails, setEditingEventDetails] = useState(false);
@@ -82,19 +81,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     };
   }, [event.id]);
 
-  async function loadTemplates(): Promise<void> {
-    try {
-      const data = await listEventPlanTemplates();
-      setTemplates(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '模板加载失败');
-    }
-  }
-
-  useEffect(() => {
-    void loadTemplates();
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     setLoadingAchievement(true);
@@ -116,89 +102,129 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     };
   }, [event.id]);
 
-  async function handleGenerate(): Promise<void> {
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const nextWorkbench = await generateEventPlanDraft(event.id);
-      setWorkbench(nextWorkbench);
-      await Promise.resolve(onChanged?.());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '生成正式安排失败');
-    } finally {
-      setSubmitting(false);
-    }
+  function cancelArrangementEditor(): void {
+    setEditingArrangement(null);
+    setNewArrangementKind(null);
+    setArrangementTitle('');
+    setArrangementContent('');
+    setArrangementTime('');
   }
 
-  async function handleApplyTemplate(): Promise<void> {
-    if (submitting || !selectedTemplateId) return;
-    if (workbench?.plan_draft && !window.confirm('套用新事件模板会覆盖当前安排内容，确定继续吗？')) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const nextWorkbench = await applyEventPlanTemplate(event.id, selectedTemplateId);
-      setWorkbench(nextWorkbench);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '套用事件模板失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function beginEditDraftItem(item: EventPlanDraftItem): void {
-    setEditingItem(item);
-    setNewDraftKind(null);
-    setDraftTitle(item.title);
-    setDraftContent(item.content ?? '');
-    setDraftTime(toDateTimeLocalValue(item.kind === 'appointment' ? (item.ends_at ?? item.starts_at) : item.scheduled_for));
-  }
-
-  function beginAddDraftItem(kind: EventPlanDraftItem['kind']): void {
-    setEditingItem(null);
-    setNewDraftKind(kind);
-    setDraftTitle('');
-    setDraftContent('');
-    setDraftTime('');
+  function beginAddArrangement(kind: ArrangementKind): void {
+    setEditingArrangement(null);
+    setNewArrangementKind(kind);
+    setArrangementTitle('');
+    setArrangementContent('');
+    setArrangementTime('');
     setError(null);
   }
 
-  function cancelDraftEditor(): void {
-    setEditingItem(null);
-    setNewDraftKind(null);
-    setDraftTitle('');
-    setDraftContent('');
-    setDraftTime('');
+  function beginEditArrangement(next: EditingArrangement): void {
+    setEditingArrangement(next);
+    setNewArrangementKind(null);
+    setArrangementTitle(next.item.title);
+    setArrangementContent(next.item.content ?? '');
+    setArrangementTime(toDateTimeLocalValue(next.kind === 'appointment' ? next.item.ends_at : next.item.due_date));
+    setError(null);
   }
 
-  async function handleSaveDraftItem(): Promise<void> {
-    const draftKind = editingItem?.kind ?? newDraftKind;
-    if (submitting || !draftKind) return;
-    const title = draftTitle.trim();
+  function appendTask(task: Task): void {
+    setWorkbench((current) => (
+      current
+        ? {
+          ...current,
+          created_tasks: current.created_tasks.some((item) => item.id === task.id)
+            ? current.created_tasks.map((item) => (item.id === task.id ? task : item))
+            : [...current.created_tasks, task],
+        }
+        : current
+    ));
+  }
+
+  function replaceTask(task: Task): void {
+    setWorkbench((current) => (
+      current
+        ? { ...current, created_tasks: current.created_tasks.map((item) => (item.id === task.id ? task : item)) }
+        : current
+    ));
+  }
+
+  function removeTask(taskId: string): void {
+    setWorkbench((current) => (
+      current ? { ...current, created_tasks: current.created_tasks.filter((item) => item.id !== taskId) } : current
+    ));
+  }
+
+  function appendAppointment(appointment: Appointment): void {
+    setWorkbench((current) => (
+      current
+        ? {
+          ...current,
+          created_appointments: current.created_appointments.some((item) => item.id === appointment.id)
+            ? current.created_appointments.map((item) => (item.id === appointment.id ? appointment : item))
+            : [...current.created_appointments, appointment],
+        }
+        : current
+    ));
+  }
+
+  function replaceAppointment(appointment: Appointment): void {
+    setWorkbench((current) => (
+      current
+        ? {
+          ...current,
+          created_appointments: current.created_appointments.map((item) => (
+            item.id === appointment.id ? appointment : item
+          )),
+        }
+        : current
+    ));
+  }
+
+  function removeAppointment(appointmentId: string): void {
+    setWorkbench((current) => (
+      current
+        ? { ...current, created_appointments: current.created_appointments.filter((item) => item.id !== appointmentId) }
+        : current
+    ));
+  }
+
+  async function handleSaveArrangement(): Promise<void> {
+    const kind = editingArrangement?.kind ?? newArrangementKind;
+    if (submitting || !kind) return;
+    const title = arrangementTitle.trim();
     if (!title) {
-      setError(`请输入${draftKind === 'appointment' ? '日程' : '任务'}标题`);
+      setError(`请输入${kind === 'appointment' ? '日程' : '任务'}标题`);
       return;
     }
-    const isoTime = fromDateTimeLocalValue(draftTime);
+    const isoTime = fromDateTimeLocalValue(arrangementTime);
+    if (kind === 'appointment' && !isoTime) {
+      setError('请选择日程时间');
+      return;
+    }
+    const payload = {
+      title,
+      content: arrangementContent.trim() || null,
+      time: isoTime,
+    };
     setSubmitting(true);
     setError(null);
     try {
-      const payload = {
-        title,
-        content: draftContent.trim() || null,
-        ...(draftKind === 'appointment'
-          ? { ends_at: isoTime, starts_at: null }
-          : { scheduled_for: isoTime }),
-      };
-      const nextWorkbench = editingItem
-        ? await updateEventPlanDraftItem(event.id, editingItem.id, payload)
-        : await createEventPlanDraftItem(event.id, {
-          kind: draftKind,
-          ...payload,
-          sort_order: draftItems.length,
-        });
-      setWorkbench(nextWorkbench);
-      cancelDraftEditor();
+      if (kind === 'task') {
+        if (editingArrangement?.kind === 'task') {
+          replaceTask(await updateEventArrangementTask(currentEvent, editingArrangement.item.id, payload));
+        } else {
+          appendTask(await createEventArrangementTask(currentEvent, payload));
+        }
+      } else if (isoTime) {
+        if (editingArrangement?.kind === 'appointment') {
+          replaceAppointment(await updateEventArrangementAppointment(currentEvent, editingArrangement.item.id, payload));
+        } else {
+          appendAppointment(await createEventArrangementAppointment(currentEvent, payload));
+        }
+      }
+      cancelArrangementEditor();
+      await Promise.resolve(onChanged?.());
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存安排内容失败');
     } finally {
@@ -206,15 +232,21 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
-  async function handleDeleteDraftItem(item: EventPlanDraftItem): Promise<void> {
+  async function handleDeleteArrangement(target: EditingArrangement): Promise<void> {
     if (submitting) return;
-    if (!window.confirm(`确定删除“${item.title}”吗？`)) return;
+    if (!window.confirm(`确定删除“${target.item.title}”吗？`)) return;
     setSubmitting(true);
     setError(null);
     try {
-      const nextWorkbench = await deleteEventPlanDraftItem(event.id, item.id);
-      setWorkbench(nextWorkbench);
-      if (editingItem?.id === item.id) cancelDraftEditor();
+      if (target.kind === 'task') {
+        await deleteEventArrangementTask(target.item.id);
+        removeTask(target.item.id);
+      } else {
+        await deleteEventArrangementAppointment(target.item.id);
+        removeAppointment(target.item.id);
+      }
+      cancelArrangementEditor();
+      await Promise.resolve(onChanged?.());
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除安排内容失败');
     } finally {
@@ -222,53 +254,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
-  async function handleSaveAsTemplate(): Promise<void> {
-    if (submitting) return;
-    const name = saveTemplateName.trim();
-    if (!name) {
-      setError('请输入新模板名称');
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await saveEventPlanDraftAsTemplate(event.id, {
-        name,
-        description: saveTemplateDescription.trim() || null,
-        schedule_mode: saveTemplateMode,
-      });
-      setShowSaveTemplate(false);
-      setSaveTemplateName('');
-      setSaveTemplateDescription('');
-      await loadTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '另存事件模板失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleUpdateSourceTemplate(): Promise<void> {
-    if (submitting || !workbench?.plan_draft?.source_template_id) return;
-    if (!window.confirm('确定用当前安排内容覆盖源模板吗？')) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await updateEventPlanDraftSourceTemplate(event.id);
-      await loadTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '回写源模板失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const currentEvent = workbench?.event ?? event;
   const eventAchievements = achievementSummary?.event_achievements ?? null;
-  const draftItems = workbench?.plan_draft?.items ?? [];
-  const taskDrafts = draftItems.filter((item) => item.kind === 'task');
-  const appointmentDrafts = draftItems.filter((item) => item.kind === 'appointment');
-  const sourceTemplateName = templates.find((template) => template.id === workbench?.plan_draft?.source_template_id)?.name;
+  const taskArrangements = workbench?.created_tasks ?? [];
+  const appointmentArrangements = workbench?.created_appointments ?? [];
 
   function beginEditEventDetails(): void {
     setEditingEventDetails(true);
@@ -362,19 +351,19 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
-  function renderDraftEditor(kind: EventPlanDraftItem['kind']) {
-    const activeKind = editingItem?.kind ?? newDraftKind;
+  function renderArrangementEditor(kind: ArrangementKind) {
+    const activeKind = editingArrangement?.kind ?? newArrangementKind;
     if (activeKind !== kind) return null;
     const label = kind === 'appointment' ? '日程' : '任务';
-    const timeValue = fromDateTimeLocalValue(draftTime);
+    const timeValue = fromDateTimeLocalValue(arrangementTime);
     return (
       <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
         <label className="grid gap-1 text-xs text-white/60">
           {label}标题
           <input
             aria-label={`${label}标题`}
-            value={draftTitle}
-            onChange={(changeEvent) => setDraftTitle(changeEvent.target.value)}
+            value={arrangementTitle}
+            onChange={(changeEvent) => setArrangementTitle(changeEvent.target.value)}
             className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
           />
         </label>
@@ -382,8 +371,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           {label}备注
           <textarea
             aria-label={`${label}备注`}
-            value={draftContent}
-            onChange={(changeEvent) => setDraftContent(changeEvent.target.value)}
+            value={arrangementContent}
+            onChange={(changeEvent) => setArrangementContent(changeEvent.target.value)}
             className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
           />
         </label>
@@ -392,17 +381,17 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           <input
             aria-label={`${label}时间`}
             type="datetime-local"
-            value={draftTime}
-            onChange={(changeEvent) => setDraftTime(changeEvent.target.value)}
+            value={arrangementTime}
+            onChange={(changeEvent) => setArrangementTime(changeEvent.target.value)}
             className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
           />
         </label>
         {timeValue ? <div className="text-xs text-white/45">时间预览 {formatEventDateTime(timeValue)}</div> : null}
         <div className="flex flex-wrap justify-end gap-2">
-          {editingItem ? (
+          {editingArrangement ? (
             <button
               type="button"
-              onClick={() => void handleDeleteDraftItem(editingItem)}
+              onClick={() => void handleDeleteArrangement(editingArrangement)}
               className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
             >
               删除{label}
@@ -410,14 +399,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           ) : null}
           <button
             type="button"
-            onClick={cancelDraftEditor}
+            onClick={cancelArrangementEditor}
             className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
           >
             取消
           </button>
           <button
             type="button"
-            onClick={() => void handleSaveDraftItem()}
+            onClick={() => void handleSaveArrangement()}
             disabled={submitting}
             className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
           >
@@ -428,34 +417,37 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     );
   }
 
-  function renderDraftItem(item: EventPlanDraftItem) {
+  function renderArrangementButton(target: EditingArrangement) {
     return (
       <button
-        key={item.id}
+        key={target.item.id}
         type="button"
-        onClick={() => beginEditDraftItem(item)}
+        onClick={() => beginEditArrangement(target)}
         className="min-h-10 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
       >
-        {item.title}
+        {target.item.title}
       </button>
     );
   }
 
-  function renderDraftColumn(kind: EventPlanDraftItem['kind'], items: EventPlanDraftItem[]) {
+  function renderArrangementColumn(kind: ArrangementKind, items: Task[] | Appointment[]) {
     const label = kind === 'appointment' ? '日程' : '任务';
     return (
-      <div className="flex min-h-[160px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
+      <div className="flex min-h-[180px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <div className="text-sm font-medium text-white/80">{label}</div>
         <div className="mt-3 grid flex-1 content-start gap-2">
-          {items.map((item) => (
-            editingItem?.id === item.id ? (
-              <div key={item.id}>{renderDraftEditor(kind)}</div>
-            ) : renderDraftItem(item)
-          ))}
-          {newDraftKind === kind ? renderDraftEditor(kind) : null}
+          {items.map((item) => {
+            const target = kind === 'task'
+              ? { kind: 'task' as const, item: item as Task }
+              : { kind: 'appointment' as const, item: item as Appointment };
+            return editingArrangement?.item.id === item.id ? (
+              <div key={item.id}>{renderArrangementEditor(kind)}</div>
+            ) : renderArrangementButton(target);
+          })}
+          {newArrangementKind === kind ? renderArrangementEditor(kind) : null}
           <button
             type="button"
-            onClick={() => beginAddDraftItem(kind)}
+            onClick={() => beginAddArrangement(kind)}
             className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-left text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
           >
             添加{label}
@@ -600,162 +592,15 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           </section>
 
           <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-              <div className="flex-1">
-                <label className="text-sm font-medium text-white/80">选择事件模板</label>
-                <select
-                  aria-label="选择事件模板"
-                  value={selectedTemplateId}
-                  onChange={(changeEvent) => setSelectedTemplateId(changeEvent.target.value)}
-                  className="mt-2 w-full rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                >
-                  <option value="">请选择模板</option>
-                  {templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleApplyTemplate()}
-                disabled={submitting || !selectedTemplateId}
-                className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                套用模板
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowTemplateManager(true)}
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
-              >
-                模板工作台
-              </button>
+            <div>
+              <h3 className="text-base font-semibold">安排内容</h3>
+              <p className="mt-1 text-sm text-white/50">直接管理当前事件下的任务和日程</p>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {renderArrangementColumn('task', taskArrangements)}
+              {renderArrangementColumn('appointment', appointmentArrangements)}
             </div>
           </section>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
-            <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold">安排内容</h3>
-                  <p className="mt-1 text-sm text-white/50">
-                    {sourceTemplateName ? `来自事件模板：${sourceTemplateName}` : '暂无模板来源'}
-                  </p>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowSaveTemplate(true)}
-                    disabled={submitting || draftItems.length === 0}
-                    className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    另存为事件模板
-                  </button>
-                  {workbench?.plan_draft?.source_template_id ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleUpdateSourceTemplate()}
-                      disabled={submitting || draftItems.length === 0}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      回写源模板
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void handleGenerate()}
-                    disabled={submitting || draftItems.length === 0}
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {submitting ? '处理中...' : '生成正式安排'}
-                  </button>
-                </div>
-              </div>
-
-              {showSaveTemplate ? (
-                <div className="mt-4 grid gap-3 rounded-lg border border-amber-200/20 bg-amber-300/10 p-3">
-                  <div className="text-sm font-medium text-amber-100">另存当前安排内容</div>
-                  <label className="grid gap-1 text-xs text-white/60">
-                    新事件模板名称
-                    <input
-                      value={saveTemplateName}
-                      onChange={(changeEvent) => setSaveTemplateName(changeEvent.target.value)}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs text-white/60">
-                    新事件模板说明
-                    <textarea
-                      value={saveTemplateDescription}
-                      onChange={(changeEvent) => setSaveTemplateDescription(changeEvent.target.value)}
-                      className="min-h-14 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs text-white/60">
-                    相对时间模式
-                    <select
-                      value={saveTemplateMode}
-                      onChange={(changeEvent) => setSaveTemplateMode(changeEvent.target.value as 'from_start' | 'before_due')}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                    >
-                      <option value="before_due">从截止时间倒推</option>
-                      <option value="from_start">从开始日期顺推</option>
-                    </select>
-                  </label>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowSaveTemplate(false)}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveAsTemplate()}
-                      disabled={submitting}
-                      className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-black hover:bg-amber-200 disabled:opacity-50"
-                    >
-                      确认另存事件模板
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {renderDraftColumn('task', taskDrafts)}
-                {renderDraftColumn('appointment', appointmentDrafts)}
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-              <h3 className="text-base font-semibold">已创建安排</h3>
-              <div className="mt-4 grid gap-3">
-                <div>
-                  <h4 className="text-sm font-medium text-blue-200">已创建任务</h4>
-                  <div className="mt-2 grid gap-2">
-                    {workbench?.created_tasks.length ? workbench.created_tasks.map((task) => (
-                      <div key={task.id} className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm">
-                        {task.title}
-                      </div>
-                    )) : <div className="text-sm text-white/40">暂无已创建任务</div>}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-teal-200">已创建日程</h4>
-                  <div className="mt-2 grid gap-2">
-                    {workbench?.created_appointments.length ? workbench.created_appointments.map((appointment) => (
-                      <div key={appointment.id} className="rounded-lg bg-white/[0.05] px-3 py-2 text-sm">
-                        {appointment.title}
-                      </div>
-                    )) : <div className="text-sm text-white/40">暂无已创建日程</div>}
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
 
           <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <h3 className="text-base font-semibold">成就摘要</h3>
@@ -789,13 +634,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           </section>
         </div>
       </div>
-      {showTemplateManager ? (
-        <EventTemplateManagerModal
-          templates={templates}
-          onClose={() => setShowTemplateManager(false)}
-          onChanged={loadTemplates}
-        />
-      ) : null}
     </div>
   );
 }
