@@ -2,16 +2,26 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 import {
+  createEventPlanTemplate,
   createEvent,
   createEventPlanDraftItem,
   getPrimaryEvent,
+  listEventPlanTemplates,
   listEvents,
+  updateEventPlanTemplate,
   type EventCreateInput,
   type EventPlanDraftItemCreateInput,
+  type EventPlanTemplateInput,
+  type EventPlanTemplateItemInput,
 } from '../lib/events/api';
-import { formatEventDateTime, getCountdownDisplay, getCountdownTone } from '../lib/events/dateTime';
+import {
+  formatEventDateTime,
+  fromDateTimeLocalValue,
+  getCountdownDisplay,
+  getCountdownTone,
+} from '../lib/events/dateTime';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
-import type { EventItem } from '../lib/events/types';
+import type { EventItem, EventPlanTemplate } from '../lib/events/types';
 
 type EventFormState = {
   name: string;
@@ -25,6 +35,11 @@ type CreateWorkbenchItemState = {
   title: string;
   content: string;
   offsetDays: number;
+};
+
+type TemplateConflictState = {
+  template: EventPlanTemplate;
+  payload: EventPlanTemplateInput;
 };
 
 const CREATE_EVENT_DEFAULTS: EventFormState = {
@@ -46,6 +61,9 @@ const EventCountdownCard: React.FC = () => {
   const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateStatus, setTemplateStatus] = useState<string | null>(null);
+  const [templateConflict, setTemplateConflict] = useState<TemplateConflictState | null>(null);
 
   useEffect(() => {
     void loadPrimaryEvent();
@@ -133,11 +151,14 @@ const EventCountdownCard: React.FC = () => {
   function resetCreateForm(): void {
     setCreateForm(CREATE_EVENT_DEFAULTS);
     setCreateWorkbenchItems([]);
+    setTemplateStatus(null);
+    setTemplateConflict(null);
   }
 
   function beginCreate(): void {
     setShowCreateEditor(true);
     setError(null);
+    setTemplateStatus(null);
   }
 
   function cancelCreate(): void {
@@ -200,6 +221,97 @@ const EventCountdownCard: React.FC = () => {
         }
       }
       await createEventPlanDraftItem(eventId, payload);
+    }
+  }
+
+  function buildTemplateItems(): EventPlanTemplateItemInput[] | null {
+    const items = createWorkbenchItems.map((item, index) => ({
+      kind: item.kind,
+      title: item.title.trim(),
+      content: item.content.trim() || null,
+      offset_days: Math.max(0, Math.floor(item.offsetDays || 0)),
+      sort_order: index,
+    }));
+    if (items.some((item) => !item.title)) {
+      setError('请输入工作台内容标题');
+      return null;
+    }
+    return items;
+  }
+
+  function buildTemplatePayload(): EventPlanTemplateInput | null {
+    const name = createForm.name.trim();
+    if (!name) {
+      setError('请输入事件名称');
+      return null;
+    }
+    const items = buildTemplateItems();
+    if (!items) return null;
+    return {
+      name,
+      description: null,
+      schedule_mode: 'before_due',
+      default_event_name: name,
+      default_start_date: createForm.startDate || null,
+      default_due_at: fromDateTimeLocalValue(createForm.dueAt),
+      default_is_primary: createForm.isPrimary,
+      items,
+    };
+  }
+
+  async function handleSaveTemplate(): Promise<void> {
+    if (savingTemplate) return;
+    const payload = buildTemplatePayload();
+    if (!payload) return;
+
+    setSavingTemplate(true);
+    setError(null);
+    setTemplateStatus(null);
+    try {
+      const templates = await listEventPlanTemplates();
+      const sameNameTemplate = templates.find((template) => template.name.trim() === payload.name);
+      if (sameNameTemplate) {
+        setTemplateConflict({ template: sameNameTemplate, payload });
+        return;
+      }
+      await createEventPlanTemplate(payload);
+      setTemplateStatus('已保存为模板');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存模板失败');
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function saveConflictAsNewTemplate(): Promise<void> {
+    if (!templateConflict || savingTemplate) return;
+    setSavingTemplate(true);
+    setError(null);
+    setTemplateStatus(null);
+    try {
+      await createEventPlanTemplate(templateConflict.payload);
+      setTemplateConflict(null);
+      setTemplateStatus('已保存为模板');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存模板失败');
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function updateConflictTemplate(): Promise<void> {
+    if (!templateConflict || savingTemplate) return;
+    setSavingTemplate(true);
+    setError(null);
+    setTemplateStatus(null);
+    try {
+      await updateEventPlanTemplate(templateConflict.template.id, templateConflict.payload);
+      setTemplateConflict(null);
+      setTemplateStatus('已更新模板');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新模板失败');
+    } finally {
+      setSavingTemplate(false);
     }
   }
 
@@ -298,6 +410,7 @@ const EventCountdownCard: React.FC = () => {
 
             <div className="flex-1 p-5 overflow-y-auto">
               {error ? <div className="mb-4 text-sm text-red-400">{error}</div> : null}
+              {templateStatus ? <div className="mb-4 text-sm text-emerald-300">{templateStatus}</div> : null}
 
               {showCreateEditor ? (
                 <div className="flex flex-col gap-4">
@@ -435,15 +548,23 @@ const EventCountdownCard: React.FC = () => {
                       <button
                         type="button"
                         onClick={cancelCreate}
-                        disabled={submitting}
+                        disabled={submitting || savingTemplate}
                         className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
                       >
                         取消
                       </button>
                       <button
                         type="button"
+                        onClick={() => void handleSaveTemplate()}
+                        disabled={submitting || savingTemplate}
+                        className="px-3 py-2 rounded-lg border border-blue-300/20 bg-blue-500/10 text-blue-100 hover:bg-blue-500/20 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {savingTemplate ? '保存中...' : '保存为模板'}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => void handleCreateEvent()}
-                        disabled={submitting}
+                        disabled={submitting || savingTemplate}
                         className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         {submitting ? '提交中...' : '创建事件'}
@@ -516,6 +637,53 @@ const EventCountdownCard: React.FC = () => {
           onClose={() => setWorkbenchEvent(null)}
           onChanged={refreshAll}
         />
+      ) : null}
+
+      {templateConflict ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+          onClick={() => setTemplateConflict(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="同名模板已存在"
+            className="w-[420px] max-w-[94vw] rounded-2xl border border-white/10 bg-[#151923] p-5 text-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold">同名模板已存在</h3>
+            <p className="mt-3 text-sm leading-6 text-white/65">
+              已经有名为 <span className="font-medium text-white">{templateConflict.template.name}</span> 的事件模板。
+              你可以更新这个模板，或者保留它并保存为新的模板。
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTemplateConflict(null)}
+                disabled={savingTemplate}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveConflictAsNewTemplate()}
+                disabled={savingTemplate}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                保存为新模板
+              </button>
+              <button
+                type="button"
+                onClick={() => void updateConflictTemplate()}
+                disabled={savingTemplate}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                更新模板
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
     </>

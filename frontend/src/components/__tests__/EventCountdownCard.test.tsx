@@ -296,6 +296,120 @@ describe('EventCountdownCard', () => {
     );
   });
 
+  it('saves the add-event editor as a new event template', async () => {
+    const user = userEvent.setup();
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates' && !options) return [];
+      if (url === '/todo/event-plan-templates' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          name: '高数期末',
+          schedule_mode: 'before_due',
+          default_event_name: '高数期末',
+          default_start_date: '2026-05-20',
+          default_due_at: expect.any(String),
+          default_is_primary: true,
+          items: [
+            {
+              kind: 'task',
+              title: '准备资料',
+              content: '先整理清单',
+              offset_days: 3,
+              sort_order: 0,
+            },
+          ],
+        });
+        return {
+          id: 'template-2',
+          user_id: 7,
+          name: '高数期末',
+          description: null,
+          schedule_mode: 'before_due',
+          default_event_name: '高数期末',
+          default_start_date: '2026-05-20',
+          default_due_at: '2026-06-20T10:00:00.000Z',
+          default_is_primary: true,
+          items: [],
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    await user.type(screen.getByLabelText('事件名称'), '高数期末');
+    await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
+    await user.type(screen.getByLabelText('到期时间'), '2026-06-20T10:00');
+    await user.click(screen.getByRole('button', { name: '添加工作台内容' }));
+    await user.type(screen.getByLabelText('内容标题'), '准备资料');
+    await user.type(screen.getByLabelText('内容备注'), '先整理清单');
+    await user.clear(screen.getByLabelText('相对天数'));
+    await user.type(screen.getByLabelText('相对天数'), '3');
+    await user.click(screen.getByRole('button', { name: '保存为模板' }));
+
+    expect(await screen.findByText('已保存为模板')).toBeInTheDocument();
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/event-plan-templates',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('asks before updating an existing template with the same name', async () => {
+    const user = userEvent.setup();
+    const existingTemplate = {
+      id: 'template-1',
+      user_id: 7,
+      name: '高数期末',
+      description: null,
+      schedule_mode: 'before_due' as const,
+      default_event_name: '旧名称',
+      default_start_date: null,
+      default_due_at: null,
+      default_is_primary: false,
+      items: [],
+      created_at: '2026-05-18T00:00:00Z',
+      updated_at: '2026-05-18T00:00:00Z',
+    };
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates' && !options) return [existingTemplate];
+      if (url === '/todo/event-plan-templates/template-1' && options?.method === 'PATCH') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          name: '高数期末',
+          default_event_name: '高数期末',
+          default_start_date: '2026-05-20',
+          items: [],
+        });
+        return { ...existingTemplate, default_event_name: '高数期末', default_start_date: '2026-05-20' };
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    await user.type(screen.getByLabelText('事件名称'), '高数期末');
+    await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
+    await user.click(screen.getByRole('button', { name: '保存为模板' }));
+
+    const conflictDialog = await screen.findByRole('dialog', { name: '同名模板已存在' });
+    expect(within(conflictDialog).getByText('高数期末')).toBeInTheDocument();
+    await user.click(within(conflictDialog).getByRole('button', { name: '更新模板' }));
+
+    expect(await screen.findByText('已更新模板')).toBeInTheDocument();
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/event-plan-templates/template-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
   it('opens the overview first when clicking the primary event', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
