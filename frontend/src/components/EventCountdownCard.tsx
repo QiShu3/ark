@@ -4,11 +4,9 @@ import { Settings } from 'lucide-react';
 import {
   applyEventPlanTemplate,
   createEvent,
-  deleteEvent,
   getPrimaryEvent,
   listEventPlanTemplates,
   listEvents,
-  updateEvent,
   updateEventPlanDraftItem,
   type EventCreateInput,
   type EventPlanDraftItemInput,
@@ -47,7 +45,6 @@ const EventCountdownCard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [workbenchEvent, setWorkbenchEvent] = useState<EventItem | null>(null);
   const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -56,7 +53,6 @@ const EventCountdownCard: React.FC = () => {
   const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
-  const [editForm, setEditForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
 
   useEffect(() => {
     void loadPrimaryEvent();
@@ -204,7 +200,6 @@ const EventCountdownCard: React.FC = () => {
 
   function beginCreate(): void {
     const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-    setEditingEventId(null);
     setCreateWorkbenchItems(buildCreateWorkbenchItems(selectedTemplate));
     setCreateForm((state) => {
       if (state.name || state.startDate || state.dueAt || state.isPrimary !== CREATE_EVENT_DEFAULTS.isPrimary) {
@@ -219,30 +214,14 @@ const EventCountdownCard: React.FC = () => {
   function cancelCreate(): void {
     setShowCreateEditor(false);
     resetCreateForm();
+    setSelectedTemplateId('');
     setError(null);
   }
 
   function closeModal(): void {
     setShowModal(false);
     cancelCreate();
-    cancelEdit();
-  }
-
-  function beginEdit(event: EventItem): void {
-    setEditingEventId(event.id);
-    setShowCreateEditor(false);
-    setEditForm({
-      name: event.name,
-      startDate: event.start_date,
-      dueAt: toDateTimeLocalValue(event.due_at),
-      isPrimary: event.is_primary,
-    });
-    setError(null);
-  }
-
-  function cancelEdit(): void {
-    setEditingEventId(null);
-    setEditForm(CREATE_EVENT_DEFAULTS);
+    setShowTemplateManager(false);
     setError(null);
   }
 
@@ -272,9 +251,9 @@ const EventCountdownCard: React.FC = () => {
   async function finishCreatedEvent(event: EventItem): Promise<void> {
     resetCreateForm();
     setShowCreateEditor(false);
-    cancelEdit();
     setSelectedTemplateId('');
     setShowModal(false);
+    setShowTemplateManager(false);
     await refreshAll();
     setWorkbenchEvent(event);
   }
@@ -308,18 +287,13 @@ const EventCountdownCard: React.FC = () => {
     return nextWorkbench;
   }
 
-  async function submitCreateEvent(requireTemplate: boolean): Promise<void> {
+  async function submitCreateEvent(): Promise<void> {
     if (submitting) return;
     const payload = buildCreatePayload();
     if (!payload) {
-      if (requireTemplate) setShowCreateEditor(true);
       return;
     }
     const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-    if (requireTemplate && !selectedTemplate) {
-      setError('请选择事件模板');
-      return;
-    }
     const workbenchItems = selectedTemplate
       ? (createWorkbenchItems.length ? createWorkbenchItems : buildCreateWorkbenchItems(selectedTemplate))
       : [];
@@ -341,87 +315,14 @@ const EventCountdownCard: React.FC = () => {
       }
       await finishCreatedEvent(createdEvent);
     } catch (err) {
-      setError(err instanceof Error ? err.message : requireTemplate ? '套用模板失败' : '创建事件失败');
+      setError(err instanceof Error ? err.message : '创建事件失败');
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleCreateEvent(): Promise<void> {
-    await submitCreateEvent(Boolean(selectedTemplateId));
-  }
-
-  async function handleCreateWithTemplate(): Promise<void> {
-    await submitCreateEvent(true);
-  }
-
-  async function handleSaveEdit(): Promise<void> {
-    if (submitting || !editingEventId) return;
-    const name = editForm.name.trim();
-    if (!name) {
-      setError('请输入事件名称');
-      return;
-    }
-    if (!editForm.startDate) {
-      setError('请选择开始日期');
-      return;
-    }
-    if (!editForm.dueAt) {
-      setError('请选择到期时间');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      await updateEvent(editingEventId, {
-        name,
-        start_date: editForm.startDate,
-        due_at: new Date(editForm.dueAt).toISOString(),
-        is_primary: editForm.isPrimary,
-      });
-      cancelEdit();
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '编辑事件失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleSetPrimary(eventId: string): Promise<void> {
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await updateEvent(eventId, { is_primary: true });
-      if (editingEventId === eventId) {
-        cancelEdit();
-      }
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '设置主事件失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleDeleteEvent(eventId: string): Promise<void> {
-    if (submitting) return;
-    if (!window.confirm('确定要删除这个事件吗？')) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await deleteEvent(eventId);
-      if (editingEventId === eventId) {
-        cancelEdit();
-      }
-      await refreshAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '删除事件失败');
-    } finally {
-      setSubmitting(false);
-    }
+    await submitCreateEvent();
   }
 
   const numberClassName =
@@ -432,16 +333,23 @@ const EventCountdownCard: React.FC = () => {
         : 'text-sky-300';
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
 
+  function openWorkbench(event: EventItem): void {
+    resetCreateForm();
+    setSelectedTemplateId('');
+    setShowCreateEditor(false);
+    setShowModal(false);
+    setShowTemplateManager(false);
+    setError(null);
+    setWorkbenchEvent(event);
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={() => {
           setError(null);
-          if (primaryEvent) {
-            setWorkbenchEvent(primaryEvent);
-            return;
-          }
+          setShowCreateEditor(false);
           setShowModal(true);
         }}
         className="absolute left-12 top-24 z-20 w-44 h-44 rounded-full border-[6px] border-white/30 bg-black/15 flex flex-col items-center justify-center text-white/90 shadow-[0_0_15px_rgba(255,255,255,0.2)] backdrop-blur-sm transition-colors hover:bg-black/30"
@@ -459,327 +367,228 @@ const EventCountdownCard: React.FC = () => {
           onClick={closeModal}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={showCreateEditor ? '添加事件' : '事件总览'}
             className="w-[760px] max-w-[94vw] h-[76vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-              <h3 className="text-lg font-bold text-white">事件编辑</h3>
+              <h3 className="text-lg font-bold text-white">
+                {showCreateEditor ? '添加事件' : '事件总览'}
+              </h3>
               <button
                 onClick={closeModal}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
-            </div>
-
-            <div className="border-b border-white/10 p-5 bg-white/[0.03]">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[220px] flex-1 flex flex-col gap-2">
-                  <label className="text-sm text-white/70">事件模板</label>
-                  <select
-                    aria-label="事件模板"
-                    value={selectedTemplateId}
-                    onChange={(event) => handleSelectTemplate(event.target.value)}
-                    disabled={loadingTemplates}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="">{loadingTemplates ? '模板加载中...' : '选择事件模板'}</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleCreateWithTemplate()}
-                  disabled={submitting || loadingTemplates || !selectedTemplateId}
-                  className="px-4 py-2 rounded-lg bg-amber-300 text-black font-semibold hover:bg-amber-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  套用模板
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowTemplateManager(true)}
-                  aria-label="进入模板工作台"
-                  title="进入模板工作台"
-                  className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <Settings size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={beginCreate}
-                  disabled={submitting || showCreateEditor}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  添加事件
-                </button>
-              </div>
             </div>
 
             <div className="flex-1 p-5 overflow-y-auto">
               {error ? <div className="mb-4 text-sm text-red-400">{error}</div> : null}
 
               {showCreateEditor ? (
-                <div className="mb-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-4">
-                  <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr_auto] md:items-end">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-sm text-white/70">事件名称</label>
-                      <input
-                        aria-label="事件名称"
-                        value={createForm.name}
-                        onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
-                        placeholder="例如：论文投稿截止"
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-sm text-white/70">开始日期</label>
-                      <input
-                        aria-label="开始日期"
-                        type="date"
-                        value={createForm.startDate}
-                        onChange={(event) => setCreateForm((state) => ({ ...state, startDate: event.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-sm text-white/70">到期时间</label>
-                      <input
-                        aria-label="到期时间"
-                        type="datetime-local"
-                        value={createForm.dueAt}
-                        onChange={(event) => setCreateForm((state) => ({ ...state, dueAt: event.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                      />
-                    </div>
-                    <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
-                      <input
-                        type="checkbox"
-                        checked={createForm.isPrimary}
-                        onChange={(event) => setCreateForm((state) => ({ ...state, isPrimary: event.target.checked }))}
-                        className="h-4 w-4 rounded border-white/20 bg-white/5"
-                      />
-                      设为主事件
-                    </label>
-                  </div>
-                  {selectedTemplate && createWorkbenchItems.length > 0 ? (
-                    <div className="grid gap-3 border-t border-blue-300/20 pt-4">
-                      <div className="text-sm font-medium text-blue-100">工作台内容</div>
-                      {createWorkbenchItems.map((item, index) => {
-                        const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
-                        return (
-                          <div
-                            key={`${item.kind}-${index}`}
-                            className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
-                          >
-                            <div className="grid gap-2 md:grid-cols-[76px_1fr_96px]">
-                              <div className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70">
-                                {item.kind === 'appointment' ? '日程' : '任务'}
-                              </div>
-                              <input
-                                aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
-                                value={item.title}
-                                onChange={(event) => updateCreateWorkbenchItem(index, { title: event.target.value })}
-                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                              <input
-                                aria-label={index === 0 ? '相对天数' : `相对天数 ${index + 1}`}
-                                type="number"
-                                min={0}
-                                value={item.offsetDays}
-                                onChange={(event) => updateCreateWorkbenchItem(index, {
-                                  offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                                })}
-                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                            </div>
-                            <input
-                              aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}
-                              value={item.content}
-                              onChange={(event) => updateCreateWorkbenchItem(index, { content: event.target.value })}
-                              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                            />
-                            {previewTime ? (
-                              <div className="text-xs text-white/45">
-                                时间预览 {formatEventDateTime(previewTime)}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={cancelCreate}
-                      disabled={submitting}
-                      className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleCreateEvent()}
-                      disabled={submitting}
-                      className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? '提交中...' : '创建事件'}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {loading ? (
-                <div className="h-full flex items-center justify-center text-white/35">加载中...</div>
-              ) : events.length === 0 && !showCreateEditor ? (
-                <div className="h-full flex items-center justify-center text-white/35">暂无事件</div>
-              ) : events.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {events.map((event) => {
-                    const isEditing = editingEventId === event.id;
-                    return (
-                      <div
-                        key={event.id}
-                        className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col gap-4"
-                      >
-                        {isEditing ? (
-                          <div className="grid grid-cols-[1.4fr_0.9fr_1.1fr_auto] gap-3 items-end">
-                            <div className="flex flex-col gap-2">
-                              <label className="text-sm text-white/70">事件名称</label>
-                              <input
-                                aria-label="编辑事件名称"
-                                value={editForm.name}
-                                onChange={(current) => setEditForm((state) => ({ ...state, name: current.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <label className="text-sm text-white/70">开始日期</label>
-                              <input
-                                aria-label="编辑开始日期"
-                                type="date"
-                                value={editForm.startDate}
-                                onChange={(current) => setEditForm((state) => ({ ...state, startDate: current.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <label className="text-sm text-white/70">到期时间</label>
-                              <input
-                                aria-label="编辑到期时间"
-                                type="datetime-local"
-                                value={editForm.dueAt}
-                                onChange={(current) => setEditForm((state) => ({ ...state, dueAt: current.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                              />
-                            </div>
-                            <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
-                              <input
-                                type="checkbox"
-                                checked={editForm.isPrimary}
-                                onChange={(current) => setEditForm((state) => ({ ...state, isPrimary: current.target.checked }))}
-                                className="h-4 w-4 rounded border-white/20 bg-white/5"
-                              />
-                              主事件
-                            </label>
-                          </div>
-                        ) : (
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg font-semibold text-white">{event.name}</span>
-                                {event.is_primary ? (
-                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20">
-                                    主事件
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div className="mt-2 text-sm text-white/55">
-                                创建于 {formatEventDateTime(event.created_at)}
-                              </div>
-                              <div className="mt-1 text-sm text-white/65">
-                                开始于 {event.start_date}
-                              </div>
-                              <div className="mt-1 text-sm text-white/75">
-                                到期于 {formatEventDateTime(event.due_at)}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className={`text-2xl font-bold ${getCountdownTone(event.due_at, nowMs) === 'due' ? 'bg-gradient-to-r from-cyan-300 via-violet-300 to-amber-300 bg-clip-text text-transparent' : getCountdownTone(event.due_at, nowMs) === 'expired' ? 'text-red-400' : 'text-sky-300'}`}>
-                                {getCountdownDisplay(event.due_at, nowMs)}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-end gap-2">
-                          {isEditing ? (
-                            <>
-                              <button
-                                onClick={cancelEdit}
-                                className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
-                                disabled={submitting}
-                              >
-                                取消
-                              </button>
-                              <button
-                                onClick={handleSaveEdit}
-                                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                                disabled={submitting}
-                              >
-                                保存
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => {
-                                  cancelEdit();
-                                  setShowModal(false);
-                                  setWorkbenchEvent(event);
-                                }}
-                                aria-label={`打开工作台：${event.name}`}
-                                className="px-3 py-2 rounded-lg bg-blue-600/90 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                                disabled={submitting}
-                              >
-                                打开工作台
-                              </button>
-                              <button
-                                onClick={() => void handleSetPrimary(event.id)}
-                                className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                                disabled={submitting || event.is_primary}
-                              >
-                                设为主事件
-                              </button>
-                              <button
-                                onClick={() => beginEdit(event)}
-                                className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
-                                disabled={submitting}
-                              >
-                                编辑
-                              </button>
-                              <button
-                                onClick={() => void handleDeleteEvent(event.id)}
-                                className="px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-300 transition-colors"
-                                disabled={submitting}
-                              >
-                                删除
-                              </button>
-                            </>
-                          )}
-                        </div>
+                <div className="flex flex-col gap-4">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="min-w-[220px] flex-1 flex flex-col gap-2">
+                        <label className="text-sm text-white/70">事件模板</label>
+                        <select
+                          aria-label="事件模板"
+                          value={selectedTemplateId}
+                          onChange={(event) => handleSelectTemplate(event.target.value)}
+                          disabled={loadingTemplates}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <option value="">{loadingTemplates ? '模板加载中...' : '选择事件模板'}</option>
+                          {templates.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    );
-                  })}
+                      <button
+                        type="button"
+                        onClick={() => setShowTemplateManager(true)}
+                        aria-label="进入模板工作台"
+                        title="进入模板工作台"
+                        className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                      >
+                        <Settings size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-4">
+                    <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr_auto] md:items-end">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">事件名称</label>
+                        <input
+                          aria-label="事件名称"
+                          value={createForm.name}
+                          onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
+                          placeholder="例如：论文投稿截止"
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">开始日期</label>
+                        <input
+                          aria-label="开始日期"
+                          type="date"
+                          value={createForm.startDate}
+                          onChange={(event) => setCreateForm((state) => ({ ...state, startDate: event.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm text-white/70">到期时间</label>
+                        <input
+                          aria-label="到期时间"
+                          type="datetime-local"
+                          value={createForm.dueAt}
+                          onChange={(event) => setCreateForm((state) => ({ ...state, dueAt: event.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
+                        <input
+                          type="checkbox"
+                          checked={createForm.isPrimary}
+                          onChange={(event) => setCreateForm((state) => ({ ...state, isPrimary: event.target.checked }))}
+                          className="h-4 w-4 rounded border-white/20 bg-white/5"
+                        />
+                        设为主事件
+                      </label>
+                    </div>
+
+                    {selectedTemplate && createWorkbenchItems.length > 0 ? (
+                      <div className="grid gap-3 border-t border-blue-300/20 pt-4">
+                        <div className="text-sm font-medium text-blue-100">工作台内容</div>
+                        {createWorkbenchItems.map((item, index) => {
+                          const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
+                          return (
+                            <div
+                              key={`${item.kind}-${index}`}
+                              className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
+                            >
+                              <div className="grid gap-2 md:grid-cols-[76px_1fr_96px]">
+                                <div className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70">
+                                  {item.kind === 'appointment' ? '日程' : '任务'}
+                                </div>
+                                <input
+                                  aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
+                                  value={item.title}
+                                  onChange={(event) => updateCreateWorkbenchItem(index, { title: event.target.value })}
+                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                />
+                                <input
+                                  aria-label={index === 0 ? '相对天数' : `相对天数 ${index + 1}`}
+                                  type="number"
+                                  min={0}
+                                  value={item.offsetDays}
+                                  onChange={(event) => updateCreateWorkbenchItem(index, {
+                                    offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                                  })}
+                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                />
+                              </div>
+                              <input
+                                aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}
+                                value={item.content}
+                                onChange={(event) => updateCreateWorkbenchItem(index, { content: event.target.value })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              />
+                              {previewTime ? (
+                                <div className="text-xs text-white/45">
+                                  时间预览 {formatEventDateTime(previewTime)}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelCreate}
+                        disabled={submitting}
+                        className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCreateEvent()}
+                        disabled={submitting}
+                        className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {submitting ? '提交中...' : '创建事件'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ) : null}
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {loading ? (
+                    <div className="h-full min-h-[160px] flex items-center justify-center text-white/35">加载中...</div>
+                  ) : events.length === 0 ? (
+                    <div className="h-full min-h-[160px] flex items-center justify-center text-white/35">暂无事件</div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {events.map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => openWorkbench(event)}
+                          className="rounded-xl border border-white/10 bg-white/5 p-4 flex items-start justify-between gap-4 text-left hover:bg-white/10 transition-colors"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-semibold text-white">{event.name}</span>
+                              {event.is_primary ? (
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20">
+                                  主事件
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 text-sm text-white/55">
+                              创建于 {formatEventDateTime(event.created_at)}
+                            </div>
+                            <div className="mt-1 text-sm text-white/65">
+                              开始于 {event.start_date}
+                            </div>
+                            <div className="mt-1 text-sm text-white/75">
+                              到期于 {formatEventDateTime(event.due_at)}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-2xl font-bold ${getCountdownTone(event.due_at, nowMs) === 'due' ? 'bg-gradient-to-r from-cyan-300 via-violet-300 to-amber-300 bg-clip-text text-transparent' : getCountdownTone(event.due_at, nowMs) === 'expired' ? 'text-red-400' : 'text-sky-300'}`}>
+                              {getCountdownDisplay(event.due_at, nowMs)}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={beginCreate}
+                    disabled={submitting}
+                    className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    添加事件
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
