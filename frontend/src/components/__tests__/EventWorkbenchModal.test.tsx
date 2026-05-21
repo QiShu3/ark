@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import '@testing-library/jest-dom';
 
 import EventWorkbenchModal from '../events/EventWorkbenchModal';
 import { apiJson } from '../../lib/api';
+import { formatEventDateTime } from '../../lib/events/dateTime';
 import type { EventItem } from '../../lib/events/types';
 import type { Appointment, Task } from '../taskTypes';
 
@@ -224,8 +225,12 @@ describe('EventWorkbenchModal', () => {
     render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
 
     expect(await screen.findByText('安排内容')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '完成第一轮复习' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
+    const taskButton = screen.getByRole('button', { name: '完成第一轮复习' });
+    const appointmentButton = screen.getByRole('button', { name: '模拟考试' });
+    expect(taskButton).toBeInTheDocument();
+    expect(appointmentButton).toBeInTheDocument();
+    expect(within(taskButton).getByText(formatEventDateTime(eventTask.due_date))).toBeInTheDocument();
+    expect(within(appointmentButton).getByText(formatEventDateTime(eventAppointment.ends_at))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加任务' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加日程' })).toBeInTheDocument();
     expect(screen.queryByText('选择事件模板')).not.toBeInTheDocument();

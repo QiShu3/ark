@@ -418,14 +418,23 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   }
 
   function renderArrangementButton(target: EditingArrangement) {
+    const dueAt = target.kind === 'appointment' ? target.item.ends_at : target.item.due_date;
+    const timeLabel = dueAt ? formatEventDateTime(dueAt) : '未设时间';
+    const timeId = `arrangement-${target.kind}-${target.item.id}-time`;
+
     return (
       <button
         key={target.item.id}
         type="button"
+        aria-label={target.item.title}
+        aria-describedby={timeId}
         onClick={() => beginEditArrangement(target)}
-        className="min-h-10 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
+        className="flex min-h-10 items-center justify-between gap-3 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
       >
-        {target.item.title}
+        <span className="min-w-0 truncate">{target.item.title}</span>
+        <span id={timeId} className="shrink-0 text-xs font-normal text-white/45">
+          {timeLabel}
+        </span>
       </button>
     );
   }
