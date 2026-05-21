@@ -9,18 +9,27 @@ import {
   listEventPlanTemplates,
   listEvents,
   updateEvent,
+  updateEventPlanDraftItem,
   type EventCreateInput,
+  type EventPlanDraftItemInput,
 } from '../lib/events/api';
 import { formatEventDateTime, getCountdownDisplay, getCountdownTone, toDateTimeLocalValue } from '../lib/events/dateTime';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import EventTemplateManagerModal from './events/EventTemplateManagerModal';
-import type { EventItem, EventPlanTemplate } from '../lib/events/types';
+import type { EventItem, EventPlanTemplate, EventWorkbench } from '../lib/events/types';
 
 type EventFormState = {
   name: string;
   startDate: string;
   dueAt: string;
   isPrimary: boolean;
+};
+
+type CreateWorkbenchItemState = {
+  kind: 'task' | 'appointment';
+  title: string;
+  content: string;
+  offsetDays: number;
 };
 
 const CREATE_EVENT_DEFAULTS: EventFormState = {
@@ -44,7 +53,9 @@ const EventCountdownCard: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
+  const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
   const [editForm, setEditForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
 
   useEffect(() => {
@@ -121,8 +132,12 @@ const EventCountdownCard: React.FC = () => {
   function handleSelectTemplate(templateId: string): void {
     setSelectedTemplateId(templateId);
     const template = templates.find((current) => current.id === templateId);
-    if (!template) return;
+    if (!template) {
+      setCreateWorkbenchItems([]);
+      return;
+    }
     const templateDueAt = toDateTimeLocalValue(template.default_due_at);
+    setCreateWorkbenchItems(buildCreateWorkbenchItems(template));
     setCreateForm((state) => ({
       ...state,
       name: state.name || template.default_event_name || '',
@@ -132,16 +147,90 @@ const EventCountdownCard: React.FC = () => {
     }));
   }
 
+  function getCreateDefaultsFromTemplate(template: EventPlanTemplate | undefined): EventFormState {
+    if (!template) return CREATE_EVENT_DEFAULTS;
+    return {
+      name: template.default_event_name || '',
+      startDate: template.default_start_date || '',
+      dueAt: toDateTimeLocalValue(template.default_due_at),
+      isPrimary: template.default_is_primary ?? CREATE_EVENT_DEFAULTS.isPrimary,
+    };
+  }
+
+  function buildCreateWorkbenchItems(template: EventPlanTemplate | undefined): CreateWorkbenchItemState[] {
+    if (!template) return [];
+    return template.items.map((item) => ({
+      kind: item.kind,
+      title: item.title,
+      content: item.content ?? '',
+      offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
+    }));
+  }
+
+  function updateCreateWorkbenchItem(index: number, patch: Partial<CreateWorkbenchItemState>): void {
+    setCreateWorkbenchItems((current) => (
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
+    ));
+  }
+
+  function previewWorkbenchItemTime(
+    template: EventPlanTemplate | undefined,
+    item: CreateWorkbenchItemState,
+  ): string | null {
+    if (!template) return null;
+    const offsetDays = Math.max(0, Math.floor(item.offsetDays || 0));
+    if (template.schedule_mode === 'from_start') {
+      if (!createForm.startDate) return null;
+      const [year, month, day] = createForm.startDate.split('-').map(Number);
+      if (!year || !month || !day) return null;
+      const scheduledMs = Date.UTC(year, month - 1, day + offsetDays, 9, 0, 0);
+      return new Date(scheduledMs).toISOString();
+    }
+    if (!createForm.dueAt) return null;
+    const dueDate = new Date(createForm.dueAt);
+    if (Number.isNaN(dueDate.getTime())) return null;
+    dueDate.setDate(dueDate.getDate() - offsetDays);
+    return dueDate.toISOString();
+  }
+
   async function refreshAll(): Promise<void> {
     await Promise.all([loadPrimaryEvent(), loadEvents()]);
   }
 
   function resetCreateForm(): void {
     setCreateForm(CREATE_EVENT_DEFAULTS);
+    setCreateWorkbenchItems([]);
+  }
+
+  function beginCreate(): void {
+    const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+    setEditingEventId(null);
+    setCreateWorkbenchItems(buildCreateWorkbenchItems(selectedTemplate));
+    setCreateForm((state) => {
+      if (state.name || state.startDate || state.dueAt || state.isPrimary !== CREATE_EVENT_DEFAULTS.isPrimary) {
+        return state;
+      }
+      return getCreateDefaultsFromTemplate(selectedTemplate);
+    });
+    setShowCreateEditor(true);
+    setError(null);
+  }
+
+  function cancelCreate(): void {
+    setShowCreateEditor(false);
+    resetCreateForm();
+    setError(null);
+  }
+
+  function closeModal(): void {
+    setShowModal(false);
+    cancelCreate();
+    cancelEdit();
   }
 
   function beginEdit(event: EventItem): void {
     setEditingEventId(event.id);
+    setShowCreateEditor(false);
     setEditForm({
       name: event.name,
       startDate: event.start_date,
@@ -182,6 +271,7 @@ const EventCountdownCard: React.FC = () => {
 
   async function finishCreatedEvent(event: EventItem): Promise<void> {
     resetCreateForm();
+    setShowCreateEditor(false);
     cancelEdit();
     setSelectedTemplateId('');
     setShowModal(false);
@@ -189,29 +279,53 @@ const EventCountdownCard: React.FC = () => {
     setWorkbenchEvent(event);
   }
 
-  async function handleCreateEvent(): Promise<void> {
-    if (submitting) return;
-    const payload = buildCreatePayload();
-    if (!payload) return;
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      const createdEvent = await createEvent(payload);
-      await finishCreatedEvent(createdEvent);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '创建事件失败');
-    } finally {
-      setSubmitting(false);
+  async function syncCreatedWorkbenchItems(
+    eventId: string,
+    workbench: EventWorkbench,
+    template: EventPlanTemplate,
+    items: CreateWorkbenchItemState[],
+  ): Promise<EventWorkbench> {
+    const draftItems = workbench.plan_draft?.items ?? [];
+    let nextWorkbench = workbench;
+    for (let index = 0; index < Math.min(items.length, draftItems.length); index += 1) {
+      const formItem = items[index];
+      const draftItem = draftItems[index];
+      const scheduledAt = previewWorkbenchItemTime(template, formItem);
+      const patch: EventPlanDraftItemInput = {
+        title: formItem.title.trim(),
+        content: formItem.content.trim() || null,
+      };
+      if (scheduledAt) {
+        if (draftItem.kind === 'appointment') {
+          patch.starts_at = null;
+          patch.ends_at = scheduledAt;
+        } else {
+          patch.scheduled_for = scheduledAt;
+        }
+      }
+      nextWorkbench = await updateEventPlanDraftItem(eventId, draftItem.id, patch);
     }
+    return nextWorkbench;
   }
 
-  async function handleCreateWithTemplate(): Promise<void> {
+  async function submitCreateEvent(requireTemplate: boolean): Promise<void> {
     if (submitting) return;
     const payload = buildCreatePayload();
-    if (!payload) return;
-    if (!selectedTemplateId) {
+    if (!payload) {
+      if (requireTemplate) setShowCreateEditor(true);
+      return;
+    }
+    const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+    if (requireTemplate && !selectedTemplate) {
       setError('请选择事件模板');
+      return;
+    }
+    const workbenchItems = selectedTemplate
+      ? (createWorkbenchItems.length ? createWorkbenchItems : buildCreateWorkbenchItems(selectedTemplate))
+      : [];
+    if (selectedTemplate && workbenchItems.some((item) => !item.title.trim())) {
+      setError('请输入工作台内容标题');
+      setShowCreateEditor(true);
       return;
     }
 
@@ -219,18 +333,26 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
     try {
       const createdEvent = await createEvent(payload);
-      const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-      if (selectedTemplate && selectedTemplate.items.length === 0) {
-        await finishCreatedEvent(createdEvent);
+      if (selectedTemplate && selectedTemplate.items.length > 0) {
+        const workbench = await applyEventPlanTemplate(createdEvent.id, selectedTemplate.id);
+        const syncedWorkbench = await syncCreatedWorkbenchItems(createdEvent.id, workbench, selectedTemplate, workbenchItems);
+        await finishCreatedEvent(syncedWorkbench.event ?? createdEvent);
         return;
       }
-      const workbench = await applyEventPlanTemplate(createdEvent.id, selectedTemplateId);
-      await finishCreatedEvent(workbench.event ?? createdEvent);
+      await finishCreatedEvent(createdEvent);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '套用模板失败');
+      setError(err instanceof Error ? err.message : requireTemplate ? '套用模板失败' : '创建事件失败');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleCreateEvent(): Promise<void> {
+    await submitCreateEvent(Boolean(selectedTemplateId));
+  }
+
+  async function handleCreateWithTemplate(): Promise<void> {
+    await submitCreateEvent(true);
   }
 
   async function handleSaveEdit(): Promise<void> {
@@ -308,6 +430,7 @@ const EventCountdownCard: React.FC = () => {
       : countdownTone === 'expired'
         ? 'text-red-400'
         : 'text-sky-300';
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
 
   return (
     <>
@@ -333,10 +456,7 @@ const EventCountdownCard: React.FC = () => {
       {showModal ? (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          onClick={() => {
-            setShowModal(false);
-            cancelEdit();
-          }}
+          onClick={closeModal}
         >
           <div
             className="w-[760px] max-w-[94vw] h-[76vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
@@ -345,10 +465,7 @@ const EventCountdownCard: React.FC = () => {
             <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
               <h3 className="text-lg font-bold text-white">事件编辑</h3>
               <button
-                onClick={() => {
-                  setShowModal(false);
-                  cancelEdit();
-                }}
+                onClick={closeModal}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -358,51 +475,9 @@ const EventCountdownCard: React.FC = () => {
               </button>
             </div>
 
-            <div className="min-h-[220px] border-b border-white/10 p-5 bg-white/[0.03]">
-              <div className="grid gap-3 md:grid-cols-[1.35fr_0.95fr_1.15fr]">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">事件名称</label>
-                  <input
-                    aria-label="事件名称"
-                    value={createForm.name}
-                    onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
-                    placeholder="例如：论文投稿截止"
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">开始日期</label>
-                  <input
-                    aria-label="开始日期"
-                    type="date"
-                    value={createForm.startDate}
-                    onChange={(event) => setCreateForm((state) => ({ ...state, startDate: event.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">到期时间</label>
-                  <input
-                    aria-label="到期时间"
-                    type="datetime-local"
-                    value={createForm.dueAt}
-                    onChange={(event) => setCreateForm((state) => ({ ...state, dueAt: event.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-end gap-3">
-                <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
-                  <input
-                    type="checkbox"
-                    checked={createForm.isPrimary}
-                    onChange={(event) => setCreateForm((state) => ({ ...state, isPrimary: event.target.checked }))}
-                    className="h-4 w-4 rounded border-white/20 bg-white/5"
-                  />
-                  设为主事件
-                </label>
-                <div className="min-w-[180px] flex-1 flex flex-col gap-2">
+            <div className="border-b border-white/10 p-5 bg-white/[0.03]">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[220px] flex-1 flex flex-col gap-2">
                   <label className="text-sm text-white/70">事件模板</label>
                   <select
                     aria-label="事件模板"
@@ -419,32 +494,30 @@ const EventCountdownCard: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                <div className="flex items-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleCreateWithTemplate()}
-                    disabled={submitting || loadingTemplates || !selectedTemplateId}
-                    className="px-4 py-2 rounded-lg bg-amber-300 text-black font-semibold hover:bg-amber-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    套用模板
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateManager(true)}
-                    aria-label="进入模板工作台"
-                    title="进入模板工作台"
-                    className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                  >
-                    <Settings size={18} />
-                  </button>
-                </div>
                 <button
                   type="button"
-                  onClick={handleCreateEvent}
-                  disabled={submitting}
+                  onClick={() => void handleCreateWithTemplate()}
+                  disabled={submitting || loadingTemplates || !selectedTemplateId}
+                  className="px-4 py-2 rounded-lg bg-amber-300 text-black font-semibold hover:bg-amber-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  套用模板
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateManager(true)}
+                  aria-label="进入模板工作台"
+                  title="进入模板工作台"
+                  className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <Settings size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={beginCreate}
+                  disabled={submitting || showCreateEditor}
                   className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {submitting ? '提交中...' : '添加事件'}
+                  添加事件
                 </button>
               </div>
             </div>
@@ -452,11 +525,122 @@ const EventCountdownCard: React.FC = () => {
             <div className="flex-1 p-5 overflow-y-auto">
               {error ? <div className="mb-4 text-sm text-red-400">{error}</div> : null}
 
+              {showCreateEditor ? (
+                <div className="mb-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-4">
+                  <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr_auto] md:items-end">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-white/70">事件名称</label>
+                      <input
+                        aria-label="事件名称"
+                        value={createForm.name}
+                        onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
+                        placeholder="例如：论文投稿截止"
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-white/70">开始日期</label>
+                      <input
+                        aria-label="开始日期"
+                        type="date"
+                        value={createForm.startDate}
+                        onChange={(event) => setCreateForm((state) => ({ ...state, startDate: event.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-white/70">到期时间</label>
+                      <input
+                        aria-label="到期时间"
+                        type="datetime-local"
+                        value={createForm.dueAt}
+                        onChange={(event) => setCreateForm((state) => ({ ...state, dueAt: event.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
+                      <input
+                        type="checkbox"
+                        checked={createForm.isPrimary}
+                        onChange={(event) => setCreateForm((state) => ({ ...state, isPrimary: event.target.checked }))}
+                        className="h-4 w-4 rounded border-white/20 bg-white/5"
+                      />
+                      设为主事件
+                    </label>
+                  </div>
+                  {selectedTemplate && createWorkbenchItems.length > 0 ? (
+                    <div className="grid gap-3 border-t border-blue-300/20 pt-4">
+                      <div className="text-sm font-medium text-blue-100">工作台内容</div>
+                      {createWorkbenchItems.map((item, index) => {
+                        const previewTime = previewWorkbenchItemTime(selectedTemplate, item);
+                        return (
+                          <div
+                            key={`${item.kind}-${index}`}
+                            className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3"
+                          >
+                            <div className="grid gap-2 md:grid-cols-[76px_1fr_96px]">
+                              <div className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70">
+                                {item.kind === 'appointment' ? '日程' : '任务'}
+                              </div>
+                              <input
+                                aria-label={index === 0 ? '内容标题' : `内容标题 ${index + 1}`}
+                                value={item.title}
+                                onChange={(event) => updateCreateWorkbenchItem(index, { title: event.target.value })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              />
+                              <input
+                                aria-label={index === 0 ? '相对天数' : `相对天数 ${index + 1}`}
+                                type="number"
+                                min={0}
+                                value={item.offsetDays}
+                                onChange={(event) => updateCreateWorkbenchItem(index, {
+                                  offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                                })}
+                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              />
+                            </div>
+                            <input
+                              aria-label={index === 0 ? '内容备注' : `内容备注 ${index + 1}`}
+                              value={item.content}
+                              onChange={(event) => updateCreateWorkbenchItem(index, { content: event.target.value })}
+                              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                            {previewTime ? (
+                              <div className="text-xs text-white/45">
+                                时间预览 {formatEventDateTime(previewTime)}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelCreate}
+                      disabled={submitting}
+                      className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateEvent()}
+                      disabled={submitting}
+                      className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? '提交中...' : '创建事件'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {loading ? (
                 <div className="h-full flex items-center justify-center text-white/35">加载中...</div>
-              ) : events.length === 0 ? (
+              ) : events.length === 0 && !showCreateEditor ? (
                 <div className="h-full flex items-center justify-center text-white/35">暂无事件</div>
-              ) : (
+              ) : events.length > 0 ? (
                 <div className="flex flex-col gap-3">
                   {events.map((event) => {
                     const isEditing = editingEventId === event.id;
@@ -595,7 +779,7 @@ const EventCountdownCard: React.FC = () => {
                     );
                   })}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
