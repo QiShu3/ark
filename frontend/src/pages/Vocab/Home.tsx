@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
 import OverviewDetailModal, { type OverviewDetailTab } from '../../components/Vocab/OverviewDetailModal';
 import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
+import SubAppArrangements from '../../components/SubAppArrangements';
 import type { AppTaskStatus } from '../../components/taskTypes';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { apiJson } from '../../lib/api';
@@ -156,6 +157,27 @@ export default function VocabHome() {
     }
   };
 
+  const vocabTasks = [
+    {
+      id: 'vocab_today',
+      name: '今日单词',
+      focusWorkName: '今日单词',
+      isInitialized: appTaskStatus?.state !== 'uninitialized',
+      isSynced: typeof appTaskStatus?.config?.add_to_today_plan === 'boolean' ? appTaskStatus.config.add_to_today_plan : true,
+      onSyncToggle: async (nextSynced: boolean) => {
+        if (!activeDeck) return;
+        const payload = await initializeVocabAppTask({
+          deck_id: activeDeck.id,
+          daily_target_count: summary?.daily_target_count || 20,
+          default_focus_duration: typeof appTaskStatus?.config?.default_focus_duration === 'number' ? (appTaskStatus.config.default_focus_duration as number) : 1500,
+          add_to_today_plan: nextSynced,
+        });
+        setAppTaskStatus(payload);
+        setAppTaskError(null);
+      },
+    },
+  ];
+
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
       <div className="mx-auto max-w-6xl">
@@ -259,6 +281,10 @@ export default function VocabHome() {
                 </div>
               </div>
             ) : null}
+
+            <div className="mt-8">
+              <SubAppArrangements tasks={vocabTasks} isBusy={appTaskBusy} />
+            </div>
 
             {summaryError ? <p className="mt-6 text-sm text-rose-200">{summaryError}</p> : null}
           </section>

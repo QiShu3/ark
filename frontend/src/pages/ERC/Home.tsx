@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Settings, BookOpen, RefreshCw } from 'lucide-react';
 
+import SubAppArrangements from '../../components/SubAppArrangements';
 import type { AppTaskStatus } from '../../components/taskTypes';
 import { apiJson } from '../../lib/api';
 import {
@@ -29,12 +30,10 @@ export default function ERCHome() {
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   // Settings values (Practice)
-  const [practiceEnabled, setPracticeEnabled] = useState(true);
   const [dailyArticleTarget, setDailyArticleTarget] = useState(1);
   const [practiceDuration, setPracticeDuration] = useState(25); // In minutes
 
   // Settings values (Review)
-  const [reviewEnabled, setReviewEnabled] = useState(true);
   const [dailyQuestionTarget, setDailyQuestionTarget] = useState(10);
   const [reviewScope, setReviewScope] = useState<'due' | 'mistakes' | 'all'>('due');
   const [reviewDuration, setReviewDuration] = useState(25); // In minutes
@@ -105,9 +104,6 @@ export default function ERCHome() {
       if (typeof appTaskStatus.config.default_focus_duration === 'number') {
         setReviewDuration(Math.round(appTaskStatus.config.default_focus_duration / 60));
       }
-      if (typeof appTaskStatus.config.add_to_today_plan === 'boolean') {
-        setReviewEnabled(appTaskStatus.config.add_to_today_plan);
-      }
     }
   }, [appTaskStatus]);
 
@@ -118,9 +114,6 @@ export default function ERCHome() {
       }
       if (typeof practiceTaskStatus.config.default_focus_duration === 'number') {
         setPracticeDuration(Math.round(practiceTaskStatus.config.default_focus_duration / 60));
-      }
-      if (typeof practiceTaskStatus.config.add_to_today_plan === 'boolean') {
-        setPracticeEnabled(practiceTaskStatus.config.add_to_today_plan);
       }
     }
   }, [practiceTaskStatus]);
@@ -202,7 +195,7 @@ export default function ERCHome() {
       const newPracticeStatus = await initializeERCPracticeAppTask({
         daily_article_target: dailyArticleTarget,
         default_focus_duration: practiceDuration * 60,
-        add_to_today_plan: practiceEnabled,
+        add_to_today_plan: typeof practiceTaskStatus?.config?.add_to_today_plan === 'boolean' ? practiceTaskStatus.config.add_to_today_plan : true,
         event_id: null,
       });
       setPracticeTaskStatus(newPracticeStatus);
@@ -212,7 +205,7 @@ export default function ERCHome() {
         review_scope: reviewScope,
         daily_question_target: dailyQuestionTarget,
         default_focus_duration: reviewDuration * 60,
-        add_to_today_plan: reviewEnabled,
+        add_to_today_plan: typeof appTaskStatus?.config?.add_to_today_plan === 'boolean' ? appTaskStatus.config.add_to_today_plan : true,
       });
       setAppTaskStatus(newReviewStatus);
 
@@ -227,6 +220,43 @@ export default function ERCHome() {
       setSettingsSaving(false);
     }
   };
+
+  const ercTasks = [
+    {
+      id: 'erc_practice',
+      name: '真题练习',
+      focusWorkName: '真题练习',
+      isInitialized: practiceTaskStatus?.state !== 'uninitialized',
+      isSynced: typeof practiceTaskStatus?.config?.add_to_today_plan === 'boolean' ? practiceTaskStatus.config.add_to_today_plan : true,
+      onSyncToggle: async (nextSynced: boolean) => {
+        const payload = await initializeERCPracticeAppTask({
+          daily_article_target: typeof practiceTaskStatus?.config?.daily_article_target === 'number' ? practiceTaskStatus.config.daily_article_target : 1,
+          default_focus_duration: typeof practiceTaskStatus?.config?.default_focus_duration === 'number' ? practiceTaskStatus.config.default_focus_duration : 1500,
+          add_to_today_plan: nextSynced,
+          event_id: null,
+        });
+        setPracticeTaskStatus(payload);
+        setAppTaskError(null);
+      },
+    },
+    {
+      id: 'erc_review',
+      name: '错题复习',
+      focusWorkName: '开始复习',
+      isInitialized: appTaskStatus?.state !== 'uninitialized',
+      isSynced: typeof appTaskStatus?.config?.add_to_today_plan === 'boolean' ? appTaskStatus.config.add_to_today_plan : true,
+      onSyncToggle: async (nextSynced: boolean) => {
+        const payload = await initializeERCAppTask({
+          review_scope: (appTaskStatus?.config?.review_scope as any) || 'due',
+          daily_question_target: typeof appTaskStatus?.config?.daily_question_target === 'number' ? appTaskStatus.config.daily_question_target : 10,
+          default_focus_duration: typeof appTaskStatus?.config?.default_focus_duration === 'number' ? appTaskStatus.config.default_focus_duration : 1500,
+          add_to_today_plan: nextSynced,
+        });
+        setAppTaskStatus(payload);
+        setAppTaskError(null);
+      },
+    },
+  ];
 
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
@@ -433,6 +463,10 @@ export default function ERCHome() {
             </Link>
           </section>
         ) : null}
+
+        <div className="mt-8">
+          <SubAppArrangements tasks={ercTasks} isBusy={appTaskBusy} />
+        </div>
       </div>
 
       {/* Settings Modal */}
@@ -464,44 +498,32 @@ export default function ERCHome() {
                     <BookOpen className="h-5 w-5 text-indigo-400" />
                     <h3 className="text-base font-semibold text-white">真题练习 (Practice Task)</h3>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={practiceEnabled}
-                      onChange={(e) => setPracticeEnabled(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-white/10 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
-                    <span className="ml-3 text-sm text-white/70">同步到主页</span>
-                  </label>
                 </div>
 
-                {practiceEnabled && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-xs text-white/50 mb-2">每日目标 (文章篇数)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={dailyArticleTarget}
-                        onChange={(e) => setDailyArticleTarget(Math.max(1, Number(e.target.value)))}
-                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-white/50 mb-2">默认专注时长 (分钟)</label>
-                      <input
-                        type="number"
-                        min={5}
-                        max={120}
-                        value={practiceDuration}
-                        onChange={(e) => setPracticeDuration(Math.max(5, Number(e.target.value)))}
-                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
-                      />
-                    </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs text-white/50 mb-2">每日目标 (文章篇数)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={dailyArticleTarget}
+                      onChange={(e) => setDailyArticleTarget(Math.max(1, Number(e.target.value)))}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                    />
                   </div>
-                )}
+                  <div>
+                    <label className="block text-xs text-white/50 mb-2">默认专注时长 (分钟)</label>
+                    <input
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={practiceDuration}
+                      onChange={(e) => setPracticeDuration(Math.max(5, Number(e.target.value)))}
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Section 2: 错题复习 */}
@@ -511,72 +533,60 @@ export default function ERCHome() {
                     <RefreshCw className="h-5 w-5 text-emerald-400" />
                     <h3 className="text-base font-semibold text-white">错题复习 (Review Task)</h3>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={reviewEnabled}
-                      onChange={(e) => setReviewEnabled(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-white/10 rounded-full peer peer-focus:ring-2 peer-focus:ring-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                    <span className="ml-3 text-sm text-white/70">同步到主页</span>
-                  </label>
                 </div>
 
-                {reviewEnabled && (
-                  <div className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-xs text-white/50 mb-2">每日目标 (复习题数)</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={dailyQuestionTarget}
-                          onChange={(e) => setDailyQuestionTarget(Math.max(1, Number(e.target.value)))}
-                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-white/50 mb-2">默认专注时长 (分钟)</label>
-                        <input
-                          type="number"
-                          min={5}
-                          max={120}
-                          value={reviewDuration}
-                          onChange={(e) => setReviewDuration(Math.max(5, Number(e.target.value)))}
-                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
-                        />
-                      </div>
-                    </div>
-
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs text-white/50 mb-2">错题复习范围</label>
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        {(['due', 'mistakes', 'all'] as const).map((scope) => {
-                          const isSelected = reviewScope === scope;
-                          const label = scope === 'due' ? '仅到期错题' : scope === 'all' ? '全部做错题目' : '未掌握错题';
-                          const desc = scope === 'due' ? '按记忆遗忘算法智能调度' : scope === 'all' ? '随机挑选所有做错题目' : '过滤已熟练掌握的题目';
-                          return (
-                            <button
-                              key={scope}
-                              type="button"
-                              onClick={() => setReviewScope(scope)}
-                              className={`rounded-2xl border p-4 text-left transition ${
-                                isSelected
-                                  ? 'border-emerald-500/80 bg-emerald-500/10 text-emerald-200'
-                                  : 'border-white/6 bg-white/4 text-white/70 hover:border-white/15'
-                              }`}
-                            >
-                              <div className="text-sm font-semibold">{label}</div>
-                              <div className="mt-1 text-[10px] text-white/40 leading-normal">{desc}</div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <label className="block text-xs text-white/50 mb-2">每日目标 (复习题数)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={dailyQuestionTarget}
+                        onChange={(e) => setDailyQuestionTarget(Math.max(1, Number(e.target.value)))}
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-white/50 mb-2">默认专注时长 (分钟)</label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={120}
+                        value={reviewDuration}
+                        onChange={(e) => setReviewDuration(Math.max(5, Number(e.target.value)))}
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                      />
                     </div>
                   </div>
-                )}
+
+                  <div>
+                    <label className="block text-xs text-white/50 mb-2">错题复习范围</label>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {(['due', 'mistakes', 'all'] as const).map((scope) => {
+                        const isSelected = reviewScope === scope;
+                        const label = scope === 'due' ? '仅到期错题' : scope === 'all' ? '全部做错题目' : '未掌握错题';
+                        const desc = scope === 'due' ? '按记忆遗忘算法智能调度' : scope === 'all' ? '随机挑选所有做错题目' : '过滤已熟练掌握的题目';
+                        return (
+                          <button
+                            key={scope}
+                            type="button"
+                            onClick={() => setReviewScope(scope)}
+                            className={`rounded-2xl border p-4 text-left transition ${
+                              isSelected
+                                ? 'border-emerald-500/80 bg-emerald-500/10 text-emerald-200'
+                                : 'border-white/6 bg-white/4 text-white/70 hover:border-white/15'
+                            }`}
+                          >
+                            <div className="text-sm font-semibold">{label}</div>
+                            <div className="mt-1 text-[10px] text-white/40 leading-normal">{desc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

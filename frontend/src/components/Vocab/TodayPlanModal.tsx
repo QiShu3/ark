@@ -81,73 +81,59 @@ export default function TodayPlanModal({
                 <BookOpen className="h-5 w-5 text-emerald-400" />
                 <h3 className="text-base font-semibold text-white">背单词任务配置</h3>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={addToTodayPlan}
-                  onChange={(e) => setAddToTodayPlan(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-white/10 rounded-full peer peer-focus:ring-2 peer-focus:ring-emerald-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                <span className="ml-3 text-sm text-white/70">同步到主页</span>
-              </label>
             </div>
 
-            {addToTodayPlan && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="today-target-count" className="block text-xs text-white/50 mb-2">
-                    今日总量
-                  </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="today-target-count" className="block text-xs text-white/50 mb-2">
+                  今日总量
+                </label>
+                <input
+                  id="today-target-count"
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={targetCountValue}
+                  onChange={(event) => setTargetCountValue(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                />
+              </div>
+              <div>
+                <label htmlFor="focus-duration" className="block text-xs text-white/50 mb-2">
+                  默认专注时长 (分钟)
+                </label>
+                <div className="relative">
                   <input
-                    id="today-target-count"
+                    id="focus-duration"
                     type="number"
-                    min={1}
-                    max={500}
-                    value={targetCountValue}
-                    onChange={(event) => setTargetCountValue(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                    min={5}
+                    max={120}
+                    value={focusDurationValue}
+                    onChange={(event) => setFocusDurationValue(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 pl-4 pr-12 py-3 text-sm text-white outline-none transition focus:border-white/30"
                   />
-                </div>
-                <div>
-                  <label htmlFor="focus-duration" className="block text-xs text-white/50 mb-2">
-                    默认专注时长 (分钟)
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="focus-duration"
-                      type="number"
-                      min={5}
-                      max={120}
-                      value={focusDurationValue}
-                      onChange={(event) => setFocusDurationValue(event.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 pl-4 pr-12 py-3 text-sm text-white outline-none transition focus:border-white/30"
-                    />
-                    <Clock className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                  </div>
+                  <Clock className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
                 </div>
               </div>
-            )}
+            </div>
 
-            {addToTodayPlan && (
-              <div className="space-y-2">
-                <div className="text-xs text-white/50">单词黄金配比方案</div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 leading-normal">30% Learning / Relearning</div>
-                    <div className="mt-2 text-2xl font-semibold">{ratio.learning}</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 leading-normal">10% Review</div>
-                    <div className="mt-2 text-2xl font-semibold">{ratio.review}</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 leading-normal">60% New</div>
-                    <div className="mt-2 text-2xl font-semibold">{ratio.newCount}</div>
-                  </div>
+            <div className="space-y-2">
+              <div className="text-xs text-white/50">单词黄金配比方案</div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-3">
+                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 leading-normal">30% Learning / Relearning</div>
+                  <div className="mt-2 text-2xl font-semibold">{ratio.learning}</div>
+                </div>
+                <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-3">
+                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 leading-normal">10% Review</div>
+                  <div className="mt-2 text-2xl font-semibold">{ratio.review}</div>
+                </div>
+                <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-3">
+                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 leading-normal">60% New</div>
+                  <div className="mt-2 text-2xl font-semibold">{ratio.newCount}</div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
 

@@ -121,7 +121,7 @@ describe('Vocab home page', () => {
     fireEvent.click(screen.getByRole('button', { name: '切换词书' }));
 
     expect(screen.getByRole('button', { name: 'CET6luan' })).toBeInTheDocument();
-    expect(await screen.findByText('今日单词')).toBeInTheDocument();
+    expect(await screen.findByText('今天这本词书要完成的学习任务，系统会先带你完成复习，再进入新词。')).toBeInTheDocument();
     const reloadFocusSpy = vi.fn();
     window.addEventListener('ark:reload-focus', reloadFocusSpy);
     fireEvent.click(screen.getByRole('button', { name: '继续今日单词' }));
@@ -408,7 +408,7 @@ describe('Vocab home page', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText('今日单词');
+    await screen.findByText('今天这本词书要完成的学习任务，系统会先带你完成复习，再进入新词。');
     await user.click(screen.getByRole('button', { name: '调整今日单词' }));
 
     expect(screen.getByRole('dialog', { name: '调整今日单词' })).toBeInTheDocument();
