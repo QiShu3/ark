@@ -1,7 +1,7 @@
 export type CompletionPeriodType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom_days';
 export type TaskSourceType = 'user' | 'app';
 export type AppTaskId = 'vocab' | 'erc';
-export type AppTaskType = 'vocab_today' | 'erc_review';
+export type AppTaskType = 'vocab_today' | 'erc_review' | 'erc_practice';
 export type AppTaskRuntimeState = 'uninitialized' | 'ready' | 'completed_today' | 'blocked' | 'config_invalid';
 
 export interface CompletionState {

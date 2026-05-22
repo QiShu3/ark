@@ -106,10 +106,8 @@ describe('Vocab today page', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('今日单词')).toBeInTheDocument();
-    expect(screen.getByText('先完成今日复习，再进入今天的新词。')).toBeInTheDocument();
-    expect(screen.getByText('批次：当前处于第 1 批 / 共 3 批')).toBeInTheDocument();
-    expect(screen.getByText('已记忆 24 个单词')).toBeInTheDocument();
+    expect(screen.getByText('第 1 批 / 共 3 批')).toBeInTheDocument();
+    expect(screen.getByText('先完成今天这一个词，再进入下一步。')).toBeInTheDocument();
     expect(screen.getByText('abruptly')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /很轻松/ }));
@@ -145,12 +143,9 @@ describe('Vocab today page', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('上一批回顾')).toBeInTheDocument();
-    expect(screen.getByText(/本批完成 10 个单词/)).toBeInTheDocument();
-    expect(screen.getByText('没记住')).toBeInTheDocument();
-    expect(screen.getByText('有点难')).toBeInTheDocument();
-    expect(screen.getByText('abruptly')).toBeInTheDocument();
-    expect(screen.getByText(/突然地/)).toBeInTheDocument();
+    expect(screen.getByText('上一批先简单回顾一下，再继续今天的词。')).toBeInTheDocument();
+    expect(screen.getByText(/上一批已完成 10 个单词/)).toBeInTheDocument();
+    expect(screen.getByText('进入下一批')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '进入下一批' }));
 

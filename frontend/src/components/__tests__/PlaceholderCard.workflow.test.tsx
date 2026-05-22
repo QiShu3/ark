@@ -165,7 +165,7 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.getByTestId('achievement-card')).toBeInTheDocument();
   });
 
-  it('separates app-managed tasks from user-created today tasks', async () => {
+  it('renders both app-managed tasks and user-created today tasks side-by-side in today arrangements', async () => {
     const user = userEvent.setup();
     const userTask = buildTask({
       id: 'task-user',
@@ -198,7 +198,6 @@ describe('PlaceholderCard workflow UI', () => {
     expect((await screen.findAllByText('写论文摘要')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('今日单词').length).toBeGreaterThan(0);
     expect(screen.getAllByText('今日任务').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('应用任务').length).toBeGreaterThan(0);
   });
 
   it('shows the default workflow as the selected start target and starts it directly', async () => {

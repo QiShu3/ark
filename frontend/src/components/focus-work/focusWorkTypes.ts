@@ -1,7 +1,7 @@
 import type React from 'react';
 import type { AppTaskId, AppTaskType, TaskSourceType } from '../taskTypes';
 
-export type FocusWorkType = 'vocab_today' | 'erc_review' | 'task_focus';
+export type FocusWorkType = 'vocab_today' | 'erc_review' | 'erc_practice' | 'task_focus';
 export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
 
@@ -50,6 +50,7 @@ export type FocusWorkSnapshot = {
 export const FOCUS_WORK_LABELS: Record<FocusWorkType, string> = {
   vocab_today: '背单词',
   erc_review: 'ERC 复习',
+  erc_practice: 'ERC 真题练习',
   task_focus: '任务专注',
 };
 

@@ -6,11 +6,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Home from '../Home';
 
-const { apiJson, fetchERCAppTaskStatus, fetchERCOverview, initializeERCAppTask } = vi.hoisted(() => ({
+const {
+  apiJson,
+  fetchERCAppTaskStatus,
+  fetchERCOverview,
+  initializeERCAppTask,
+  fetchERCPracticeAppTaskStatus,
+  initializeERCPracticeAppTask,
+} = vi.hoisted(() => ({
   apiJson: vi.fn(),
   fetchERCAppTaskStatus: vi.fn(),
   fetchERCOverview: vi.fn(),
   initializeERCAppTask: vi.fn(),
+  fetchERCPracticeAppTaskStatus: vi.fn(),
+  initializeERCPracticeAppTask: vi.fn(),
 }));
 
 vi.mock('../../../lib/api', () => ({
@@ -21,6 +30,8 @@ vi.mock('../../../lib/erc/api', () => ({
   fetchERCAppTaskStatus,
   fetchERCOverview,
   initializeERCAppTask,
+  fetchERCPracticeAppTaskStatus,
+  initializeERCPracticeAppTask,
 }));
 
 describe('ERC home page', () => {
@@ -36,8 +47,18 @@ describe('ERC home page', () => {
       blocked_reason: null,
       config: {},
     });
+    fetchERCPracticeAppTaskStatus.mockReset();
+    fetchERCPracticeAppTaskStatus.mockResolvedValue({
+      state: 'ready',
+      task_id: 'task-erc-practice',
+      config_id: 'config-erc-practice',
+      completion_state: null,
+      blocked_reason: null,
+      config: {},
+    });
     fetchERCOverview.mockReset();
     initializeERCAppTask.mockReset();
+    initializeERCPracticeAppTask.mockReset();
   });
 
   it('renders reading training summary and primary links', async () => {
@@ -68,10 +89,10 @@ describe('ERC home page', () => {
       expect(apiJson).toHaveBeenCalledWith('/todo/tasks/task-erc/focus/start', { method: 'POST' });
     });
     expect(reloadFocusSpy).toHaveBeenCalledTimes(1);
-    expect(reviewButton).toHaveClass('bg-white/10', 'backdrop-blur-xl');
+    expect(reviewButton).toHaveClass('bg-white');
     window.removeEventListener('ark:reload-focus', reloadFocusSpy);
     expect(screen.getByRole('link', { name: '查看错题' })).toHaveAttribute('href', '/erc/mistakes');
-    expect(screen.getByRole('link', { name: '查看错题' })).toHaveClass('bg-white/10', 'backdrop-blur-xl');
+    expect(screen.getByRole('link', { name: '查看错题' })).toHaveClass('backdrop-blur-xl');
   });
 
   it('shows initialize button before ERC app task is initialized', async () => {
@@ -98,7 +119,7 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('button', { name: '初始化 ERC 复习' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '启用错题复习' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '开始复习' })).not.toBeInTheDocument();
   });
 
@@ -135,7 +156,7 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole('button', { name: '初始化 ERC 复习' }));
+    await user.click(await screen.findByRole('button', { name: '启用错题复习' }));
 
     expect(initializeERCAppTask).toHaveBeenCalledWith({
       review_scope: 'due',

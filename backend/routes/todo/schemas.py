@@ -13,7 +13,7 @@ TaskSourceType = Literal["user", "app"]
 EventPlanScheduleMode = Literal["from_start", "before_due"]
 EventPlanItemKind = Literal["task", "appointment"]
 AppTaskId = Literal["vocab", "erc"]
-AppTaskType = Literal["vocab_today", "erc_review"]
+AppTaskType = Literal["vocab_today", "erc_review", "erc_practice"]
 AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
 AppTaskRuntimeState = Literal["uninitialized", "ready", "completed_today", "blocked", "config_invalid"]
 CompletionPeriodType = Literal["once", "daily", "weekly", "monthly", "custom_days"]
@@ -22,7 +22,7 @@ AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break"]
 FocusTimerMode = Literal["countdown", "countup"]
-FocusWorkType = Literal["vocab_today", "erc_review", "task_focus"]
+FocusWorkType = Literal["vocab_today", "erc_review", "erc_practice", "task_focus"]
 FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
 FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
@@ -448,6 +448,10 @@ class VocabAppTaskInitRequest(AppTaskInitRequest):
 class ERCAppTaskInitRequest(AppTaskInitRequest):
     review_scope: Literal["due", "mistakes", "all"] = "due"
     daily_question_target: int = Field(default=10, ge=1, le=200)
+
+
+class ERCPracticeAppTaskInitRequest(AppTaskInitRequest):
+    daily_article_target: int = Field(default=1, ge=1, le=50)
 
 
 class AppTaskStatusOut(BaseModel):

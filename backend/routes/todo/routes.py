@@ -84,6 +84,7 @@ from .schemas import (
     AppointmentUpdateRequest,
     AppTaskStatusOut,
     ERCAppTaskInitRequest,
+    ERCPracticeAppTaskInitRequest,
     EventCreateRequest,
     EventOut,
     EventPlanDraftItemCreateRequest,
@@ -562,6 +563,48 @@ async def init_erc_app_task(
                 event_id=body.event_id,
             )
             return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
+
+
+@router.get("/app-tasks/erc-practice/status", response_model=AppTaskStatusOut)
+async def get_erc_practice_app_task_status(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppTaskStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_practice")
+
+
+@router.post("/app-tasks/erc-practice/init", response_model=AppTaskStatusOut)
+async def init_erc_practice_app_task(
+    request: Request,
+    body: ERCPracticeAppTaskInitRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> AppTaskStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if body.event_id is not None:
+                event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
+                if event_row is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+            config = {
+                "daily_article_target": body.daily_article_target,
+                "default_focus_duration": body.default_focus_duration,
+                "add_to_today_plan": body.add_to_today_plan,
+                "event_id": str(body.event_id) if body.event_id is not None else None,
+            }
+            await _create_or_update_managed_app_task(
+                conn,
+                user_id=int(user.id),
+                app_id="erc",
+                app_task_type="erc_practice",
+                config=config,
+                target_duration=body.default_focus_duration,
+                add_to_today_plan=body.add_to_today_plan,
+                event_id=body.event_id,
+            )
+            return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_practice")
 
 
 @router.post("/tasks", response_model=TaskOut)

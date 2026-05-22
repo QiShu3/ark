@@ -93,6 +93,8 @@ def _app_task_title(app_id: str, app_task_type: str) -> str:
         return "今日单词"
     if app_id == "erc" and app_task_type == "erc_review":
         return "ERC 复习"
+    if app_id == "erc" and app_task_type == "erc_practice":
+        return "ERC 真题练习"
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="不支持的应用任务类型")
 
 
@@ -1121,7 +1123,7 @@ def _normalize_timer_mode(value: Any, default: FocusTimerMode = "countdown") -> 
 
 def _normalize_focus_work_type(value: Any) -> FocusWorkType | None:
     text = str(value or "").strip()
-    if text in {"vocab_today", "erc_review", "task_focus"}:
+    if text in {"vocab_today", "erc_review", "erc_practice", "task_focus"}:
         return text  # type: ignore[return-value]
     return None
 
@@ -1226,6 +1228,8 @@ def _focus_work_type_for_task_row(task_row: Any | None) -> FocusWorkType:
         return "vocab_today"
     if app_task_type == "erc_review":
         return "erc_review"
+    if app_task_type == "erc_practice":
+        return "erc_practice"
     return "task_focus"
 
 

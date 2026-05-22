@@ -57,7 +57,7 @@ async def init_todo(app: Any) -> None:
               CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin')),
               CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app')),
               CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
-              CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review')),
+              CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice')),
               CONSTRAINT chk_tasks_app_metadata_consistency CHECK (
                   (
                     source_type = 'user'
@@ -130,7 +130,7 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review'));"
+            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_metadata_consistency;")
         await conn.execute(
@@ -200,7 +200,7 @@ async def init_todo(app: Any) -> None:
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc')),
-              CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review')),
+              CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review', 'erc_practice')),
               CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid')),
               CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type)
             );
@@ -226,7 +226,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
         await conn.execute(
-            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review'));"
+            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
         )
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_status;")
         await conn.execute(
@@ -521,7 +521,7 @@ async def init_todo(app: Any) -> None:
               progress_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
               record_focus BOOLEAN NOT NULL DEFAULT TRUE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'task_focus')),
+              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus')),
               CONSTRAINT chk_focus_app_work_logs_result CHECK (result IS NULL OR result IN ('completed', 'interrupted', 'abandoned')),
               CONSTRAINT chk_focus_app_work_logs_duration CHECK (duration >= 0),
               CONSTRAINT chk_focus_app_work_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time)
@@ -533,7 +533,7 @@ async def init_todo(app: Any) -> None:
             """
             ALTER TABLE focus_app_work_logs
             ADD CONSTRAINT chk_focus_app_work_logs_type
-            CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'task_focus'));
+            CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus'));
             """
         )
         await conn.execute(

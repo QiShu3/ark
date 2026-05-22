@@ -1,6 +1,7 @@
 import type { FocusWorkDefinition, FocusWorkType } from './focusWorkTypes';
 import VocabTodayFocusWork from '../Vocab/VocabTodayFocusWork';
 import ERCReviewFocusWork from '../ERC/ERCReviewFocusWork';
+import ERCPracticeFocusWork from '../ERC/ERCPracticeFocusWork';
 import TaskFocusWork from './TaskFocusWork';
 
 export const focusWorkRegistry: Record<FocusWorkType, FocusWorkDefinition> = {
@@ -15,6 +16,12 @@ export const focusWorkRegistry: Record<FocusWorkType, FocusWorkDefinition> = {
     title: '开始复习',
     subtitle: 'ERC 阅读理解',
     render: (props) => <ERCReviewFocusWork {...props} />,
+  },
+  erc_practice: {
+    type: 'erc_practice',
+    title: '真题练习',
+    subtitle: 'ERC 阅读理解',
+    render: (props) => <ERCPracticeFocusWork {...props} />,
   },
   task_focus: {
     type: 'task_focus',

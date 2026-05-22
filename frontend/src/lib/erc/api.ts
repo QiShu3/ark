@@ -30,6 +30,23 @@ export function initializeERCAppTask(payload: ERCAppTaskInitPayload) {
   });
 }
 
+export function fetchERCPracticeAppTaskStatus() {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/erc-practice/status');
+}
+
+export function initializeERCPracticeAppTask(payload: {
+  default_focus_duration: number;
+  add_to_today_plan: boolean;
+  event_id: string | null;
+  daily_article_target: number;
+}) {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/erc-practice/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function fetchERCSets() {
   return apiJson<ERCSet[]>('/api/erc/sets');
 }
