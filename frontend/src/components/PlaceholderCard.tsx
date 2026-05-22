@@ -1506,9 +1506,20 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             )}
           </div>
         </div>
-        {completionStatusLabel && (
-          <div className="pl-3.5 text-[11px] text-emerald-200/55">
-            {completionStatusLabel}
+        {(completionStatusLabel || (task.managed_by_app && task.app_id)) && (
+          <div className="pl-3.5 flex flex-wrap items-center gap-2 text-[11px] mt-0.5">
+            {completionStatusLabel && (
+              <span className="text-emerald-200/55">{completionStatusLabel}</span>
+            )}
+            {task.managed_by_app && task.app_id && (
+              <span className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold tracking-wide leading-none border ${
+                task.app_id === 'vocab'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+              }`}>
+                {task.app_id === 'vocab' ? '单词' : (task.app_id === 'erc' ? 'ERC' : task.app_id)}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -1617,18 +1628,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
 
     return (
       <div className="flex flex-col gap-6 pb-4">
-        {activeUserTasks.length > 0 && (
+        {activeTasks.length > 0 && (
           <div className="flex flex-col gap-2">
-            {activeUserTasks.map(t => _renderSmallTaskCard(t, true))}
-          </div>
-        )}
-        {activeAppTasks.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <h4 className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest px-1 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-              应用任务
-            </h4>
-            {activeAppTasks.map(t => _renderSmallTaskCard(t, true))}
+            {activeTasks.map(t => _renderSmallTaskCard(t, true))}
           </div>
         )}
         {completedTasks.length > 0 && (
@@ -2327,8 +2329,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                       });
                       
                       const activeTodayTasks = todayTasks.filter(t => t.status !== 'done');
-                      const activeTodayUserTasks = activeTodayTasks.filter(t => !_isAppManagedTask(t));
-                      const activeTodayAppTasks = activeTodayTasks.filter(t => _isAppManagedTask(t));
                       const dones = todayTasks.filter(t => t.status === 'done');
                       const weekAppointments = appointments.filter((appointment) => (
                         _isAppointmentUnfinished(appointment)
@@ -2348,26 +2348,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                               有 {needsConfirmationAppointments.length} 个日程待确认
                             </div>
                           )}
-                          {activeTodayUserTasks.length > 0 || activeTodayAppTasks.length > 0 ? (
-                            <div className="flex flex-col gap-3">
-                              {activeTodayUserTasks.length > 0 && (
-                                <div className="flex flex-col gap-2">
-                                  <h4 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest px-1 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                    今日任务
-                                  </h4>
-                                  {activeTodayUserTasks.map(t => _renderSmallTaskCard(t, true, true))}
-                                </div>
-                              )}
-                              {activeTodayAppTasks.length > 0 && (
-                                <div className="flex flex-col gap-2">
-                                  <h4 className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest px-1 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                                    应用任务
-                                  </h4>
-                                  {activeTodayAppTasks.map(t => _renderSmallTaskCard(t, true, true))}
-                                </div>
-                              )}
+                          {activeTodayTasks.length > 0 ? (
+                            <div className="flex flex-col gap-2">
+                              <h4 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest px-1 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                今日任务
+                              </h4>
+                              {activeTodayTasks.map(t => _renderSmallTaskCard(t, true, true))}
                             </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center py-10 opacity-30 text-sm">

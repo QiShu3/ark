@@ -137,28 +137,42 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
         .map((tag) => tag.trim())
         .filter(Boolean);
 
+      const patchData = task.managed_by_app
+        ? {
+            priority: form.priority,
+            target_duration: Math.round(form.targetMinutes * 60),
+            event: form.event.trim(),
+            event_id: form.eventId || null,
+            time_inherits_from_event: form.timeInheritsFromEvent,
+            time_overridden: form.timeOverridden,
+            tags,
+            start_date: startDate,
+            due_date: dueDate,
+          }
+        : {
+            title: form.title.trim(),
+            content: form.content.trim() || null,
+            priority: form.priority,
+            target_duration: Math.round(form.targetMinutes * 60),
+            event: form.event.trim(),
+            event_id: form.eventId || null,
+            is_recurring: form.periodType !== 'once',
+            period_type: form.periodType,
+            custom_period_days: customPeriodDays,
+            max_completions_per_period: Math.max(1, Math.floor(form.maxCompletionsPerPeriod || 1)),
+            weekday_only: form.weekdayOnly,
+            time_inherits_from_event: form.timeInheritsFromEvent,
+            time_overridden: form.timeOverridden,
+            task_type: form.taskType,
+            tags,
+            start_date: startDate,
+            due_date: dueDate,
+          };
+
       await apiJson(`/todo/tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: form.title.trim(),
-          content: form.content.trim() || null,
-          priority: form.priority,
-          target_duration: Math.round(form.targetMinutes * 60),
-          event: form.event.trim(),
-          event_id: form.eventId || null,
-          is_recurring: form.periodType !== 'once',
-          period_type: form.periodType,
-          custom_period_days: customPeriodDays,
-          max_completions_per_period: Math.max(1, Math.floor(form.maxCompletionsPerPeriod || 1)),
-          weekday_only: form.weekdayOnly,
-          time_inherits_from_event: form.timeInheritsFromEvent,
-          time_overridden: form.timeOverridden,
-          task_type: form.taskType,
-          tags,
-          start_date: startDate,
-          due_date: dueDate,
-        }),
+        body: JSON.stringify(patchData),
       });
 
       await handleChanged();
@@ -170,7 +184,12 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
 
   async function handleDelete() {
     if (submitting) return;
-    if (!window.confirm(`确定要删除任务「${task.title}」吗？`)) return;
+
+    const confirmMessage = task.managed_by_app
+      ? "删除此卡片仅跳过今日任务，次日仍会自动生成。如需永久取消，请前往子应用内关闭配置。确定要删除吗？"
+      : `确定要删除任务「${task.title}」吗？`;
+
+    if (!window.confirm(confirmMessage)) return;
 
     setSubmitting(true);
     setError(null);
@@ -210,6 +229,35 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
         </div>
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+          {task.managed_by_app && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
+              <div className="flex flex-col gap-0.5">
+                <div className="font-bold flex items-center gap-1.5 text-xs sm:text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 animate-pulse">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  应用托管任务
+                </div>
+                <p className="text-[11px] sm:text-xs text-white/50 leading-relaxed mt-0.5">
+                  该任务由子应用托管生成，核心内容不可在当前面板修改。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  const route = task.app_id === 'vocab' ? '/vocab' : (task.app_id === 'erc' ? '/erc' : '/');
+                  window.location.href = route;
+                }}
+                className="shrink-0 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 text-xs font-bold text-emerald-400 transition-all hover:bg-emerald-500/20 active:scale-95"
+              >
+                前往配置
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <label className="text-sm text-white/70">标题</label>
             <input
@@ -217,7 +265,8 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
               value={form.title}
               onChange={(e) => setForm((state) => ({ ...state, title: e.target.value }))}
               placeholder="例如：完成周报"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              disabled={task.managed_by_app}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -228,7 +277,8 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
                 aria-label="任务类型"
                 value={form.taskType}
                 onChange={(e) => setForm((state) => ({ ...state, taskType: e.target.value as 'focus' | 'checkin' }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                disabled={task.managed_by_app}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="focus">专注任务</option>
                 <option value="checkin">快速打卡</option>
@@ -257,7 +307,8 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
               value={form.content}
               onChange={(e) => setForm((state) => ({ ...state, content: e.target.value }))}
               placeholder="可选：补充描述/拆解步骤"
-              className="min-h-[88px] w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              disabled={task.managed_by_app}
+              className="min-h-[88px] w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -329,7 +380,8 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
                 aria-label="完成周期"
                 value={form.periodType}
                 onChange={(e) => setForm((state) => ({ ...state, periodType: e.target.value as CompletionPeriodType }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                disabled={task.managed_by_app}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="once">一次性</option>
                 <option value="daily">每天</option>
@@ -346,7 +398,8 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
                 min={1}
                 value={form.maxCompletionsPerPeriod}
                 onChange={(e) => setForm((state) => ({ ...state, maxCompletionsPerPeriod: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                disabled={task.managed_by_app}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -360,18 +413,20 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
                 min={1}
                 value={form.customPeriodDays}
                 onChange={(e) => setForm((state) => ({ ...state, customPeriodDays: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                disabled={task.managed_by_app}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           ) : null}
 
-          <label className="flex items-center gap-3 text-sm text-white/80">
+          <label className="flex items-center gap-3 text-sm text-white/80 disabled:opacity-50">
             <input
               aria-label="仅工作日可完成"
               type="checkbox"
               checked={form.weekdayOnly}
               onChange={(e) => setForm((state) => ({ ...state, weekdayOnly: e.target.checked }))}
-              className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+              disabled={task.managed_by_app}
+              className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             仅工作日可完成
           </label>
