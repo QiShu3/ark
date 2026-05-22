@@ -303,6 +303,45 @@ describe('PlaceholderCard workflow UI', () => {
     expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
   });
 
+  it('keeps the normal start-workflow hover scoped to workflow switching only', async () => {
+    const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    const launcher = await screen.findByRole('button', { name: '开始工作流 深度工作流' });
+    const nestedActions = within(launcher).getAllByRole('button');
+
+    expect(nestedActions.map((item) => item.getAttribute('aria-label') ?? item.textContent?.trim())).toEqual([
+      '切换工作流 深度工作流',
+    ]);
+  });
+
+  it('keeps the inactive split-card workflow launcher outside the main task entry unchanged', async () => {
+    const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
+      return defaultApiResponse(path);
+    });
+
+    render(
+      <MemoryRouter>
+        <PlaceholderCard index={1} split={2} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows');
+    });
+    expect(screen.getByText('运行 深度工作流')).toBeInTheDocument();
+    expect(screen.getByTitle('工作流设置')).toBeInTheDocument();
+  });
+
   it('hides the duration input for countup focus phases but still submits a default target duration', async () => {
     const user = userEvent.setup();
 

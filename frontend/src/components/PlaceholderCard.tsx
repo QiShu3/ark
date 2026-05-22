@@ -198,7 +198,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [startingWorkflow, setStartingWorkflow] = useState(false);
   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
   const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
-  const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
 
   const [createTaskSubmitting, setCreateTaskSubmitting] = useState(false);
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
@@ -1797,34 +1796,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     setShowFocusTaskPicker(false);
   }
 
-  async function _handleCompleteAndStopFocus(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (focusQuickActionBusy) return;
-    const targetTaskId = currentFocus?.task_id ?? _pickTodayFocusTask()?.id ?? null;
-    if (!targetTaskId) {
-      alert('没有可完成的即将专注任务');
-      return;
-    }
-    setFocusQuickActionBusy(true);
-    try {
-      await apiJson(`/todo/tasks/${targetTaskId}/complete`, {
-        method: 'POST',
-      });
-      if (currentFocus?.task_id === targetTaskId) {
-        await apiJson('/todo/focus/stop', { method: 'POST' });
-        setCurrentFocus(null);
-      }
-      setFocusTargetTaskId((prev) => (prev === targetTaskId ? null : prev));
-      await Promise.all([_loadTasks(), _loadCurrentFocus(), _loadTodayFocus()]);
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-    } catch (e) {
-      console.error('Failed to complete and stop focus', e);
-      alert('完成任务失败');
-    } finally {
-      setFocusQuickActionBusy(false);
-    }
-  }
-
   async function _submitCreateTask(): Promise<void> {
     if (createTaskSubmitting) return;
     const title = (createArrangementKind === 'appointment' ? createAppointmentForm.title : createTaskForm.title).trim();
@@ -1992,32 +1963,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   </svg>
                 </button>
               )}
-
-              {/* 右上角切换按钮 */}
-              <button 
-                className="absolute top-2 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-white/80 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowFocusTaskPicker(true);
-                  _loadTasks();
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 7l-5-5-5 5"/>
-                  <path d="M19 7H3"/>
-                  <path d="M5 17l5 5 5-5"/>
-                  <path d="M5 17h16"/>
-                </svg>
-              </button>
-              <button
-                className="absolute top-14 right-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-black/40 text-white/40 hover:text-emerald-300 transition-all opacity-0 group-hover:opacity-100 z-10 w-12 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={_handleCompleteAndStopFocus}
-                disabled={focusQuickActionBusy}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </button>
 
               <div className="flex flex-col items-center justify-center group-hover:opacity-0 transition-opacity duration-300">
                 {isWorkflowActive && (
