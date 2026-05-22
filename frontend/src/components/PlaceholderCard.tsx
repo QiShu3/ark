@@ -1452,9 +1452,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             )}
             {summaryEntry ? (
               !_isTaskCompletable(task) ? (
-                <span className="rounded-full border border-blue-300/15 bg-blue-300/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (task.managed_by_app && task.app_id) {
+                      const route = task.app_id === 'vocab' ? '/vocab' : (task.app_id === 'erc' ? '/erc' : '/');
+                      navigate(route);
+                    } else {
+                      _openEditTask(task);
+                    }
+                  }}
+                  className="rounded-full border border-blue-300/20 bg-blue-300/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100 transition hover:border-blue-300/35 hover:bg-blue-300/16 cursor-pointer"
+                >
                   进入任务
-                </span>
+                </button>
               ) : (
                 <button
                   type="button"
@@ -1512,11 +1524,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               <span className="text-emerald-200/55">{completionStatusLabel}</span>
             )}
             {task.managed_by_app && task.app_id && (
-              <span className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold tracking-wide leading-none border ${
-                task.app_id === 'vocab'
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-              }`}>
+              <span 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const route = task.app_id === 'vocab' ? '/vocab' : (task.app_id === 'erc' ? '/erc' : '/');
+                  navigate(route);
+                }}
+                title="点击进入子应用"
+                className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold tracking-wide leading-none border cursor-pointer hover:scale-105 active:scale-95 transition-all ${
+                  task.app_id === 'vocab'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/35'
+                    : 'bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/35'
+                }`}
+              >
                 {task.app_id === 'vocab' ? '单词' : (task.app_id === 'erc' ? 'ERC' : task.app_id)}
               </span>
             )}
@@ -3099,8 +3119,72 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                     />
                   )}
                 </>
+              ) : index === 2 && subIndex === 1 ? (
+                <div className="w-full h-full bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-3 flex flex-col justify-between text-left">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white/85 text-sm font-semibold flex items-center gap-1.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                      </svg>
+                      子应用入口
+                    </span>
+                    <span 
+                      onClick={(e) => { e.stopPropagation(); navigate('/apps'); }}
+                      className="text-cyan-400/80 hover:text-cyan-300 text-[11px] font-medium cursor-pointer transition-colors flex items-center gap-0.5"
+                    >
+                      全部应用
+                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 flex-1 justify-center">
+                    {/* 背单词 */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate('/vocab');
+                      }}
+                      className="group/btn flex items-center gap-3 p-2 rounded-lg bg-gradient-to-r from-emerald-500/10 to-teal-500/5 hover:from-emerald-500/20 hover:to-teal-500/10 border border-emerald-500/15 hover:border-emerald-500/30 text-emerald-300 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 group-hover/btn:bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm shrink-0 transition-colors">
+                        ✦
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-white/90 font-bold text-xs">背单词</span>
+                        <span className="text-white/40 text-[10px] truncate mt-0.5">词汇学习与每日任务管理</span>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-emerald-400/40 group-hover/btn:text-emerald-400 group-hover/btn:translate-x-0.5 transition-all">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </div>
+
+                    {/* 阅读训练 */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate('/erc');
+                      }}
+                      className="group/btn flex items-center gap-3 p-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-indigo-500/5 hover:from-blue-500/20 hover:to-indigo-500/10 border border-blue-500/15 hover:border-blue-500/30 text-blue-300 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-blue-500/10 group-hover/btn:bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm shrink-0 transition-colors">
+                        R
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-white/90 font-bold text-xs">阅读训练</span>
+                        <span className="text-white/40 text-[10px] truncate mt-0.5">整篇练习与 FSRS 复习池</span>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-blue-400/40 group-hover/btn:text-blue-400 group-hover/btn:translate-x-0.5 transition-all">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
+                <span className="font-medium">{`占位区 ${index + 1}-${subIndex + 1}`}</span>
               )}
             </div>
           )
