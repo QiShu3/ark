@@ -1139,6 +1139,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
   }
 
+  function _selectWorkflowPreset(presetId: string) {
+    setSelectedWorkflowPresetId(presetId);
+    window.localStorage.setItem(SELECTED_WORKFLOW_PRESET_STORAGE_KEY, presetId);
+    setShowWorkflowPicker(false);
+  }
+
+  function _openNewWorkflowFromPicker() {
+    setShowWorkflowPicker(false);
+    _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+    setShowWorkflowModal(true);
+  }
+
   async function _confirmFocusWorkflowPhase() {
     if (confirmingFocusPhase) return;
     setConfirmingFocusPhase(true);
@@ -2024,9 +2036,23 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                 <span className="text-2xl font-bold">
                   {primaryActionLabel}
                 </span>
-                <span className="text-sm text-white/60 mt-1">
-                  {primaryActionSubtext}
-                </span>
+                {!isWorkflowActive && !isFocusing && effectiveSelectedWorkflow ? (
+                  <button
+                    type="button"
+                    aria-label={`切换工作流 ${effectiveSelectedWorkflow.name}`}
+                    className="mt-1 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-sm text-white/65 transition hover:border-white/20 hover:bg-black/40 hover:text-white"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setShowWorkflowPicker(true);
+                    }}
+                  >
+                    {effectiveSelectedWorkflow.name}
+                  </button>
+                ) : (
+                  <span className="text-sm text-white/60 mt-1">
+                    {primaryActionSubtext}
+                  </span>
+                )}
               </div>
             </div>
             {hasPendingTaskSelection && (
@@ -2088,6 +2114,67 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             </button>
           </div>
         </div>
+
+        {showWorkflowPicker && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowWorkflowPicker(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="workflow-picker-title"
+              className="w-[520px] max-w-[92vw] max-h-[72vh] overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex h-14 items-center justify-between border-b border-white/10 bg-white/5 px-5">
+                <h3 id="workflow-picker-title" className="text-lg font-bold text-white">选择工作流</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowWorkflowPicker(false)}
+                  className="rounded-full p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
+                  aria-label="关闭选择工作流"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div className="flex max-h-[calc(72vh-56px)] flex-col gap-2 overflow-y-auto p-4">
+                {workflowPresets.map((preset) => {
+                  const selected = preset.id === effectiveSelectedWorkflow?.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      aria-label={`选择工作流 ${preset.name}`}
+                      onClick={() => _selectWorkflowPreset(preset.id)}
+                      className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                        selected
+                          ? 'border-blue-400/40 bg-blue-500/10 text-white'
+                          : 'border-white/10 bg-white/5 text-white/85 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium">{preset.name}</span>
+                        {preset.is_default ? <span className="text-xs text-blue-200/70">默认</span> : null}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">共 {preset.phases.length} 个阶段</div>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={_openNewWorkflowFromPicker}
+                  className="mt-2 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/75 transition hover:border-white/30 hover:bg-white/10 hover:text-white"
+                >
+                  新建工作流
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showFocusTaskPicker && (
           <div

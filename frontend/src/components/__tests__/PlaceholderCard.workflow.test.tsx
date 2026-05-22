@@ -251,6 +251,58 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.getByText('上次工作流')).toBeInTheDocument();
   });
 
+  it('opens the workflow picker from the workflow name and switches without starting', async () => {
+    const user = userEvent.setup();
+    const first = buildWorkflowPreset({ id: 'preset-a', name: 'A 工作流', is_default: true });
+    const second = buildWorkflowPreset({ id: 'preset-b', name: 'B 工作流', is_default: false });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([first, second]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    await user.click(await screen.findByRole('button', { name: '切换工作流 A 工作流' }));
+    await user.click(screen.getByRole('button', { name: '选择工作流 B 工作流' }));
+
+    expect(window.localStorage.getItem('ark-home-selected-workflow-preset-id')).toBe('preset-b');
+    expect(screen.getByRole('button', { name: '切换工作流 B 工作流' })).toBeInTheDocument();
+    expect(mockApiJson.mock.calls.some(([path]) => path === '/todo/focus/workflows/preset-b/start')).toBe(false);
+  });
+
+  it('opens the workflow preset modal when creating from the picker', async () => {
+    const user = userEvent.setup();
+    const preset = buildWorkflowPreset({ id: 'preset-a', name: 'A 工作流', is_default: true });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    await user.click(await screen.findByRole('button', { name: '切换工作流 A 工作流' }));
+    await user.click(screen.getByRole('button', { name: '新建工作流' }));
+
+    expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+  });
+
+  it('opens the workflow preset modal from the empty workflow state', async () => {
+    const user = userEvent.setup();
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    await user.click(await screen.findByRole('button', { name: '新建工作流' }));
+
+    expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+  });
+
   it('hides the duration input for countup focus phases but still submits a default target duration', async () => {
     const user = userEvent.setup();
 
