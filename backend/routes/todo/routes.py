@@ -50,6 +50,8 @@ from .helpers import (
     _normalize_focus_end_at,
     _normalize_timer_mode,
     _normalize_workflow_phases,
+    _phase_focus_work_type_value,
+    _phase_task_id_value,
     _raise_if_completion_blocked,
     _resolve_appointment_ends_at,
     _resolve_appointment_occurrences,
@@ -2723,6 +2725,109 @@ async def set_default_focus_workflow_preset(
     if updated is None:
         raise HTTPException(status_code=500, detail="设置默认工作流失败")
     return _row_to_focus_workflow_preset(updated)
+
+
+@router.post("/focus/workflows/{preset_id}/start", response_model=FocusWorkflowOut)
+async def start_focus_workflow_preset(
+    request: Request,
+    preset_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            preset = await conn.fetchrow(
+                """
+                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                FROM focus_workflow_presets
+                WHERE id = $1 AND user_id = $2
+                """,
+                preset_id,
+                int(user.id),
+            )
+            if preset is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
+
+            active = await conn.fetchrow(
+                "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
+                int(user.id),
+            )
+            if active is not None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有活动工作流")
+
+            phases = _normalize_workflow_phases(
+                preset["phases"],
+                fallback_focus_duration=int(preset["focus_duration"]),
+                fallback_break_duration=int(preset["break_duration"]),
+                default_focus_timer_mode=_normalize_timer_mode(
+                    preset.get("default_focus_timer_mode", "countdown") if hasattr(preset, "get") else "countdown"
+                ),
+            )
+            if not phases:
+                phases = _build_default_phases(int(preset["focus_duration"]), int(preset["break_duration"]))
+
+            first_phase = phases[0]
+            first_phase_type = str(first_phase["phase_type"])
+            pending_task_selection = False
+            task_row = None
+            task_id = None
+            runtime_task_id = None
+            active_focus_work_type = _phase_focus_work_type_value(first_phase)
+            focus_work_display_state = "fullscreen" if active_focus_work_type is not None else None
+            record_focus = bool(first_phase.get("record_focus", True))
+
+            if first_phase_type == "focus" and active_focus_work_type is None:
+                phase_task_id = _phase_task_id_value(first_phase)
+                task_row = await _get_bindable_task(conn, int(user.id), phase_task_id)
+                if phase_task_id is None or task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+                    pending_task_selection = True
+                    task_row = None
+                else:
+                    task_id = task_row["id"]
+                    runtime_task_id = task_row["id"]
+                    active_focus_work_type = _focus_work_type_for_task_row(task_row)
+                    focus_work_display_state = "fullscreen"
+
+            row = await conn.fetchrow(
+                """
+                INSERT INTO focus_workflows(
+                    user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                    focus_duration, break_duration, current_phase, phase_started_at,
+                    phase_planned_duration, pending_confirmation, pending_task_selection, status,
+                    active_focus_work_type, focus_work_display_state, focus_work_result,
+                    focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                )
+                VALUES ($1, $2, $3, $4, $5::jsonb, 0, $6, $7, $8, NOW(), $9, FALSE, $10,
+                        'active', $11, $12, NULL, NULL, FALSE, NULL, $13)
+                RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                          focus_duration, break_duration, current_phase, phase_started_at,
+                          phase_planned_duration, pending_confirmation, pending_task_selection,
+                          active_focus_work_type, focus_work_display_state, focus_work_result,
+                          focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                """,
+                int(user.id),
+                task_id,
+                runtime_task_id,
+                str(preset["name"] or "工作流"),
+                _to_jsonb_param(phases),
+                int(preset["focus_duration"]),
+                int(preset["break_duration"]),
+                first_phase_type,
+                int(first_phase["duration"]),
+                pending_task_selection,
+                active_focus_work_type,
+                focus_work_display_state,
+                record_focus,
+            )
+            if row is None:
+                raise HTTPException(status_code=500, detail="开始工作流失败")
+
+            if active_focus_work_type is not None:
+                await _start_focus_app_work_log(conn, int(user.id), row["id"], active_focus_work_type, record_focus)
+            if task_row is not None and task_id is not None:
+                await _start_focus_log_for_task(conn, int(user.id), task_id)
+
+    return _row_to_focus_workflow(row, **_focus_workflow_task_kwargs(task_row))
 
 
 @router.post("/tasks/{task_id}/focus/start", response_model=FocusLogOut)

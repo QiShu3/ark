@@ -3586,10 +3586,40 @@ def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:
     assert data["active_focus_work_type"] == "erc_review"
 
 
+def _preset_row(
+    *,
+    preset_id=None,
+    user_id: int = 7,
+    name: str = "深度工作流",
+    phases: list[dict[str, Any]] | None = None,
+    is_default: bool = False,
+) -> dict[str, Any]:
+    now = datetime.now(UTC)
+    return {
+        "id": preset_id or uuid4(),
+        "user_id": user_id,
+        "name": name,
+        "focus_duration": 1500,
+        "break_duration": 300,
+        "default_focus_timer_mode": "countdown",
+        "phases": phases
+        or [
+            {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": None},
+            {"phase_type": "break", "duration": 300},
+        ],
+        "is_default": is_default,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
 class _WorkflowPresetConn:
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
         self.tasks: list[dict[str, Any]] = []
+        self.active_workflow: dict[str, Any] | None = None
+        self.inserted_focus_task_id: Any = None
+        self.started_app_work_type: str | None = None
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "FROM focus_workflow_presets" in sql and "ORDER BY is_default DESC" in sql:
@@ -3602,7 +3632,7 @@ class _WorkflowPresetConn:
         if "WHERE user_id = $1 AND is_default = TRUE" in sql:
             user_id = int(args[0])
             return next((row for row in self.rows if int(row["user_id"]) == user_id and bool(row["is_default"])), None)
-        if "FROM tasks" in sql and "is_deleted" in sql and "WHERE id = $1 AND user_id = $2" in sql:
+        if "SELECT id, status, is_deleted, title, source_type, app_id, app_task_type, app_config_id" in sql:
             task_id = args[0]
             user_id = int(args[1])
             return next(
@@ -3612,12 +3642,20 @@ class _WorkflowPresetConn:
                         "status": item["status"],
                         "is_deleted": item["is_deleted"],
                         "title": item["title"],
+                        "source_type": item.get("source_type", "user"),
+                        "app_id": item.get("app_id"),
+                        "app_task_type": item.get("app_task_type"),
+                        "app_config_id": item.get("app_config_id"),
+                        "app_instance_key": item.get("app_instance_key"),
+                        "managed_by_app": item.get("managed_by_app", False),
                     }
                     for item in self.tasks
                     if item["id"] == task_id and int(item["user_id"]) == user_id
                 ),
                 None,
             )
+        if "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'" in sql:
+            return self.active_workflow
         if "INSERT INTO focus_workflow_presets" in sql:
             now = datetime.now(UTC)
             phases_arg = args[4]
@@ -3691,6 +3729,46 @@ class _WorkflowPresetConn:
                 return None
             items.sort(key=lambda row: row["updated_at"], reverse=True)
             return {"id": items[0]["id"]}
+        if "INSERT INTO focus_workflows" in sql:
+            now = datetime.now(UTC)
+            phases_arg = args[4]
+            phases = json.loads(phases_arg) if isinstance(phases_arg, str) else phases_arg
+            row = {
+                "id": uuid4(),
+                "user_id": int(args[0]),
+                "task_id": args[1],
+                "runtime_task_id": args[2],
+                "workflow_name": str(args[3]),
+                "phases": phases,
+                "current_phase_index": 0,
+                "focus_duration": int(args[5]),
+                "break_duration": int(args[6]),
+                "current_phase": str(args[7]),
+                "phase_started_at": now,
+                "phase_planned_duration": int(args[8]),
+                "pending_confirmation": False,
+                "pending_task_selection": bool(args[9]),
+                "active_focus_work_type": args[10],
+                "focus_work_display_state": args[11],
+                "focus_work_result": None,
+                "focus_work_progress_snapshot": None,
+                "is_paused": False,
+                "paused_at": None,
+                "record_focus": bool(args[12]),
+            }
+            self.active_workflow = row
+            return row
+        if "INSERT INTO focus_logs" in sql:
+            self.inserted_focus_task_id = args[1]
+            return {
+                "id": uuid4(),
+                "user_id": int(args[0]),
+                "task_id": args[1],
+                "duration": 0,
+                "start_time": datetime.now(UTC),
+                "end_at": None,
+                "created_at": datetime.now(UTC),
+            }
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
@@ -3714,6 +3792,9 @@ class _WorkflowPresetConn:
                     row["is_default"] = True
                     row["updated_at"] = datetime.now(UTC)
             return "UPDATE 1"
+        if "INSERT INTO focus_app_work_logs" in sql:
+            self.started_app_work_type = str(args[2])
+            return "INSERT 1"
         return "UPDATE 1"
 
     def transaction(self):
@@ -3816,3 +3897,98 @@ def test_set_default_and_delete_focus_workflow_preset(monkeypatch) -> None:
     assert len(rows) == 1
     assert rows[0]["id"] == first["id"]
     assert rows[0]["is_default"] is True
+
+
+def test_start_focus_workflow_preset_waits_for_task_when_first_focus_is_unbound(monkeypatch) -> None:
+    conn = _WorkflowPresetConn()
+    preset = _preset_row(name="无绑定工作流")
+    conn.rows.append(preset)
+    pool = _WorkflowPresetPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/focus/workflows/{preset['id']}/start")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["workflow_name"] == "无绑定工作流"
+    assert data["state"] == "focus"
+    assert data["pending_task_selection"] is True
+    assert data["task_id"] is None
+    assert conn.inserted_focus_task_id is None
+
+
+def test_start_focus_workflow_preset_enters_bound_task_focus(monkeypatch) -> None:
+    conn = _WorkflowPresetConn()
+    task_id = uuid4()
+    conn.tasks.append(
+        {
+            "id": task_id,
+            "user_id": 7,
+            "title": "写方案",
+            "status": "todo",
+            "is_deleted": False,
+            "source_type": "user",
+            "app_id": None,
+            "app_task_type": None,
+            "app_config_id": None,
+            "app_instance_key": None,
+            "managed_by_app": False,
+        }
+    )
+    preset = _preset_row(
+        name="写作工作流",
+        phases=[
+            {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(task_id)},
+            {"phase_type": "break", "duration": 300},
+        ],
+    )
+    conn.rows.append(preset)
+    pool = _WorkflowPresetPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/focus/workflows/{preset['id']}/start")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["workflow_name"] == "写作工作流"
+    assert data["pending_task_selection"] is False
+    assert data["task_id"] == str(task_id)
+    assert data["task_title"] == "写方案"
+    assert data["active_focus_work_type"] == "task_focus"
+    assert data["focus_work_display_state"] == "fullscreen"
+    assert conn.inserted_focus_task_id == task_id
+
+
+def test_start_focus_workflow_preset_rejects_other_user_preset(monkeypatch) -> None:
+    conn = _WorkflowPresetConn()
+    preset = _preset_row(user_id=8, name="别人的工作流")
+    conn.rows.append(preset)
+    pool = _WorkflowPresetPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/focus/workflows/{preset['id']}/start")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "工作流不存在"
+
+
+def test_start_focus_workflow_preset_rejects_when_workflow_is_active(monkeypatch) -> None:
+    conn = _WorkflowPresetConn()
+    preset = _preset_row(name="深度工作流")
+    conn.rows.append(preset)
+    conn.active_workflow = {"id": uuid4()}
+    pool = _WorkflowPresetPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(f"/todo/focus/workflows/{preset['id']}/start")
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "已有活动工作流"
