@@ -1,5 +1,5 @@
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,6 +96,7 @@ function renderCard() {
 describe('PlaceholderCard workflow UI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     mockApiJson.mockImplementation((path: string) => defaultApiResponse(path));
   });
 
@@ -198,6 +199,56 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.getAllByText('今日单词').length).toBeGreaterThan(0);
     expect(screen.getAllByText('今日任务').length).toBeGreaterThan(0);
     expect(screen.getAllByText('应用任务').length).toBeGreaterThan(0);
+  });
+
+  it('shows the default workflow as the selected start target and starts it directly', async () => {
+    const user = userEvent.setup();
+    const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
+      if (path === '/todo/focus/workflows/preset-default/start' && init?.method === 'POST') {
+        return Promise.resolve({
+          state: 'focus',
+          workflow_name: preset.name,
+          current_phase_index: 0,
+          phases: preset.phases,
+          task_id: null,
+          task_title: null,
+          pending_confirmation: false,
+          pending_task_selection: true,
+          remaining_seconds: null,
+        });
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    expect(await screen.findByText('开始工作流')).toBeInTheDocument();
+    expect(screen.getByText('深度工作流')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '开始工作流 深度工作流' }));
+
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/preset-default/start', { method: 'POST' });
+    });
+  });
+
+  it('uses the last selected workflow from localStorage before the default workflow', async () => {
+    window.localStorage.setItem('ark-home-selected-workflow-preset-id', 'preset-last');
+    const defaultPreset = buildWorkflowPreset({ id: 'preset-default', name: '默认工作流', is_default: true });
+    const lastPreset = buildWorkflowPreset({ id: 'preset-last', name: '上次工作流', is_default: false });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([defaultPreset, lastPreset]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    expect(await screen.findByText('开始工作流')).toBeInTheDocument();
+    expect(screen.getByText('上次工作流')).toBeInTheDocument();
   });
 
   it('hides the duration input for countup focus phases but still submits a default target duration', async () => {
@@ -397,7 +448,8 @@ describe('PlaceholderCard workflow UI', () => {
     expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
     expect(screen.getByText('这里管理的是可复用的专注流程模板，运行控制仍在主面板中完成。')).toBeInTheDocument();
 
-    await user.click(screen.getByText('深度工作流'));
+    const dialog = screen.getByRole('dialog', { name: '工作流预设' });
+    await user.click(within(dialog).getByText('深度工作流'));
 
     expect(screen.getByText('编辑中')).toBeInTheDocument();
   });

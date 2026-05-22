@@ -158,6 +158,8 @@ const CREATE_APPOINTMENT_FORM_DEFAULTS: CreateAppointmentForm = {
   timeOverridden: false,
 };
 
+const SELECTED_WORKFLOW_PRESET_STORAGE_KEY = 'ark-home-selected-workflow-preset-id';
+
 /**
  * 右侧占位卡片组件
  * 用于展示占位内容
@@ -188,6 +190,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null);
   const [workflowForm, setWorkflowForm] = useState<WorkflowFormState>(() => createDefaultWorkflowForm(false));
   const [workflowFormBaseline, setWorkflowFormBaseline] = useState<WorkflowFormState>(() => createDefaultWorkflowForm(false));
+  const [selectedWorkflowPresetId, setSelectedWorkflowPresetId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem(SELECTED_WORKFLOW_PRESET_STORAGE_KEY);
+  });
+  const [showWorkflowPicker, setShowWorkflowPicker] = useState(false);
+  const [startingWorkflow, setStartingWorkflow] = useState(false);
   const [showFocusTaskPicker, setShowFocusTaskPicker] = useState(false);
   const [focusTargetTaskId, setFocusTargetTaskId] = useState<string | null>(null);
   const [focusQuickActionBusy, setFocusQuickActionBusy] = useState(false);
@@ -457,10 +465,26 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     };
   }, [focusWorkflow, workflowRenderTick]);
 
-  const defaultWorkflowName = React.useMemo(() => {
-    const preset = workflowPresets.find((item) => item.is_default) ?? workflowPresets[0];
-    return preset?.name?.trim() || '工作流';
+  const sortedWorkflowPresets = React.useMemo(() => {
+    return [...workflowPresets].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   }, [workflowPresets]);
+
+  const effectiveSelectedWorkflow = React.useMemo(() => {
+    const saved = selectedWorkflowPresetId
+      ? workflowPresets.find((item) => item.id === selectedWorkflowPresetId)
+      : null;
+    return saved ?? workflowPresets.find((item) => item.is_default) ?? sortedWorkflowPresets[0] ?? null;
+  }, [selectedWorkflowPresetId, sortedWorkflowPresets, workflowPresets]);
+
+  const defaultWorkflowName = effectiveSelectedWorkflow?.name?.trim() || '工作流';
+
+  useEffect(() => {
+    if (!selectedWorkflowPresetId) return;
+    if (workflowPresets.length === 0) return;
+    if (workflowPresets.some((item) => item.id === selectedWorkflowPresetId)) return;
+    setSelectedWorkflowPresetId(null);
+    window.localStorage.removeItem(SELECTED_WORKFLOW_PRESET_STORAGE_KEY);
+  }, [selectedWorkflowPresetId, workflowPresets]);
 
   useEffect(() => {
     if (showTaskModal && activeTab === 'all') {
@@ -1094,6 +1118,27 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
   }
 
+  async function _startSelectedWorkflow() {
+    if (startingWorkflow) return;
+    if (!effectiveSelectedWorkflow) {
+      _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+      setShowWorkflowModal(true);
+      return;
+    }
+    setStartingWorkflow(true);
+    try {
+      const res = await apiJson(`/todo/focus/workflows/${effectiveSelectedWorkflow.id}/start`, { method: 'POST' }) as FocusWorkflow;
+      setFocusWorkflow(res);
+      await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow(), _loadTasks()]);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (e) {
+      console.error('Failed to start workflow', e);
+      alert(e instanceof Error ? e.message : '开始工作流失败');
+    } finally {
+      setStartingWorkflow(false);
+    }
+  }
+
   async function _confirmFocusWorkflowPhase() {
     if (confirmingFocusPhase) return;
     setConfirmingFocusPhase(true);
@@ -1665,8 +1710,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     }
   }
 
-  async function _handleFocusToggle(e: React.MouseEvent) {
-    e.stopPropagation();
+  async function _handleFocusToggle(e?: React.SyntheticEvent) {
+    e?.stopPropagation();
     
     if (focusWorkflow && focusWorkflow.state !== 'normal') {
       if (focusWorkflow.pending_task_selection) {
@@ -1885,16 +1930,37 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
     } else if (isFocusing) {
       displayTaskTitle = tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务';
     }
+    const primaryActionLabel = isWorkflowActive
+      ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : '跳过阶段'))
+      : (isFocusing ? '结束专注' : (effectiveSelectedWorkflow ? '开始工作流' : '新建工作流'));
+    const primaryActionSubtext = isFocusing || isWorkflowActive
+      ? `${isWorkflowActive && isBreakPhase ? '' : '正在专注于：'}${displayTaskTitle}`
+      : (effectiveSelectedWorkflow?.name ?? '还没有可启动的工作流');
+    const primaryActionAriaLabel = isFocusing || isWorkflowActive
+      ? `${primaryActionLabel} ${displayTaskTitle}`
+      : (effectiveSelectedWorkflow ? `开始工作流 ${effectiveSelectedWorkflow.name}` : '新建工作流');
 
     return (
       <>
         <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-2 flex gap-2">
           <div className="flex-[2] flex flex-col rounded overflow-hidden">
             <div 
+              role="button"
+              tabIndex={0}
+              aria-label={primaryActionAriaLabel}
               className={`group relative flex-[2] bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${
                 isFocusing || isWorkflowActive ? 'bg-blue-500/10 border border-blue-500/20' : ''
               }`}
-              onClick={_handleFocusToggle}
+              onClick={isFocusing || isWorkflowActive ? _handleFocusToggle : () => void _startSelectedWorkflow()}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                if (isFocusing || isWorkflowActive) {
+                  void _handleFocusToggle(e);
+                } else {
+                  void _startSelectedWorkflow();
+                }
+              }}
             >
               {/* 左上角结束工作流按钮 */}
               {isWorkflowActive && (
@@ -1956,13 +2022,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
               
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <span className="text-2xl font-bold">
-                  {isWorkflowActive
-                    ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : '跳过阶段'))
-                    : (isFocusing ? '结束专注' : '开始专注')}
+                  {primaryActionLabel}
                 </span>
                 <span className="text-sm text-white/60 mt-1">
-                  {isWorkflowActive && isBreakPhase ? '' : (isFocusing || isWorkflowActive ? '正在专注于：' : '即将专注于：')}
-                  {displayTaskTitle}
+                  {primaryActionSubtext}
                 </span>
               </div>
             </div>
