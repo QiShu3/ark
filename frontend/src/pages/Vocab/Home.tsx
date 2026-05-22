@@ -80,13 +80,25 @@ export default function VocabHome() {
     };
   }, []);
 
-  const handleSaveSettings = async (totalTargetCount: number) => {
+  const handleSaveSettings = async (totalTargetCount: number, addToTodayPlan: boolean, focusDuration: number) => {
     if (!activeDeck) return;
     setSettingsSaving(true);
     try {
+      // 1. Update deck-specific daily vocabulary target settings
       const payload = await updateVocabTodaySettings(activeDeck.id, { total_target_count: totalTargetCount });
       setSummary(payload);
       setSummaryError(null);
+
+      // 2. Initialize/Sync the Vocab App Task in todo module with add_to_today_plan and focus duration
+      const initPayload = await initializeVocabAppTask({
+        deck_id: activeDeck.id,
+        daily_target_count: totalTargetCount,
+        default_focus_duration: focusDuration,
+        add_to_today_plan: addToTodayPlan,
+      });
+      setAppTaskStatus(initPayload);
+      setAppTaskError(null);
+
       setSettingsOpen(false);
       const overviewPayload = await fetchVocabOverview(activeDeck.id);
       setOverview(overviewPayload);
@@ -343,6 +355,8 @@ export default function VocabHome() {
       {settingsOpen ? (
         <TodayPlanModal
           initialTargetCount={modalInitialTarget}
+          initialAddToTodayPlan={typeof appTaskStatus?.config?.add_to_today_plan === 'boolean' ? appTaskStatus.config.add_to_today_plan : true}
+          initialFocusDuration={typeof appTaskStatus?.config?.default_focus_duration === 'number' ? appTaskStatus.config.default_focus_duration : 1500}
           isCompleted={isTodayComplete}
           isSaving={settingsSaving}
           onClose={() => setSettingsOpen(false)}
