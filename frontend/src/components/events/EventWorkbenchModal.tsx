@@ -534,6 +534,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       const updatedEvent = await updateEvent(currentEvent.id, { is_primary: true });
       updateCurrentEvent(updatedEvent);
       await Promise.resolve(onChanged?.());
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (err) {
       setError(err instanceof Error ? err.message : '设置主事件失败');
     } finally {
@@ -570,6 +571,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       updateCurrentEvent(updatedEvent);
       setEditingEventDetails(false);
       await Promise.resolve(onChanged?.());
+      if (eventEditForm.isPrimary) {
+        window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存事件失败');
     } finally {

@@ -262,7 +262,6 @@ const EventCountdownCard: React.FC = () => {
 
   async function refreshAll(): Promise<void> {
     await Promise.all([loadPrimaryEvent(), loadEvents()]);
-    window.dispatchEvent(new CustomEvent('ark:reload-focus'));
   }
 
   function resetCreateForm(): void {
@@ -478,9 +477,15 @@ const EventCountdownCard: React.FC = () => {
       if (workbenchItems.length > 0) {
         await createWorkbenchItemsForEvent(createdEvent, workbenchItems);
         await finishCreatedEvent();
+        if (payload.is_primary) {
+          window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+        }
         return;
       }
       await finishCreatedEvent();
+      if (payload.is_primary) {
+        window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建事件失败');
     } finally {
