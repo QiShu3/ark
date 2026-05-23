@@ -544,59 +544,6 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.getByText('编辑中')).toBeInTheDocument();
   });
 
-  it('dispatches a workflow reminder event when focus advances into break', async () => {
-    const reminderSpy = vi.fn();
-    window.addEventListener('ark:main-agent-workflow-notification', reminderSpy as EventListener);
-
-    let currentWorkflow = {
-      state: 'focus',
-      workflow_name: '深度工作流',
-      current_phase_index: 0,
-      phases: [
-        { phase_type: 'focus', duration: 1500, task_id: 'task-a' },
-        { phase_type: 'break', duration: 300 },
-      ],
-      task_id: 'task-a',
-      task_title: '待办任务',
-      pending_confirmation: false,
-      pending_task_selection: false,
-      remaining_seconds: 30,
-    };
-
-    mockApiJson.mockImplementation((path: string) => {
-      if (path === '/todo/focus/workflow/current') {
-        return Promise.resolve(currentWorkflow);
-      }
-      return defaultApiResponse(path);
-    });
-
-    renderCard();
-
-    await waitFor(() => {
-      expect(mockApiJson.mock.calls.some(([path]) => path === '/todo/focus/workflow/current')).toBe(true);
-    });
-
-    currentWorkflow = {
-      ...currentWorkflow,
-      state: 'break',
-      current_phase_index: 1,
-      task_id: null,
-      remaining_seconds: 300,
-    };
-
-    window.dispatchEvent(new Event('ark:reload-focus'));
-
-    await waitFor(() => {
-      expect(reminderSpy).toHaveBeenCalledTimes(1);
-    });
-
-    const event = reminderSpy.mock.calls[0][0] as CustomEvent<{ key: string; prompt: string }>;
-    expect(event.detail.key).toContain('focus_to_break');
-    expect(event.detail.prompt).toContain('来源：workflow_notification');
-
-    window.removeEventListener('ark:main-agent-workflow-notification', reminderSpy as EventListener);
-  });
-
   it('keeps the right-panel workflow timer frozen while task focus is paused', async () => {
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflow/current') {
@@ -628,55 +575,5 @@ describe('PlaceholderCard workflow UI', () => {
     await new Promise((resolve) => setTimeout(resolve, 1200));
 
     expect(screen.getAllByText('12:34').length).toBeGreaterThan(0);
-  });
-
-  it('does not dispatch the same workflow reminder twice across repeated reloads', async () => {
-    const reminderSpy = vi.fn();
-    window.addEventListener('ark:main-agent-workflow-notification', reminderSpy as EventListener);
-
-    let currentWorkflow = {
-      state: 'focus',
-      workflow_name: '深度工作流',
-      current_phase_index: 0,
-      phases: [{ phase_type: 'focus', duration: 1500, task_id: 'task-a' }],
-      task_id: 'task-a',
-      task_title: '待办任务',
-      pending_confirmation: false,
-      pending_task_selection: false,
-      remaining_seconds: 10,
-    };
-
-    mockApiJson.mockImplementation((path: string) => {
-      if (path === '/todo/focus/workflow/current') {
-        return Promise.resolve(currentWorkflow);
-      }
-      return defaultApiResponse(path);
-    });
-
-    renderCard();
-
-    await waitFor(() => {
-      expect(mockApiJson.mock.calls.some(([path]) => path === '/todo/focus/workflow/current')).toBe(true);
-    });
-
-    currentWorkflow = {
-      ...currentWorkflow,
-      pending_confirmation: true,
-      remaining_seconds: 0,
-    };
-
-    window.dispatchEvent(new Event('ark:reload-focus'));
-
-    await waitFor(() => {
-      expect(reminderSpy).toHaveBeenCalledTimes(1);
-    });
-
-    window.dispatchEvent(new Event('ark:reload-focus'));
-
-    await waitFor(() => {
-      expect(reminderSpy).toHaveBeenCalledTimes(1);
-    });
-
-    window.removeEventListener('ark:main-agent-workflow-notification', reminderSpy as EventListener);
   });
 });

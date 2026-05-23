@@ -31,7 +31,7 @@ uv run python scripts/auth_selftest.py
 
 ## Chat（兼容 `/api/chat`）
 
-提供一个独立的最小兼容聊天接口，供前端的“快捷生成任务”和 ArXiv 摘要翻译复用。
+提供一个独立的最小兼容聊天接口，供前端的“快捷生成任务”复用。
 
 需要在环境变量中提供：
 - `CHAT_API_KEY`：OpenAI 兼容接口的 API Key
@@ -86,7 +86,7 @@ AUTO_KILL_PORT=1 ./dev.sh
 
 ## MCP（工具接入）
 
-通过环境变量配置 MCP servers（stdio 子进程）。后端会在启动时连接这些 server，并为 mini-agent 运行时提供可用工具。
+通过环境变量配置 MCP servers（stdio 子进程）。后端会在启动时连接这些 server，并为 Ark 的工具流程提供可用工具。
 
 示例（使用仓库自带的 echo MCP server）：
 

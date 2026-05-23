@@ -10,11 +10,6 @@ import TaskEditModal from './TaskEditModal';
 import AppointmentEditModal from './AppointmentEditModal';
 import AchievementCard from './AchievementCard';
 import type { Appointment, CompletionPeriodType, Task } from './taskTypes';
-import {
-  buildWorkflowNotificationPrompt,
-  deriveWorkflowNotification,
-  type WorkflowNotificationSnapshot,
-} from '../lib/workflowNotifications';
 import { formatClockTime } from './workflowProgress';
 import {
   cloneWorkflowForm,
@@ -313,8 +308,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   const arrangementAppointments = React.useMemo(() => {
     return primaryEvent ? appointments.filter((a) => a.event_id === primaryEvent.id) : appointments;
   }, [appointments, primaryEvent]);
-  const previousWorkflowSnapshotRef = React.useRef<WorkflowNotificationSnapshot | null>(null);
-  const lastWorkflowNotificationKeyRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     if (
@@ -948,25 +941,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       const res = await apiJson('/todo/focus/workflow/current');
       const workflow = res as FocusWorkflow;
       setFocusWorkflow(workflow);
-      const reminder = deriveWorkflowNotification(previousWorkflowSnapshotRef.current, workflow);
-      previousWorkflowSnapshotRef.current = workflow;
-      if (reminder && reminder.key !== lastWorkflowNotificationKeyRef.current) {
-        lastWorkflowNotificationKeyRef.current = reminder.key;
-        window.dispatchEvent(
-          new CustomEvent('ark:main-agent-workflow-notification', {
-            detail: {
-              key: reminder.key,
-              prompt: buildWorkflowNotificationPrompt(reminder),
-            },
-          }),
-        );
-      }
       if (workflow.state !== 'focus' || workflow.pending_confirmation || workflow.pending_task_selection) {
         setCurrentFocus(null);
       }
     } catch (e) {
       console.error('Failed to load focus workflow', e);
-      previousWorkflowSnapshotRef.current = null;
       setFocusWorkflow({
         state: 'normal',
         task_id: null,

@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from mini_agent_integration import init_mini_agent, register_mini_agent
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
@@ -25,7 +24,6 @@ load_dotenv(dotenv_path=ENV_PATH, override=False)
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     await init_auth(app)
-    await init_mini_agent(app)
     await init_checkin(app)
     await init_todo(app)
     await init_vocab(app)
@@ -52,7 +50,6 @@ app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(vocab_router)
 app.include_router(erc_router)
-register_mini_agent(app)
 
 
 @app.get("/health")
