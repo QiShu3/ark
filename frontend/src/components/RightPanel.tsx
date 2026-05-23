@@ -13,19 +13,18 @@ interface RightPanelProps {
  * 包含4个等高的占位块
  */
 const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
-  // 将面板容器的 ref 传给最後一张卡片，用于 PhoneSimulator 的覆盖定位
   const panelRef = useRef<HTMLDivElement>(null);
 
   // 配置每个占位卡片的拆分数量
   // Index 0: 不拆分
   // Index 1: 拆分为 2 部分
   // Index 2: 拆分为 2 部分
-  // Index 3: 拆分为 3 部分
+  // Index 3: 拆分为 2 部分
   const configs = [
     { split: 1 },
     { split: 2 },
     { split: 2 },
-    { split: 3 },
+    { split: 2 },
   ];
 
   return (
@@ -61,7 +60,6 @@ const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
             key={i}
             index={i}
             split={config.split}
-            anchorRef={i === 3 ? panelRef : undefined}
           />
         ))}
       </div>

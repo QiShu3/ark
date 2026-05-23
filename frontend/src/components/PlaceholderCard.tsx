@@ -5,7 +5,6 @@ import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
 import WorkflowPresetModal from './WorkflowPresetModal';
 import CalendarWidget from './CalendarWidget';
-import PhoneSimulator from './PhoneSimulator';
 import TaskEditModal from './TaskEditModal';
 import AppointmentEditModal from './AppointmentEditModal';
 import AchievementCard from './AchievementCard';
@@ -25,8 +24,6 @@ import {
 interface PlaceholderCardProps {
   index: number;
   split?: number;
-  /** RightPanel 容器的 ref，用于 PhoneSimulator 的覆盖定位 */
-  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 interface FocusSession {
@@ -159,12 +156,11 @@ const SELECTED_WORKFLOW_PRESET_STORAGE_KEY = 'ark-home-selected-workflow-preset-
  * 右侧占位卡片组件
  * 用于展示占位内容
  */
-const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anchorRef }) => {
+const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) => {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
   const [showTaskAssistantModal, setShowTaskAssistantModal] = useState(false);
-  const [showPhoneSimulator, setShowPhoneSimulator] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'all'>('today');
   const [activeArrangementTab, setActiveArrangementTab] = useState<'tasks' | 'appointments'>('tasks');
   const [activeAppointmentTab, setActiveAppointmentTab] = useState<'all' | 'today' | 'needs_confirmation' | 'repeating'>('all');
@@ -3024,12 +3020,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
             <div
               key={subIndex}
               onClick={
-                index === 3 && subIndex === 1 ? () => navigate('/apps') :
-                index === 3 && subIndex === 2 ? () => setShowPhoneSimulator(true) :
-                undefined
+                index === 3 && subIndex === 1 ? () => navigate('/apps') : undefined
               }
               className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${
-                (index === 3 && subIndex === 1) || (index === 3 && subIndex === 2) ? 'cursor-pointer' : ''
+                index === 3 && subIndex === 1 ? 'cursor-pointer' : ''
               }`}
             >
               {showWorkflowProgress ? (
@@ -3081,18 +3075,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                     </svg>
                   </div>
                 </div>
-              ) : index === 3 && subIndex === 2 ? (
-                <>
-                  <span className="font-medium text-white/80">
-                    快捷入口
-                  </span>
-                  {showPhoneSimulator && anchorRef && (
-                    <PhoneSimulator
-                      anchorRef={anchorRef}
-                      onClose={() => setShowPhoneSimulator(false)}
-                    />
-                  )}
-                </>
               ) : (
                 <span className="font-medium">{index === 2 && subIndex === 1 ? '数据分析' : `占位区 ${index + 1}-${subIndex + 1}`}</span>
               )}
