@@ -270,10 +270,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       _loadCurrentFocus();
       _loadTodayFocus();
       _loadFocusWorkflow();
+      if (showTaskModal || showCreateTaskModal) {
+        void _loadArrangementEvents();
+      }
     };
     window.addEventListener('ark:reload-focus', handleReload);
     return () => window.removeEventListener('ark:reload-focus', handleReload);
-  }, []);
+  }, [showTaskModal, showCreateTaskModal]);
 
   useEffect(() => {
     if (index !== 0) return;
@@ -298,6 +301,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   // Calculate a stable end time to prevent countdown jitter/flashback
   const targetEndTimeRef = React.useRef<number | null>(null);
   const isFetchingRef = React.useRef(false);
+
+  const primaryEvent = React.useMemo(() => {
+    return arrangementEvents.find((event) => event.is_primary) ?? null;
+  }, [arrangementEvents]);
+
+  const arrangementTasks = React.useMemo(() => {
+    return primaryEvent ? tasks.filter((t) => t.event_id === primaryEvent.id) : tasks;
+  }, [tasks, primaryEvent]);
+
+  const arrangementAppointments = React.useMemo(() => {
+    return primaryEvent ? appointments.filter((a) => a.event_id === primaryEvent.id) : appointments;
+  }, [appointments, primaryEvent]);
   const previousWorkflowSnapshotRef = React.useRef<WorkflowNotificationSnapshot | null>(null);
   const lastWorkflowNotificationKeyRef = React.useRef<string | null>(null);
 
@@ -500,9 +515,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
   }, [tasks, focusTargetTaskId]);
 
   useEffect(() => {
-    if (!showCreateTaskModal) return;
+    if (!showCreateTaskModal && !showTaskModal) return;
     void _loadArrangementEvents();
-  }, [showCreateTaskModal]);
+  }, [showCreateTaskModal, showTaskModal]);
 
   function _getPrimaryArrangementEvent(events: EventItem[]): EventItem | null {
     return events.find((event) => event.is_primary) ?? null;
@@ -1608,9 +1623,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       );
     }
     
-    let filtered = tasks;
+    let filtered = arrangementTasks;
     if (activeTab !== 'all' && activeTab !== 'today') {
-      filtered = tasks.filter((task) => _matchesTaskArrangementTab(task, activeTab));
+      filtered = arrangementTasks.filter((task) => _matchesTaskArrangementTab(task, activeTab));
     }
 
     const activeTasks = filtered.filter((task) => !_isTaskCompletedForArrangementView(task) && !_isTaskHiddenFromActionList(task));
@@ -1662,13 +1677,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
       );
     }
 
-    let filtered = appointments;
+    let filtered = arrangementAppointments;
     if (activeAppointmentTab === 'today') {
-      filtered = appointments.filter((appointment) => _isToday(appointment.ends_at));
+      filtered = arrangementAppointments.filter((appointment) => _isToday(appointment.ends_at));
     } else if (activeAppointmentTab === 'needs_confirmation') {
-      filtered = appointments.filter((appointment) => appointment.status === 'needs_confirmation');
+      filtered = arrangementAppointments.filter((appointment) => appointment.status === 'needs_confirmation');
     } else if (activeAppointmentTab === 'repeating') {
-      filtered = appointments.filter((appointment) => !!appointment.repeat_rule);
+      filtered = arrangementAppointments.filter((appointment) => !!appointment.repeat_rule);
     }
     filtered = filtered.filter((appointment) => !_isAppointmentHiddenFromActionList(appointment));
 
@@ -2320,7 +2335,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
                     {(() => {
-                      const todayTasks = tasks.filter(t => {
+                      const todayTasks = arrangementTasks.filter(t => {
                         if (_isTaskHiddenFromActionList(t)) return false;
                         if (!_isTaskDateMatchedToday(t)) return false;
                         if (t.period_type === 'daily') return true;
@@ -2330,12 +2345,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1, anc
                       
                       const activeTodayTasks = todayTasks.filter(t => t.status !== 'done');
                       const dones = todayTasks.filter(t => t.status === 'done');
-                      const weekAppointments = appointments.filter((appointment) => (
+                      const weekAppointments = arrangementAppointments.filter((appointment) => (
                         _isAppointmentUnfinished(appointment)
                         && !_isAppointmentHiddenFromActionList(appointment)
                         && _isAppointmentDueThisWeek(appointment)
                       ));
-                      const needsConfirmationAppointments = appointments.filter((appointment) => (
+                      const needsConfirmationAppointments = arrangementAppointments.filter((appointment) => (
                         appointment.status === 'needs_confirmation'
                         && !_isAppointmentHiddenFromActionList(appointment)
                         && !weekAppointments.some((weekAppointment) => weekAppointment.id === appointment.id)

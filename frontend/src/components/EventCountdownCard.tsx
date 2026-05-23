@@ -3,13 +3,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   createEventPlanTemplate,
   createEvent,
-  createEventPlanDraftItem,
   getPrimaryEvent,
   listEventPlanTemplates,
   listEvents,
   updateEventPlanTemplate,
   type EventCreateInput,
-  type EventPlanDraftItemCreateInput,
   type EventPlanTemplateInput,
   type EventPlanTemplateItemInput,
 } from '../lib/events/api';
@@ -20,6 +18,15 @@ import {
   getCountdownTone,
   toDateTimeLocalValue,
 } from '../lib/events/dateTime';
+import {
+  createEventArrangementTask,
+  createEventArrangementAppointment,
+  type EventArrangementTaskInput,
+  type EventArrangementAppointmentInput,
+} from '../lib/events/arrangementApi';
+import { fetchVocabDecks, initializeVocabAppTask } from '../lib/vocab/api';
+import { initializeERCAppTask, initializeERCPracticeAppTask } from '../lib/erc/api';
+import type { VocabDeck } from '../lib/vocab/types';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import type { EventItem, EventPlanTemplate } from '../lib/events/types';
 
@@ -28,6 +35,32 @@ type EventFormState = {
   startDate: string;
   dueAt: string;
   isPrimary: boolean;
+};
+
+type ConfiguredAppState = {
+  appType: 'vocab_today' | 'erc_practice' | 'erc_review';
+  config: {
+    deckId?: string;
+    deckName?: string;
+    dailyTargetCount?: number;
+    dailyArticleTarget?: number;
+    reviewScope?: 'due' | 'mistakes' | 'all';
+    dailyQuestionTarget?: number;
+    defaultFocusDuration: number; // in seconds
+    addToTodayPlan: boolean;
+  };
+};
+
+type AppEditorState = {
+  appType: 'vocab_today' | 'erc_practice' | 'erc_review';
+  deckId: string;
+  dailyTargetCount: number;
+  dailyArticleTarget: number;
+  reviewScope: 'due' | 'mistakes' | 'all';
+  dailyQuestionTarget: number;
+  focusDurationMin: number;
+  addToTodayPlan: boolean;
+  index: number | null;
 };
 
 type CreateWorkbenchItemState = {
@@ -72,6 +105,9 @@ const EventCountdownCard: React.FC = () => {
   const [templateStatus, setTemplateStatus] = useState<string | null>(null);
   const [templateConflict, setTemplateConflict] = useState<TemplateConflictState | null>(null);
   const [createArrangementEditor, setCreateArrangementEditor] = useState<CreateArrangementEditorState | null>(null);
+  const [configuredApps, setConfiguredApps] = useState<ConfiguredAppState[]>([]);
+  const [appEditor, setAppEditor] = useState<AppEditorState | null>(null);
+  const [decks, setDecks] = useState<VocabDeck[]>([]);
 
   useEffect(() => {
     void loadPrimaryEvent();
@@ -88,6 +124,9 @@ const EventCountdownCard: React.FC = () => {
     if (!showModal) return;
     void loadEvents();
     void loadTemplates();
+    void fetchVocabDecks()
+      .then((res) => setDecks(res))
+      .catch((err) => console.error('Failed to load decks', err));
   }, [showModal]);
 
   const countdownText = useMemo(() => {
@@ -267,6 +306,8 @@ const EventCountdownCard: React.FC = () => {
     setTemplateStatus(null);
     setTemplateConflict(null);
     setCreateArrangementEditor(null);
+    setConfiguredApps([]);
+    setAppEditor(null);
   }
 
   function beginCreate(): void {
@@ -316,26 +357,49 @@ const EventCountdownCard: React.FC = () => {
     await refreshAll();
   }
 
-  async function createWorkbenchItemsForEvent(eventId: string, items: CreateWorkbenchItemState[]): Promise<void> {
+  async function createWorkbenchItemsForEvent(createdEvent: EventItem, items: CreateWorkbenchItemState[]): Promise<void> {
     for (let index = 0; index < items.length; index += 1) {
       const formItem = items[index];
       const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
       const scheduledAt = previewWorkbenchItemTime(formItem, selectedTemplate);
-      const payload: EventPlanDraftItemCreateInput = {
-        kind: formItem.kind,
-        title: formItem.title.trim(),
-        content: formItem.content.trim() || null,
-        sort_order: index,
-      };
-      if (scheduledAt) {
-        if (formItem.kind === 'appointment') {
-          payload.starts_at = null;
-          payload.ends_at = scheduledAt;
-        } else {
-          payload.scheduled_for = scheduledAt;
-        }
+      if (formItem.kind === 'task') {
+        const payload: EventArrangementTaskInput = {
+          title: formItem.title.trim(),
+          content: formItem.content.trim() || null,
+          priority: 0,
+          targetDuration: 0,
+          event: createdEvent.name,
+          eventId: createdEvent.id,
+          periodType: 'once',
+          customPeriodDays: null,
+          maxCompletionsPerPeriod: 1,
+          weekdayOnly: false,
+          timeInheritsFromEvent: false,
+          timeOverridden: Boolean(scheduledAt),
+          taskType: 'focus',
+          tags: [],
+          startDate: null,
+          dueDate: scheduledAt,
+        };
+        await createEventArrangementTask(createdEvent, payload);
+      } else {
+        const payload: EventArrangementAppointmentInput = {
+          title: formItem.title.trim(),
+          content: formItem.content.trim() || null,
+          status: 'pending',
+          startsAt: null,
+          endsAt: scheduledAt || '',
+          repeatRule: null,
+          eventId: createdEvent.id,
+          periodType: 'once',
+          customPeriodDays: null,
+          maxCompletionsPerPeriod: 1,
+          weekdayOnly: false,
+          timeInheritsFromEvent: false,
+          timeOverridden: true,
+        };
+        await createEventArrangementAppointment(createdEvent, payload);
       }
-      await createEventPlanDraftItem(eventId, payload);
     }
   }
 
@@ -447,12 +511,83 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
     try {
       const createdEvent = await createEvent(payload);
-      if (workbenchItems.length > 0) {
-        await createWorkbenchItemsForEvent(createdEvent.id, workbenchItems);
-        await finishCreatedEvent();
-        return;
+
+      // Initialize configured applications
+      if (payload.is_primary) {
+        // If the event is primary, initialize the sub-app tasks immediately
+        for (const app of configuredApps) {
+          if (app.appType === 'vocab_today') {
+            await initializeVocabAppTask({
+              deck_id: app.config.deckId!,
+              daily_target_count: app.config.dailyTargetCount!,
+              default_focus_duration: app.config.defaultFocusDuration,
+              add_to_today_plan: app.config.addToTodayPlan,
+              event_id: createdEvent.id,
+            });
+          } else if (app.appType === 'erc_practice') {
+            await initializeERCPracticeAppTask({
+              daily_article_target: app.config.dailyArticleTarget!,
+              default_focus_duration: app.config.defaultFocusDuration,
+              add_to_today_plan: app.config.addToTodayPlan,
+              event_id: createdEvent.id,
+            });
+          } else if (app.appType === 'erc_review') {
+            await initializeERCAppTask({
+              review_scope: app.config.reviewScope!,
+              daily_question_target: app.config.dailyQuestionTarget!,
+              default_focus_duration: app.config.defaultFocusDuration,
+              add_to_today_plan: app.config.addToTodayPlan,
+              event_id: createdEvent.id,
+            });
+          }
+        }
+      } else {
+        // If the event is not primary, create passive placeholder tasks for the sub-apps
+        for (const app of configuredApps) {
+          const title = app.appType === 'vocab_today'
+            ? `今日单词 (应用：${app.config.deckName})`
+            : app.appType === 'erc_practice'
+              ? `真题练习 (应用)`
+              : `错题复习 (应用)`;
+
+          const taskPayload: EventArrangementTaskInput = {
+            title,
+            content: JSON.stringify({
+              deckId: app.config.deckId,
+              dailyTargetCount: app.config.dailyTargetCount,
+              dailyArticleTarget: app.config.dailyArticleTarget,
+              reviewScope: app.config.reviewScope,
+              dailyQuestionTarget: app.config.dailyQuestionTarget,
+              defaultFocusDuration: app.config.defaultFocusDuration,
+              addToTodayPlan: app.config.addToTodayPlan,
+            }),
+            priority: 0,
+            targetDuration: 0,
+            event: createdEvent.name,
+            eventId: createdEvent.id,
+            periodType: 'once',
+            customPeriodDays: null,
+            maxCompletionsPerPeriod: 1,
+            weekdayOnly: false,
+            timeInheritsFromEvent: false,
+            timeOverridden: false,
+            taskType: 'focus',
+            tags: ['__app_task_config', app.appType],
+            startDate: null,
+            dueDate: null,
+          };
+          await createEventArrangementTask(createdEvent, taskPayload);
+        }
       }
+
+      if (workbenchItems.length > 0) {
+        await createWorkbenchItemsForEvent(createdEvent, workbenchItems);
+      }
+
       await finishCreatedEvent();
+      if (payload.is_primary) {
+        window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建事件失败');
     } finally {
@@ -471,6 +606,334 @@ const EventCountdownCard: React.FC = () => {
         ? 'text-red-400'
         : 'text-sky-300';
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+
+  function beginAddConfiguredApp(): void {
+    const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+      .filter(type => !configuredApps.some(app => app.appType === type));
+      
+    if (unconfiguredTypes.length === 0) return;
+    
+    const initialType = unconfiguredTypes[0];
+    setAppEditor({
+      appType: initialType,
+      deckId: initialType === 'vocab_today' ? (decks[0]?.id || '') : '',
+      dailyTargetCount: 20,
+      dailyArticleTarget: 1,
+      reviewScope: 'due',
+      dailyQuestionTarget: 10,
+      focusDurationMin: 25,
+      addToTodayPlan: true,
+      index: null,
+    });
+    setError(null);
+  }
+
+  function beginEditConfiguredApp(index: number): void {
+    const app = configuredApps[index];
+    if (!app) return;
+    setAppEditor({
+      appType: app.appType,
+      deckId: app.config.deckId || '',
+      dailyTargetCount: app.config.dailyTargetCount || 20,
+      dailyArticleTarget: app.config.dailyArticleTarget || 1,
+      reviewScope: app.config.reviewScope || 'due',
+      dailyQuestionTarget: app.config.dailyQuestionTarget || 10,
+      focusDurationMin: Math.round(app.config.defaultFocusDuration / 60),
+      addToTodayPlan: app.config.addToTodayPlan,
+      index,
+    });
+    setError(null);
+  }
+
+  function saveAppEditorConfig(): void {
+    if (!appEditor) return;
+    
+    if (appEditor.appType === 'vocab_today' && !appEditor.deckId) {
+      setError('请选择词书');
+      return;
+    }
+
+    const deckName = appEditor.appType === 'vocab_today'
+      ? (decks.find(d => d.id === appEditor.deckId)?.name || '未命名词书')
+      : undefined;
+
+    const nextApp: ConfiguredAppState = {
+      appType: appEditor.appType,
+      config: {
+        deckId: appEditor.appType === 'vocab_today' ? appEditor.deckId : undefined,
+        deckName,
+        dailyTargetCount: appEditor.appType === 'vocab_today' ? appEditor.dailyTargetCount : undefined,
+        dailyArticleTarget: appEditor.appType === 'erc_practice' ? appEditor.dailyArticleTarget : undefined,
+        reviewScope: appEditor.appType === 'erc_review' ? appEditor.reviewScope : undefined,
+        dailyQuestionTarget: appEditor.appType === 'erc_review' ? appEditor.dailyQuestionTarget : undefined,
+        defaultFocusDuration: appEditor.focusDurationMin * 60,
+        addToTodayPlan: appEditor.addToTodayPlan,
+      },
+    };
+
+    setConfiguredApps((current) => {
+      if (appEditor.index === null) return [...current, nextApp];
+      return current.map((item, idx) => (idx === appEditor.index ? nextApp : item));
+    });
+    setAppEditor(null);
+    setError(null);
+  }
+
+  function deleteConfiguredApp(): void {
+    if (!appEditor || appEditor.index === null) return;
+    const targetIdx = appEditor.index;
+    setConfiguredApps((current) => current.filter((_, idx) => idx !== targetIdx));
+    setAppEditor(null);
+    setError(null);
+  }
+
+  function getAppConfigSummary(app: ConfiguredAppState): string {
+    if (app.appType === 'vocab_today') {
+      return `词书: ${app.config.deckName || '加载中...'}, 每日 ${app.config.dailyTargetCount} 词, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
+    }
+    if (app.appType === 'erc_practice') {
+      return `每日 ${app.config.dailyArticleTarget} 篇文章, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
+    }
+    return `范围: ${app.config.reviewScope === 'due' ? '到期复习' : app.config.reviewScope === 'mistakes' ? '错题复习' : '全部'}, 每日 ${app.config.dailyQuestionTarget} 题, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
+  }
+
+  function renderAppEditor() {
+    if (!appEditor) return null;
+    const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+      .filter(type => !configuredApps.some(app => app.appType === type) || (appEditor.index !== null && appEditor.appType === type));
+
+    return (
+      <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3 text-left">
+        {appEditor.index === null ? (
+          <label className="grid gap-1 text-xs text-white/60">
+            选择应用
+            <select
+              aria-label="选择应用"
+              value={appEditor.appType}
+              onChange={(event) => {
+                const val = event.target.value as any;
+                setAppEditor((current) => {
+                  if (!current) return current;
+                  return {
+                    ...current,
+                    appType: val,
+                    deckId: val === 'vocab_today' ? (decks[0]?.id || '') : '',
+                  };
+                });
+              }}
+              className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              {unconfiguredTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type === 'vocab_today' ? '今日单词 (背单词)' : type === 'erc_practice' ? '真题练习 (ERC)' : '错题复习 (ERC)'}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="text-sm font-medium text-white/80">
+            应用：
+            <span className="text-blue-300">
+              {appEditor.appType === 'vocab_today' ? '今日单词' : appEditor.appType === 'erc_practice' ? '真题练习' : '错题复习'}
+            </span>
+          </div>
+        )}
+
+        {appEditor.appType === 'vocab_today' ? (
+          <>
+            <label className="grid gap-1 text-xs text-white/60">
+              选择词书
+              <select
+                aria-label="选择词书"
+                value={appEditor.deckId}
+                onChange={(event) => setAppEditor((current) => (
+                  current ? { ...current, deckId: event.target.value } : current
+                ))}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                <option value="">选择词书</option>
+                {decks.map((deck) => (
+                  <option key={deck.id} value={deck.id}>
+                    {deck.name} ({deck.word_count}词)
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs text-white/60">
+              每日目标词数
+              <input
+                aria-label="每日目标词数"
+                type="number"
+                min={1}
+                max={500}
+                value={appEditor.dailyTargetCount}
+                onChange={(event) => setAppEditor((current) => (
+                  current
+                    ? { ...current, dailyTargetCount: Math.max(1, Math.min(500, Number(event.target.value) || 20)) }
+                    : current
+                ))}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+            </label>
+          </>
+        ) : null}
+
+        {appEditor.appType === 'erc_practice' ? (
+          <label className="grid gap-1 text-xs text-white/60">
+            每日目标文章数
+            <input
+              aria-label="每日目标文章数"
+              type="number"
+              min={1}
+              max={50}
+              value={appEditor.dailyArticleTarget}
+              onChange={(event) => setAppEditor((current) => (
+                current
+                  ? { ...current, dailyArticleTarget: Math.max(1, Math.min(50, Number(event.target.value) || 1)) }
+                  : current
+              ))}
+              className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
+          </label>
+        ) : null}
+
+        {appEditor.appType === 'erc_review' ? (
+          <>
+            <label className="grid gap-1 text-xs text-white/60">
+              复习范围
+              <select
+                aria-label="复习范围"
+                value={appEditor.reviewScope}
+                onChange={(event) => setAppEditor((current) => (
+                  current ? { ...current, reviewScope: event.target.value as any } : current
+                ))}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                <option value="due">到期复习 (due)</option>
+                <option value="mistakes">全部错题 (mistakes)</option>
+                <option value="all">全部题目 (all)</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs text-white/60">
+              每日目标题数
+              <input
+                aria-label="每日目标题数"
+                type="number"
+                min={1}
+                max={200}
+                value={appEditor.dailyQuestionTarget}
+                onChange={(event) => setAppEditor((current) => (
+                  current
+                    ? { ...current, dailyQuestionTarget: Math.max(1, Math.min(200, Number(event.target.value) || 10)) }
+                    : current
+                ))}
+                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+            </label>
+          </>
+        ) : null}
+
+        <label className="grid gap-1 text-xs text-white/60">
+          默认专注时长 (分钟)
+          <input
+            aria-label="默认专注时长 (分钟)"
+            type="number"
+            min={1}
+            value={appEditor.focusDurationMin}
+            onChange={(event) => setAppEditor((current) => (
+              current ? { ...current, focusDurationMin: Math.max(1, Number(event.target.value) || 25) } : current
+            ))}
+            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-white/70">
+          <input
+            aria-label="同步到今日计划"
+            type="checkbox"
+            checked={appEditor.addToTodayPlan}
+            onChange={(event) => setAppEditor((current) => (
+              current ? { ...current, addToTodayPlan: event.target.checked } : current
+            ))}
+            className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+          />
+          同步到今日计划
+        </label>
+
+        <div className="flex flex-wrap justify-end gap-2 mt-2">
+          {appEditor.index !== null ? (
+            <button
+              type="button"
+              onClick={deleteConfiguredApp}
+              className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
+            >
+              删除应用
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setAppEditor(null)}
+            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={saveAppEditorConfig}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            保存应用
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderCreateAppsColumn() {
+    const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+      .filter(type => !configuredApps.some(app => app.appType === type));
+
+    return (
+      <div className="flex min-h-[100px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3 text-left">
+        <div className="text-sm font-medium text-white/80">应用任务配置</div>
+        <div className="mt-3 grid flex-1 content-start gap-2">
+          {configuredApps.map((app, index) => (
+            appEditor?.index === index ? (
+              <div key={`app-edit-${index}`}>{renderAppEditor()}</div>
+            ) : (
+              <button
+                key={`app-item-${index}`}
+                type="button"
+                onClick={() => beginEditConfiguredApp(index)}
+                className="min-h-12 rounded-lg bg-white/[0.05] border border-white/10 px-3 py-2 text-left hover:bg-white/10 flex flex-col justify-center animate-fadeIn"
+              >
+                <div className="text-sm font-semibold text-white">
+                  {app.appType === 'vocab_today' ? '今日单词' : app.appType === 'erc_practice' ? '真题练习' : '错题复习'}
+                </div>
+                <div className="text-xs text-white/50 mt-1 truncate">
+                  {getAppConfigSummary(app)}
+                </div>
+              </button>
+            )
+          ))}
+
+          {appEditor?.index === null ? renderAppEditor() : null}
+
+          {appEditor === null && unconfiguredTypes.length > 0 ? (
+            <button
+              type="button"
+              onClick={beginAddConfiguredApp}
+              className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-center text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+            >
+              添加应用
+            </button>
+          ) : appEditor === null ? (
+            <div className="text-xs text-white/45 text-center py-2">已添加全部可用应用</div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   function openWorkbench(event: EventItem): void {
     resetCreateForm();
@@ -557,16 +1020,51 @@ const EventCountdownCard: React.FC = () => {
 
   function renderCreateArrangementColumn(kind: CreateWorkbenchItemState['kind']) {
     const label = kind === 'appointment' ? '日程' : '任务';
-    const items = createWorkbenchItems
-      .map((item, index) => ({ item, index }))
+    const manualItems = createWorkbenchItems
+      .map((item, index) => ({ item, index, isVirtual: false }))
       .filter(({ item }) => item.kind === kind);
+
+    const virtualItems = kind === 'task'
+      ? configuredApps.map((app, index) => ({
+          item: {
+            kind: 'task' as const,
+            title: app.appType === 'vocab_today'
+              ? `今日单词 (应用：${app.config.deckName})`
+              : app.appType === 'erc_practice'
+                ? `真题练习 (应用)`
+                : `错题复习 (应用)`,
+            content: getAppConfigSummary(app),
+            offsetDays: 0,
+          },
+          index,
+          isVirtual: true,
+        }))
+      : [];
+
+    const allItems = [...virtualItems, ...manualItems];
 
     return (
       <div className="flex min-h-[132px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <div className="text-sm font-medium text-white/80">{label}</div>
         <div className="mt-3 grid flex-1 content-start gap-2">
-          {items.map(({ item, index }) => (
-            createArrangementEditor?.index === index ? (
+          {allItems.map(({ item, index, isVirtual }) => {
+            if (isVirtual) {
+              return (
+                <div
+                  key={`virtual-app-${index}`}
+                  className="min-h-12 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-left text-sm font-medium text-blue-300 flex items-center justify-between animate-fadeIn"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{item.title}</div>
+                    <div className="text-xs text-white/40 mt-1 truncate">{item.content}</div>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-normal shrink-0 ml-2">
+                    托管
+                  </span>
+                </div>
+              );
+            }
+            return createArrangementEditor?.index === index ? (
               <div key={`${kind}-${index}`}>{renderCreateArrangementEditor(kind)}</div>
             ) : (
               <button
@@ -577,8 +1075,8 @@ const EventCountdownCard: React.FC = () => {
               >
                 {item.title || `未命名${label}`}
               </button>
-            )
-          ))}
+            );
+          })}
           {createArrangementEditor?.kind === kind && createArrangementEditor.index === null
             ? renderCreateArrangementEditor(kind)
             : null}
@@ -717,16 +1215,27 @@ const EventCountdownCard: React.FC = () => {
                       </label>
                     </div>
 
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                    <div>
-                      <h4 className="text-base font-semibold text-white">安排</h4>
-                      <p className="mt-1 text-sm text-white/45">安排内容</p>
+                    {/* 应用 */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                      <div>
+                        <h4 className="text-base font-semibold text-white">应用</h4>
+                        <p className="mt-1 text-sm text-white/45">配置子应用托管的每日任务</p>
+                      </div>
+                      <div className="mt-4">
+                        {renderCreateAppsColumn()}
+                      </div>
                     </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {renderCreateArrangementColumn('task')}
-                      {renderCreateArrangementColumn('appointment')}
+
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                      <div>
+                        <h4 className="text-base font-semibold text-white">安排</h4>
+                        <p className="mt-1 text-sm text-white/45">安排内容</p>
+                      </div>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {renderCreateArrangementColumn('task')}
+                        {renderCreateArrangementColumn('appointment')}
+                      </div>
                     </div>
-                  </div>
 
                 </div>
               ) : (
