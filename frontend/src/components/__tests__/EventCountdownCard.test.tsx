@@ -394,13 +394,15 @@ describe('EventCountdownCard', () => {
         createdEvents.push(created);
         return created;
       }
-      if (url === '/todo/events/event-blank/plan-draft/items' && options?.method === 'POST') {
+      if (url === '/todo/tasks' && options?.method === 'POST') {
         expect(JSON.parse(options.body || '{}')).toMatchObject({
-          kind: 'task',
           title: '准备资料',
           content: '先整理清单',
-          scheduled_for: expect.any(String),
-          sort_order: 0,
+          event: '空白事件',
+          event_id: 'event-blank',
+          task_type: 'focus',
+          period_type: 'once',
+          due_date: expect.any(String),
         });
         return {};
       }
@@ -423,7 +425,7 @@ describe('EventCountdownCard', () => {
     const overview = await screen.findByRole('dialog', { name: '事件总览' });
     expect(within(overview).getByText('空白事件')).toBeInTheDocument();
     expect(apiJson).toHaveBeenCalledWith(
-      '/todo/events/event-blank/plan-draft/items',
+      '/todo/tasks',
       expect.objectContaining({ method: 'POST' }),
     );
   });

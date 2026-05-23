@@ -3,13 +3,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   createEventPlanTemplate,
   createEvent,
-  createEventPlanDraftItem,
   getPrimaryEvent,
   listEventPlanTemplates,
   listEvents,
   updateEventPlanTemplate,
   type EventCreateInput,
-  type EventPlanDraftItemCreateInput,
   type EventPlanTemplateInput,
   type EventPlanTemplateItemInput,
 } from '../lib/events/api';
@@ -20,6 +18,12 @@ import {
   getCountdownTone,
   toDateTimeLocalValue,
 } from '../lib/events/dateTime';
+import {
+  createEventArrangementTask,
+  createEventArrangementAppointment,
+  type EventArrangementTaskInput,
+  type EventArrangementAppointmentInput,
+} from '../lib/events/arrangementApi';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import type { EventItem, EventPlanTemplate } from '../lib/events/types';
 
@@ -258,6 +262,7 @@ const EventCountdownCard: React.FC = () => {
 
   async function refreshAll(): Promise<void> {
     await Promise.all([loadPrimaryEvent(), loadEvents()]);
+    window.dispatchEvent(new CustomEvent('ark:reload-focus'));
   }
 
   function resetCreateForm(): void {
@@ -316,26 +321,49 @@ const EventCountdownCard: React.FC = () => {
     await refreshAll();
   }
 
-  async function createWorkbenchItemsForEvent(eventId: string, items: CreateWorkbenchItemState[]): Promise<void> {
+  async function createWorkbenchItemsForEvent(createdEvent: EventItem, items: CreateWorkbenchItemState[]): Promise<void> {
     for (let index = 0; index < items.length; index += 1) {
       const formItem = items[index];
       const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
       const scheduledAt = previewWorkbenchItemTime(formItem, selectedTemplate);
-      const payload: EventPlanDraftItemCreateInput = {
-        kind: formItem.kind,
-        title: formItem.title.trim(),
-        content: formItem.content.trim() || null,
-        sort_order: index,
-      };
-      if (scheduledAt) {
-        if (formItem.kind === 'appointment') {
-          payload.starts_at = null;
-          payload.ends_at = scheduledAt;
-        } else {
-          payload.scheduled_for = scheduledAt;
-        }
+      if (formItem.kind === 'task') {
+        const payload: EventArrangementTaskInput = {
+          title: formItem.title.trim(),
+          content: formItem.content.trim() || null,
+          priority: 0,
+          targetDuration: 0,
+          event: createdEvent.name,
+          eventId: createdEvent.id,
+          periodType: 'once',
+          customPeriodDays: null,
+          maxCompletionsPerPeriod: 1,
+          weekdayOnly: false,
+          timeInheritsFromEvent: false,
+          timeOverridden: Boolean(scheduledAt),
+          taskType: 'focus',
+          tags: [],
+          startDate: null,
+          dueDate: scheduledAt,
+        };
+        await createEventArrangementTask(createdEvent, payload);
+      } else {
+        const payload: EventArrangementAppointmentInput = {
+          title: formItem.title.trim(),
+          content: formItem.content.trim() || null,
+          status: 'pending',
+          startsAt: null,
+          endsAt: scheduledAt || '',
+          repeatRule: null,
+          eventId: createdEvent.id,
+          periodType: 'once',
+          customPeriodDays: null,
+          maxCompletionsPerPeriod: 1,
+          weekdayOnly: false,
+          timeInheritsFromEvent: false,
+          timeOverridden: true,
+        };
+        await createEventArrangementAppointment(createdEvent, payload);
       }
-      await createEventPlanDraftItem(eventId, payload);
     }
   }
 
@@ -448,7 +476,7 @@ const EventCountdownCard: React.FC = () => {
     try {
       const createdEvent = await createEvent(payload);
       if (workbenchItems.length > 0) {
-        await createWorkbenchItemsForEvent(createdEvent.id, workbenchItems);
+        await createWorkbenchItemsForEvent(createdEvent, workbenchItems);
         await finishCreatedEvent();
         return;
       }
