@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "anthropic>=0.39.0",
-  "arxiv>=2.4.0",
   "asyncpg>=0.31.0",
   "edge-tts>=7.2.3",
   "fastapi>=0.115.0",

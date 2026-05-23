@@ -6,8 +6,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from mini_agent_integration import init_mini_agent, register_mini_agent
-from routes.arxiv import close_arxiv, init_arxiv
-from routes.arxiv import router as arxiv_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
@@ -30,13 +28,11 @@ async def _lifespan(app: FastAPI):
     await init_mini_agent(app)
     await init_checkin(app)
     await init_todo(app)
-    await init_arxiv(app)
     await init_vocab(app)
     await init_erc(app)
     try:
         yield
     finally:
-        await close_arxiv(app)
         await close_auth(app)
 
 
@@ -54,7 +50,6 @@ app.include_router(auth_router)
 app.include_router(checkin_router)
 app.include_router(chat_router)
 app.include_router(todo_router)
-app.include_router(arxiv_router)
 app.include_router(vocab_router)
 app.include_router(erc_router)
 register_mini_agent(app)

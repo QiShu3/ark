@@ -4,9 +4,6 @@ import { vi } from 'vitest';
 // Mock API
 vi.mock('./lib/api', () => ({
   apiJson: vi.fn().mockImplementation(async (url) => {
-    if (url === '/api/arxiv/daily/config') return null;
-    if (url === '/api/arxiv/daily/candidates') return [];
-    if (url === '/api/arxiv/papers?limit=200') return [];
     if (typeof url === 'string' && url.startsWith('/todo/tasks/calendar')) return [];
     return [];
   }),

@@ -60,6 +60,7 @@ def test_register_mini_agent_routes_are_exposed_on_main_app() -> None:
     assert "/api/skills/upload" in http_paths
     assert "/api/pages/{profile_key}/session" in http_paths
     assert "/api/sessions" in http_paths
+    assert not any(path.startswith("/api/arxiv") for path in http_paths)
     assert "/api/sessions/ws/{session_id}" in websocket_paths
 
 
@@ -304,8 +305,8 @@ def test_resolved_prompt_route_returns_resolved_prompt_payload(monkeypatch) -> N
     profile = repository_module.ProfileRecord(
         id="profile-1",
         user_id=7,
-        key="agent-console",
-        name="Agent Console",
+        key="MainAgent",
+        name="Main Agent",
         config_json={"llm": {"api_key": "test-key"}},
         system_prompt=None,
         system_prompt_path=None,
@@ -403,8 +404,8 @@ def test_page_session_route_returns_latest_existing_session(monkeypatch) -> None
     profile = repository_module.ProfileRecord(
         id="profile-1",
         user_id=1,
-        key="agent-console",
-        name="Agent Console",
+        key="MainAgent",
+        name="Main Agent",
         config_json={"llm": {"api_key": "test-key"}},
         system_prompt=None,
         system_prompt_path=None,
@@ -426,8 +427,9 @@ def test_page_session_route_returns_latest_existing_session(monkeypatch) -> None
 
     app.dependency_overrides[auth_module.get_current_user] = fake_current_user
     app.state.auth_pool = object()
+
     async def fake_get_profile_by_key(pool, key):
-        return profile if key == "agent-console" else None
+        return profile if key == "MainAgent" else None
 
     async def fake_get_latest_session_for_profile(pool, user_id, profile_id):
         return session
@@ -436,7 +438,7 @@ def test_page_session_route_returns_latest_existing_session(monkeypatch) -> None
     monkeypatch.setattr(pages_module, "get_latest_session_for_profile", fake_get_latest_session_for_profile)
 
     client = TestClient(app)
-    response = client.post("/api/pages/agent-console/session")
+    response = client.post("/api/pages/MainAgent/session")
 
     assert response.status_code == 200
     assert response.json()["id"] == "session-1"
@@ -464,8 +466,8 @@ def test_page_session_route_creates_session_when_missing(monkeypatch) -> None:
     profile = repository_module.ProfileRecord(
         id="profile-2",
         user_id=1,
-        key="agent-console",
-        name="Agent Console",
+        key="MainAgent",
+        name="Main Agent",
         config_json={"llm": {"api_key": "test-key"}},
         system_prompt=None,
         system_prompt_path=None,
@@ -496,7 +498,7 @@ def test_page_session_route_creates_session_when_missing(monkeypatch) -> None:
     )
 
     async def fake_get_profile_by_key(pool, key):
-        return profile if key == "agent-console" else None
+        return profile if key == "MainAgent" else None
 
     async def fake_get_latest_session_for_profile(pool, user_id, profile_id):
         return None
@@ -526,7 +528,7 @@ def test_page_session_route_creates_session_when_missing(monkeypatch) -> None:
     monkeypatch.setattr(pages_module, "update_session", fake_update_session)
 
     client = TestClient(app)
-    response = client.post("/api/pages/agent-console/session")
+    response = client.post("/api/pages/MainAgent/session")
 
     assert response.status_code == 200
     assert response.json()["id"] == "session-2"
@@ -544,8 +546,8 @@ async def test_page_session_route_deduplicates_concurrent_creation(monkeypatch) 
     profile = repository_module.ProfileRecord(
         id="profile-3",
         user_id=1,
-        key="agent-console",
-        name="Agent Console",
+        key="MainAgent",
+        name="Main Agent",
         config_json={"llm": {"api_key": "test-key"}},
         system_prompt=None,
         system_prompt_path=None,
@@ -569,7 +571,7 @@ async def test_page_session_route_deduplicates_concurrent_creation(monkeypatch) 
 
     async def fake_get_profile_by_key(pool, key):
         del pool
-        return profile if key == "agent-console" else None
+        return profile if key == "MainAgent" else None
 
     async def fake_get_latest_session_for_profile(pool, user_id, profile_id):
         del pool, user_id, profile_id
@@ -627,8 +629,8 @@ async def test_page_session_route_deduplicates_concurrent_creation(monkeypatch) 
     monkeypatch.setattr(pages_module, "update_session", fake_update_session)
 
     first, second = await asyncio.gather(
-        pages_module.route_get_or_create_page_session("agent-console", current_user, object()),
-        pages_module.route_get_or_create_page_session("agent-console", current_user, object()),
+        pages_module.route_get_or_create_page_session("MainAgent", current_user, object()),
+        pages_module.route_get_or_create_page_session("MainAgent", current_user, object()),
     )
 
     assert create_calls == 1

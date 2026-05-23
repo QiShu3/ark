@@ -60,18 +60,13 @@ uv run python scripts/auth_selftest.py
 }
 ```
 
-## ArXiv（论文检索与状态）
+## ArXiv（已移除）
 
-接口：
-- `POST /arxiv/search`
-- `PUT /arxiv/papers/state`
-- `GET /arxiv/papers`
-- `GET /arxiv/health`
-
-自检（需要可用的 PostgreSQL）：
+旧的 ArXiv 子应用和相关表已从后端入口中移除。
+如需清理历史数据库里的残留表，请先备份，再执行：
 
 ```bash
-uv run python scripts/arxiv_selftest.py
+uv run python scripts/cleanup_arxiv_tables.py --apply
 ```
 
 ## 一键启动（含 MCP）

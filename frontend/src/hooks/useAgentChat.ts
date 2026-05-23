@@ -163,7 +163,7 @@ function canAttemptAutoOpen({
   );
 }
 
-export function useAgentChat(profileKey: string = 'agent-console') {
+export function useAgentChat(profileKey: string = 'MainAgent') {
   const token = useAuthStore((s) => s.token);
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);

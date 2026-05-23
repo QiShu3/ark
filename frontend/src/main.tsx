@@ -1,12 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Route, Routes } from 'react-router-dom';
 
 import App from './App';
 import Login from './pages/Login';
 import AppCenter from './pages/AppCenter';
-import AgentConsole from './pages/AgentConsole';
-import Arxiv from './pages/Arxiv';
 import ERCHome from './pages/ERC/Home';
 import ERCLibrary from './pages/ERC/Library';
 import ERCMistakes from './pages/ERC/Mistakes';
@@ -19,6 +17,7 @@ import VocabReview from './pages/Vocab/Review';
 import VocabStudy from './pages/Vocab/Study';
 import VocabToday from './pages/Vocab/Today';
 import VocabWordDetail from './pages/Vocab/WordDetail';
+import NotFound from './pages/NotFound';
 import RequireAuth from './routes/RequireAuth';
 import './index.css';
 
@@ -30,8 +29,6 @@ createRoot(document.getElementById('root')!).render(
         <Route element={<RequireAuth />}>
           <Route path="/" element={<App />} />
           <Route path="/apps" element={<AppCenter />} />
-          <Route path="/agent-console" element={<AgentConsole />} />
-          <Route path="/arxiv" element={<Arxiv />} />
           <Route path="/erc" element={<ERCHome />} />
           <Route path="/erc/library" element={<ERCLibrary />} />
           <Route path="/erc/articles/:articleId/practice" element={<ERCPractice />} />
@@ -44,7 +41,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/vocab/review" element={<VocabReview />} />
           <Route path="/vocab/mistakes" element={<VocabMistakes />} />
           <Route path="/vocab/words/:wordId" element={<VocabWordDetail />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </HashRouter>
