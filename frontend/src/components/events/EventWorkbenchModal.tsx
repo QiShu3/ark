@@ -17,6 +17,7 @@ import {
   updateEventArrangementAppointment,
   updateEventArrangementTask,
 } from '../../lib/events/arrangementApi';
+import { activateEventSubApps } from '../../lib/events/eventAppSync';
 import type { EventItem, EventWorkbench } from '../../lib/events/types';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';
 
@@ -532,6 +533,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setError(null);
     try {
       const updatedEvent = await updateEvent(currentEvent.id, { is_primary: true });
+      await activateEventSubApps(currentEvent.id);
       updateCurrentEvent(updatedEvent);
       await Promise.resolve(onChanged?.());
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
@@ -568,6 +570,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         due_at: dueAt,
         is_primary: eventEditForm.isPrimary,
       });
+      if (eventEditForm.isPrimary) {
+        await activateEventSubApps(currentEvent.id);
+      }
       updateCurrentEvent(updatedEvent);
       setEditingEventDetails(false);
       await Promise.resolve(onChanged?.());
