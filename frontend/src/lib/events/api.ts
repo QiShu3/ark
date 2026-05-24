@@ -77,14 +77,4 @@ export function updateEventPlanTemplate(templateId: string, input: EventPlanTemp
   });
 }
 
-export function copyEventPlanTemplate(templateId: string): Promise<EventPlanTemplate> {
-  return apiJson<EventPlanTemplate>(`/todo/event-plan-templates/${templateId}/copy`, {
-    method: 'POST',
-  });
-}
 
-export function deleteEventPlanTemplate(templateId: string): Promise<{ ok: boolean }> {
-  return apiJson<{ ok: boolean }>(`/todo/event-plan-templates/${templateId}`, {
-    method: 'DELETE',
-  });
-}
