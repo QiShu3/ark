@@ -2007,21 +2007,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 </button>
               </div>
             )}
-            {hasPendingTransition && (
-              <div className="flex items-center justify-between px-3 py-2 text-sm bg-amber-500/15 border-t border-amber-400/30">
-                <span>
-                  {isBreakPhase ? '休息阶段已结束，等待确认进入专注' : '专注阶段已结束，等待确认进入休息'}
-                </span>
-                <button
-                  onClick={_confirmFocusWorkflowPhase}
-                  disabled={confirmingFocusPhase}
-                  className="px-3 py-1 rounded bg-amber-400/80 text-black font-medium hover:bg-amber-300 disabled:opacity-60"
-                >
-                  {confirmingFocusPhase ? '确认中' : '确认流转'}
-                </button>
-              </div>
-            )}
-            <div 
+            <div
               className="flex-1 bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors cursor-pointer"
               onClick={() => setShowStatsModal(true)}
             >
