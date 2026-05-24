@@ -46,7 +46,10 @@ Backend commands run from `backend/`:
 ## Commit & Pull Request Guidelines
 - Follow the existing commit style: `feat: ...`, `fix: ...`, `chore: ...`, `refactor: ...`, with optional scopes like `feat(frontend): ...`.
 - Keep commits focused and avoid mixing frontend and backend refactors unless required by one feature.
-- After each code commit, update [开发日志.md](/Users/qishu/Project/ark/docs/开发日志.md) by adding a new commit entry under the matching branch section, including the user request wording, commit hash, completed work, and verification notes.
+- After each code commit, update the development log without loading the full history:
+  - Add the full commit entry to the current branch shard in [docs/devlogs/](/Users/qishu/Project/ark/docs/devlogs/), creating the shard if needed; use the branch name with `/` and other non-`a-z0-9._-` characters replaced by `-`.
+  - Refresh the compact [开发日志.md](/Users/qishu/Project/ark/docs/开发日志.md) only for its recent-record summary and shard index.
+  - Include the user request wording, commit hash, completed work, and verification notes in the branch shard.
 - PRs should include a short problem statement, implementation summary, test evidence, and screenshots for visible UI changes.
 
 ## Configuration & Security Tips

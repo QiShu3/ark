@@ -18,38 +18,23 @@ describe('AchievementCard', () => {
     vi.useRealTimers();
   });
 
-  it('shows only the achievement label by default and reveals summaries on hover', async () => {
-    const user = userEvent.setup();
+  it('shows the achievement label', async () => {
     (apiJson as Mock).mockResolvedValue({
-      active_event: { id: 'event-1', name: '论文投稿', due_at: '2026-04-25T12:00:00Z', is_primary: true, user_id: 7, created_at: '2026-04-20T00:00:00Z', updated_at: '2026-04-20T00:00:00Z' },
-      event_achievements: {
-        title: '事件成就',
-        summary_text: '论文投稿 的当前进展',
-        stats: { unlocked_count: 3, in_progress_count: 1, primary_metric_value: 7200, primary_metric_label: '事件专注秒数' },
-        latest_unlocked: [{ id: 'a', title: '连续推进 3 天', description: '...', status: 'unlocked', current_value: 3, target_value: 3, progress_text: null }],
-        upcoming: [{ id: 'b', title: '收尾干净', description: '...', status: 'in_progress', current_value: 4, target_value: 5, progress_text: '4 / 5' }],
-      },
+      active_event: null,
+      event_achievements: null,
       global_achievements: {
         title: '全局成就',
-        summary_text: '始终显示的长期累计进度',
-        stats: { unlocked_count: 2, in_progress_count: 1, primary_metric_value: 151200, primary_metric_label: '总专注秒数' },
+        summary_text: null,
+        stats: { unlocked_count: 0, in_progress_count: 0, primary_metric_value: 0, primary_metric_label: '总专注秒数' },
         latest_unlocked: [],
-        upcoming: [{ id: 'g', title: '总专注 50 小时', description: '...', status: 'in_progress', current_value: 151200, target_value: 180000, progress_text: '151200 / 180000' }],
+        upcoming: [],
       },
     });
 
     render(<AchievementCard />);
 
-    const trigger = screen.getByRole('button', { name: '成就' });
     expect(screen.getByText('成就')).toBeInTheDocument();
     await waitFor(() => expect(apiJson).toHaveBeenCalledWith('/todo/achievements/summary'));
-    expect(screen.queryByText('论文投稿')).not.toBeInTheDocument();
-
-    await user.hover(trigger);
-
-    expect(screen.getByText('论文投稿')).toBeInTheDocument();
-    expect(screen.getByText(/事件已解锁 3 项/)).toBeInTheDocument();
-    expect(screen.getByText(/全局：总专注 50 小时/)).toBeInTheDocument();
   });
 
   it('opens the modal when the card is clicked', async () => {

@@ -1,0 +1,82 @@
+# 开发日志：codex/repeat-completion-events
+
+> 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
+
+### 2026-04-20 14:46 · 44fed46 · fix(todo): keep manually scheduled tasks in today summary
+
+- 用户提出的需求：
+  - “等等，关于第一个要求，是我说的不够清楚：只显示 period_type === 'daily' 且日期命中今天的任务，但也显示从右栏拖拽过来的任务”
+  - “我想在安排管理右边的任务板块中仍然可以看到已完成的任务，但是无法拖到左边的今日任务中”
+  - “编辑任务是不是还没有更新，我看到很多旧参数”
+
+- 本次完成的工作：
+  - 调整安排总览“今日任务”的最终展示规则
+  - 不是所有“今天日期命中”的任务都会进入今日任务区
+  - 仅显示两类任务：
+    - `period_type === 'daily'` 且命中今天的任务
+    - 用户手动从右侧拖拽到左侧今日区的任务
+  - 为任务新增 `manually_scheduled_for_today` 标记
+  - 右拖左 `move-to-today` 时设置该标记
+  - 左拖右 `move-out-of-today` 时清除该标记
+  - 前后端同步更新该字段的类型、接口返回和测试
+- 验证情况：
+  - `uv run pytest tests/test_todo_routes.py`
+  - `pnpm test -- --run src/components/__tests__/TaskEditModal.test.tsx src/components/__tests__/AppointmentEditModal.test.tsx src/components/__tests__/PlaceholderCard.arrangements.test.tsx src/components/__tests__/PlaceholderCard.taskAssistant.test.tsx src/components/__tests__/EventCountdownCard.test.tsx`
+  - `pnpm check`
+
+### 2026-04-20 14:28 · 3118eab · feat(todo): move today tasks back to arrangements
+
+- 用户提出的需求：
+  - “然后是关于 安排管理处左右两侧的任务拖拽功能 ，现在是右边可以拖拽到左边，现在我想更新新功能，左侧的任务可以拖拽到右边，但
+1. 如果今日任务的任务截止时间恰好是今天，就要提示用户。比如说如果是每日任务或者是每周任务（但今天是一周的最后一天），就要提示用户。”
+  - “具体要看左右任务是什么类型”
+  - “不希望改变周期”
+
+- 本次完成的工作：
+  - 新增左侧“今日任务”拖回右侧任务仓库的能力
+  - 左拖右时不会修改任务周期，只会将任务移出今日
+  - 如果任务当天处于当前周期截止边界，拖回右侧前会弹出确认提示
+  - 为事件继承时间的任务补上移出今日时的时间覆盖处理，避免再次被事件时间拉回今天
+  - 补充前后端测试覆盖左拖右行为
+- 验证情况：
+  - `uv run pytest tests/test_todo_routes.py`
+  - `pnpm test -- --run src/components/__tests__/TaskEditModal.test.tsx src/components/__tests__/AppointmentEditModal.test.tsx src/components/__tests__/PlaceholderCard.arrangements.test.tsx src/components/__tests__/PlaceholderCard.taskAssistant.test.tsx src/components/__tests__/EventCountdownCard.test.tsx`
+  - `pnpm check`
+
+### 2026-04-20 11:26 · d56d79b · feat(todo): support recurring completion and event-bound arrangements
+
+- 用户提出的需求：
+  - “对于 任务 或者 日程 部分。它们现在应该还不支持重复完成，对吗？我希望可以实现重复完成，且添加时间条件，比如说：
+1. 有些只可以在工作日完成
+2. 有些一天只能完成一次，有些一周只能完成一次，有些在xx天内只能完成一次，总而言之有一个时间周期，单个时间周期内只能完成一次。”
+  - “还有一个问题：我希望任务/日程是和事件绑定的，它的截止时间也是事件的截止时间。你看看关于 事件 的代码”
+  - “你有没有修改 创建安排 这一弹窗，我发现事件参数处是填空的，我希望是选择框为默认选择当前事件。再看看其他参数需不需要修改”
+
+- 本次完成的工作：
+  - 为任务和日程实现重复完成能力
+  - 支持完成周期、单周期最大完成次数、仅工作日可完成
+  - 新增完成记录与周期完成状态计算
+  - 任务和日程支持绑定事件，并可继承事件截止时间
+  - 创建安排弹窗默认选择当前主事件
+  - 清理任务创建/编辑中的旧循环参数
+  - 右侧任务仓库筛选统一改为基于 `period_type`
+  - 重复任务在当前周期完成后继续保留在右侧已完成区域中，但不可再拖入今日任务
+  - 安排总览逐步重构为更符合新语义的展示逻辑
+- 验证情况：
+  - `uv run pytest tests/test_todo_routes.py`
+  - `pnpm test -- --run src/components/__tests__/TaskEditModal.test.tsx src/components/__tests__/AppointmentEditModal.test.tsx src/components/__tests__/PlaceholderCard.arrangements.test.tsx src/components/__tests__/PlaceholderCard.taskAssistant.test.tsx src/components/__tests__/EventCountdownCard.test.tsx`
+  - `pnpm check`
+
+### 2026-04-20 · ce6b31b · docs: add repeat completion and event binding design
+
+- 用户提出的需求：
+  - “对于 任务 或者 日程 部分。它们现在应该还不支持重复完成，对吗？我希望可以实现重复完成，且添加时间条件，比如说：
+1. 有些只可以在工作日完成
+2. 有些一天只能完成一次，有些一周只能完成一次，有些在xx天内只能完成一次，总而言之有一个时间周期，单个时间周期内只能完成一次。”
+  - “还有一个问题：我希望任务/日程是和事件绑定的，它的截止时间也是事件的截止时间。你看看关于 事件 的代码”
+
+- 本次完成的工作：
+  - 新增重复完成与事件绑定方案设计文档
+  - 沉淀任务/日程重复完成、事件绑定、安排管理重构的设计依据
+- 验证情况：
+  - 文档提交，无额外代码验证
