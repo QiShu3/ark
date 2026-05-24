@@ -2,6 +2,29 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-24 23:47 · c592bba · feat: add event store template cleanup
+
+- 用户提出的需求：
+  - “好，删除掉事件商店的所有模板，等会我会提供给你一个模板”
+  - “错了，我想任务日常工作流应用配置这四个东西是同级的，删除事件前也要把这些一起清理掉，要提醒用户”
+  - “把这个事件作为 事件 商店的模板吧，你知道我的意思吗？”
+  - “是，start_date 改成 当天，due_at改成2026-12-26 8:00:00+08”
+  - “OK，提交代码吧。不过我发现用户好像没有删除模板的入口，你看看怎么回事？”
+
+- 本次完成的工作：
+  - 将事件删除语义调整为容器清理：删除事件前提供 `delete-preview`，前端确认弹窗提示会同步清理任务、日程、工作流和应用配置；删除时同步清理事件下的 app config、工作流，并软删除事件任务和日程。
+  - 清空事件商店原有内置模板，并新增项目内置 `考研英语` 模板：默认开始日期为 `2026-05-24`，默认到期时间为 `2026-12-26 08:00:00+08`，包含词书、ERC 真题练习、ERC 复习 3 个 app 配置和 1 个工作流。
+  - 查明个人事件模板后端已有删除接口，但前端缺少入口；新增个人模板删除 API 封装和“删除模板”按钮，确认后调用 `DELETE /todo/event-plan-templates/{template_id}` 并从下拉框移除。
+  - 已同步把 `kaoyan-english` 模板写入当前本地数据库，刷新事件商店即可看到。
+
+- 验证情况：
+  - `cd backend && uv run pytest tests/test_todo_routes.py tests/test_todo_event_store.py -q`，97 个后端测试通过。
+  - `cd frontend && pnpm test -- EventCountdownCard.test.tsx EventWorkbenchModal.test.tsx`，2 个测试文件 / 27 个测试通过。
+  - `cd frontend && pnpm check`，TypeScript 检查通过。
+  - `cd backend && uv run ruff check routes/todo/db.py ../backend/tests/test_todo_routes.py`，Ruff 检查通过。
+  - `git diff --check` 通过。
+  - 当前环境提示 Node v22.18.0 与项目期望 Node 20.x 不一致，但前端测试和类型检查通过。
+
 ### 2026-05-22 21:15 · 588b249 · feat(frontend): add unified SubAppArrangements component and integrate in Vocab and ERC sub-apps
 
 - 用户提出的需求：
