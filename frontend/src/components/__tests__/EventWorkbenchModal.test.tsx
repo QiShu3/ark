@@ -41,8 +41,6 @@ const eventTask: Task = {
   title: '完成第一轮复习',
   content: '覆盖全部章节',
   status: 'todo',
-  priority: 0,
-  target_duration: 0,
   current_cycle_count: 0,
   target_cycle_count: 0,
   cycle_period: 'daily',
@@ -59,7 +57,6 @@ const eventTask: Task = {
   time_overridden: true,
   manually_scheduled_for_today: false,
   task_type: 'focus',
-  tags: [],
   actual_duration: 0,
   start_date: null,
   due_date: '2026-06-06T09:00:00Z',
@@ -362,8 +359,6 @@ describe('EventWorkbenchModal', () => {
         expect(JSON.parse(options.body || '{}')).toMatchObject({
           title: '精修错题',
           content: '错题本',
-          priority: 2,
-          target_duration: 2700,
           task_type: 'checkin',
           start_date: expectedStartDate,
           due_date: expectedDueDate,
@@ -373,14 +368,11 @@ describe('EventWorkbenchModal', () => {
           period_type: 'weekly',
           max_completions_per_period: 2,
           weekday_only: true,
-          tags: ['数学', '错题'],
         });
         tasks[0] = {
           ...tasks[0],
           title: '精修错题',
           content: '错题本',
-          priority: 2,
-          target_duration: 2700,
           task_type: 'checkin',
           start_date: expectedStartDate,
           due_date: expectedDueDate,
@@ -390,7 +382,6 @@ describe('EventWorkbenchModal', () => {
           period_type: 'weekly',
           max_completions_per_period: 2,
           weekday_only: true,
-          tags: ['数学', '错题'],
         };
         return tasks[0];
       }
@@ -439,24 +430,19 @@ describe('EventWorkbenchModal', () => {
 
     await user.click(await screen.findByRole('button', { name: '完成第一轮复习' }));
     expect(screen.getByLabelText('任务类型')).toBeInTheDocument();
-    expect(screen.getByLabelText('优先级')).toBeInTheDocument();
-    expect(screen.getByLabelText('目标时长（分钟）')).toBeInTheDocument();
     expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
     expect(screen.getByLabelText('截止日期')).toBeInTheDocument();
     expect(screen.getByLabelText('关联事件')).toBeInTheDocument();
     expect(screen.getByLabelText('完成周期')).toBeInTheDocument();
     expect(screen.getByLabelText('单周期最多完成次数')).toBeInTheDocument();
     expect(screen.getByLabelText('仅工作日可完成')).toBeInTheDocument();
-    expect(screen.getByLabelText('标签')).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('标题'));
     await user.type(screen.getByLabelText('标题'), '精修错题');
     await user.selectOptions(screen.getByLabelText('任务类型'), 'checkin');
-    await user.selectOptions(screen.getByLabelText('优先级'), '2');
     await user.clear(screen.getByLabelText('备注'));
     await user.type(screen.getByLabelText('备注'), '错题本');
-    await user.clear(screen.getByLabelText('目标时长（分钟）'));
-    await user.type(screen.getByLabelText('目标时长（分钟）'), '45');
+
     await user.clear(screen.getByLabelText('开始日期'));
     await user.type(screen.getByLabelText('开始日期'), '2026-06-01T08:00');
     await user.clear(screen.getByLabelText('截止日期'));
@@ -466,8 +452,7 @@ describe('EventWorkbenchModal', () => {
     await user.clear(screen.getByLabelText('单周期最多完成次数'));
     await user.type(screen.getByLabelText('单周期最多完成次数'), '2');
     await user.click(screen.getByLabelText('仅工作日可完成'));
-    await user.clear(screen.getByLabelText('标签'));
-    await user.type(screen.getByLabelText('标签'), '数学, 错题');
+
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     expect(await screen.findByRole('button', { name: '精修错题' })).toBeInTheDocument();

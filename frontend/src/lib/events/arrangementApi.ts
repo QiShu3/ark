@@ -7,8 +7,6 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 export type EventArrangementTaskInput = {
   title: string;
   content: string | null;
-  priority: 0 | 1 | 2 | 3;
-  targetDuration: number;
   event: string;
   eventId: string | null;
   periodType: Task['period_type'];
@@ -18,7 +16,7 @@ export type EventArrangementTaskInput = {
   timeInheritsFromEvent: boolean;
   timeOverridden: boolean;
   taskType: Task['task_type'];
-  tags: string[];
+  appTaskType: Task['app_task_type'];
   startDate: string | null;
   dueDate: string | null;
 };
@@ -50,8 +48,6 @@ export function createEventArrangementTask(
       title: input.title,
       content: input.content,
       status: 'todo',
-      priority: input.priority,
-      target_duration: input.targetDuration,
       current_cycle_count: 0,
       target_cycle_count: 0,
       cycle_period: 'daily',
@@ -67,7 +63,7 @@ export function createEventArrangementTask(
       time_inherits_from_event: input.timeInheritsFromEvent,
       time_overridden: input.timeOverridden,
       task_type: input.taskType,
-      tags: input.tags,
+      app_task_type: input.appTaskType,
       start_date: input.startDate,
       due_date: input.dueDate,
     }),
@@ -85,8 +81,6 @@ export function updateEventArrangementTask(
     body: JSON.stringify({
       title: input.title,
       content: input.content,
-      priority: input.priority,
-      target_duration: input.targetDuration,
       event: input.event,
       event_id: input.eventId,
       is_recurring: input.periodType !== 'once',
@@ -97,7 +91,7 @@ export function updateEventArrangementTask(
       time_inherits_from_event: input.timeInheritsFromEvent,
       time_overridden: input.timeOverridden,
       task_type: input.taskType,
-      tags: input.tags,
+      app_task_type: input.appTaskType,
       start_date: input.startDate,
       due_date: input.dueDate,
     }),

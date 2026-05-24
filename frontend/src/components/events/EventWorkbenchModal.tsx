@@ -43,8 +43,6 @@ type EditingArrangement =
 type TaskArrangementFormState = {
   title: string;
   content: string;
-  priority: 0 | 1 | 2 | 3;
-  targetMinutes: number;
   event: string;
   eventId: string;
   periodType: CompletionPeriodType;
@@ -54,7 +52,6 @@ type TaskArrangementFormState = {
   timeInheritsFromEvent: boolean;
   timeOverridden: boolean;
   taskType: 'focus' | 'checkin';
-  tagsText: string;
   startDate: string;
   dueDate: string;
 };
@@ -85,8 +82,6 @@ const EMPTY_EVENT_EDIT_FORM: EventEditFormState = {
 const EMPTY_TASK_ARRANGEMENT_FORM: TaskArrangementFormState = {
   title: '',
   content: '',
-  priority: 0,
-  targetMinutes: 0,
   event: '',
   eventId: '',
   periodType: 'once',
@@ -96,7 +91,6 @@ const EMPTY_TASK_ARRANGEMENT_FORM: TaskArrangementFormState = {
   timeInheritsFromEvent: false,
   timeOverridden: false,
   taskType: 'focus',
-  tagsText: '',
   startDate: '',
   dueDate: '',
 };
@@ -216,8 +210,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     return {
       title: task.title,
       content: task.content ?? '',
-      priority: task.priority as 0 | 1 | 2 | 3,
-      targetMinutes: Math.round(task.target_duration / 60),
       event: task.event || '',
       eventId: task.event_id ?? '',
       periodType: task.period_type ?? 'once',
@@ -227,7 +219,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       timeInheritsFromEvent: task.time_inherits_from_event ?? false,
       timeOverridden: task.time_overridden ?? false,
       taskType: task.task_type || 'focus',
-      tagsText: task.tags.join(', '),
       startDate: toDateTimeLocalValue(task.start_date),
       dueDate: toDateTimeLocalValue(task.due_date),
     };
@@ -418,10 +409,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           ? Math.max(1, Math.floor(appointmentArrangementForm.customPeriodDays || 1))
           : null
       );
-    const tags = taskArrangementForm.tagsText
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
     setSubmitting(true);
     setError(null);
     try {
@@ -429,8 +416,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         const payload = {
           title,
           content: taskArrangementForm.content.trim() || null,
-          priority: taskArrangementForm.priority,
-          targetDuration: Math.max(0, Math.round(taskArrangementForm.targetMinutes * 60)),
           event: taskArrangementForm.event.trim(),
           eventId: taskArrangementForm.eventId || null,
           periodType: taskArrangementForm.periodType,
@@ -440,7 +425,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           timeInheritsFromEvent: taskArrangementForm.timeInheritsFromEvent,
           timeOverridden: taskArrangementForm.timeOverridden,
           taskType: taskArrangementForm.taskType,
-          tags,
+          appTaskType: null,
           startDate: taskStartDate,
           dueDate: taskDueDate,
         };
@@ -637,22 +622,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   <option value="checkin">快速打卡</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-xs text-white/60">
-                优先级
-                <select
-                  aria-label="优先级"
-                  value={taskArrangementForm.priority}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, priority: Number(changeEvent.target.value) as 0 | 1 | 2 | 3 }))
-                  )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                >
-                  <option value={0}>0 低</option>
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3 高</option>
-                </select>
-              </label>
             </div>
             <label className="grid gap-1 text-xs text-white/60">
               备注
@@ -664,19 +633,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
               />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-white/60">
-                目标时长（分钟）
-                <input
-                  aria-label="目标时长（分钟）"
-                  type="number"
-                  min={0}
-                  value={taskArrangementForm.targetMinutes}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, targetMinutes: Number(changeEvent.target.value) }))
-                  )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
-                />
-              </label>
               <label className="grid gap-1 text-xs text-white/60">
                 开始日期
                 <input
@@ -788,16 +744,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
               />
               仅工作日可完成
-            </label>
-            <label className="grid gap-1 text-xs text-white/60">
-              标签
-              <input
-                aria-label="标签"
-                value={taskArrangementForm.tagsText}
-                onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, tagsText: changeEvent.target.value }))}
-                placeholder="逗号分隔，例如：学习,arxiv"
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white placeholder:text-white/30"
-              />
             </label>
           </>
         ) : (

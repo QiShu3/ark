@@ -16,8 +16,6 @@ type EventItem = {
 type TaskEditFormState = {
   title: string;
   content: string;
-  priority: 0 | 1 | 2 | 3;
-  targetMinutes: number;
   event: string;
   eventId: string;
   periodType: CompletionPeriodType;
@@ -27,7 +25,6 @@ type TaskEditFormState = {
   timeInheritsFromEvent: boolean;
   timeOverridden: boolean;
   taskType: 'focus' | 'checkin';
-  tagsText: string;
   startDate: string;
   dueDate: string;
 };
@@ -49,8 +46,6 @@ function buildEditForm(task: Task): TaskEditFormState {
   return {
     title: task.title,
     content: task.content || '',
-    priority: task.priority as 0 | 1 | 2 | 3,
-    targetMinutes: Math.round(task.target_duration / 60),
     event: task.event || '',
     eventId: task.event_id ?? '',
     periodType: task.period_type ?? 'once',
@@ -60,7 +55,6 @@ function buildEditForm(task: Task): TaskEditFormState {
     timeInheritsFromEvent: task.time_inherits_from_event ?? false,
     timeOverridden: task.time_overridden ?? false,
     taskType: task.task_type || 'focus',
-    tagsText: task.tags.join(', '),
     startDate: toLocalDateTimeValue(task.start_date),
     dueDate: toLocalDateTimeValue(task.due_date),
   };
@@ -132,28 +126,19 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
       const startDate = form.startDate ? new Date(form.startDate).toISOString() : null;
       const dueDate = form.dueDate ? new Date(form.dueDate).toISOString() : null;
       const customPeriodDays = form.periodType === 'custom_days' ? Math.max(1, Math.floor(form.customPeriodDays || 1)) : null;
-      const tags = form.tagsText
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean);
 
       const patchData = task.managed_by_app
         ? {
-            priority: form.priority,
-            target_duration: Math.round(form.targetMinutes * 60),
             event: form.event.trim(),
             event_id: form.eventId || null,
             time_inherits_from_event: form.timeInheritsFromEvent,
             time_overridden: form.timeOverridden,
-            tags,
             start_date: startDate,
             due_date: dueDate,
           }
         : {
             title: form.title.trim(),
             content: form.content.trim() || null,
-            priority: form.priority,
-            target_duration: Math.round(form.targetMinutes * 60),
             event: form.event.trim(),
             event_id: form.eventId || null,
             is_recurring: form.periodType !== 'once',
@@ -164,7 +149,6 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
             time_inherits_from_event: form.timeInheritsFromEvent,
             time_overridden: form.timeOverridden,
             task_type: form.taskType,
-            tags,
             start_date: startDate,
             due_date: dueDate,
           };
@@ -270,34 +254,18 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">任务类型</label>
-              <select
-                aria-label="任务类型"
-                value={form.taskType}
-                onChange={(e) => setForm((state) => ({ ...state, taskType: e.target.value as 'focus' | 'checkin' }))}
-                disabled={task.managed_by_app}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="focus">专注任务</option>
-                <option value="checkin">快速打卡</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">优先级</label>
-              <select
-                aria-label="优先级"
-                value={form.priority}
-                onChange={(e) => setForm((state) => ({ ...state, priority: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              >
-                <option value={0}>0 低</option>
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3 高</option>
-              </select>
-            </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-white/70">任务类型</label>
+            <select
+              aria-label="任务类型"
+              value={form.taskType}
+              onChange={(e) => setForm((state) => ({ ...state, taskType: e.target.value as 'focus' | 'checkin' }))}
+              disabled={task.managed_by_app}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="focus">专注任务</option>
+              <option value="checkin">快速打卡</option>
+            </select>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -313,17 +281,6 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">目标时长（分钟）</label>
-              <input
-                aria-label="目标时长（分钟）"
-                type="number"
-                min={0}
-                value={form.targetMinutes}
-                onChange={(e) => setForm((state) => ({ ...state, targetMinutes: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
             <div className="flex flex-col gap-2">
               <label className="text-sm text-white/70">开始日期</label>
               <input
@@ -430,17 +387,6 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
             />
             仅工作日可完成
           </label>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm text-white/70">标签</label>
-            <input
-              aria-label="标签"
-              value={form.tagsText}
-              onChange={(e) => setForm((state) => ({ ...state, tagsText: e.target.value }))}
-              placeholder="逗号分隔，例如：学习,arxiv"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-            />
-          </div>
 
           {error ? <div className="text-sm text-red-400">{error}</div> : null}
         </div>

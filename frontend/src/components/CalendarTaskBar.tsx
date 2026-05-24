@@ -4,7 +4,7 @@ import { CalendarTask, CalendarWeekSegment } from './calendarUtils';
 const TASK_COLORS = ['sky', 'mint', 'lavender', 'pink', 'green', 'yellow', 'violet'] as const;
 
 function taskColor(task: CalendarTask): string {
-  const source = task.tags?.[0] || task.task_type || task.id;
+  const source = task.app_id || task.task_type || task.id;
   const code = Array.from(source).reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return TASK_COLORS[code % TASK_COLORS.length];
 }

@@ -14,16 +14,14 @@ const task = (patch: Record<string, unknown>) => ({
   title: patch.title ?? 'Task',
   content: null,
   status: patch.status ?? 'todo',
-  priority: patch.priority ?? 0,
-  target_duration: 0,
   current_cycle_count: 0,
   target_cycle_count: 0,
   cycle_period: 'daily',
   cycle_every_days: null,
   event: '',
   event_ids: [],
+  event_id: patch.event_id ?? 'primary-event-1',
   task_type: 'focus',
-  tags: [],
   actual_duration: 0,
   start_date: patch.start_date ?? null,
   due_date: patch.due_date ?? null,
@@ -42,6 +40,7 @@ const appointment = (patch: Record<string, unknown>) => ({
   ends_at: patch.ends_at ?? '2026-04-16T10:30:00+08:00',
   repeat_rule: patch.repeat_rule ?? null,
   linked_task_id: patch.linked_task_id ?? null,
+  event_id: patch.event_id ?? 'primary-event-1',
   is_deleted: false,
   created_at: '2026-04-16T00:00:00+08:00',
   updated_at: patch.updated_at ?? '2026-04-16T00:00:00+08:00',
@@ -59,9 +58,8 @@ describe('MultiWeekCalendarModal', () => {
             title: '准备工作汇报',
             start_date: '2026-04-16T09:00:00+08:00',
             due_date: '2026-04-16T11:00:00+08:00',
-            priority: 3,
           }),
-          task({ id: 'read', title: '睡前阅读', due_date: '2026-04-16T21:00:00+08:00', priority: 1 }),
+          task({ id: 'read', title: '睡前阅读', due_date: '2026-04-16T21:00:00+08:00' }),
           task({ id: 'overflow-1', title: '任务三', due_date: '2026-04-16T21:00:00+08:00' }),
           task({ id: 'overflow-2', title: '任务四', due_date: '2026-04-16T21:00:00+08:00' }),
           task({ id: 'overflow-3', title: '任务五', due_date: '2026-04-16T21:00:00+08:00' }),
@@ -71,6 +69,18 @@ describe('MultiWeekCalendarModal', () => {
         return Promise.resolve([
           appointment({ id: 'standup', title: '参加站会', ends_at: '2026-04-16T10:30:00+08:00' }),
         ]);
+      }
+      if (path === '/todo/events/primary') {
+        return Promise.resolve({
+          id: 'primary-event-1',
+          user_id: 7,
+          name: '主事件',
+          start_date: '2026-04-01',
+          due_at: '2026-04-30',
+          is_primary: true,
+          created_at: '2026-04-01T00:00:00+08:00',
+          updated_at: '2026-04-01T00:00:00+08:00',
+        });
       }
       return Promise.resolve([]);
     });
@@ -160,13 +170,25 @@ describe('MultiWeekCalendarModal', () => {
           title: '准备工作汇报',
           start_date: '2026-04-16T09:00:00+08:00',
           due_date: '2026-04-16T11:00:00+08:00',
-          priority: 3,
         }),
       ]);
     });
     mockApiJson.mockImplementationOnce((path: string) => {
       expect(path).toBe('/todo/appointments?view=all');
       return Promise.resolve([]);
+    });
+    mockApiJson.mockImplementationOnce((path: string) => {
+      expect(path).toBe('/todo/events/primary');
+      return Promise.resolve({
+        id: 'primary-event-1',
+        user_id: 7,
+        name: '主事件',
+        start_date: '2026-04-01',
+        due_at: '2026-04-30',
+        is_primary: true,
+        created_at: '2026-04-01T00:00:00+08:00',
+        updated_at: '2026-04-01T00:00:00+08:00',
+      });
     });
     mockApiJson.mockImplementationOnce((path: string) => {
       expect(path).toContain('/todo/tasks/calendar');

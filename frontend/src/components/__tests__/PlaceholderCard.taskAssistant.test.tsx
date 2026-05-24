@@ -68,13 +68,11 @@ describe('PlaceholderCard task assistant', () => {
                 title: '预习课文',
                 content: '阅读老师发来的课文材料，标记不理解的词句。',
                 dueDate: '2026-04-20T10:00:00+08:00',
-                tags: ['语文'],
               },
               {
                 title: '拍摄视频',
                 content: '按通知要求录制朗读视频。',
                 dueDate: '2026-04-21T20:00:00+08:00',
-                tags: ['作业'],
               },
             ],
           }),
@@ -108,15 +106,12 @@ describe('PlaceholderCard task assistant', () => {
               {
                 title: '预习课文',
                 content: '阅读老师发来的课文材料，标记不理解的词句。',
-                targetMinutes: 35,
                 dueDate: '2026-04-20T10:00:00+08:00',
-                tags: ['语文'],
               },
               {
                 title: '拍摄视频',
                 content: '按通知要求录制朗读视频。',
                 dueDate: '2026-04-21T20:00:00+08:00',
-                tags: ['作业'],
               },
             ],
           }),
@@ -136,9 +131,7 @@ describe('PlaceholderCard task assistant', () => {
 
     expect(screen.getByRole('heading', { name: '创建安排' })).toBeInTheDocument();
     expect(screen.getByLabelText('标题')).toHaveValue('预习课文');
-    expect(screen.getByLabelText('目标时长（分钟）')).toHaveValue(35);
     expect(screen.getByLabelText('截止日期')).toHaveValue('2026-04-20T10:00');
-    expect(screen.getByLabelText('标签')).toHaveValue('语文');
 
     await waitFor(() => {
       expect(screen.queryByText('安排解析助手')).not.toBeInTheDocument();
@@ -153,8 +146,6 @@ describe('PlaceholderCard task assistant', () => {
           reply: JSON.stringify({
             title: '完成周报',
             content: '整理本周进展并提交。',
-            targetMinutes: 45,
-            tags: ['工作'],
           }),
         });
       }
@@ -172,8 +163,6 @@ describe('PlaceholderCard task assistant', () => {
     expect(screen.queryByText(/安排草稿/)).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '创建安排' })).toBeInTheDocument();
     expect(screen.getByLabelText('标题')).toHaveValue('完成周报');
-    expect(screen.getByLabelText('目标时长（分钟）')).toHaveValue(45);
-    expect(screen.getByLabelText('标签')).toHaveValue('工作');
   });
 
   it('opens the appointment create flow when assistant identifies a schedule item', async () => {

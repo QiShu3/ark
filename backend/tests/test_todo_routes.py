@@ -131,7 +131,6 @@ class _FakeTodoConn:
                 rows,
                 key=lambda task: (
                     0 if task["status"] != "done" else 1,
-                    -task["priority"],
                     task["due_date"] or datetime.max.replace(tzinfo=UTC),
                     task["updated_at"],
                 ),
@@ -483,34 +482,69 @@ class _FakeTodoConn:
             )
             return {"id": task["id"]} if task is not None else None
         if "INSERT INTO tasks" in sql:
-            if len(args) == 10:
+            if len(args) == 9:
                 task_id = uuid4()
                 now = datetime.now(UTC)
                 row = {
-                    **_task_row(title=args[1], due_date=args[9]),
+                    **_task_row(title=args[1], due_date=args[8]),
                     "id": task_id,
                     "user_id": args[0],
                     "content": args[2],
-                    "priority": args[3],
-                    "target_duration": args[4],
-                    "event": args[5],
-                    "event_id": args[6],
-                    "task_type": args[7],
-                    "tags": args[8],
+                    "event": args[3],
+                    "event_id": args[4],
+                    "task_type": args[5],
+                    "updated_at": now,
+                }
+                self.tasks.append(row)
+                return row
+            if len(args) == 7:
+                task_id = uuid4()
+                now = datetime.now(UTC)
+                row = {
+                    **_task_row(title=args[1], due_date=args[6]),
+                    "id": task_id,
+                    "user_id": args[0],
+                    "content": args[2],
+                    "status": "todo",
+                    "current_cycle_count": 0,
+                    "target_cycle_count": 0,
+                    "cycle_period": "daily",
+                    "cycle_every_days": None,
+                    "event": args[3],
+                    "event_ids": [],
+                    "event_id": args[4],
+                    "is_recurring": False,
+                    "period_type": "once",
+                    "custom_period_days": None,
+                    "max_completions_per_period": 1,
+                    "weekday_only": False,
+                    "time_inherits_from_event": False,
+                    "time_overridden": False,
+                    "manually_scheduled_for_today": False,
+                    "task_type": args[5],
+                    "start_date": None,
+                    "source_type": "user",
+                    "app_id": None,
+                    "app_task_type": None,
+                    "app_config_id": None,
+                    "app_instance_key": None,
+                    "managed_by_app": False,
+                    "actual_duration": 0,
+                    "is_deleted": False,
                     "created_at": now,
                     "updated_at": now,
                 }
                 self.tasks.append(row)
                 return row
-            if "ON CONFLICT (user_id, app_id, app_task_type)" in sql and len(args) > 30 and args[25] == "app":
+            if "ON CONFLICT (user_id, app_id, app_task_type)" in sql and len(args) == 28 and args[22] == "app":
                 existing = next(
                     (
                         item
                         for item in self.tasks
                         if item["user_id"] == args[0]
                         and item["source_type"] == "app"
-                        and item["app_id"] == args[26]
-                        and item["app_task_type"] == args[27]
+                        and item["app_id"] == args[23]
+                        and item["app_task_type"] == args[24]
                         and item["managed_by_app"]
                         and not item["is_deleted"]
                     ),
@@ -521,8 +555,6 @@ class _FakeTodoConn:
                         "title",
                         "content",
                         "status",
-                        "priority",
-                        "target_duration",
                         "current_cycle_count",
                         "target_cycle_count",
                         "cycle_period",
@@ -539,7 +571,6 @@ class _FakeTodoConn:
                         "time_overridden",
                         "manually_scheduled_for_today",
                         "task_type",
-                        "tags",
                         "start_date",
                         "due_date",
                         "source_type",
@@ -561,33 +592,30 @@ class _FakeTodoConn:
                 "title": args[1],
                 "content": args[2],
                 "status": args[3],
-                "priority": args[4],
-                "target_duration": args[5],
-                "current_cycle_count": args[6],
-                "target_cycle_count": args[7],
-                "cycle_period": args[8],
-                "cycle_every_days": args[9],
-                "event": args[10],
-                "event_ids": args[11],
-                "event_id": args[12],
-                "is_recurring": args[13],
-                "period_type": args[14],
-                "custom_period_days": args[15],
-                "max_completions_per_period": args[16],
-                "weekday_only": args[17],
-                "time_inherits_from_event": args[18],
-                "time_overridden": args[19],
-                "manually_scheduled_for_today": args[20],
-                "task_type": args[21],
-                "tags": args[22],
-                "start_date": args[23],
-                "due_date": args[24],
-                "source_type": args[25] if len(args) > 25 else "user",
-                "app_id": args[26] if len(args) > 26 else None,
-                "app_task_type": args[27] if len(args) > 27 else None,
-                "app_config_id": args[28] if len(args) > 28 else None,
-                "app_instance_key": args[29] if len(args) > 29 else None,
-                "managed_by_app": args[30] if len(args) > 30 else False,
+                "current_cycle_count": args[4],
+                "target_cycle_count": args[5],
+                "cycle_period": args[6],
+                "cycle_every_days": args[7],
+                "event": args[8],
+                "event_ids": args[9],
+                "event_id": args[10],
+                "is_recurring": args[11],
+                "period_type": args[12],
+                "custom_period_days": args[13],
+                "max_completions_per_period": args[14],
+                "weekday_only": args[15],
+                "time_inherits_from_event": args[16],
+                "time_overridden": args[17],
+                "manually_scheduled_for_today": args[18],
+                "task_type": args[19],
+                "start_date": args[20],
+                "due_date": args[21],
+                "source_type": args[22] if len(args) > 22 else "user",
+                "app_id": args[23] if len(args) > 23 else None,
+                "app_task_type": args[24] if len(args) > 24 else None,
+                "app_config_id": args[25] if len(args) > 25 else None,
+                "app_instance_key": args[26] if len(args) > 26 else None,
+                "managed_by_app": args[27] if len(args) > 27 else False,
                 "actual_duration": 0,
                 "is_deleted": False,
                 "created_at": now,
@@ -1222,7 +1250,7 @@ async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_
 
     response = await client.patch(
         f"/todo/tasks/{task_id}",
-        json={"priority": 2, "target_duration": 900, "tags": ["morning"]},
+        json={"start_date": "2026-06-01T08:00:00Z", "due_date": "2026-06-07T10:30:00Z"},
         headers=auth_headers,
     )
 
@@ -1231,9 +1259,6 @@ async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_
     assert payload["title"] == "今日单词"
     assert payload["source_type"] == "app"
     assert payload["managed_by_app"] is True
-    assert payload["priority"] == 2
-    assert payload["target_duration"] == 900
-    assert payload["tags"] == ["morning"]
 
 
 @pytest.mark.asyncio
@@ -1377,7 +1402,6 @@ def _task_row(
     user_id: int = 7,
     title: str = "Task",
     status: str = "todo",
-    priority: int = 0,
     start_date: datetime | None = None,
     due_date: datetime | None = None,
     is_deleted: bool = False,
@@ -1389,8 +1413,6 @@ def _task_row(
         "title": title,
         "content": None,
         "status": status,
-        "priority": priority,
-        "target_duration": 0,
         "current_cycle_count": 0,
         "target_cycle_count": 0,
         "cycle_period": "daily",
@@ -1407,7 +1429,6 @@ def _task_row(
         "time_overridden": False,
         "manually_scheduled_for_today": False,
         "task_type": "focus",
-        "tags": [],
         "actual_duration": 0,
         "start_date": start_date,
         "due_date": due_date,

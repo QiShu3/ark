@@ -11,14 +11,14 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
   try {
     const workbench = await getEventWorkbench(eventId);
     const tempAppTasks = workbench.created_tasks.filter(
-      (task) => task.tags && task.tags.includes('__app_task_config')
+      (task) => task.app_task_type
     );
 
     for (const task of tempAppTasks) {
       if (!task.content) continue;
       try {
         const config = JSON.parse(task.content);
-        const appType = task.tags.find((tag) => tag !== '__app_task_config');
+        const appType = task.app_task_type;
 
         if (appType === 'vocab_today') {
           await initializeVocabAppTask({

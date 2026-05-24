@@ -30,8 +30,6 @@ async def init_todo(app: Any) -> None:
               title VARCHAR(255) NOT NULL,
               content TEXT NULL,
               status VARCHAR(20) NOT NULL DEFAULT 'todo',
-              priority INTEGER NOT NULL DEFAULT 0,
-              target_duration INTEGER NOT NULL DEFAULT 0,
               current_cycle_count INTEGER NOT NULL DEFAULT 0,
               target_cycle_count INTEGER NOT NULL DEFAULT 0,
               cycle_period VARCHAR(20) NOT NULL DEFAULT 'daily',
@@ -39,7 +37,6 @@ async def init_todo(app: Any) -> None:
               event TEXT NOT NULL DEFAULT '',
               event_ids UUID[] NOT NULL DEFAULT '{}',
               task_type VARCHAR(20) NOT NULL DEFAULT 'focus',
-              tags TEXT[] NOT NULL DEFAULT '{}',
               actual_duration INTEGER NOT NULL DEFAULT 0,
               start_date TIMESTAMPTZ NULL,
               due_date TIMESTAMPTZ NULL,
@@ -76,8 +73,6 @@ async def init_todo(app: Any) -> None:
                     AND app_config_id IS NOT NULL
                   )
               ),
-              CONSTRAINT chk_tasks_priority CHECK (priority BETWEEN 0 AND 3),
-              CONSTRAINT chk_tasks_target_duration CHECK (target_duration >= 0),
               CONSTRAINT chk_tasks_current_cycle_count CHECK (current_cycle_count >= 0),
               CONSTRAINT chk_tasks_target_cycle_count CHECK (target_cycle_count >= 0),
               CONSTRAINT chk_tasks_cycle_period CHECK (cycle_period IN ('daily', 'weekly', 'monthly', 'custom')),
@@ -159,7 +154,6 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
         await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin'));")
-        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';")
         await conn.execute("ALTER TABLE tasks DROP COLUMN IF EXISTS category;")
         await conn.execute("UPDATE tasks SET status = 'todo' WHERE status = 'doing';")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_status;")

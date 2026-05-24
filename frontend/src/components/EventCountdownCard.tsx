@@ -366,8 +366,6 @@ const EventCountdownCard: React.FC = () => {
         const payload: EventArrangementTaskInput = {
           title: formItem.title.trim(),
           content: formItem.content.trim() || null,
-          priority: 0,
-          targetDuration: 0,
           event: createdEvent.name,
           eventId: createdEvent.id,
           periodType: 'once',
@@ -377,7 +375,7 @@ const EventCountdownCard: React.FC = () => {
           timeInheritsFromEvent: false,
           timeOverridden: Boolean(scheduledAt),
           taskType: 'focus',
-          tags: [],
+          appTaskType: null,
           startDate: null,
           dueDate: scheduledAt,
         };
@@ -561,8 +559,6 @@ const EventCountdownCard: React.FC = () => {
               defaultFocusDuration: app.config.defaultFocusDuration,
               addToTodayPlan: app.config.addToTodayPlan,
             }),
-            priority: 0,
-            targetDuration: 0,
             event: createdEvent.name,
             eventId: createdEvent.id,
             periodType: 'once',
@@ -572,7 +568,7 @@ const EventCountdownCard: React.FC = () => {
             timeInheritsFromEvent: false,
             timeOverridden: false,
             taskType: 'focus',
-            tags: ['__app_task_config', app.appType],
+            appTaskType: app.appType,
             startDate: null,
             dueDate: null,
           };

@@ -43,8 +43,6 @@ class TaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     content: str | None = None
     status: TaskStatus = "todo"
-    priority: int = Field(default=0, ge=0, le=3)
-    target_duration: int = Field(default=0, ge=0)
     current_cycle_count: int = Field(default=0, ge=0)
     target_cycle_count: int = Field(default=0, ge=0)
     cycle_period: TaskCyclePeriod = "daily"
@@ -60,7 +58,6 @@ class TaskCreateRequest(BaseModel):
     time_inherits_from_event: bool = False
     time_overridden: bool = False
     task_type: TaskType = "focus"
-    tags: list[str] = Field(default_factory=list)
     start_date: datetime | None = None
     due_date: datetime | None = None
     source_type: TaskSourceType = "user"
@@ -75,8 +72,6 @@ class TaskUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     content: str | None = None
     status: TaskStatus | None = None
-    priority: int | None = Field(default=None, ge=0, le=3)
-    target_duration: int | None = Field(default=None, ge=0)
     current_cycle_count: int | None = Field(default=None, ge=0)
     target_cycle_count: int | None = Field(default=None, ge=0)
     cycle_period: TaskCyclePeriod | None = None
@@ -92,7 +87,6 @@ class TaskUpdateRequest(BaseModel):
     time_inherits_from_event: bool | None = None
     time_overridden: bool | None = None
     task_type: TaskType | None = None
-    tags: list[str] | None = None
     start_date: datetime | None = None
     due_date: datetime | None = None
     source_type: TaskSourceType | None = None
@@ -109,8 +103,6 @@ class TaskOut(BaseModel):
     title: str
     content: str | None
     status: TaskStatus
-    priority: int
-    target_duration: int
     current_cycle_count: int
     target_cycle_count: int
     cycle_period: TaskCyclePeriod
@@ -127,7 +119,6 @@ class TaskOut(BaseModel):
     time_overridden: bool
     manually_scheduled_for_today: bool
     task_type: TaskType
-    tags: list[str]
     actual_duration: int
     start_date: datetime | None
     due_date: datetime | None

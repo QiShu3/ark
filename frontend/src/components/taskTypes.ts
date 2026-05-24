@@ -21,8 +21,6 @@ export interface Task {
   title: string;
   content: string | null;
   status: 'todo' | 'done';
-  priority: number;
-  target_duration: number;
   current_cycle_count: number;
   target_cycle_count: number;
   cycle_period: 'daily' | 'weekly' | 'monthly' | 'custom';
@@ -39,7 +37,6 @@ export interface Task {
   time_overridden?: boolean;
   manually_scheduled_for_today?: boolean;
   task_type: 'focus' | 'checkin';
-  tags: string[];
   actual_duration: number;
   start_date: string | null;
   due_date: string | null;

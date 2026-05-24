@@ -131,7 +131,6 @@ export default function TaskFocusWork({
 
   const title = workflow?.task_title ?? task?.title ?? '未命名任务';
   const content = task?.content?.trim() ?? '';
-  const tags = Array.isArray(task?.tags) ? task.tags : [];
   const cycleText = task && task.target_cycle_count > 0
     ? `${task.current_cycle_count}/${task.target_cycle_count} 次`
     : null;
@@ -167,15 +166,6 @@ export default function TaskFocusWork({
             ) : (
               <p className="text-sm text-white/48">这个任务还没有补充说明。</p>
             )}
-            {tags.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <span key={tag} className="rounded-full border border-white/12 bg-white/6 px-3 py-1 text-xs text-white/68">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            ) : null}
             {cycleText ? <div className="mt-4 text-xs text-white/45">周期进度：{cycleText}</div> : null}
           </section>
         ) : null}

@@ -176,7 +176,6 @@ export function groupCalendarDotsByDay(
 
 function compareTasks(a: CalendarTask, b: CalendarTask): number {
   if (a.status !== b.status) return a.status === 'done' ? 1 : -1;
-  if (a.priority !== b.priority) return b.priority - a.priority;
   const aDue = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
   const bDue = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
   if (aDue !== bDue) return aDue - bDue;

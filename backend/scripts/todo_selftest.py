@@ -45,8 +45,6 @@ def _run() -> int:
                 "title": "test task",
                 "content": "hello",
                 "status": "todo",
-                "priority": 2,
-                "target_duration": 1500,
             },
         )
         if r.status_code != 200:
