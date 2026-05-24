@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import asyncpg
@@ -12,6 +14,135 @@ def _pool_from_request(request: Request) -> asyncpg.Pool:
     if pool is None:
         raise HTTPException(status_code=500, detail="数据库未初始化")
     return pool
+
+
+async def _clear_event_template_store(conn: Any) -> None:
+    await conn.execute("DELETE FROM event_template_store_items;")
+    await conn.execute("DELETE FROM event_template_store_templates;")
+
+
+async def _seed_event_template_store(conn: Any) -> None:
+    """写入项目内置事件模板。"""
+    utc_plus_8 = timezone(timedelta(hours=8))
+    app_configs = [
+        {
+            "client_id": "vocab_today",
+            "app_type": "vocab_today",
+            "config": {
+                "deckId": "bec",
+                "deckName": None,
+                "dailyTargetCount": 20,
+                "defaultFocusDuration": 1500,
+                "addToTodayPlan": True,
+            },
+        },
+        {
+            "client_id": "erc_practice",
+            "app_type": "erc_practice",
+            "config": {
+                "dailyArticleTarget": 1,
+                "defaultFocusDuration": 1500,
+                "addToTodayPlan": True,
+            },
+        },
+        {
+            "client_id": "erc_review",
+            "app_type": "erc_review",
+            "config": {
+                "reviewScope": "due",
+                "dailyQuestionTarget": 10,
+                "defaultFocusDuration": 1500,
+                "addToTodayPlan": True,
+            },
+        },
+    ]
+    workflows = [
+        {
+            "client_id": "kaoyan-english-workflow",
+            "name": "考研英语",
+            "focus_duration": 1500,
+            "break_duration": 300,
+            "default_focus_timer_mode": "countdown",
+            "phases": [
+                {
+                    "phase_type": "focus",
+                    "duration": 1500,
+                    "timer_mode": "countdown",
+                    "task_id": "vocab_today",
+                    "focus_work_type": None,
+                    "is_temporary": False,
+                    "record_focus": True,
+                },
+                {
+                    "phase_type": "break",
+                    "duration": 300,
+                    "timer_mode": None,
+                    "task_id": None,
+                    "focus_work_type": None,
+                    "is_temporary": False,
+                    "record_focus": True,
+                },
+                {
+                    "phase_type": "focus",
+                    "duration": 300,
+                    "timer_mode": "countdown",
+                    "task_id": "erc_practice",
+                    "focus_work_type": None,
+                    "is_temporary": False,
+                    "record_focus": True,
+                },
+                {
+                    "phase_type": "break",
+                    "duration": 300,
+                    "timer_mode": None,
+                    "task_id": None,
+                    "focus_work_type": None,
+                    "is_temporary": False,
+                    "record_focus": True,
+                },
+                {
+                    "phase_type": "focus",
+                    "duration": 300,
+                    "timer_mode": "countdown",
+                    "task_id": "erc_review",
+                    "focus_work_type": None,
+                    "is_temporary": False,
+                    "record_focus": True,
+                },
+                {
+                    "phase_type": "break",
+                    "duration": 300,
+                    "timer_mode": None,
+                    "task_id": None,
+                    "focus_work_type": None,
+                    "is_temporary": False,
+                    "record_focus": True,
+                },
+            ],
+        }
+    ]
+    await conn.execute(
+        """
+        INSERT INTO event_template_store_templates(
+            slug, category, name, description, schedule_mode,
+            default_event_name, default_start_date, default_due_at, default_is_primary,
+            app_configs, workflows, sort_order
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::JSONB, $11::JSONB, $12)
+        """,
+        "kaoyan-english",
+        "考研",
+        "考研英语",
+        "项目内置模板，包含词书、真题练习和复习工作流。",
+        "before_due",
+        "考研英语",
+        date(2026, 5, 24),
+        datetime(2026, 12, 26, 8, 0, tzinfo=utc_plus_8),
+        True,
+        json.dumps(app_configs, ensure_ascii=False),
+        json.dumps(workflows, ensure_ascii=False),
+        0,
+    )
 
 
 async def init_todo(app: Any) -> None:
@@ -704,3 +835,48 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_event_plan_template_items_template_sort ON event_plan_template_items(template_id, sort_order ASC);"
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_template_store_templates (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              slug VARCHAR(120) NOT NULL UNIQUE,
+              category VARCHAR(80) NOT NULL,
+              name VARCHAR(255) NOT NULL,
+              description TEXT,
+              schedule_mode VARCHAR(32) NOT NULL CHECK (schedule_mode IN ('from_start', 'before_due')),
+              default_event_name VARCHAR(255),
+              default_start_date DATE,
+              default_due_at TIMESTAMPTZ,
+              default_is_primary BOOLEAN,
+              app_configs JSONB NOT NULL DEFAULT '[]'::jsonb,
+              workflows JSONB NOT NULL DEFAULT '[]'::jsonb,
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_template_store_items (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              template_id UUID NOT NULL REFERENCES event_template_store_templates(id) ON DELETE CASCADE,
+              kind VARCHAR(32) NOT NULL CHECK (kind IN ('task', 'appointment')),
+              title VARCHAR(255) NOT NULL,
+              content TEXT,
+              offset_days INTEGER NOT NULL CHECK (offset_days >= 0),
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              details JSONB NOT NULL DEFAULT '{}'::jsonb,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_event_template_store_sort ON event_template_store_templates(sort_order ASC, name ASC);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_event_template_store_items_sort ON event_template_store_items(template_id, sort_order ASC);"
+        )
+        await _clear_event_template_store(conn)
+        await _seed_event_template_store(conn)

@@ -13,6 +13,7 @@ from .db import _pool_from_request
 from .event_store import (
     create_event_row,
     delete_event_row,
+    get_event_delete_preview_row,
     get_primary_event_row,
     list_event_rows,
     update_event_row,
@@ -86,11 +87,14 @@ from .schemas import (
     ERCAppTaskInitRequest,
     ERCPracticeAppTaskInitRequest,
     EventCreateRequest,
+    EventDeletePreviewOut,
     EventOut,
     EventPlanTemplateCreateRequest,
     EventPlanTemplateItemOut,
     EventPlanTemplateOut,
     EventPlanTemplateUpdateRequest,
+    EventTemplateStoreItemOut,
+    EventTemplateStoreOut,
     EventUpdateRequest,
     EventWorkbenchOut,
     FocusLogCreateRequest,
@@ -181,6 +185,55 @@ async def _event_plan_template_out(conn: Any, row: Any) -> EventPlanTemplateOut:
         row["id"],
     )
     return _row_to_event_plan_template(row, items)
+
+
+def _row_to_event_template_store_item(row: Any) -> EventTemplateStoreItemOut:
+    return EventTemplateStoreItemOut(
+        id=row["id"],
+        template_id=row["template_id"],
+        kind=row["kind"],
+        title=str(row["title"]),
+        content=row["content"],
+        offset_days=int(row["offset_days"]),
+        sort_order=int(row["sort_order"]),
+        details=_payload_dict(_row_value(row, "details", {})),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_event_template_store(row: Any, items: list[Any]) -> EventTemplateStoreOut:
+    return EventTemplateStoreOut(
+        id=row["id"],
+        slug=str(row["slug"]),
+        category=str(row["category"]),
+        name=str(row["name"]),
+        description=row["description"],
+        schedule_mode=row["schedule_mode"],
+        default_event_name=_row_value(row, "default_event_name"),
+        default_start_date=_row_value(row, "default_start_date"),
+        default_due_at=_row_value(row, "default_due_at"),
+        default_is_primary=_row_value(row, "default_is_primary"),
+        items=[_row_to_event_template_store_item(item) for item in items],
+        app_configs=_payload_list(_row_value(row, "app_configs", [])),
+        workflows=_payload_list(_row_value(row, "workflows", [])),
+        sort_order=int(_row_value(row, "sort_order", 0) or 0),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def _event_template_store_out(conn: Any, row: Any) -> EventTemplateStoreOut:
+    items = await conn.fetch(
+        """
+        SELECT id, template_id, kind, title, content, offset_days, sort_order, details, created_at, updated_at
+        FROM event_template_store_items
+        WHERE template_id = $1
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        row["id"],
+    )
+    return _row_to_event_template_store(row, items)
 
 
 async def _replace_event_plan_template_items(
@@ -1640,6 +1693,25 @@ async def get_achievement_summary(
     )
 
 
+@router.get("/event-template-store", response_model=list[EventTemplateStoreOut])
+async def list_event_template_store(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[EventTemplateStoreOut]:
+    _ = user
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, slug, category, name, description, schedule_mode, default_event_name, default_start_date,
+                   default_due_at, default_is_primary, app_configs, workflows, sort_order, created_at, updated_at
+            FROM event_template_store_templates
+            ORDER BY sort_order ASC, name ASC
+            """
+        )
+        return [await _event_template_store_out(conn, row) for row in rows]
+
+
 @router.get("/event-plan-templates", response_model=list[EventPlanTemplateOut])
 async def list_event_plan_templates(
     request: Request,
@@ -2126,6 +2198,26 @@ async def update_event(
     return _row_to_event(row)
 
 
+@router.get("/events/{event_id}/delete-preview", response_model=EventDeletePreviewOut)
+async def get_event_delete_preview(
+    request: Request,
+    event_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> EventDeletePreviewOut:
+    """返回删除事件时会一起清理的内容数量。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await get_event_delete_preview_row(conn, user_id=int(user.id), event_id=event_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+    return EventDeletePreviewOut(
+        tasks_count=int(row["tasks_count"]),
+        appointments_count=int(row["appointments_count"]),
+        workflows_count=int(row["workflows_count"]),
+        app_configs_count=int(row["app_configs_count"]),
+    )
+
+
 @router.delete("/events/{event_id}")
 async def delete_event(
     request: Request,
@@ -2135,7 +2227,8 @@ async def delete_event(
     """删除事件。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        tag = await delete_event_row(conn, user_id=int(user.id), event_id=event_id)
+        async with conn.transaction():
+            tag = await delete_event_row(conn, user_id=int(user.id), event_id=event_id)
     if not tag.startswith("DELETE ") or tag.endswith(" 0"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
     return {"ok": True}

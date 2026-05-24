@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routes.auth_routes import get_current_user
+from routes.todo.db import init_todo
 from routes.todo_routes import _next_task_window_after_today, router
 
 
@@ -53,6 +54,9 @@ class _FakeTodoConn:
         self.focus_logs: list[dict[str, Any]] = []
         self.event_plan_templates: list[dict[str, Any]] = []
         self.event_plan_template_items: list[dict[str, Any]] = []
+        self.event_template_store_templates: list[dict[str, Any]] = []
+        self.event_template_store_items: list[dict[str, Any]] = []
+        self.focus_workflow_presets: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -71,6 +75,12 @@ class _FakeTodoConn:
         if "FROM event_plan_template_items" in sql and "WHERE template_id = $1" in sql:
             template_id = args[0]
             rows = [item for item in self.event_plan_template_items if item["template_id"] == template_id]
+            return sorted(rows, key=lambda item: (item["sort_order"], item["created_at"]))
+        if "FROM event_template_store_templates" in sql and "ORDER BY sort_order ASC" in sql:
+            return sorted(self.event_template_store_templates, key=lambda item: (item["sort_order"], item["name"]))
+        if "FROM event_template_store_items" in sql and "WHERE template_id = $1" in sql:
+            template_id = args[0]
+            rows = [item for item in self.event_template_store_items if item["template_id"] == template_id]
             return sorted(rows, key=lambda item: (item["sort_order"], item["created_at"]))
         if "FROM tasks" in sql and "WHERE user_id = $1 AND event_id = $2" in sql:
             user_id, event_id = args
@@ -198,6 +208,34 @@ class _FakeTodoConn:
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
+        if "SELECT" in sql and "tasks_count" in sql and "app_configs_count" in sql:
+            user_id, event_id = args[0], args[1]
+            if not any(event["id"] == event_id and event["user_id"] == user_id for event in self.events):
+                return None
+            return {
+                "tasks_count": sum(
+                    1
+                    for task in self.tasks
+                    if task["user_id"] == user_id and task["event_id"] == event_id and not task["is_deleted"]
+                ),
+                "appointments_count": sum(
+                    1
+                    for appointment in self.appointments
+                    if appointment["user_id"] == user_id
+                    and appointment["event_id"] == event_id
+                    and not appointment["is_deleted"]
+                ),
+                "workflows_count": sum(
+                    1
+                    for workflow in self.focus_workflow_presets
+                    if workflow["user_id"] == user_id and workflow.get("event_id") == event_id
+                ),
+                "app_configs_count": sum(
+                    1
+                    for config in self.app_task_configs
+                    if config["user_id"] == user_id and config.get("event_id") == event_id
+                ),
+            }
         if "SELECT id FROM vocab_decks WHERE id = $1" in sql:
             return {"id": args[0]}
         if "regexp_replace(key, '_[0-9]+$', '') AS deck_id" in sql:
@@ -823,6 +861,34 @@ class _FakeTodoConn:
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
+        if sql.startswith("DELETE FROM event_template_store_items"):
+            self.event_template_store_items = []
+            return "DELETE 0"
+        if sql.startswith("DELETE FROM event_template_store_templates"):
+            self.event_template_store_templates = []
+            return "DELETE 0"
+        if "INSERT INTO event_template_store_templates" in sql:
+            template_id = uuid4()
+            now = datetime.now(UTC)
+            row = {
+                "id": template_id,
+                "slug": args[0],
+                "category": args[1],
+                "name": args[2],
+                "description": args[3],
+                "schedule_mode": args[4],
+                "default_event_name": args[5],
+                "default_start_date": args[6],
+                "default_due_at": args[7],
+                "default_is_primary": args[8],
+                "app_configs": json.loads(args[9]),
+                "workflows": json.loads(args[10]),
+                "sort_order": args[11],
+                "created_at": now,
+                "updated_at": now,
+            }
+            self.event_template_store_templates.append(row)
+            return "INSERT 1"
         if sql.startswith("DELETE FROM event_plan_template_items"):
             template_id = args[0]
             before = len(self.event_plan_template_items)
@@ -911,6 +977,50 @@ class _FakeTodoConn:
                     appointment["updated_at"] = datetime.now(UTC)
                     updated += 1
             return f"UPDATE {updated}"
+        if "UPDATE tasks" in sql and "app_config_id = NULL" in sql:
+            user_id, event_id = args
+            updated = 0
+            for task in self.tasks:
+                if task["user_id"] == user_id and task["event_id"] == event_id and not task["is_deleted"]:
+                    task["is_deleted"] = True
+                    task["event_id"] = None
+                    task["source_type"] = "user"
+                    task["app_id"] = None
+                    task["app_task_type"] = None
+                    task["app_config_id"] = None
+                    task["app_instance_key"] = None
+                    task["managed_by_app"] = False
+                    task["updated_at"] = datetime.now(UTC)
+                    updated += 1
+            return f"UPDATE {updated}"
+        if "UPDATE appointments" in sql and "event_id = NULL" in sql:
+            user_id, event_id = args
+            updated = 0
+            for appointment in self.appointments:
+                if appointment["user_id"] == user_id and appointment["event_id"] == event_id and not appointment["is_deleted"]:
+                    appointment["is_deleted"] = True
+                    appointment["event_id"] = None
+                    appointment["updated_at"] = datetime.now(UTC)
+                    updated += 1
+            return f"UPDATE {updated}"
+        if sql.startswith("DELETE FROM focus_workflow_presets"):
+            user_id, event_id = args
+            before = len(self.focus_workflow_presets)
+            self.focus_workflow_presets = [
+                workflow
+                for workflow in self.focus_workflow_presets
+                if not (workflow["user_id"] == user_id and workflow.get("event_id") == event_id)
+            ]
+            return f"DELETE {before - len(self.focus_workflow_presets)}"
+        if sql.startswith("DELETE FROM app_task_configs"):
+            user_id, event_id = args
+            before = len(self.app_task_configs)
+            self.app_task_configs = [
+                config
+                for config in self.app_task_configs
+                if not (config["user_id"] == user_id and config.get("event_id") == event_id)
+            ]
+            return f"DELETE {before - len(self.app_task_configs)}"
         if sql.startswith("DELETE FROM events"):
             event_id, user_id = args
             before = len(self.events)
@@ -951,6 +1061,40 @@ def _build_app() -> FastAPI:
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: _DummyUser()
     return app
+
+
+@pytest.mark.asyncio
+async def test_init_todo_seeds_event_template_store(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = type("App", (), {})()
+    app.state = type("State", (), {})()
+    app.state.auth_pool = pool
+
+    await init_todo(app)
+
+    test_app = _build_app()
+    client = TestClient(test_app)
+    resp = client.get("/todo/event-template-store")
+
+    assert resp.status_code == 200
+    templates = resp.json()
+    assert [template["name"] for template in templates] == ["考研英语"]
+    template = templates[0]
+    assert template["category"] == "考研"
+    assert template["default_event_name"] == "考研英语"
+    assert template["default_start_date"] == "2026-05-24"
+    assert template["default_due_at"] == "2026-12-26T08:00:00+08:00"
+    assert template["default_is_primary"] is True
+    assert template["items"] == []
+    assert [item["client_id"] for item in template["app_configs"]] == [
+        "vocab_today",
+        "erc_practice",
+        "erc_review",
+    ]
+    assert template["workflows"][0]["phases"][0]["task_id"] == "vocab_today"
 
 
 @pytest_asyncio.fixture
@@ -2190,6 +2334,100 @@ def test_delete_primary_event_leaves_no_primary(monkeypatch) -> None:
     assert primary_resp.status_code == 404
 
 
+def test_delete_event_cleans_container_contents(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    event_id = uuid4()
+    config_id = uuid4()
+    app_task_id = uuid4()
+    user_task_id = uuid4()
+    appointment_id = uuid4()
+    workflow_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "Main",
+            "start_date": datetime(2026, 3, 1, tzinfo=UTC).date(),
+            "due_at": datetime(2026, 3, 20, tzinfo=UTC),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    conn.app_task_configs = [
+        {
+            "id": config_id,
+            "user_id": 7,
+            "event_id": event_id,
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "config": {"deck_id": "cet4", "daily_target_count": 20},
+            "status": "active",
+            "created_task_id": app_task_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    conn.tasks = [
+        {
+            **_task_row(title="App task"),
+            "id": app_task_id,
+            "event_id": event_id,
+            "source_type": "app",
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "app_config_id": config_id,
+            "app_instance_key": "event-vocab",
+            "managed_by_app": True,
+        },
+        {
+            **_task_row(title="User task"),
+            "id": user_task_id,
+            "event_id": event_id,
+        },
+    ]
+    conn.appointments = [
+        {
+            **_appointment_row(title="Event appointment"),
+            "id": appointment_id,
+            "event_id": event_id,
+        }
+    ]
+    conn.focus_workflow_presets = [
+        {
+            **_preset_row(preset_id=workflow_id, event_id=event_id),
+            "user_id": 7,
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+
+    preview_resp = client.get(f"/todo/events/{event_id}/delete-preview")
+    assert preview_resp.status_code == 200
+    assert preview_resp.json() == {
+        "tasks_count": 2,
+        "appointments_count": 1,
+        "workflows_count": 1,
+        "app_configs_count": 1,
+    }
+
+    delete_resp = client.delete(f"/todo/events/{event_id}")
+    assert delete_resp.status_code == 200
+    assert conn.events == []
+    assert conn.app_task_configs == []
+    assert conn.focus_workflow_presets == []
+    assert all(task["is_deleted"] for task in conn.tasks)
+    assert all(task["event_id"] is None for task in conn.tasks)
+    assert all(task["source_type"] == "user" for task in conn.tasks)
+    assert all(task["app_config_id"] is None for task in conn.tasks)
+    assert conn.appointments[0]["is_deleted"] is True
+    assert conn.appointments[0]["event_id"] is None
+
+
 def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
     conn = _FakeTodoConn()
     pool = _FakePool(conn)
@@ -2257,6 +2495,42 @@ def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
 
     list_after_delete = client.get("/todo/event-plan-templates")
     assert [item["name"] for item in list_after_delete.json()] == ["考试复习 副本"]
+
+
+def test_event_template_store_lists_system_templates_without_user_templates(monkeypatch) -> None:
+    conn = _FakeTodoConn()
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    now = datetime.now(UTC)
+    conn.event_plan_templates = [
+        {
+            "id": uuid4(),
+            "user_id": 7,
+            "name": "我的考试模板",
+            "description": None,
+            "schedule_mode": "before_due",
+            "default_event_name": "高数期末",
+            "default_start_date": None,
+            "default_due_at": None,
+            "default_is_primary": False,
+            "app_configs": [],
+            "workflows": [],
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+
+    app = _build_app()
+    client = TestClient(app)
+
+    store_resp = client.get("/todo/event-template-store")
+    assert store_resp.status_code == 200
+    store_templates = store_resp.json()
+    assert store_templates == []
+
+    personal_resp = client.get("/todo/event-plan-templates")
+    assert personal_resp.status_code == 200
+    assert [item["name"] for item in personal_resp.json()] == ["我的考试模板"]
 
 
 def test_achievement_summary_without_primary_event_still_returns_global(monkeypatch) -> None:

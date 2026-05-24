@@ -69,3 +69,13 @@ export type EventPlanTemplate = {
   created_at: string;
   updated_at: string;
 };
+
+export type EventTemplateStoreItem = Omit<EventPlanTemplateItem, 'template_id'> & {
+  template_id: string;
+};
+
+export type EventTemplateStoreTemplate = Omit<EventPlanTemplate, 'user_id'> & {
+  slug: string;
+  category: string;
+  sort_order: number;
+};

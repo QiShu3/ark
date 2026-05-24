@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Save, ShoppingBag, Trash2, X } from 'lucide-react';
 
 import {
   createEventPlanTemplate,
+  deleteEventPlanTemplate,
   createEvent,
   getPrimaryEvent,
   listEventPlanTemplates,
+  listEventTemplateStore,
   listEvents,
   updateEvent,
   updateEventPlanTemplate,
@@ -45,7 +48,7 @@ import {
   type WorkflowPreset,
 } from './workflowPresetForm';
 import type { Task } from './taskTypes';
-import type { EventItem, EventPlanTemplate } from '../lib/events/types';
+import type { EventItem, EventPlanTemplate, EventTemplateStoreTemplate } from '../lib/events/types';
 
 type EventFormState = {
   name: string;
@@ -129,7 +132,12 @@ const EventCountdownCard: React.FC = () => {
   const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [showTemplateStore, setShowTemplateStore] = useState(false);
+  const [storeTemplates, setStoreTemplates] = useState<EventTemplateStoreTemplate[]>([]);
+  const [loadingTemplateStore, setLoadingTemplateStore] = useState(false);
+  const [savingStoreTemplateId, setSavingStoreTemplateId] = useState<string | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
   const [templateStatus, setTemplateStatus] = useState<string | null>(null);
   const [templateConflict, setTemplateConflict] = useState<TemplateConflictState | null>(null);
   const [createArrangementEditor, setCreateArrangementEditor] = useState<CreateArrangementEditorState | null>(null);
@@ -210,6 +218,19 @@ const EventCountdownCard: React.FC = () => {
       setError(err instanceof Error ? err.message : '模板加载失败');
     } finally {
       setLoadingTemplates(false);
+    }
+  }
+
+  async function loadTemplateStore(): Promise<void> {
+    setLoadingTemplateStore(true);
+    try {
+      const data = await listEventTemplateStore();
+      setStoreTemplates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load event template store', err);
+      setError(err instanceof Error ? err.message : '事件商店加载失败');
+    } finally {
+      setLoadingTemplateStore(false);
     }
   }
 
@@ -840,6 +861,35 @@ const EventCountdownCard: React.FC = () => {
     };
   }
 
+  function buildTemplateStorePayload(template: EventTemplateStoreTemplate): EventPlanTemplateInput {
+    return {
+      name: template.name,
+      description: template.description,
+      schedule_mode: template.schedule_mode,
+      default_event_name: template.default_event_name ?? template.name,
+      default_start_date: template.default_start_date ?? null,
+      default_due_at: template.default_due_at ?? null,
+      default_is_primary: template.default_is_primary ?? false,
+      items: template.items.map((item) => ({
+        kind: item.kind,
+        title: item.title,
+        content: item.content,
+        offset_days: item.offset_days,
+        sort_order: item.sort_order,
+        details: item.details ?? {},
+      })),
+      app_configs: template.app_configs ?? [],
+      workflows: template.workflows ?? [],
+    };
+  }
+
+  function rememberSavedTemplate(template: EventPlanTemplate, status: string): void {
+    setTemplates((current) => [template, ...current.filter((item) => item.id !== template.id)]);
+    setSelectedTemplateId(template.id);
+    setTemplateStatus(status);
+    setShowTemplateStore(false);
+  }
+
   async function handleSaveTemplate(): Promise<void> {
     if (savingTemplate) return;
     const payload = buildTemplatePayload();
@@ -855,8 +905,8 @@ const EventCountdownCard: React.FC = () => {
         setTemplateConflict({ template: sameNameTemplate, payload });
         return;
       }
-      await createEventPlanTemplate(payload);
-      setTemplateStatus('已保存为模板');
+      const createdTemplate = await createEventPlanTemplate(payload);
+      rememberSavedTemplate(createdTemplate, '已保存为模板');
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存模板失败');
     } finally {
@@ -870,9 +920,9 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
     setTemplateStatus(null);
     try {
-      await createEventPlanTemplate(templateConflict.payload);
+      const createdTemplate = await createEventPlanTemplate(templateConflict.payload);
       setTemplateConflict(null);
-      setTemplateStatus('已保存为模板');
+      rememberSavedTemplate(createdTemplate, '已保存为模板');
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存模板失败');
     } finally {
@@ -886,13 +936,62 @@ const EventCountdownCard: React.FC = () => {
     setError(null);
     setTemplateStatus(null);
     try {
-      await updateEventPlanTemplate(templateConflict.template.id, templateConflict.payload);
+      const updatedTemplate = await updateEventPlanTemplate(templateConflict.template.id, templateConflict.payload);
       setTemplateConflict(null);
-      setTemplateStatus('已更新模板');
+      rememberSavedTemplate(updatedTemplate, '已更新模板');
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新模板失败');
     } finally {
       setSavingTemplate(false);
+    }
+  }
+
+  async function handleSaveStoreTemplate(template: EventTemplateStoreTemplate): Promise<void> {
+    if (savingTemplate || savingStoreTemplateId) return;
+    const payload = buildTemplateStorePayload(template);
+    setSavingTemplate(true);
+    setSavingStoreTemplateId(template.id);
+    setError(null);
+    setTemplateStatus(null);
+    try {
+      const nextTemplates = await listEventPlanTemplates();
+      setTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
+      const sameNameTemplate = nextTemplates.find((item) => item.name.trim() === payload.name.trim());
+      if (sameNameTemplate) {
+        setTemplateConflict({ template: sameNameTemplate, payload });
+        return;
+      }
+      const createdTemplate = await createEventPlanTemplate(payload);
+      rememberSavedTemplate(createdTemplate, '已保存到我的事件模板');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存模板失败');
+    } finally {
+      setSavingStoreTemplateId(null);
+      setSavingTemplate(false);
+    }
+  }
+
+  async function handleDeleteSelectedTemplate(): Promise<void> {
+    if (savingTemplate || deletingTemplate || !selectedTemplateId) return;
+    const template = templates.find((item) => item.id === selectedTemplateId);
+    if (!template) {
+      setError('请选择事件模板');
+      return;
+    }
+    if (!window.confirm(`确认删除事件模板「${template.name}」吗？`)) return;
+
+    setDeletingTemplate(true);
+    setError(null);
+    setTemplateStatus(null);
+    try {
+      await deleteEventPlanTemplate(template.id);
+      setTemplates((current) => current.filter((item) => item.id !== template.id));
+      setSelectedTemplateId('');
+      setTemplateStatus('已删除模板');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除模板失败');
+    } finally {
+      setDeletingTemplate(false);
     }
   }
 
@@ -982,6 +1081,14 @@ const EventCountdownCard: React.FC = () => {
         ? 'text-red-400'
         : 'text-sky-300';
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const templateStoreCategories = useMemo(() => {
+    const groups = new Map<string, EventTemplateStoreTemplate[]>();
+    for (const template of storeTemplates) {
+      const category = template.category || '通用';
+      groups.set(category, [...(groups.get(category) ?? []), template]);
+    }
+    return Array.from(groups.entries());
+  }, [storeTemplates]);
 
   function beginAddConfiguredApp(): void {
     const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
@@ -1604,11 +1711,32 @@ const EventCountdownCard: React.FC = () => {
                         </div>
                         <button
                           type="button"
+                          onClick={() => {
+                            setShowTemplateStore(true);
+                            if (storeTemplates.length === 0) void loadTemplateStore();
+                          }}
+                          disabled={loadingTemplateStore}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <ShoppingBag size={16} aria-hidden="true" />
+                          事件商店
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleApplyTemplate}
                           disabled={loadingTemplates || !selectedTemplateId}
                           className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           套用模板
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSelectedTemplate()}
+                          disabled={loadingTemplates || savingTemplate || deletingTemplate || !selectedTemplateId}
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-400/20 bg-red-500/10 text-sm text-red-200 hover:bg-red-500/20 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                          {deletingTemplate ? '删除中...' : '删除模板'}
                         </button>
                       </div>
                     </div>
@@ -1808,6 +1936,97 @@ const EventCountdownCard: React.FC = () => {
         showDefaultControls={false}
         zIndexClass="z-[90]"
       />
+
+      {showTemplateStore ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+          onClick={() => setShowTemplateStore(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="事件商店"
+            className="w-[760px] max-w-[94vw] max-h-[82vh] overflow-hidden rounded-2xl border border-white/10 bg-[#151923] text-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <div>
+                <h3 className="text-lg font-semibold">事件商店</h3>
+                <p className="mt-1 text-sm text-white/45">保存项目内置模板到我的事件模板</p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭事件商店"
+                onClick={() => setShowTemplateStore(false)}
+                className="rounded-full p-2 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(82vh-76px)] overflow-y-auto px-5 py-4">
+              {loadingTemplateStore ? (
+                <div className="flex min-h-[180px] items-center justify-center text-sm text-white/45">加载中...</div>
+              ) : storeTemplates.length === 0 ? (
+                <div className="flex min-h-[180px] items-center justify-center text-sm text-white/45">
+                  暂无内置模板
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {templateStoreCategories.map(([category, categoryTemplates]) => (
+                    <section key={category}>
+                      <h4 className="text-sm font-medium text-white/70">{category}</h4>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {categoryTemplates.map((template) => (
+                          <article
+                            key={template.id}
+                            className="rounded-xl border border-white/10 bg-white/[0.04] p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h5 className="text-base font-semibold text-white">{template.name}</h5>
+                                {template.description ? (
+                                  <p className="mt-2 text-sm leading-5 text-white/55">{template.description}</p>
+                                ) : null}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveStoreTemplate(template)}
+                                disabled={savingTemplate || savingStoreTemplateId === template.id}
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <Save size={15} aria-hidden="true" />
+                                {savingStoreTemplateId === template.id ? '保存中...' : '保存'}
+                              </button>
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/55">
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+                                {template.schedule_mode === 'before_due' ? '按截止倒推' : '按开始顺推'}
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+                                {template.items.length} 个工作台内容
+                              </span>
+                            </div>
+                            {template.items.length > 0 ? (
+                              <ul className="mt-3 space-y-1 text-sm text-white/60">
+                                {template.items.slice(0, 3).map((item) => (
+                                  <li key={item.id} className="truncate">
+                                    {item.kind === 'task' ? '任务' : '日程'} · {item.title}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {templateConflict ? (
         <div

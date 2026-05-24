@@ -175,9 +175,139 @@ describe('EventCountdownCard', () => {
     await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
     await user.click(screen.getByRole('button', { name: '添加事件' }));
 
-    expect(screen.getByLabelText('事件模板')).toBeInTheDocument();
+    const templateSelect = screen.getByLabelText('事件模板');
+    const storeButton = screen.getByRole('button', { name: /事件商店/ });
+    const applyButton = screen.getByRole('button', { name: '套用模板' });
+    expect(templateSelect).toBeInTheDocument();
+    expect(storeButton).toBeInTheDocument();
+    expect(templateSelect.compareDocumentPosition(storeButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(storeButton.compareDocumentPosition(applyButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button', { name: '套用模板' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '进入模板工作台' })).not.toBeInTheDocument();
+  });
+
+  it('deletes a selected personal event template from the add-event editor', async () => {
+    const user = userEvent.setup();
+    const template = {
+      id: 'template-1',
+      user_id: 7,
+      name: '考试复习',
+      description: null,
+      schedule_mode: 'before_due' as const,
+      default_event_name: '高数期末',
+      default_start_date: '2026-05-20',
+      default_due_at: new Date('2026-06-20T10:00').toISOString(),
+      default_is_primary: true,
+      items: [],
+      app_configs: [],
+      workflows: [],
+      created_at: '2026-05-18T00:00:00Z',
+      updated_at: '2026-05-18T00:00:00Z',
+    };
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [template];
+      if (url === '/todo/event-plan-templates/template-1' && options?.method === 'DELETE') return { ok: true };
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    const templateSelect = screen.getByLabelText('事件模板');
+    await user.selectOptions(templateSelect, 'template-1');
+    await user.click(screen.getByRole('button', { name: '删除模板' }));
+
+    expect(window.confirm).toHaveBeenCalledWith('确认删除事件模板「考试复习」吗？');
+    expect(await screen.findByText('已删除模板')).toBeInTheDocument();
+    expect(apiJson).toHaveBeenCalledWith('/todo/event-plan-templates/template-1', { method: 'DELETE' });
+    expect(templateSelect).toHaveValue('');
+    expect(screen.queryByRole('option', { name: '考试复习' })).not.toBeInTheDocument();
+  });
+
+  it('saves an event store template into personal templates', async () => {
+    const user = userEvent.setup();
+    const storeTemplate = {
+      id: 'store-template-1',
+      slug: 'work-project-delivery',
+      category: '工作',
+      name: '项目交付推进',
+      description: '适合一个明确截止日期的项目。',
+      schedule_mode: 'before_due' as const,
+      default_event_name: '项目交付',
+      default_start_date: null,
+      default_due_at: null,
+      default_is_primary: true,
+      sort_order: 20,
+      items: [
+        {
+          id: 'store-item-1',
+          template_id: 'store-template-1',
+          kind: 'task' as const,
+          title: '拆分交付清单',
+          content: '把交付物拆成可执行任务。',
+          offset_days: 24,
+          sort_order: 0,
+          details: { client_id: 'work-project-delivery-1' },
+          created_at: '2026-05-24T00:00:00Z',
+          updated_at: '2026-05-24T00:00:00Z',
+        },
+      ],
+      app_configs: [],
+      workflows: [],
+      created_at: '2026-05-24T00:00:00Z',
+      updated_at: '2026-05-24T00:00:00Z',
+    };
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-template-store') return [storeTemplate];
+      if (url === '/todo/event-plan-templates' && !options) return [];
+      if (url === '/todo/event-plan-templates' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          name: '项目交付推进',
+          description: '适合一个明确截止日期的项目。',
+          schedule_mode: 'before_due',
+          default_event_name: '项目交付',
+          default_is_primary: true,
+          items: [
+            {
+              kind: 'task',
+              title: '拆分交付清单',
+              content: '把交付物拆成可执行任务。',
+              offset_days: 24,
+              sort_order: 0,
+              details: { client_id: 'work-project-delivery-1' },
+            },
+          ],
+          app_configs: [],
+          workflows: [],
+        });
+        return {
+          ...storeTemplate,
+          id: 'template-2',
+          user_id: 7,
+          items: [{ ...storeTemplate.items[0], template_id: 'template-2' }],
+        };
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    await user.click(screen.getByRole('button', { name: /事件商店/ }));
+
+    const storeDialog = await screen.findByRole('dialog', { name: '事件商店' });
+    expect(within(storeDialog).getByText('项目交付推进')).toBeInTheDocument();
+    await user.click(within(storeDialog).getByRole('button', { name: '保存' }));
+
+    expect(await screen.findByText('已保存到我的事件模板')).toBeInTheDocument();
+    expect(screen.getByLabelText('事件模板')).toHaveValue('template-2');
+    expect(screen.queryByRole('dialog', { name: '事件商店' })).not.toBeInTheDocument();
   });
 
   it('applies an event template to the add-event editor', async () => {

@@ -245,6 +245,49 @@ describe('EventWorkbenchModal', () => {
     });
   });
 
+  it('warns that event deletion clears tasks schedules workflows and app configs', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onChanged = vi.fn();
+    const confirmSpy = vi.fn(() => true);
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string }) => {
+      if (url === '/todo/events/event-1/workbench') {
+        return {
+          event,
+          created_tasks: [eventTask],
+          created_appointments: [eventAppointment],
+        };
+      }
+      if (url === '/todo/events') return [event];
+      if (url === '/todo/events/event-1/workflows') return [];
+      if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
+      if (url === '/todo/events/event-1/delete-preview') {
+        return {
+          tasks_count: 1,
+          appointments_count: 1,
+          workflows_count: 1,
+          app_configs_count: 1,
+        };
+      }
+      if (url === '/todo/events/event-1' && options?.method === 'DELETE') return { ok: true };
+      return {};
+    });
+    vi.stubGlobal('confirm', confirmSpy);
+
+    render(<EventWorkbenchModal event={event} onClose={onClose} onChanged={onChanged} />);
+
+    await screen.findByText('安排内容');
+    await user.click(screen.getByRole('button', { name: '删除事件' }));
+
+    await waitFor(() => {
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/delete-preview');
+      expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('1 个任务、1 个日程、1 个工作流、1 个应用配置'));
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1', { method: 'DELETE' });
+      expect(onChanged).toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
   it('creates real task and schedule arrangements from the arrangement page', async () => {
     const user = userEvent.setup();
     const tasks: Task[] = [];

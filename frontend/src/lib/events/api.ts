@@ -1,8 +1,14 @@
 import { apiJson } from '../api';
-import type { EventItem, EventPlanTemplate, EventWorkbench } from './types';
+import type { EventItem, EventPlanTemplate, EventTemplateStoreTemplate, EventWorkbench } from './types';
 
 export type EventCreateInput = Pick<EventItem, 'name' | 'start_date' | 'due_at' | 'is_primary'>;
 export type EventUpdateInput = Partial<EventCreateInput>;
+export type EventDeletePreview = {
+  tasks_count: number;
+  appointments_count: number;
+  workflows_count: number;
+  app_configs_count: number;
+};
 
 export function listEvents(): Promise<EventItem[]> {
   return apiJson<EventItem[]>('/todo/events');
@@ -34,12 +40,20 @@ export function deleteEvent(eventId: string): Promise<{ ok: boolean }> {
   });
 }
 
+export function getEventDeletePreview(eventId: string): Promise<EventDeletePreview> {
+  return apiJson<EventDeletePreview>(`/todo/events/${eventId}/delete-preview`);
+}
+
 export function getEventWorkbench(eventId: string): Promise<EventWorkbench> {
   return apiJson<EventWorkbench>(`/todo/events/${eventId}/workbench`);
 }
 
 export function listEventPlanTemplates(): Promise<EventPlanTemplate[]> {
   return apiJson<EventPlanTemplate[]>('/todo/event-plan-templates');
+}
+
+export function listEventTemplateStore(): Promise<EventTemplateStoreTemplate[]> {
+  return apiJson<EventTemplateStoreTemplate[]>('/todo/event-template-store');
 }
 
 export type EventPlanTemplateItemInput = {
@@ -103,3 +117,8 @@ export function updateEventPlanTemplate(templateId: string, input: EventPlanTemp
   });
 }
 
+export function deleteEventPlanTemplate(templateId: string): Promise<{ ok: boolean }> {
+  return apiJson<{ ok: boolean }>(`/todo/event-plan-templates/${templateId}`, {
+    method: 'DELETE',
+  });
+}

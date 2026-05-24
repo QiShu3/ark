@@ -240,6 +240,13 @@ class EventOut(BaseModel):
     updated_at: datetime
 
 
+class EventDeletePreviewOut(BaseModel):
+    tasks_count: int
+    appointments_count: int
+    workflows_count: int
+    app_configs_count: int
+
+
 class EventPlanTemplateItemIn(BaseModel):
     kind: EventPlanItemKind
     title: str = Field(min_length=1, max_length=255)
@@ -301,6 +308,38 @@ class EventPlanTemplateOut(BaseModel):
     items: list[EventPlanTemplateItemOut]
     app_configs: list[dict[str, Any]] = Field(default_factory=list)
     workflows: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class EventTemplateStoreItemOut(BaseModel):
+    id: UUID
+    template_id: UUID
+    kind: EventPlanItemKind
+    title: str
+    content: str | None
+    offset_days: int
+    sort_order: int
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class EventTemplateStoreOut(BaseModel):
+    id: UUID
+    slug: str
+    category: str
+    name: str
+    description: str | None
+    schedule_mode: EventPlanScheduleMode
+    default_event_name: str | None
+    default_start_date: date | None
+    default_due_at: datetime | None
+    default_is_primary: bool | None
+    items: list[EventTemplateStoreItemOut]
+    app_configs: list[dict[str, Any]] = Field(default_factory=list)
+    workflows: list[dict[str, Any]] = Field(default_factory=list)
+    sort_order: int
     created_at: datetime
     updated_at: datetime
 

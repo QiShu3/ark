@@ -5,6 +5,7 @@ import { apiJson } from '../../lib/api';
 import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } from '../../lib/events/dateTime';
 import {
   deleteEvent as deleteEventById,
+  getEventDeletePreview,
   getEventWorkbench,
   listEvents,
   updateEvent,
@@ -615,10 +616,20 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   async function handleDeleteEvent(): Promise<void> {
     if (submitting) return;
-    if (!window.confirm(`确定删除“${currentEvent.name}”吗？`)) return;
     setSubmitting(true);
     setError(null);
     try {
+      const preview = await getEventDeletePreview(currentEvent.id);
+      const affectedText = [
+        `${preview.tasks_count} 个任务`,
+        `${preview.appointments_count} 个日程`,
+        `${preview.workflows_count} 个工作流`,
+        `${preview.app_configs_count} 个应用配置`,
+      ].join('、');
+      const confirmed = window.confirm(
+        `确定删除“${currentEvent.name}”吗？\n\n删除后将同时清理该事件下的${affectedText}。此操作不可恢复。`,
+      );
+      if (!confirmed) return;
       await deleteEventById(currentEvent.id);
       await Promise.resolve(onChanged?.());
       onClose();

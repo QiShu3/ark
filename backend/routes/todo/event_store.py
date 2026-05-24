@@ -125,8 +125,77 @@ async def update_event_row(conn: Any, *, user_id: int, event_id: UUID, patch: di
 
 
 async def delete_event_row(conn: Any, *, user_id: int, event_id: UUID) -> str:
+    await conn.execute(
+        """
+        UPDATE tasks
+        SET is_deleted = TRUE,
+            event_id = NULL,
+            source_type = 'user',
+            app_id = NULL,
+            app_task_type = NULL,
+            app_config_id = NULL,
+            app_instance_key = NULL,
+            managed_by_app = FALSE,
+            updated_at = NOW()
+        WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE
+        """,
+        user_id,
+        event_id,
+    )
+    await conn.execute(
+        """
+        UPDATE appointments
+        SET is_deleted = TRUE, event_id = NULL, updated_at = NOW()
+        WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE
+        """,
+        user_id,
+        event_id,
+    )
+    await conn.execute(
+        "DELETE FROM focus_workflow_presets WHERE user_id = $1 AND event_id = $2",
+        user_id,
+        event_id,
+    )
+    await conn.execute(
+        "DELETE FROM app_task_configs WHERE user_id = $1 AND event_id = $2",
+        user_id,
+        event_id,
+    )
     return await conn.execute(
         "DELETE FROM events WHERE id = $1 AND user_id = $2",
         event_id,
         user_id,
+    )
+
+
+async def get_event_delete_preview_row(conn: Any, *, user_id: int, event_id: UUID) -> Any | None:
+    return await conn.fetchrow(
+        """
+        SELECT
+          (
+            SELECT COUNT(*)
+            FROM tasks
+            WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE
+          ) AS tasks_count,
+          (
+            SELECT COUNT(*)
+            FROM appointments
+            WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE
+          ) AS appointments_count,
+          (
+            SELECT COUNT(*)
+            FROM focus_workflow_presets
+            WHERE user_id = $1 AND event_id = $2
+          ) AS workflows_count,
+          (
+            SELECT COUNT(*)
+            FROM app_task_configs
+            WHERE user_id = $1 AND event_id = $2
+          ) AS app_configs_count
+        WHERE EXISTS (
+          SELECT 1 FROM events WHERE id = $2 AND user_id = $1
+        )
+        """,
+        user_id,
+        event_id,
     )
