@@ -170,6 +170,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const [showCompletedToday, setShowCompletedToday] = useState(false);
   const [showCompletedAll, setShowCompletedAll] = useState(false);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>([]);
+  const manageableWorkflowPresets = React.useMemo(() => {
+    return workflowPresets.filter((preset) => preset.event_id == null);
+  }, [workflowPresets]);
   const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null);
@@ -224,7 +227,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   function _startNewWorkflowDraft() {
     if (!_confirmWorkflowDiscard()) return;
-    _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+    _replaceWorkflowDraft(createDefaultWorkflowForm(manageableWorkflowPresets.length === 0), null);
   }
 
   // Task Management State
@@ -245,6 +248,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     _loadTodayFocus();
     _loadFocusWorkflow();
     _loadWorkflowPresets();
+    void _loadArrangementEvents();
   }, []);
 
   // Listen for global reload event so all cards stay cleanly in sync
@@ -255,9 +259,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       _loadCurrentFocus();
       _loadTodayFocus();
       _loadFocusWorkflow();
-      if (showTaskModal || showCreateTaskModal) {
-        void _loadArrangementEvents();
-      }
+      _loadWorkflowPresets();
+      void _loadArrangementEvents();
     };
     window.addEventListener('ark:reload-focus', handleReload);
     return () => window.removeEventListener('ark:reload-focus', handleReload);
@@ -266,13 +269,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   useEffect(() => {
     if (index !== 0) return;
     const handler = () => {
-      _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+      _replaceWorkflowDraft(createDefaultWorkflowForm(manageableWorkflowPresets.length === 0), null);
       setShowWorkflowModal(true);
       _loadWorkflowPresets();
     };
     window.addEventListener('ark:open-workflow-modal', handler);
     return () => window.removeEventListener('ark:open-workflow-modal', handler);
-  }, [index, workflowPresets.length]);
+  }, [index, manageableWorkflowPresets.length]);
 
   // Sync today focus minutes periodically
   useEffect(() => {
@@ -290,6 +293,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   const primaryEvent = React.useMemo(() => {
     return arrangementEvents.find((event) => event.is_primary) ?? null;
   }, [arrangementEvents]);
+
+  const visibleWorkflowPresets = React.useMemo(() => {
+    const primaryEventId = primaryEvent?.id ?? null;
+    return workflowPresets.filter((preset) => (
+      preset.event_id == null || (primaryEventId != null && preset.event_id === primaryEventId)
+    ));
+  }, [workflowPresets, primaryEvent]);
+
+  const visibleEventWorkflowPresetIds = React.useMemo(() => {
+    const primaryEventId = primaryEvent?.id ?? null;
+    if (!primaryEventId) return [];
+    return visibleWorkflowPresets
+      .filter((preset) => preset.event_id === primaryEventId)
+      .map((preset) => preset.id);
+  }, [primaryEvent, visibleWorkflowPresets]);
 
   const arrangementTasks = React.useMemo(() => {
     return primaryEvent ? tasks.filter((t) => t.event_id === primaryEvent.id) : tasks;
@@ -463,25 +481,31 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }, [focusWorkflow, workflowRenderTick]);
 
   const sortedWorkflowPresets = React.useMemo(() => {
-    return [...workflowPresets].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  }, [workflowPresets]);
+    return [...visibleWorkflowPresets].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  }, [visibleWorkflowPresets]);
 
   const effectiveSelectedWorkflow = React.useMemo(() => {
     const saved = selectedWorkflowPresetId
-      ? workflowPresets.find((item) => item.id === selectedWorkflowPresetId)
+      ? visibleWorkflowPresets.find((item) => item.id === selectedWorkflowPresetId)
       : null;
-    return saved ?? workflowPresets.find((item) => item.is_default) ?? sortedWorkflowPresets[0] ?? null;
-  }, [selectedWorkflowPresetId, sortedWorkflowPresets, workflowPresets]);
+    return saved ?? visibleWorkflowPresets.find((item) => item.is_default) ?? sortedWorkflowPresets[0] ?? null;
+  }, [selectedWorkflowPresetId, sortedWorkflowPresets, visibleWorkflowPresets]);
 
-  const defaultWorkflowName = effectiveSelectedWorkflow?.name?.trim() || '工作流';
+  const selectedWorkflowDisplayName = effectiveSelectedWorkflow
+    ? (effectiveSelectedWorkflow.event_name
+      ? `${effectiveSelectedWorkflow.name} · ${effectiveSelectedWorkflow.event_name}`
+      : effectiveSelectedWorkflow.name)
+    : null;
+
+  const defaultWorkflowName = selectedWorkflowDisplayName || '工作流';
 
   useEffect(() => {
     if (!selectedWorkflowPresetId) return;
-    if (workflowPresets.length === 0) return;
-    if (workflowPresets.some((item) => item.id === selectedWorkflowPresetId)) return;
+    if (visibleWorkflowPresets.length === 0) return;
+    if (visibleWorkflowPresets.some((item) => item.id === selectedWorkflowPresetId)) return;
     setSelectedWorkflowPresetId(null);
     window.localStorage.removeItem(SELECTED_WORKFLOW_PRESET_STORAGE_KEY);
-  }, [selectedWorkflowPresetId, workflowPresets]);
+  }, [selectedWorkflowPresetId, visibleWorkflowPresets]);
 
   useEffect(() => {
     if (showTaskModal && activeTab === 'all') {
@@ -1096,7 +1120,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   async function _startSelectedWorkflow() {
     if (startingWorkflow) return;
     if (!effectiveSelectedWorkflow) {
-      _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+      _replaceWorkflowDraft(createDefaultWorkflowForm(manageableWorkflowPresets.length === 0), null);
       setShowWorkflowModal(true);
       return;
     }
@@ -1122,7 +1146,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   function _openNewWorkflowFromPicker() {
     setShowWorkflowPicker(false);
-    _replaceWorkflowDraft(createDefaultWorkflowForm(workflowPresets.length === 0), null);
+    _replaceWorkflowDraft(createDefaultWorkflowForm(manageableWorkflowPresets.length === 0), null);
     setShowWorkflowModal(true);
   }
 
@@ -1874,10 +1898,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       : (isFocusing ? '结束专注' : (effectiveSelectedWorkflow ? '开始工作流' : '新建工作流'));
     const primaryActionSubtext = isFocusing || isWorkflowActive
       ? `${isWorkflowActive && isBreakPhase ? '' : '正在专注于：'}${displayTaskTitle}`
-      : (effectiveSelectedWorkflow?.name ?? '还没有可启动的工作流');
+      : (selectedWorkflowDisplayName ?? '还没有可启动的工作流');
     const primaryActionAriaLabel = isFocusing || isWorkflowActive
       ? `${primaryActionLabel} ${displayTaskTitle}`
-      : (effectiveSelectedWorkflow ? `开始工作流 ${effectiveSelectedWorkflow.name}` : '新建工作流');
+      : (selectedWorkflowDisplayName ? `开始工作流 ${selectedWorkflowDisplayName}` : '新建工作流');
 
     return (
       <>
@@ -2029,7 +2053,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 </button>
               </div>
               <div className="flex max-h-[calc(72vh-56px)] flex-col gap-2 overflow-y-auto p-4">
-                {workflowPresets.map((preset) => {
+                {visibleWorkflowPresets.map((preset) => {
                   const selected = preset.id === effectiveSelectedWorkflow?.id;
                   return (
                     <button
@@ -2042,14 +2066,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           ? 'border-blue-400/40 bg-blue-500/10 text-white'
                           : 'border-white/10 bg-white/5 text-white/85 hover:bg-white/10'
                       }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium">{preset.name}</span>
-                        {preset.is_default ? <span className="text-xs text-blue-200/70">默认</span> : null}
-                      </div>
-                      <div className="mt-1 text-xs text-white/45">共 {preset.phases.length} 个阶段</div>
-                    </button>
-                  );
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{preset.name}</span>
+                          {preset.is_default ? <span className="text-xs text-blue-200/70">默认</span> : null}
+                        </div>
+                        <div className="mt-1 text-xs text-white/45">共 {preset.phases.length} 个阶段</div>
+                        {preset.event_name ? (
+                          <div className="mt-1 text-xs text-white/45">事件：{preset.event_name}</div>
+                        ) : null}
+                      </button>
+                    );
                 })}
                 <button
                   type="button"
@@ -2112,7 +2139,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         <WorkflowPresetModal
           open={showWorkflowModal}
-          presets={workflowPresets}
+          presets={visibleWorkflowPresets}
           tasks={arrangementTasks}
           editingWorkflowId={editingWorkflowId}
           workflowForm={workflowForm}
@@ -2130,6 +2157,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           onSubmit={_submitWorkflowPreset}
           onReset={_resetWorkflowForm}
           isTaskHiddenFromActionList={_isTaskHiddenFromActionList}
+          readOnlyPresetIds={visibleEventWorkflowPresetIds}
         />
 
         {/* 专注时长统计悬浮页面 */}

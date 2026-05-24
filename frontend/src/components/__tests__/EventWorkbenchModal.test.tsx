@@ -326,6 +326,82 @@ describe('EventWorkbenchModal', () => {
     );
   });
 
+  it('manages event workflows inside the event page without default controls', async () => {
+    const user = userEvent.setup();
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const workflows: Array<Record<string, unknown>> = [];
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+      if (url === '/todo/events/event-1/workbench') {
+        return {
+          event,
+          created_tasks: [eventTask],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/events') return [event, secondaryEvent];
+      if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
+      if (url === '/todo/events/event-1/workflows' && !options?.method) return workflows;
+      if (url === '/todo/events/event-1/workflows' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        expect(payload).toMatchObject({
+          name: '期末冲刺',
+          focus_duration: 1500,
+          break_duration: 300,
+          default_focus_timer_mode: 'countdown',
+          is_default: false,
+        });
+        expect(payload.phases[0]).toMatchObject({
+          phase_type: 'focus',
+          duration: 1500,
+          timer_mode: 'countdown',
+          task_id: 'task-1',
+        });
+        const createdWorkflow = {
+          id: 'workflow-1',
+          user_id: 7,
+          event_id: 'event-1',
+          name: payload.name,
+          focus_duration: payload.focus_duration,
+          break_duration: payload.break_duration,
+          default_focus_timer_mode: payload.default_focus_timer_mode,
+          phases: payload.phases,
+          is_default: false,
+          created_at: '2026-05-18T00:00:00Z',
+          updated_at: '2026-05-18T00:00:00Z',
+        };
+        workflows.push(createdWorkflow);
+        return createdWorkflow;
+      }
+      return {};
+    });
+
+    render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: '新建工作流' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '新建工作流' }));
+
+    expect(await screen.findByRole('dialog', { name: '工作流' })).toBeInTheDocument();
+    expect(screen.queryByText('设为默认工作流')).not.toBeInTheDocument();
+    const taskSelect = screen.getByLabelText('阶段 1 绑定任务');
+    expect(within(taskSelect).getByRole('option', { name: '完成第一轮复习' })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('工作流名称'), '期末冲刺');
+    await user.selectOptions(taskSelect, 'task-1');
+    await user.click(screen.getByRole('button', { name: '创建工作流' }));
+
+    try {
+      await waitFor(() => {
+        expect(screen.getAllByText('期末冲刺').length).toBeGreaterThan(0);
+      });
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/workflows', expect.objectContaining({ method: 'POST' }));
+      expect(apiJson).not.toHaveBeenCalledWith('/todo/focus/workflows', expect.objectContaining({ method: 'POST' }));
+      expect(dispatchSpy.mock.calls.some(([event]) => event.type === 'ark:reload-focus')).toBe(true);
+    } finally {
+      dispatchSpy.mockRestore();
+    }
+  });
+
   it('edits and deletes real event arrangements', async () => {
     const user = userEvent.setup();
     const tasks: Task[] = [{ ...eventTask }];

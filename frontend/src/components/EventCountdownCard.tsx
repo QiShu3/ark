@@ -26,8 +26,22 @@ import {
 } from '../lib/events/arrangementApi';
 import { fetchVocabDecks, initializeVocabAppTask } from '../lib/vocab/api';
 import { initializeERCAppTask, initializeERCPracticeAppTask } from '../lib/erc/api';
+import { apiJson } from '../lib/api';
 import type { VocabDeck } from '../lib/vocab/types';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
+import WorkflowPresetModal from './WorkflowPresetModal';
+import {
+  buildWorkflowPreview,
+  cloneWorkflowForm,
+  createDefaultWorkflowForm,
+  createWorkflowCopyDraft,
+  createWorkflowFormFromPreset,
+  isWorkflowFormDirty,
+  normalizeWorkflowFormPhases,
+  type WorkflowFormState,
+  type WorkflowPreset,
+} from './workflowPresetForm';
+import type { Task } from './taskTypes';
 import type { EventItem, EventPlanTemplate } from '../lib/events/types';
 
 type EventFormState = {
@@ -38,6 +52,7 @@ type EventFormState = {
 };
 
 type ConfiguredAppState = {
+  clientId: string;
   appType: 'vocab_today' | 'erc_practice' | 'erc_review';
   config: {
     deckId?: string;
@@ -64,6 +79,7 @@ type AppEditorState = {
 };
 
 type CreateWorkbenchItemState = {
+  clientId: string;
   kind: 'task' | 'appointment';
   title: string;
   content: string;
@@ -98,6 +114,15 @@ const EventCountdownCard: React.FC = () => {
   const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
+  const [createWorkflowDrafts, setCreateWorkflowDrafts] = useState<WorkflowPreset[]>([]);
+  const [showCreateWorkflowModal, setShowCreateWorkflowModal] = useState(false);
+  const [editingCreateWorkflowId, setEditingCreateWorkflowId] = useState<string | null>(null);
+  const [createWorkflowForm, setCreateWorkflowForm] = useState<WorkflowFormState>(() => createDefaultWorkflowForm(false));
+  const [createWorkflowFormBaseline, setCreateWorkflowFormBaseline] = useState<WorkflowFormState>(() =>
+    createDefaultWorkflowForm(false),
+  );
+  const [createWorkflowError, setCreateWorkflowError] = useState<string | null>(null);
+  const [createWorkflowSubmitting, setCreateWorkflowSubmitting] = useState(false);
   const [templates, setTemplates] = useState<EventPlanTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -138,6 +163,8 @@ const EventCountdownCard: React.FC = () => {
     if (!primaryEvent) return 'upcoming';
     return getCountdownTone(primaryEvent.due_at, nowMs);
   }, [primaryEvent, nowMs]);
+
+  const createWorkflowTaskOptions = buildCreateWorkflowTaskOptions(createWorkbenchItems, configuredApps, createForm.name);
 
   async function loadPrimaryEvent(): Promise<void> {
     try {
@@ -183,14 +210,86 @@ const EventCountdownCard: React.FC = () => {
     }
   }
 
+  function makeCreateArrangementClientId(): string {
+    return `arrangement-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function makeConfiguredAppClientId(): string {
+    return `app-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function getConfiguredAppTaskTitle(app: ConfiguredAppState): string {
+    if (app.appType === 'vocab_today') {
+      return `今日单词 (应用：${app.config.deckName || '未命名词书'})`;
+    }
+    if (app.appType === 'erc_practice') {
+      return '真题练习 (应用)';
+    }
+    return '错题复习 (应用)';
+  }
+
   function buildCreateWorkbenchItems(template: EventPlanTemplate | undefined): CreateWorkbenchItemState[] {
     if (!template) return [];
     return template.items.map((item) => ({
+      clientId: makeCreateArrangementClientId(),
       kind: item.kind,
       title: item.title,
       content: item.content ?? '',
       offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
     }));
+  }
+
+  function buildTaskOption(
+    id: string,
+    title: string,
+    content: string | null,
+    eventName: string,
+    appTaskType: Task['app_task_type'] = null,
+  ): Task {
+    const now = new Date().toISOString();
+    return {
+      id,
+      user_id: 0,
+      title: title || '未命名任务',
+      content,
+      status: 'todo',
+      current_cycle_count: 0,
+      target_cycle_count: 0,
+      cycle_period: 'daily',
+      cycle_every_days: null,
+      event: eventName.trim(),
+      event_ids: [],
+      event_id: null,
+      is_recurring: false,
+      period_type: 'once',
+      custom_period_days: null,
+      max_completions_per_period: 1,
+      weekday_only: false,
+      time_inherits_from_event: false,
+      time_overridden: false,
+      task_type: 'focus',
+      app_task_type: appTaskType,
+      actual_duration: 0,
+      start_date: null,
+      due_date: null,
+      is_deleted: false,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  function buildCreateWorkflowTaskOptions(
+    items: CreateWorkbenchItemState[],
+    apps: ConfiguredAppState[],
+    eventName: string,
+  ): Task[] {
+    const manualTaskOptions = items
+      .filter((item) => item.kind === 'task')
+      .map((item) => buildTaskOption(item.clientId, item.title, item.content || null, eventName));
+    const appTaskOptions = apps.map((app) => (
+      buildTaskOption(app.clientId, getConfiguredAppTaskTitle(app), getAppConfigSummary(app), eventName, app.appType)
+    ));
+    return [...appTaskOptions, ...manualTaskOptions];
   }
 
   function applyTemplateToCreateForm(template: EventPlanTemplate): void {
@@ -216,11 +315,16 @@ const EventCountdownCard: React.FC = () => {
   }
 
   function removeCreateWorkbenchItem(index: number): void {
+    const removedItem = createWorkbenchItems[index];
     setCreateWorkbenchItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    if (removedItem?.kind === 'task') {
+      clearCreateWorkflowTaskBinding(removedItem.clientId);
+    }
   }
 
   function beginAddCreateArrangementItem(kind: CreateWorkbenchItemState['kind']): void {
     setCreateArrangementEditor({
+      clientId: makeCreateArrangementClientId(),
       kind,
       index: null,
       title: '',
@@ -249,6 +353,7 @@ const EventCountdownCard: React.FC = () => {
     if (!createArrangementEditor) return;
     const label = createArrangementEditor.kind === 'appointment' ? '日程' : '任务';
     const nextItem: CreateWorkbenchItemState = {
+      clientId: createArrangementEditor.clientId,
       kind: createArrangementEditor.kind,
       title: createArrangementEditor.title.trim(),
       content: createArrangementEditor.content.trim(),
@@ -273,6 +378,199 @@ const EventCountdownCard: React.FC = () => {
     removeCreateWorkbenchItem(createArrangementEditor.index);
     setCreateArrangementEditor(null);
     setError(null);
+  }
+
+  function makeCreateWorkflowDraftId(): string {
+    return `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function buildCreateWorkflowPayload(form: WorkflowFormState, taskIdMap?: Map<string, string>) {
+    const focusDuration = form.phases.find((phase) => phase.phase_type === 'focus')?.duration ?? 25 * 60;
+    const breakDuration = form.phases.find((phase) => phase.phase_type === 'break')?.duration ?? 5 * 60;
+    const defaultFocusTimerMode = form.phases.find((phase) => phase.phase_type === 'focus')?.timer_mode ?? 'countdown';
+
+    return {
+      name: form.name.trim(),
+      focus_duration: focusDuration,
+      break_duration: breakDuration,
+      default_focus_timer_mode: defaultFocusTimerMode,
+      phases: form.phases.map((phase) => ({
+        phase_type: phase.phase_type,
+        duration: phase.duration,
+        timer_mode: phase.timer_mode,
+        task_id: phase.task_id ? (taskIdMap ? taskIdMap.get(phase.task_id) ?? null : phase.task_id) : null,
+      })),
+      is_default: false,
+    };
+  }
+
+  function buildCreateWorkflowDraft(form: WorkflowFormState, existing?: WorkflowPreset): WorkflowPreset {
+    const payload = buildCreateWorkflowPayload(form);
+    const now = new Date().toISOString();
+    return {
+      id: existing?.id ?? makeCreateWorkflowDraftId(),
+      user_id: existing?.user_id ?? 0,
+      event_id: null,
+      name: payload.name,
+      focus_duration: payload.focus_duration,
+      break_duration: payload.break_duration,
+      default_focus_timer_mode: payload.default_focus_timer_mode,
+      phases: normalizeWorkflowFormPhases(payload.phases, payload.default_focus_timer_mode),
+      is_default: false,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    };
+  }
+
+  function validateCreateWorkflowForm(form: WorkflowFormState): string | null {
+    if (!form.name.trim()) return '请输入工作流名称';
+    if (!form.phases.length) return '请至少保留一个阶段';
+    for (let index = 0; index < form.phases.length; index += 1) {
+      const phase = form.phases[index];
+      if (!phase.duration || phase.duration < 60) return '阶段时长至少 1 分钟';
+      if (index > 0 && form.phases[index - 1].phase_type === phase.phase_type) {
+        return '专注与休息阶段需要交替排列';
+      }
+    }
+    if (form.phases[0].phase_type !== 'focus') return '工作流需要以专注阶段开始';
+    return null;
+  }
+
+  function replaceCreateWorkflowDraftForm(nextForm: WorkflowFormState, nextEditingId: string | null): void {
+    const snapshot = cloneWorkflowForm(nextForm);
+    setEditingCreateWorkflowId(nextEditingId);
+    setCreateWorkflowForm(snapshot);
+    setCreateWorkflowFormBaseline(cloneWorkflowForm(snapshot));
+    setCreateWorkflowError(null);
+  }
+
+  function isCreateWorkflowFormDirty(): boolean {
+    return isWorkflowFormDirty(createWorkflowForm, createWorkflowFormBaseline);
+  }
+
+  function confirmCreateWorkflowDiscard(): boolean {
+    if (!isCreateWorkflowFormDirty()) return true;
+    return window.confirm('当前工作流还有未保存修改，确定要放弃吗？');
+  }
+
+  function openNewCreateWorkflow(): void {
+    if (!confirmCreateWorkflowDiscard()) return;
+    replaceCreateWorkflowDraftForm(createDefaultWorkflowForm(false), null);
+    setShowCreateWorkflowModal(true);
+  }
+
+  function closeCreateWorkflowModal(): void {
+    if (!confirmCreateWorkflowDiscard()) return;
+    setShowCreateWorkflowModal(false);
+  }
+
+  function editCreateWorkflowDraft(workflow: WorkflowPreset): void {
+    if (!confirmCreateWorkflowDiscard()) return;
+    replaceCreateWorkflowDraftForm(createWorkflowFormFromPreset(workflow), workflow.id);
+    setShowCreateWorkflowModal(true);
+  }
+
+  function copyCreateWorkflowDraft(workflow: WorkflowPreset): void {
+    if (!confirmCreateWorkflowDiscard()) return;
+    replaceCreateWorkflowDraftForm(createWorkflowCopyDraft(workflow), null);
+    setShowCreateWorkflowModal(true);
+  }
+
+  function resetCreateWorkflowForm(): void {
+    replaceCreateWorkflowDraftForm(createDefaultWorkflowForm(false), null);
+  }
+
+  function clearCreateWorkflowTaskBinding(taskId: string): void {
+    const clearPhases = (phases: WorkflowFormState['phases']) => (
+      phases.map((phase) => (
+        phase.task_id === taskId ? { ...phase, task_id: null } : phase
+      ))
+    );
+    setCreateWorkflowForm((state) => ({
+      ...state,
+      phases: clearPhases(state.phases),
+    }));
+    setCreateWorkflowDrafts((current) => (
+      current.map((workflow) => ({
+        ...workflow,
+        phases: workflow.phases.map((phase) => (
+          phase.task_id === taskId ? { ...phase, task_id: null } : phase
+        )),
+      }))
+    ));
+  }
+
+  function addCreateWorkflowPhase(): void {
+    setCreateWorkflowForm((state) => ({
+      ...state,
+      phases: normalizeWorkflowFormPhases([
+        ...state.phases,
+        { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+        { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+      ]),
+    }));
+  }
+
+  function removeCreateWorkflowPhase(index: number): void {
+    setCreateWorkflowForm((state) => {
+      if (state.phases.length <= 2) return state;
+      const groupStart = index % 2 === 0 ? index : index - 1;
+      return {
+        ...state,
+        phases: normalizeWorkflowFormPhases(
+          state.phases.filter((_, phaseIndex) => phaseIndex !== groupStart && phaseIndex !== groupStart + 1),
+        ),
+      };
+    });
+  }
+
+  function deleteCreateWorkflowDraft(workflowId: string): void {
+    if (!window.confirm('确认删除该工作流吗？')) return;
+    setCreateWorkflowDrafts((current) => current.filter((workflow) => workflow.id !== workflowId));
+    if (editingCreateWorkflowId === workflowId) {
+      resetCreateWorkflowForm();
+      setShowCreateWorkflowModal(false);
+    }
+  }
+
+  function submitCreateWorkflowDraft(): void {
+    if (createWorkflowSubmitting) return;
+    const validationError = validateCreateWorkflowForm(createWorkflowForm);
+    if (validationError) {
+      setCreateWorkflowError(validationError);
+      return;
+    }
+    setCreateWorkflowSubmitting(true);
+    const existing = editingCreateWorkflowId
+      ? createWorkflowDrafts.find((workflow) => workflow.id === editingCreateWorkflowId)
+      : undefined;
+    const nextDraft = buildCreateWorkflowDraft(createWorkflowForm, existing);
+    setCreateWorkflowDrafts((current) => {
+      if (!editingCreateWorkflowId) return [...current, nextDraft];
+      return current.map((workflow) => (workflow.id === editingCreateWorkflowId ? nextDraft : workflow));
+    });
+    replaceCreateWorkflowDraftForm(createDefaultWorkflowForm(false), null);
+    setShowCreateWorkflowModal(false);
+    setCreateWorkflowSubmitting(false);
+  }
+
+  function workflowDraftSummary(workflow: WorkflowPreset): string {
+    const preview = buildWorkflowPreview(createWorkflowFormFromPreset(workflow));
+    return preview.summary;
+  }
+
+  async function createWorkflowDraftsForEvent(
+    createdEvent: EventItem,
+    workflows: WorkflowPreset[],
+    taskIdMap: Map<string, string>,
+  ): Promise<void> {
+    for (const workflow of workflows) {
+      await apiJson<WorkflowPreset>(`/todo/events/${createdEvent.id}/workflows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildCreateWorkflowPayload(createWorkflowFormFromPreset(workflow), taskIdMap)),
+      });
+    }
   }
 
   function previewWorkbenchItemTime(
@@ -302,6 +600,9 @@ const EventCountdownCard: React.FC = () => {
   function resetCreateForm(): void {
     setCreateForm(CREATE_EVENT_DEFAULTS);
     setCreateWorkbenchItems([]);
+    setCreateWorkflowDrafts([]);
+    setShowCreateWorkflowModal(false);
+    replaceCreateWorkflowDraftForm(createDefaultWorkflowForm(false), null);
     setSelectedTemplateId('');
     setTemplateStatus(null);
     setTemplateConflict(null);
@@ -357,7 +658,11 @@ const EventCountdownCard: React.FC = () => {
     await refreshAll();
   }
 
-  async function createWorkbenchItemsForEvent(createdEvent: EventItem, items: CreateWorkbenchItemState[]): Promise<void> {
+  async function createWorkbenchItemsForEvent(
+    createdEvent: EventItem,
+    items: CreateWorkbenchItemState[],
+  ): Promise<Map<string, string>> {
+    const taskIdMap = new Map<string, string>();
     for (let index = 0; index < items.length; index += 1) {
       const formItem = items[index];
       const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
@@ -379,7 +684,8 @@ const EventCountdownCard: React.FC = () => {
           startDate: null,
           dueDate: scheduledAt,
         };
-        await createEventArrangementTask(createdEvent, payload);
+        const createdTask = await createEventArrangementTask(createdEvent, payload);
+        taskIdMap.set(formItem.clientId, createdTask.id);
       } else {
         const payload: EventArrangementAppointmentInput = {
           title: formItem.title.trim(),
@@ -399,6 +705,7 @@ const EventCountdownCard: React.FC = () => {
         await createEventArrangementAppointment(createdEvent, payload);
       }
     }
+    return taskIdMap;
   }
 
   function buildTemplateItems(): EventPlanTemplateItemInput[] | null {
@@ -499,6 +806,7 @@ const EventCountdownCard: React.FC = () => {
       return;
     }
     const workbenchItems = createWorkbenchItems;
+    const workflowDrafts = createWorkflowDrafts;
     if (workbenchItems.some((item) => !item.title.trim())) {
       setError('请输入安排内容标题');
       setShowCreateEditor(true);
@@ -508,48 +816,47 @@ const EventCountdownCard: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
+      const shouldPromoteToPrimary = workflowDrafts.length > 0 && !payload.is_primary && primaryEvent === null;
       const createdEvent = await createEvent(payload);
+      const workflowTaskIdMap = new Map<string, string>();
 
       // Initialize configured applications
       if (payload.is_primary) {
         // If the event is primary, initialize the sub-app tasks immediately
         for (const app of configuredApps) {
           if (app.appType === 'vocab_today') {
-            await initializeVocabAppTask({
+            const appTaskStatus = await initializeVocabAppTask({
               deck_id: app.config.deckId!,
               daily_target_count: app.config.dailyTargetCount!,
               default_focus_duration: app.config.defaultFocusDuration,
               add_to_today_plan: app.config.addToTodayPlan,
               event_id: createdEvent.id,
             });
+            if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
           } else if (app.appType === 'erc_practice') {
-            await initializeERCPracticeAppTask({
+            const appTaskStatus = await initializeERCPracticeAppTask({
               daily_article_target: app.config.dailyArticleTarget!,
               default_focus_duration: app.config.defaultFocusDuration,
               add_to_today_plan: app.config.addToTodayPlan,
               event_id: createdEvent.id,
             });
+            if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
           } else if (app.appType === 'erc_review') {
-            await initializeERCAppTask({
+            const appTaskStatus = await initializeERCAppTask({
               review_scope: app.config.reviewScope!,
               daily_question_target: app.config.dailyQuestionTarget!,
               default_focus_duration: app.config.defaultFocusDuration,
               add_to_today_plan: app.config.addToTodayPlan,
               event_id: createdEvent.id,
             });
+            if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
           }
         }
       } else {
         // If the event is not primary, create passive placeholder tasks for the sub-apps
         for (const app of configuredApps) {
-          const title = app.appType === 'vocab_today'
-            ? `今日单词 (应用：${app.config.deckName})`
-            : app.appType === 'erc_practice'
-              ? `真题练习 (应用)`
-              : `错题复习 (应用)`;
-
           const taskPayload: EventArrangementTaskInput = {
-            title,
+            title: getConfiguredAppTaskTitle(app),
             content: JSON.stringify({
               deckId: app.config.deckId,
               dailyTargetCount: app.config.dailyTargetCount,
@@ -572,16 +879,26 @@ const EventCountdownCard: React.FC = () => {
             startDate: null,
             dueDate: null,
           };
-          await createEventArrangementTask(createdEvent, taskPayload);
+          const createdTask = await createEventArrangementTask(createdEvent, taskPayload);
+          workflowTaskIdMap.set(app.clientId, createdTask.id);
         }
       }
 
       if (workbenchItems.length > 0) {
-        await createWorkbenchItemsForEvent(createdEvent, workbenchItems);
+        const manualTaskIdMap = await createWorkbenchItemsForEvent(createdEvent, workbenchItems);
+        manualTaskIdMap.forEach((taskId, clientId) => workflowTaskIdMap.set(clientId, taskId));
+      }
+
+      if (workflowDrafts.length > 0) {
+        await createWorkflowDraftsForEvent(createdEvent, workflowDrafts, workflowTaskIdMap);
+      }
+
+      if (shouldPromoteToPrimary) {
+        await updateEvent(createdEvent.id, { is_primary: true });
       }
 
       await finishCreatedEvent();
-      if (payload.is_primary) {
+      if (payload.is_primary || workflowDrafts.length > 0) {
         window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       }
     } catch (err) {
@@ -654,6 +971,9 @@ const EventCountdownCard: React.FC = () => {
       : undefined;
 
     const nextApp: ConfiguredAppState = {
+      clientId: appEditor.index === null
+        ? makeConfiguredAppClientId()
+        : configuredApps[appEditor.index]?.clientId ?? makeConfiguredAppClientId(),
       appType: appEditor.appType,
       config: {
         deckId: appEditor.appType === 'vocab_today' ? appEditor.deckId : undefined,
@@ -678,7 +998,11 @@ const EventCountdownCard: React.FC = () => {
   function deleteConfiguredApp(): void {
     if (!appEditor || appEditor.index === null) return;
     const targetIdx = appEditor.index;
+    const removedApp = configuredApps[targetIdx];
     setConfiguredApps((current) => current.filter((_, idx) => idx !== targetIdx));
+    if (removedApp) {
+      clearCreateWorkflowTaskBinding(removedApp.clientId);
+    }
     setAppEditor(null);
     setError(null);
   }
@@ -707,7 +1031,7 @@ const EventCountdownCard: React.FC = () => {
               aria-label="选择应用"
               value={appEditor.appType}
               onChange={(event) => {
-                const val = event.target.value as any;
+                const val = event.target.value as AppEditorState['appType'];
                 setAppEditor((current) => {
                   if (!current) return current;
                   return {
@@ -801,7 +1125,7 @@ const EventCountdownCard: React.FC = () => {
                 aria-label="复习范围"
                 value={appEditor.reviewScope}
                 onChange={(event) => setAppEditor((current) => (
-                  current ? { ...current, reviewScope: event.target.value as any } : current
+                  current ? { ...current, reviewScope: event.target.value as AppEditorState['reviewScope'] } : current
                 ))}
                 className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
@@ -1023,12 +1347,9 @@ const EventCountdownCard: React.FC = () => {
     const virtualItems = kind === 'task'
       ? configuredApps.map((app, index) => ({
           item: {
+            clientId: app.clientId,
             kind: 'task' as const,
-            title: app.appType === 'vocab_today'
-              ? `今日单词 (应用：${app.config.deckName})`
-              : app.appType === 'erc_practice'
-                ? `真题练习 (应用)`
-                : `错题复习 (应用)`,
+            title: getConfiguredAppTaskTitle(app),
             content: getAppConfigSummary(app),
             offsetDays: 0,
           },
@@ -1084,6 +1405,66 @@ const EventCountdownCard: React.FC = () => {
             添加{label}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  function renderCreateWorkflowSection() {
+    return (
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h4 className="text-base font-semibold text-white">工作流</h4>
+            <p className="mt-1 text-sm text-white/45">事件创建后保存到当前事件</p>
+          </div>
+          <button
+            type="button"
+            onClick={openNewCreateWorkflow}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+          >
+            新建工作流
+          </button>
+        </div>
+
+        {createWorkflowDrafts.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+            暂无工作流
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-2">
+            {createWorkflowDrafts.map((workflow) => (
+              <div
+                key={workflow.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => editCreateWorkflowDraft(workflow)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="truncate text-sm font-medium text-white">{workflow.name}</div>
+                  <div className="mt-1 truncate text-xs text-white/45">{workflowDraftSummary(workflow)}</div>
+                </button>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyCreateWorkflowDraft(workflow)}
+                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+                  >
+                    复制
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteCreateWorkflowDraft(workflow.id)}
+                    className="rounded-lg border border-red-400/20 bg-red-500/10 px-2 py-1 text-xs text-red-200 hover:bg-red-500/20"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -1233,6 +1614,8 @@ const EventCountdownCard: React.FC = () => {
                       </div>
                     </div>
 
+                    {renderCreateWorkflowSection()}
+
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -1334,6 +1717,34 @@ const EventCountdownCard: React.FC = () => {
           onChanged={refreshAll}
         />
       ) : null}
+
+      <WorkflowPresetModal
+        open={showCreateWorkflowModal}
+        presets={createWorkflowDrafts}
+        tasks={createWorkflowTaskOptions}
+        editingWorkflowId={editingCreateWorkflowId}
+        workflowForm={createWorkflowForm}
+        workflowError={createWorkflowError}
+        workflowSubmitting={createWorkflowSubmitting}
+        onClose={closeCreateWorkflowModal}
+        onCreateNew={openNewCreateWorkflow}
+        onSelectPreset={editCreateWorkflowDraft}
+        onCopyPreset={copyCreateWorkflowDraft}
+        onSetDefault={() => undefined}
+        onDeletePreset={deleteCreateWorkflowDraft}
+        onUpdateForm={setCreateWorkflowForm}
+        onAddPhase={addCreateWorkflowPhase}
+        onRemovePhase={removeCreateWorkflowPhase}
+        onSubmit={submitCreateWorkflowDraft}
+        onReset={resetCreateWorkflowForm}
+        isTaskHiddenFromActionList={() => false}
+        title="工作流"
+        description={createForm.name.trim() || '新事件'}
+        savedListLabel="待保存工作流"
+        emptyText="暂无工作流"
+        showDefaultControls={false}
+        zIndexClass="z-[90]"
+      />
 
       {templateConflict ? (
         <div

@@ -1808,6 +1808,177 @@ async def get_event_workbench(
         return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
+@router.get("/events/{event_id}/workflows", response_model=list[FocusWorkflowPresetOut])
+async def list_event_workflows(
+    request: Request,
+    event_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[FocusWorkflowPresetOut]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+        if event_row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+        rows = await conn.fetch(
+            f"""
+            SELECT {WORKFLOW_PRESET_SELECT}
+            FROM focus_workflow_presets
+            WHERE user_id = $1 AND event_id = $2
+            ORDER BY updated_at DESC
+            """,
+            int(user.id),
+            event_id,
+        )
+    return [_row_to_focus_workflow_preset(row) for row in rows]
+
+
+@router.post("/events/{event_id}/workflows", response_model=FocusWorkflowPresetOut)
+async def create_event_workflow(
+    request: Request,
+    event_id: UUID,
+    body: FocusWorkflowPresetCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowPresetOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            phases = _normalize_workflow_phases(
+                body.phases,
+                fallback_focus_duration=int(body.focus_duration),
+                fallback_break_duration=int(body.break_duration),
+                default_focus_timer_mode=body.default_focus_timer_mode,
+            )
+            phases = await _validate_event_workflow_phase_task_bindings(conn, int(user.id), event_id, phases)
+            row = await conn.fetchrow(
+                f"""
+                INSERT INTO focus_workflow_presets(
+                    user_id, event_id, name, focus_duration, break_duration, phases, default_focus_timer_mode, is_default
+                )
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, FALSE)
+                RETURNING {WORKFLOW_PRESET_SELECT}
+                """,
+                int(user.id),
+                event_id,
+                body.name.strip(),
+                int(body.focus_duration),
+                int(body.break_duration),
+                _to_jsonb_param(phases),
+                body.default_focus_timer_mode,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建工作流失败")
+    return _row_to_focus_workflow_preset(row)
+
+
+@router.patch("/events/{event_id}/workflows/{workflow_id}", response_model=FocusWorkflowPresetOut)
+async def update_event_workflow(
+    request: Request,
+    event_id: UUID,
+    workflow_id: UUID,
+    body: FocusWorkflowPresetUpdateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowPresetOut:
+    patch = body.model_dump(exclude_unset=True)
+    patch.pop("is_default", None)
+    if not patch:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可更新字段")
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            target = await conn.fetchrow(
+                f"""
+                SELECT {WORKFLOW_PRESET_SELECT}
+                FROM focus_workflow_presets
+                WHERE id = $1 AND user_id = $2 AND event_id = $3
+                """,
+                workflow_id,
+                int(user.id),
+                event_id,
+            )
+            if target is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
+            target_timer_mode = (
+                target.get("default_focus_timer_mode", "countdown")
+                if hasattr(target, "get")
+                else target["default_focus_timer_mode"]
+            )
+            if "phases" in patch:
+                phases = _normalize_workflow_phases(
+                    body.phases,
+                    fallback_focus_duration=int(target["focus_duration"]),
+                    fallback_break_duration=int(target["break_duration"]),
+                    default_focus_timer_mode=str(patch.get("default_focus_timer_mode") or target_timer_mode),
+                )
+                phases = await _validate_event_workflow_phase_task_bindings(conn, int(user.id), event_id, phases)
+            else:
+                phases = target["phases"]
+            sets: list[str] = []
+            args: list[Any] = []
+            if "name" in patch:
+                args.append(str(patch["name"]).strip())
+                sets.append(f"name = ${len(args)}")
+            if "focus_duration" in patch:
+                args.append(int(patch["focus_duration"]))
+                sets.append(f"focus_duration = ${len(args)}")
+            if "break_duration" in patch:
+                args.append(int(patch["break_duration"]))
+                sets.append(f"break_duration = ${len(args)}")
+            if "phases" in patch:
+                args.append(_to_jsonb_param(phases))
+                sets.append(f"phases = ${len(args)}::jsonb")
+            if "default_focus_timer_mode" in patch:
+                args.append(str(patch["default_focus_timer_mode"]))
+                sets.append(f"default_focus_timer_mode = ${len(args)}")
+            args.append(workflow_id)
+            p_i = len(args)
+            args.append(int(user.id))
+            u_i = len(args)
+            args.append(event_id)
+            e_i = len(args)
+            row = await conn.fetchrow(
+                f"""
+                UPDATE focus_workflow_presets
+                SET {", ".join(sets)}, is_default = FALSE, updated_at = NOW()
+                WHERE id = ${p_i} AND user_id = ${u_i} AND event_id = ${e_i}
+                RETURNING {WORKFLOW_PRESET_SELECT}
+                """,
+                *args,
+            )
+    if row is None:
+        raise HTTPException(status_code=500, detail="更新工作流失败")
+    return _row_to_focus_workflow_preset(row)
+
+
+@router.delete("/events/{event_id}/workflows/{workflow_id}")
+async def delete_event_workflow(
+    request: Request,
+    event_id: UUID,
+    workflow_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> dict[str, bool]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
+            if event_row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
+            tag = await conn.execute(
+                "DELETE FROM focus_workflow_presets WHERE id = $1 AND user_id = $2 AND event_id = $3",
+                workflow_id,
+                int(user.id),
+                event_id,
+            )
+    if not tag.startswith("DELETE ") or tag.endswith(" 0"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
+    return {"ok": True}
+
+
 @router.post("/events", response_model=EventOut)
 async def create_event(
     request: Request,
@@ -1964,6 +2135,45 @@ async def list_focus_logs(
     return [_row_to_focus_log(r) for r in rows]
 
 
+WORKFLOW_PRESET_SELECT = """
+id, user_id, event_id, (SELECT name FROM events WHERE id = event_id) AS event_name, name, focus_duration, break_duration,
+default_focus_timer_mode, phases, is_default, created_at, updated_at
+"""
+
+
+async def _validate_event_workflow_phase_task_bindings(
+    conn: Any,
+    user_id: int,
+    event_id: UUID,
+    phases: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    validated: list[dict[str, Any]] = []
+    for phase in phases:
+        next_phase = dict(phase)
+        task_id = _phase_task_id_value(next_phase)
+        if str(next_phase.get("phase_type")) == "focus" and task_id is not None:
+            task_row = await conn.fetchrow(
+                """
+                SELECT id, status, is_deleted
+                FROM tasks
+                WHERE id = $1 AND user_id = $2 AND event_id = $3
+                """,
+                task_id,
+                int(user_id),
+                event_id,
+            )
+            if task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="绑定任务必须属于当前事件且未完成",
+                )
+            next_phase["task_id"] = task_row["id"]
+        elif str(next_phase.get("phase_type")) != "focus":
+            next_phase["task_id"] = None
+        validated.append(next_phase)
+    return validated
+
+
 @router.get("/focus/workflows", response_model=list[FocusWorkflowPresetOut])
 async def list_focus_workflow_presets(
     request: Request,
@@ -1972,11 +2182,11 @@ async def list_focus_workflow_presets(
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
-            SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+            f"""
+            SELECT {WORKFLOW_PRESET_SELECT}
             FROM focus_workflow_presets
             WHERE user_id = $1
-            ORDER BY is_default DESC, updated_at DESC
+            ORDER BY is_default DESC, (event_id IS NOT NULL) ASC, updated_at DESC
             """,
             int(user.id),
         )
@@ -1996,7 +2206,7 @@ async def create_focus_workflow_preset(
             should_default = body.is_default or existing_default is None
             if should_default:
                 await conn.execute(
-                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
+                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND event_id IS NULL",
                     int(user.id),
                 )
             phases = _normalize_workflow_phases(
@@ -2007,10 +2217,10 @@ async def create_focus_workflow_preset(
             )
             phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
             row = await conn.fetchrow(
-                """
+                f"""
                 INSERT INTO focus_workflow_presets(user_id, name, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
-                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 int(user.id),
                 body.name.strip(),
@@ -2039,10 +2249,10 @@ async def update_focus_workflow_preset(
     async with pool.acquire() as conn:
         async with conn.transaction():
             target = await conn.fetchrow(
-                """
-                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                f"""
+                SELECT {WORKFLOW_PRESET_SELECT}
                 FROM focus_workflow_presets
-                WHERE id = $1 AND user_id = $2
+                WHERE id = $1 AND user_id = $2 AND event_id IS NULL
                 """,
                 preset_id,
                 int(user.id),
@@ -2051,7 +2261,7 @@ async def update_focus_workflow_preset(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
             if patch.get("is_default") is True:
                 await conn.execute(
-                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
+                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND event_id IS NULL",
                     int(user.id),
                 )
             if "phases" in patch:
@@ -2094,8 +2304,8 @@ async def update_focus_workflow_preset(
                 f"""
                 UPDATE focus_workflow_presets
                 SET {", ".join(sets)}, updated_at = NOW()
-                WHERE id = ${p_i} AND user_id = ${u_i}
-                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                WHERE id = ${p_i} AND user_id = ${u_i} AND event_id IS NULL
+                RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 *args,
             )
@@ -2114,14 +2324,14 @@ async def delete_focus_workflow_preset(
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                "SELECT id, is_default FROM focus_workflow_presets WHERE id = $1 AND user_id = $2",
+                "SELECT id, is_default FROM focus_workflow_presets WHERE id = $1 AND user_id = $2 AND event_id IS NULL",
                 preset_id,
                 int(user.id),
             )
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
             await conn.execute(
-                "DELETE FROM focus_workflow_presets WHERE id = $1 AND user_id = $2",
+                "DELETE FROM focus_workflow_presets WHERE id = $1 AND user_id = $2 AND event_id IS NULL",
                 preset_id,
                 int(user.id),
             )
@@ -2130,7 +2340,7 @@ async def delete_focus_workflow_preset(
                     """
                     SELECT id
                     FROM focus_workflow_presets
-                    WHERE user_id = $1
+                    WHERE user_id = $1 AND event_id IS NULL
                     ORDER BY updated_at DESC
                     LIMIT 1
                     """,
@@ -2154,10 +2364,10 @@ async def set_default_focus_workflow_preset(
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                """
-                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                f"""
+                SELECT {WORKFLOW_PRESET_SELECT}
                 FROM focus_workflow_presets
-                WHERE id = $1 AND user_id = $2
+                WHERE id = $1 AND user_id = $2 AND event_id IS NULL
                 """,
                 preset_id,
                 int(user.id),
@@ -2165,15 +2375,15 @@ async def set_default_focus_workflow_preset(
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
             await conn.execute(
-                "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
+                "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND event_id IS NULL",
                 int(user.id),
             )
             updated = await conn.fetchrow(
-                """
+                f"""
                 UPDATE focus_workflow_presets
                 SET is_default = TRUE, updated_at = NOW()
-                WHERE id = $1 AND user_id = $2
-                RETURNING id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                WHERE id = $1 AND user_id = $2 AND event_id IS NULL
+                RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 preset_id,
                 int(user.id),
@@ -2193,8 +2403,8 @@ async def start_focus_workflow_preset(
     async with pool.acquire() as conn:
         async with conn.transaction():
             preset = await conn.fetchrow(
-                """
-                SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+                f"""
+                SELECT {WORKFLOW_PRESET_SELECT}
                 FROM focus_workflow_presets
                 WHERE id = $1 AND user_id = $2
                 """,

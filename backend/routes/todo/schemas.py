@@ -463,6 +463,8 @@ class FocusWorkflowPresetUpdateRequest(BaseModel):
 class FocusWorkflowPresetOut(BaseModel):
     id: UUID
     user_id: int
+    event_id: UUID | None = None
+    event_name: str | None = None
     name: str
     focus_duration: int
     break_duration: int

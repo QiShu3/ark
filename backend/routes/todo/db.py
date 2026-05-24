@@ -567,12 +567,6 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_workflow_active_per_user ON focus_workflows(user_id) WHERE status = 'active';"
         )
-        await conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_workflow_default_per_user ON focus_workflow_presets(user_id) WHERE is_default = TRUE;"
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_focus_workflow_presets_user_updated ON focus_workflow_presets(user_id, updated_at DESC);"
-        )
         # 迁移：允许 end_at 为空、放宽 duration 校验并更新时间一致性约束
         await conn.execute("ALTER TABLE focus_logs ALTER COLUMN end_at DROP NOT NULL;")
         await conn.execute("ALTER TABLE focus_logs DROP CONSTRAINT IF EXISTS chk_focus_logs_duration;")
@@ -605,6 +599,31 @@ async def init_todo(app: Any) -> None:
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_user_due_at ON events(user_id, due_at ASC);")
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_events_primary_per_user ON events(user_id) WHERE is_primary = TRUE;"
+        )
+        await conn.execute(
+            "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS event_id UUID NULL REFERENCES events(id) ON DELETE CASCADE;"
+        )
+        await conn.execute("DROP INDEX IF EXISTS uniq_focus_workflow_default_per_user;")
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_workflow_global_default_per_user
+            ON focus_workflow_presets(user_id)
+            WHERE is_default = TRUE AND event_id IS NULL;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_focus_workflow_presets_user_updated
+            ON focus_workflow_presets(user_id, updated_at DESC)
+            WHERE event_id IS NULL;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_focus_workflow_presets_event_updated
+            ON focus_workflow_presets(user_id, event_id, updated_at DESC)
+            WHERE event_id IS NOT NULL;
+            """
         )
         await conn.execute(
             """

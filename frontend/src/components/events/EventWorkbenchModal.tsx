@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { AchievementSummary } from '../achievementTypes';
 import { apiJson } from '../../lib/api';
@@ -18,6 +18,17 @@ import {
   updateEventArrangementTask,
 } from '../../lib/events/arrangementApi';
 import { activateEventSubApps } from '../../lib/events/eventAppSync';
+import WorkflowPresetModal from '../WorkflowPresetModal';
+import {
+  cloneWorkflowForm,
+  createDefaultWorkflowForm,
+  createWorkflowCopyDraft,
+  createWorkflowFormFromPreset,
+  isWorkflowFormDirty,
+  normalizeWorkflowFormPhases,
+  type WorkflowFormState,
+  type WorkflowPreset,
+} from '../workflowPresetForm';
 import type { EventItem, EventWorkbench } from '../../lib/events/types';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';
 
@@ -111,6 +122,8 @@ const EMPTY_APPOINTMENT_ARRANGEMENT_FORM: AppointmentArrangementFormState = {
   timeOverridden: false,
 };
 
+const EMPTY_EVENT_WORKFLOW_FORM = createDefaultWorkflowForm(false);
+
 export default function EventWorkbenchModal({ event, onClose, onChanged }: EventWorkbenchModalProps) {
   const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +139,16 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [loadingAchievement, setLoadingAchievement] = useState(false);
   const [editingEventDetails, setEditingEventDetails] = useState(false);
   const [eventEditForm, setEventEditForm] = useState<EventEditFormState>(EMPTY_EVENT_EDIT_FORM);
+  const [eventWorkflows, setEventWorkflows] = useState<WorkflowPreset[]>([]);
+  const [loadingEventWorkflows, setLoadingEventWorkflows] = useState(false);
+  const [showEventWorkflowModal, setShowEventWorkflowModal] = useState(false);
+  const [editingEventWorkflowId, setEditingEventWorkflowId] = useState<string | null>(null);
+  const [eventWorkflowForm, setEventWorkflowForm] = useState<WorkflowFormState>(EMPTY_EVENT_WORKFLOW_FORM);
+  const [eventWorkflowFormBaseline, setEventWorkflowFormBaseline] = useState<WorkflowFormState>(
+    EMPTY_EVENT_WORKFLOW_FORM,
+  );
+  const [eventWorkflowSubmitting, setEventWorkflowSubmitting] = useState(false);
+  const [eventWorkflowError, setEventWorkflowError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -185,6 +208,25 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       cancelled = true;
     };
   }, []);
+
+  const loadEventWorkflows = useCallback(async (): Promise<void> => {
+    setLoadingEventWorkflows(true);
+    try {
+      const data = await apiJson<WorkflowPreset[]>(`/todo/events/${event.id}/workflows`);
+      setEventWorkflows(Array.isArray(data) ? data : []);
+      setEventWorkflowError(null);
+    } catch (err) {
+      console.error('Failed to load event workflows', err);
+      setEventWorkflows([]);
+      setEventWorkflowError(err instanceof Error ? err.message : '工作流加载失败');
+    } finally {
+      setLoadingEventWorkflows(false);
+    }
+  }, [event.id]);
+
+  useEffect(() => {
+    void loadEventWorkflows();
+  }, [loadEventWorkflows]);
 
   const currentEvent = workbench?.event ?? event;
   const eventOptions = arrangementEvents.some((item) => item.id === currentEvent.id)
@@ -585,6 +627,176 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function replaceEventWorkflowDraft(nextForm: WorkflowFormState, nextEditingId: string | null): void {
+    const snapshot = cloneWorkflowForm({ ...nextForm, isDefault: false });
+    setEditingEventWorkflowId(nextEditingId);
+    setEventWorkflowForm(snapshot);
+    setEventWorkflowFormBaseline(cloneWorkflowForm(snapshot));
+    setEventWorkflowError(null);
+  }
+
+  function isEventWorkflowDraftDirty(): boolean {
+    return isWorkflowFormDirty(eventWorkflowForm, eventWorkflowFormBaseline);
+  }
+
+  function confirmDiscardEventWorkflowDraft(): boolean {
+    if (!isEventWorkflowDraftDirty()) return true;
+    return window.confirm('当前工作流还有未保存修改，确定要放弃吗？');
+  }
+
+  function openNewEventWorkflow(): void {
+    if (!confirmDiscardEventWorkflowDraft()) return;
+    replaceEventWorkflowDraft(createDefaultWorkflowForm(false), null);
+    setShowEventWorkflowModal(true);
+  }
+
+  function closeEventWorkflowModal(): void {
+    if (!confirmDiscardEventWorkflowDraft()) return;
+    setShowEventWorkflowModal(false);
+  }
+
+  function editEventWorkflow(workflow: WorkflowPreset): void {
+    if (!confirmDiscardEventWorkflowDraft()) return;
+    replaceEventWorkflowDraft(createWorkflowFormFromPreset(workflow), workflow.id);
+    setShowEventWorkflowModal(true);
+  }
+
+  function copyEventWorkflow(workflow: WorkflowPreset): void {
+    if (!confirmDiscardEventWorkflowDraft()) return;
+    replaceEventWorkflowDraft(createWorkflowCopyDraft(workflow), null);
+    setShowEventWorkflowModal(true);
+  }
+
+  function addEventWorkflowPhase(): void {
+    setEventWorkflowForm((state) => ({
+      ...state,
+      phases: normalizeWorkflowFormPhases([
+        ...state.phases,
+        { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+        { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
+      ]),
+    }));
+  }
+
+  function removeEventWorkflowPhase(index: number): void {
+    setEventWorkflowForm((state) => {
+      if (state.phases.length <= 2) return state;
+      const groupStart = index % 2 === 0 ? index : index - 1;
+      return {
+        ...state,
+        phases: normalizeWorkflowFormPhases(
+          state.phases.filter((_, phaseIndex) => phaseIndex !== groupStart && phaseIndex !== groupStart + 1),
+        ),
+      };
+    });
+  }
+
+  function resetEventWorkflowForm(): void {
+    if (!confirmDiscardEventWorkflowDraft()) return;
+    if (editingEventWorkflowId) {
+      const workflow = eventWorkflows.find((item) => item.id === editingEventWorkflowId);
+      if (workflow) {
+        replaceEventWorkflowDraft(createWorkflowFormFromPreset(workflow), workflow.id);
+        return;
+      }
+    }
+    replaceEventWorkflowDraft(createDefaultWorkflowForm(false), null);
+  }
+
+  async function submitEventWorkflow(): Promise<void> {
+    if (eventWorkflowSubmitting) return;
+    const name = eventWorkflowForm.name.trim();
+    if (!name) {
+      setEventWorkflowError('请输入工作流名称');
+      return;
+    }
+    if (!eventWorkflowForm.phases.length) {
+      setEventWorkflowError('至少配置一个阶段');
+      return;
+    }
+    for (let index = 0; index < eventWorkflowForm.phases.length; index += 1) {
+      const phase = eventWorkflowForm.phases[index];
+      if (phase.duration < 60) {
+        setEventWorkflowError('每个阶段时长不能小于 60 秒');
+        return;
+      }
+      if (index > 0 && eventWorkflowForm.phases[index - 1].phase_type === phase.phase_type) {
+        setEventWorkflowError('相邻阶段必须交替 focus / break');
+        return;
+      }
+    }
+    if (eventWorkflowForm.phases[0].phase_type !== 'focus') {
+      setEventWorkflowError('第一个阶段必须是专注');
+      return;
+    }
+    const focusDuration = eventWorkflowForm.phases.find((phase) => phase.phase_type === 'focus')?.duration ?? 1500;
+    const breakDuration = eventWorkflowForm.phases.find((phase) => phase.phase_type === 'break')?.duration ?? 300;
+    const defaultFocusTimerMode = eventWorkflowForm.phases.find((phase) => phase.phase_type === 'focus')?.timer_mode ?? 'countdown';
+    const body = JSON.stringify({
+      name,
+      phases: eventWorkflowForm.phases.map((phase) => ({
+        phase_type: phase.phase_type,
+        duration: Math.round(phase.duration),
+        timer_mode: phase.phase_type === 'focus' ? phase.timer_mode : undefined,
+        task_id: phase.phase_type === 'focus' ? phase.task_id : undefined,
+      })),
+      focus_duration: Math.round(focusDuration),
+      break_duration: Math.round(breakDuration),
+      default_focus_timer_mode: defaultFocusTimerMode,
+      is_default: false,
+    });
+
+    setEventWorkflowSubmitting(true);
+    setEventWorkflowError(null);
+    try {
+      if (editingEventWorkflowId) {
+        await apiJson<WorkflowPreset>(`/todo/events/${currentEvent.id}/workflows/${editingEventWorkflowId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+      } else {
+        await apiJson<WorkflowPreset>(`/todo/events/${currentEvent.id}/workflows`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+      }
+      replaceEventWorkflowDraft(createDefaultWorkflowForm(false), null);
+      await loadEventWorkflows();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      setEventWorkflowError(err instanceof Error ? err.message : '保存工作流失败');
+    } finally {
+      setEventWorkflowSubmitting(false);
+    }
+  }
+
+  async function deleteEventWorkflow(workflowId: string): Promise<void> {
+    if (eventWorkflowSubmitting) return;
+    if (!window.confirm('确认删除该工作流吗？')) return;
+    setEventWorkflowSubmitting(true);
+    setEventWorkflowError(null);
+    try {
+      await apiJson(`/todo/events/${currentEvent.id}/workflows/${workflowId}`, { method: 'DELETE' });
+      if (editingEventWorkflowId === workflowId) {
+        replaceEventWorkflowDraft(createDefaultWorkflowForm(false), null);
+      }
+      await loadEventWorkflows();
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      setEventWorkflowError(err instanceof Error ? err.message : '删除工作流失败');
+    } finally {
+      setEventWorkflowSubmitting(false);
+    }
+  }
+
+  function workflowSummary(workflow: WorkflowPreset): string {
+    return workflow.phases
+      .map((phase, index) => `${index + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`)
+      .join(' · ');
   }
 
   function renderArrangementEditor(kind: ArrangementKind) {
@@ -1002,18 +1214,82 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     );
   }
 
+  function renderWorkflowSection() {
+    return (
+      <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-base font-semibold">工作流</h3>
+          <button
+            type="button"
+            onClick={openNewEventWorkflow}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+          >
+            新建工作流
+          </button>
+        </div>
+        {eventWorkflowError ? (
+          <div className="mt-3 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
+            {eventWorkflowError}
+          </div>
+        ) : null}
+        {loadingEventWorkflows ? <p className="mt-3 text-sm text-white/50">工作流加载中...</p> : null}
+        {!loadingEventWorkflows && eventWorkflows.length === 0 ? (
+          <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+            暂无工作流
+          </div>
+        ) : null}
+        {eventWorkflows.length > 0 ? (
+          <div className="mt-3 grid gap-2">
+            {eventWorkflows.map((workflow) => (
+              <div
+                key={workflow.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => editEventWorkflow(workflow)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="truncate text-sm font-medium text-white">{workflow.name}</div>
+                  <div className="mt-1 truncate text-xs text-white/45">{workflowSummary(workflow)}</div>
+                </button>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyEventWorkflow(workflow)}
+                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+                  >
+                    复制
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteEventWorkflow(workflow.id)}
+                    className="rounded-lg border border-red-400/20 bg-red-500/10 px-2 py-1 text-xs text-red-200 hover:bg-red-500/20"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 px-5 py-20 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-label="安排"
-      onClick={onClose}
-    >
+    <>
       <div
-        className="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f16] text-white shadow-2xl"
-        onClick={(clickEvent) => clickEvent.stopPropagation()}
+        className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 px-5 py-20 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-label="安排"
+        onClick={onClose}
       >
+        <div
+          className="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f16] text-white shadow-2xl"
+          onClick={(clickEvent) => clickEvent.stopPropagation()}
+        >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-white/[0.04] px-5">
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-white/45">安排</div>
@@ -1136,6 +1412,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             ) : null}
           </section>
 
+          {renderWorkflowSection()}
+
           <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <div>
               <h3 className="text-base font-semibold">安排内容</h3>
@@ -1178,7 +1456,35 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             )}
           </section>
         </div>
+        </div>
       </div>
-    </div>
+      <WorkflowPresetModal
+        open={showEventWorkflowModal}
+        presets={eventWorkflows}
+        tasks={taskArrangements}
+        editingWorkflowId={editingEventWorkflowId}
+        workflowForm={eventWorkflowForm}
+        workflowError={eventWorkflowError}
+        workflowSubmitting={eventWorkflowSubmitting}
+        onClose={closeEventWorkflowModal}
+        onCreateNew={openNewEventWorkflow}
+        onSelectPreset={editEventWorkflow}
+        onCopyPreset={copyEventWorkflow}
+        onSetDefault={() => undefined}
+        onDeletePreset={(workflowId) => void deleteEventWorkflow(workflowId)}
+        onUpdateForm={setEventWorkflowForm}
+        onAddPhase={addEventWorkflowPhase}
+        onRemovePhase={removeEventWorkflowPhase}
+        onSubmit={() => void submitEventWorkflow()}
+        onReset={resetEventWorkflowForm}
+        isTaskHiddenFromActionList={() => false}
+        title="工作流"
+        description={currentEvent.name}
+        savedListLabel="已保存工作流"
+        emptyText="暂无工作流"
+        showDefaultControls={false}
+        zIndexClass="z-[90]"
+      />
+    </>
   );
 }

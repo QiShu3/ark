@@ -17,6 +17,8 @@ export type WorkflowPresetPhase = {
 export interface WorkflowPreset {
   id: string;
   user_id: number;
+  event_id?: string | null;
+  event_name?: string | null;
   name: string;
   focus_duration: number;
   break_duration: number;

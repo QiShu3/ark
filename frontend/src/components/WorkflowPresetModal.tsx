@@ -29,6 +29,13 @@ type WorkflowPresetModalProps = {
   onSubmit: () => void;
   onReset: () => void;
   isTaskHiddenFromActionList: (task: Task) => boolean;
+  title?: string;
+  description?: string | null;
+  savedListLabel?: string;
+  emptyText?: string;
+  showDefaultControls?: boolean;
+  zIndexClass?: string;
+  readOnlyPresetIds?: string[];
 };
 
 const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
@@ -51,12 +58,20 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
   onSubmit,
   onReset,
   isTaskHiddenFromActionList,
+  title = '工作流预设',
+  description = '这里管理的是可复用的专注流程模板，运行控制仍在主面板中完成。',
+  savedListLabel = '已保存预设',
+  emptyText = '暂无预设，先创建一个适合你的专注流程',
+  showDefaultControls = true,
+  zIndexClass = 'z-[60]',
+  readOnlyPresetIds = [],
 }) => {
   const preview = React.useMemo(() => buildWorkflowPreview(workflowForm), [workflowForm]);
   const availableTasks = React.useMemo(
     () => getWorkflowTaskOptions(tasks, isTaskHiddenFromActionList),
     [tasks, isTaskHiddenFromActionList],
   );
+  const readOnlyPresetIdSet = React.useMemo(() => new Set(readOnlyPresetIds), [readOnlyPresetIds]);
   const phaseGroups = React.useMemo(() => {
     const groups: Array<{
       focusPhase: WorkflowFormPhase;
@@ -107,7 +122,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-black/70 backdrop-blur-sm`}
       onClick={onClose}
     >
       <div
@@ -120,10 +135,8 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
         <div className="border-b border-white/10 px-5 py-4 bg-white/5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 id="workflow-preset-modal-title" className="text-lg font-bold text-white">工作流预设</h3>
-              <p className="text-sm text-white/55 mt-1">
-                这里管理的是可复用的专注流程模板，运行控制仍在主面板中完成。
-              </p>
+              <h3 id="workflow-preset-modal-title" className="text-lg font-bold text-white">{title}</h3>
+              {description ? <p className="text-sm text-white/55 mt-1">{description}</p> : null}
             </div>
             <button
               aria-label="关闭工作流预设弹窗"
@@ -141,7 +154,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
         <div className="grid grid-cols-[320px_1fr] gap-0 h-[calc(82vh-88px)]">
           <div className="border-r border-white/10 p-4 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-white/70">已保存预设</span>
+              <span className="text-sm text-white/70">{savedListLabel}</span>
               <button
                 onClick={onCreateNew}
                 className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
@@ -152,17 +165,24 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
             <div className="flex flex-col gap-2">
               {presets.map((preset) => {
                 const isEditing = editingWorkflowId === preset.id;
+                const isReadOnly = readOnlyPresetIdSet.has(preset.id);
                 return (
                   <div
                     key={preset.id}
-                    className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                    className={`rounded-lg border p-3 transition-colors ${
                       isEditing
                         ? 'border-amber-400/60 bg-amber-500/10'
-                        : preset.is_default
+                        : showDefaultControls && preset.is_default && !isReadOnly
                           ? 'border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20'
-                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                          : isReadOnly
+                            ? 'cursor-default border-white/10 bg-white/[0.03]'
+                            : 'cursor-pointer border-white/10 bg-white/5 hover:bg-white/10'
                     }`}
-                    onClick={() => onSelectPreset(preset)}
+                    onClick={() => {
+                      if (!isReadOnly) {
+                        onSelectPreset(preset);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -170,9 +190,17 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                         <div className="text-xs text-white/60 mt-1">
                           {preset.phases.map((phase, index) => `${index + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`).join(' · ')}
                         </div>
+                        {preset.event_name ? (
+                          <div className="text-xs text-white/45 mt-1">事件：{preset.event_name}</div>
+                        ) : null}
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        {preset.is_default && <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/30">默认</span>}
+                        {showDefaultControls && preset.is_default && !isReadOnly ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/30">默认</span>
+                        ) : null}
+                        {isReadOnly ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/55">事件</span>
+                        ) : null}
                         {isEditing && <span className="text-[10px] px-2 py-0.5 rounded bg-amber-400/20 text-amber-200">编辑中</span>}
                       </div>
                     </div>
@@ -187,31 +215,37 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                       >
                         复制
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSetDefault(preset.id);
-                        }}
-                        className="text-xs px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30"
-                      >
-                        设为默认
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeletePreset(preset.id);
-                        }}
-                        className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30"
-                      >
-                        删除
-                      </button>
+                      {isReadOnly ? null : (
+                        <>
+                          {showDefaultControls ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSetDefault(preset.id);
+                              }}
+                              className="text-xs px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30"
+                            >
+                              设为默认
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeletePreset(preset.id);
+                            }}
+                            className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30"
+                          >
+                            删除
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
               })}
               {presets.length === 0 && (
                 <div className="text-center text-white/35 py-8">
-                  暂无预设，先创建一个适合你的专注流程
+                  {emptyText}
                 </div>
               )}
             </div>
@@ -316,14 +350,16 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                 ))}
               </div>
 
-              <label className="inline-flex items-center gap-2 text-sm text-white/75">
-                <input
-                  type="checkbox"
-                  checked={workflowForm.isDefault}
-                  onChange={(e) => onUpdateForm((state) => ({ ...state, isDefault: e.target.checked }))}
-                />
-                设为默认工作流
-              </label>
+              {showDefaultControls ? (
+                <label className="inline-flex items-center gap-2 text-sm text-white/75">
+                  <input
+                    type="checkbox"
+                    checked={workflowForm.isDefault}
+                    onChange={(e) => onUpdateForm((state) => ({ ...state, isDefault: e.target.checked }))}
+                  />
+                  设为默认工作流
+                </label>
+              ) : null}
 
               {workflowError && <div className="text-sm text-red-400">{workflowError}</div>}
 

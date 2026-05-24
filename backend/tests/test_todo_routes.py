@@ -3292,6 +3292,7 @@ def _preset_row(
     *,
     preset_id=None,
     user_id: int = 7,
+    event_id=None,
     name: str = "深度工作流",
     phases: list[dict[str, Any]] | None = None,
     is_default: bool = False,
@@ -3300,6 +3301,7 @@ def _preset_row(
     return {
         "id": preset_id or uuid4(),
         "user_id": user_id,
+        "event_id": event_id,
         "name": name,
         "focus_duration": 1500,
         "break_duration": 300,
@@ -3318,6 +3320,7 @@ def _preset_row(
 class _WorkflowPresetConn:
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
+        self.events: list[dict[str, Any]] = []
         self.tasks: list[dict[str, Any]] = []
         self.active_workflow: dict[str, Any] | None = None
         self.inserted_focus_task_id: Any = None
@@ -3326,14 +3329,59 @@ class _WorkflowPresetConn:
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "FROM focus_workflow_presets" in sql and "ORDER BY is_default DESC" in sql:
             user_id = int(args[0])
-            items = [row for row in self.rows if int(row["user_id"]) == user_id]
+            items = [
+                row
+                for row in self.rows
+                if int(row["user_id"]) == user_id and (row.get("event_id") is None or "event_id IS NULL" not in sql)
+            ]
+            if "event_id IS NULL" in sql:
+                items = [row for row in items if row.get("event_id") is None]
             return sorted(items, key=lambda row: (not bool(row["is_default"]), -row["updated_at"].timestamp()))
+        if "FROM focus_workflow_presets" in sql and "WHERE user_id = $1 AND event_id = $2" in sql:
+            user_id = int(args[0])
+            event_id = args[1]
+            items = [
+                row
+                for row in self.rows
+                if int(row["user_id"]) == user_id and row.get("event_id") == event_id
+            ]
+            return sorted(items, key=lambda row: row["updated_at"], reverse=True)
         return []
 
     async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
         if "WHERE user_id = $1 AND is_default = TRUE" in sql:
             user_id = int(args[0])
-            return next((row for row in self.rows if int(row["user_id"]) == user_id and bool(row["is_default"])), None)
+            return next(
+                (
+                    row
+                    for row in self.rows
+                    if int(row["user_id"]) == user_id and row.get("event_id") is None and bool(row["is_default"])
+                ),
+                None,
+            )
+        if (
+            "FROM events" in sql
+            and "WHERE id = $1 AND user_id = $2" in sql
+            and "SELECT id, user_id, name, start_date, due_at, is_primary, created_at, updated_at" in sql
+        ):
+            event_id = args[0]
+            user_id = int(args[1])
+            return next(
+                (event for event in self.events if event["id"] == event_id and int(event["user_id"]) == user_id),
+                None,
+            )
+        if "SELECT id, status, is_deleted" in sql and "event_id = $3" in sql:
+            task_id = args[0]
+            user_id = int(args[1])
+            event_id = args[2]
+            return next(
+                (
+                    {"id": item["id"], "status": item["status"], "is_deleted": item["is_deleted"]}
+                    for item in self.tasks
+                    if item["id"] == task_id and int(item["user_id"]) == user_id and item.get("event_id") == event_id
+                ),
+                None,
+            )
         if "SELECT id, status, is_deleted, title, source_type, app_id, app_task_type, app_config_id" in sql:
             task_id = args[0]
             user_id = int(args[1])
@@ -3350,6 +3398,7 @@ class _WorkflowPresetConn:
                         "app_config_id": item.get("app_config_id"),
                         "app_instance_key": item.get("app_instance_key"),
                         "managed_by_app": item.get("managed_by_app", False),
+                        "event_id": item.get("event_id"),
                     }
                     for item in self.tasks
                     if item["id"] == task_id and int(item["user_id"]) == user_id
@@ -3360,17 +3409,35 @@ class _WorkflowPresetConn:
             return self.active_workflow
         if "INSERT INTO focus_workflow_presets" in sql:
             now = datetime.now(UTC)
-            phases_arg = args[4]
+            if re.search(r"INSERT INTO focus_workflow_presets\(\s*user_id,\s*event_id", sql):
+                user_id = int(args[0])
+                event_id = args[1]
+                name = str(args[2])
+                focus_duration = int(args[3])
+                break_duration = int(args[4])
+                phases_arg = args[5]
+                timer_mode = str(args[6])
+                is_default = False
+            else:
+                user_id = int(args[0])
+                event_id = None
+                name = str(args[1])
+                focus_duration = int(args[2])
+                break_duration = int(args[3])
+                phases_arg = args[4]
+                timer_mode = str(args[5])
+                is_default = bool(args[6])
             phases = json.loads(phases_arg) if isinstance(phases_arg, str) else phases_arg
             row = {
                 "id": uuid4(),
-                "user_id": int(args[0]),
-                "name": str(args[1]),
-                "focus_duration": int(args[2]),
-                "break_duration": int(args[3]),
+                "user_id": user_id,
+                "event_id": event_id,
+                "name": name,
+                "focus_duration": focus_duration,
+                "break_duration": break_duration,
                 "phases": phases,
-                "default_focus_timer_mode": str(args[5]),
-                "is_default": bool(args[6]),
+                "default_focus_timer_mode": timer_mode,
+                "is_default": is_default,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -3379,7 +3446,32 @@ class _WorkflowPresetConn:
         if "SELECT id, is_default FROM focus_workflow_presets" in sql:
             preset_id = args[0]
             user_id = int(args[1])
-            return next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
+            return next(
+                (
+                    row
+                    for row in self.rows
+                    if row["id"] == preset_id
+                    and int(row["user_id"]) == user_id
+                    and (row.get("event_id") is None or "event_id IS NULL" not in sql)
+                ),
+                None,
+            )
+        if (
+            "FROM focus_workflow_presets" in sql
+            and "WHERE id = $1 AND user_id = $2 AND event_id = $3" in sql
+            and sql.strip().startswith("SELECT")
+        ):
+            preset_id = args[0]
+            user_id = int(args[1])
+            event_id = args[2]
+            return next(
+                (
+                    row
+                    for row in self.rows
+                    if row["id"] == preset_id and int(row["user_id"]) == user_id and row.get("event_id") == event_id
+                ),
+                None,
+            )
         if (
             "FROM focus_workflow_presets" in sql
             and "WHERE id = $1 AND user_id = $2" in sql
@@ -3387,10 +3479,19 @@ class _WorkflowPresetConn:
         ):
             preset_id = args[0]
             user_id = int(args[1])
-            return next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
+            return next(
+                (
+                    row
+                    for row in self.rows
+                    if row["id"] == preset_id
+                    and int(row["user_id"]) == user_id
+                    and (row.get("event_id") is None or "event_id IS NULL" not in sql)
+                ),
+                None,
+            )
         if (
             "UPDATE focus_workflow_presets" in sql
-            and "RETURNING id, user_id, name, focus_duration, break_duration" in sql
+            and "RETURNING" in sql
             and "default_focus_timer_mode" in sql
             and "phases" in sql
             and "is_default" in sql
@@ -3408,31 +3509,60 @@ class _WorkflowPresetConn:
                 target["is_default"] = True
                 target["updated_at"] = datetime.now(UTC)
                 return target
-            preset_id = args[-2]
-            user_id = int(args[-1])
-            target = next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
+            if "AND event_id = $" in sql:
+                preset_id = args[-3]
+                user_id = int(args[-2])
+                event_id = args[-1]
+                target = next(
+                    (
+                        row
+                        for row in self.rows
+                        if row["id"] == preset_id and int(row["user_id"]) == user_id and row.get("event_id") == event_id
+                    ),
+                    None,
+                )
+            else:
+                preset_id = args[-2]
+                user_id = int(args[-1])
+                target = next(
+                    (
+                        row
+                        for row in self.rows
+                        if row["id"] == preset_id
+                        and int(row["user_id"]) == user_id
+                        and (row.get("event_id") is None or "event_id IS NULL" not in sql)
+                    ),
+                    None,
+                )
             if target is None:
                 return None
-            if "name =" in sql:
-                target["name"] = str(args[0])
-            if "focus_duration =" in sql:
-                target["focus_duration"] = int(args[1 if "name =" in sql else 0])
-            if "break_duration =" in sql:
-                idx = 2 if "name =" in sql else (1 if "focus_duration =" in sql else 0)
-                target["break_duration"] = int(args[idx])
-            if "phases =" in sql:
-                phases_arg = args[-4] if "is_default =" in sql else args[-3]
+            for field in ("name", "focus_duration", "break_duration", "default_focus_timer_mode"):
+                match = re.search(rf"{field} = \$(\d+)", sql)
+                if match is None:
+                    continue
+                value = args[int(match.group(1)) - 1]
+                if field in {"focus_duration", "break_duration"}:
+                    target[field] = int(value)
+                else:
+                    target[field] = str(value)
+            phases_match = re.search(r"phases = \$(\d+)::jsonb", sql)
+            if phases_match is not None:
+                phases_arg = args[int(phases_match.group(1)) - 1]
                 target["phases"] = json.loads(phases_arg) if isinstance(phases_arg, str) else phases_arg
-            if "default_focus_timer_mode =" in sql:
-                mode_idx = len(args) - 4 if "is_default =" in sql else len(args) - 3
-                target["default_focus_timer_mode"] = str(args[mode_idx])
-            if "is_default =" in sql:
-                target["is_default"] = bool(args[-3])
+            default_match = re.search(r"is_default = \$(\d+)", sql)
+            if default_match is not None:
+                target["is_default"] = bool(args[int(default_match.group(1)) - 1])
+            elif "is_default = FALSE" in sql:
+                target["is_default"] = False
             target["updated_at"] = datetime.now(UTC)
             return target
         if "SELECT id" in sql and "FROM focus_workflow_presets" in sql and "LIMIT 1" in sql:
             user_id = int(args[0])
-            items = [row for row in self.rows if int(row["user_id"]) == user_id]
+            items = [
+                row
+                for row in self.rows
+                if int(row["user_id"]) == user_id and (row.get("event_id") is None or "event_id IS NULL" not in sql)
+            ]
             if not items:
                 return None
             items.sort(key=lambda row: row["updated_at"], reverse=True)
@@ -3483,15 +3613,24 @@ class _WorkflowPresetConn:
         if "UPDATE focus_workflow_presets SET is_default = FALSE" in sql:
             user_id = int(args[0])
             for row in self.rows:
-                if int(row["user_id"]) == user_id:
+                if int(row["user_id"]) == user_id and (row.get("event_id") is None or "event_id IS NULL" not in sql):
                     row["is_default"] = False
                     row["updated_at"] = datetime.now(UTC)
             return "UPDATE 1"
         if sql.startswith("DELETE FROM focus_workflow_presets"):
             preset_id = args[0]
             user_id = int(args[1])
+            event_id = args[2] if len(args) > 2 else None
             before = len(self.rows)
-            self.rows = [row for row in self.rows if not (row["id"] == preset_id and int(row["user_id"]) == user_id)]
+            self.rows = [
+                row
+                for row in self.rows
+                if not (
+                    row["id"] == preset_id
+                    and int(row["user_id"]) == user_id
+                    and (row.get("event_id") == event_id if len(args) > 2 else row.get("event_id") is None)
+                )
+            ]
             return f"DELETE {before - len(self.rows)}"
         if "UPDATE focus_workflow_presets SET is_default = TRUE" in sql:
             preset_id = args[0]
@@ -3551,6 +3690,86 @@ def test_create_and_list_focus_workflow_presets(monkeypatch) -> None:
     items = list_resp.json()
     assert len(items) == 1
     assert items[0]["name"] == "默认番茄"
+
+
+def test_event_workflows_surface_in_global_list_but_stay_event_managed(monkeypatch) -> None:
+    conn = _WorkflowPresetConn()
+    now = datetime.now(UTC)
+    event_id = uuid4()
+    task_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "高数期末",
+            "start_date": now.date(),
+            "due_at": now + timedelta(days=7),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    conn.tasks = [
+        {
+            "id": task_id,
+            "user_id": 7,
+            "status": "todo",
+            "is_deleted": False,
+            "title": "完成第一轮复习",
+            "event_id": event_id,
+        }
+    ]
+    global_preset = _preset_row(name="全局工作流", is_default=True)
+    conn.rows.append(global_preset)
+    pool = _WorkflowPresetPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+    app = _build_app()
+    client = TestClient(app)
+
+    create_resp = client.post(
+        f"/todo/events/{event_id}/workflows",
+        json={
+            "name": "期末冲刺",
+            "focus_duration": 1500,
+            "break_duration": 300,
+            "phases": [
+                {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(task_id)},
+                {"phase_type": "break", "duration": 300},
+            ],
+            "is_default": True,
+        },
+    )
+    assert create_resp.status_code == 200
+    created = create_resp.json()
+    assert created["event_id"] == str(event_id)
+    assert created["is_default"] is False
+    assert created["phases"][0]["task_id"] == str(task_id)
+
+    global_resp = client.get("/todo/focus/workflows")
+    assert global_resp.status_code == 200
+    assert [item["name"] for item in global_resp.json()] == ["全局工作流", "期末冲刺"]
+    assert global_resp.json()[1]["event_id"] == str(event_id)
+
+    start_resp = client.post(f"/todo/focus/workflows/{created['id']}/start")
+    assert start_resp.status_code == 200
+    assert start_resp.json()["workflow_name"] == "期末冲刺"
+
+    event_list_resp = client.get(f"/todo/events/{event_id}/workflows")
+    assert event_list_resp.status_code == 200
+    assert [item["name"] for item in event_list_resp.json()] == ["期末冲刺"]
+
+    update_resp = client.patch(
+        f"/todo/events/{event_id}/workflows/{created['id']}",
+        json={"name": "期末冲刺改", "is_default": True},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["name"] == "期末冲刺改"
+    assert update_resp.json()["is_default"] is False
+
+    delete_resp = client.delete(f"/todo/events/{event_id}/workflows/{created['id']}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["ok"] is True
+    assert client.get(f"/todo/events/{event_id}/workflows").json() == []
 
 
 def test_create_focus_workflow_preset_rejects_completed_task_binding(monkeypatch) -> None:

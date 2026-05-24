@@ -56,6 +56,17 @@ function buildWorkflowPreset(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+const primaryEvent = {
+  id: 'event-1',
+  user_id: 7,
+  name: '高数期末',
+  start_date: '2026-05-20',
+  due_at: '2026-06-20T09:00:00Z',
+  is_primary: true,
+  created_at: '2026-05-18T00:00:00Z',
+  updated_at: '2026-05-18T00:00:00Z',
+};
+
 function defaultApiResponse(path: string) {
   if (path === '/todo/focus/current') {
     return Promise.reject(new Error('no focus'));
@@ -245,6 +256,91 @@ describe('PlaceholderCard workflow UI', () => {
 
     expect(await screen.findByText('开始工作流')).toBeInTheDocument();
     expect(screen.getByText('上次工作流')).toBeInTheDocument();
+  });
+
+  it('reloads workflow presets so event workflows appear in the home launcher', async () => {
+    const user = userEvent.setup();
+    const presets: ReturnType<typeof buildWorkflowPreset>[] = [];
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([...presets]);
+      if (path === '/todo/events') return Promise.resolve([primaryEvent]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    expect(await screen.findByRole('button', { name: '新建工作流' })).toBeInTheDocument();
+
+    presets.push(
+      buildWorkflowPreset({
+        id: 'preset-event',
+        name: '期末冲刺',
+        event_id: 'event-1',
+        event_name: '高数期末',
+        is_default: false,
+      }),
+      buildWorkflowPreset({
+        id: 'preset-other',
+        name: '其他事件工作流',
+        event_id: 'event-other',
+        event_name: '其他事件',
+        is_default: false,
+      }),
+    );
+    window.dispatchEvent(new Event('ark:reload-focus'));
+
+    await waitFor(() => {
+      expect(
+        mockApiJson.mock.calls.filter(([path]) => path === '/todo/focus/workflows').length,
+      ).toBeGreaterThan(1);
+    });
+
+    expect(await screen.findByRole('button', { name: /开始工作流 期末冲刺/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /开始工作流 其他事件工作流/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '切换工作流 期末冲刺' }));
+
+    expect(await screen.findByRole('dialog', { name: '选择工作流' })).toBeInTheDocument();
+    expect(screen.getByText('事件：高数期末')).toBeInTheDocument();
+    expect(screen.queryByText('事件：其他事件')).not.toBeInTheDocument();
+  });
+
+  it('shows current-event workflows in the home workflow preset panel and keeps them read-only', async () => {
+    const user = userEvent.setup();
+    const globalPreset = buildWorkflowPreset({ id: 'preset-global', name: '全局工作流', is_default: true });
+    const eventPreset = buildWorkflowPreset({
+      id: 'preset-event',
+      name: '期末冲刺',
+      event_id: 'event-1',
+      event_name: '高数期末',
+      is_default: false,
+    });
+    const otherPreset = buildWorkflowPreset({
+      id: 'preset-other',
+      name: '其他事件工作流',
+      event_id: 'event-other',
+      event_name: '其他事件',
+      is_default: false,
+    });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([globalPreset, eventPreset, otherPreset]);
+      if (path === '/todo/events') return Promise.resolve([primaryEvent]);
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+    window.dispatchEvent(new Event('ark:open-workflow-modal'));
+
+    const dialog = await screen.findByRole('dialog', { name: '工作流预设' });
+    expect(within(dialog).getByText('全局工作流')).toBeInTheDocument();
+    expect(within(dialog).getByText('期末冲刺')).toBeInTheDocument();
+    expect(within(dialog).getByText('事件：高数期末')).toBeInTheDocument();
+    expect(within(dialog).queryByText('其他事件工作流')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '复制工作流 期末冲刺' })).toBeInTheDocument();
+    await user.click(within(dialog).getByText('期末冲刺'));
+    expect(screen.getByLabelText('工作流名称')).toHaveValue('');
   });
 
   it('opens the workflow picker from the workflow name and switches without starting', async () => {

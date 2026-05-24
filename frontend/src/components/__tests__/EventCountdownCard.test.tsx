@@ -301,6 +301,267 @@ describe('EventCountdownCard', () => {
     expect(screen.getByRole('button', { name: '添加日程' })).toBeInTheDocument();
   });
 
+  it('adds workflow drafts in the add-event editor and saves them after creating the event', async () => {
+    const user = userEvent.setup();
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const createdEvents: Array<{
+      id: string;
+      user_id: number;
+      name: string;
+      start_date: string;
+      due_at: string;
+      is_primary: boolean;
+      created_at: string;
+      updated_at: string;
+    }> = [];
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events' && !options) return [...createdEvents];
+      if (url === '/todo/event-plan-templates') return [];
+      if (url === '/api/vocab/decks') return [];
+      if (url === '/todo/events' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        expect(payload.is_primary).toBe(true);
+        const created = {
+          id: 'event-workflow',
+          user_id: 7,
+          name: payload.name,
+          start_date: payload.start_date,
+          due_at: payload.due_at,
+          is_primary: payload.is_primary,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+        createdEvents.push(created);
+        return created;
+      }
+      if (url === '/todo/tasks' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        expect(payload).toMatchObject({
+          title: '准备资料',
+          event_id: 'event-workflow',
+        });
+        return {
+          id: 'task-created',
+          user_id: 7,
+          title: payload.title,
+          content: payload.content,
+          status: 'todo',
+          current_cycle_count: 0,
+          target_cycle_count: 0,
+          cycle_period: 'daily',
+          cycle_every_days: null,
+          event: payload.event,
+          event_ids: [],
+          event_id: payload.event_id,
+          task_type: 'focus',
+          actual_duration: 0,
+          start_date: payload.start_date,
+          due_date: payload.due_date,
+          is_deleted: false,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+      }
+      if (url === '/todo/events/event-workflow/workflows' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          name: '冲刺工作流',
+          is_default: false,
+          phases: [
+            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: 'task-created' },
+            { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+          ],
+        });
+        return {
+          id: 'workflow-1',
+          user_id: 7,
+          event_id: 'event-workflow',
+          name: '冲刺工作流',
+          focus_duration: 1500,
+          break_duration: 300,
+          default_focus_timer_mode: 'countdown',
+          phases: [],
+          is_default: false,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+
+    const createDialog = screen.getByRole('dialog', { name: '添加事件' });
+    expect(within(createDialog).getByRole('heading', { name: '工作流' })).toBeInTheDocument();
+    expect(within(createDialog).getByText('暂无工作流')).toBeInTheDocument();
+
+    await user.click(within(createDialog).getByRole('button', { name: '添加任务' }));
+    await user.type(screen.getByLabelText('任务标题'), '准备资料');
+    await user.click(screen.getByRole('button', { name: '保存任务' }));
+
+    await user.click(within(createDialog).getByRole('button', { name: '新建工作流' }));
+    const workflowDialog = await screen.findByRole('dialog', { name: '工作流' });
+    await user.type(within(workflowDialog).getByLabelText('工作流名称'), '冲刺工作流');
+    await user.selectOptions(
+      within(workflowDialog).getByLabelText('阶段 1 绑定任务'),
+      within(workflowDialog).getByRole('option', { name: '准备资料' }),
+    );
+    await user.click(within(workflowDialog).getByRole('button', { name: '创建工作流' }));
+
+    expect(within(createDialog).getByRole('button', { name: /冲刺工作流/ })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('事件名称'), '高数期末');
+    await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
+    await user.type(screen.getByLabelText('到期时间'), '2026-06-20T10:00');
+    await user.click(screen.getByRole('button', { name: '创建事件' }));
+
+    try {
+      const overview = await screen.findByRole('dialog', { name: '事件总览' });
+      expect(within(overview).getByText('高数期末')).toBeInTheDocument();
+      expect(apiJson).toHaveBeenCalledWith(
+        '/todo/events/event-workflow/workflows',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(dispatchSpy.mock.calls.some(([event]) => event.type === 'ark:reload-focus')).toBe(true);
+    } finally {
+      dispatchSpy.mockRestore();
+    }
+  });
+
+  it('lets workflow drafts bind to app-derived tasks in the add-event editor', async () => {
+    const user = userEvent.setup();
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const createdEvents: Array<{
+      id: string;
+      user_id: number;
+      name: string;
+      start_date: string;
+      due_at: string;
+      is_primary: boolean;
+      created_at: string;
+      updated_at: string;
+    }> = [];
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events' && !options) return [...createdEvents];
+      if (url === '/todo/event-plan-templates') return [];
+      if (url === '/api/vocab/decks') return [];
+      if (url === '/todo/events' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        expect(payload.is_primary).toBe(true);
+        const created = {
+          id: 'event-app-workflow',
+          user_id: 7,
+          name: payload.name,
+          start_date: payload.start_date,
+          due_at: payload.due_at,
+          is_primary: payload.is_primary,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+        createdEvents.push(created);
+        return created;
+      }
+      if (url === '/todo/tasks' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        expect(payload).toMatchObject({
+          title: '真题练习 (应用)',
+          app_task_type: 'erc_practice',
+          event_id: 'event-app-workflow',
+        });
+        return {
+          id: 'app-task-created',
+          user_id: 7,
+          title: payload.title,
+          content: payload.content,
+          status: 'todo',
+          current_cycle_count: 0,
+          target_cycle_count: 0,
+          cycle_period: 'daily',
+          cycle_every_days: null,
+          event: payload.event,
+          event_ids: [],
+          event_id: payload.event_id,
+          task_type: 'focus',
+          app_task_type: payload.app_task_type,
+          actual_duration: 0,
+          start_date: payload.start_date,
+          due_date: payload.due_date,
+          is_deleted: false,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+      }
+      if (url === '/todo/events/event-app-workflow/workflows' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          name: '应用工作流',
+          is_default: false,
+          phases: [
+            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: 'app-task-created' },
+            { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+          ],
+        });
+        return {
+          id: 'workflow-app-1',
+          user_id: 7,
+          event_id: 'event-app-workflow',
+          name: '应用工作流',
+          focus_duration: 1500,
+          break_duration: 300,
+          default_focus_timer_mode: 'countdown',
+          phases: [],
+          is_default: false,
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-19T00:00:00Z',
+        };
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    const createDialog = screen.getByRole('dialog', { name: '添加事件' });
+
+    await user.click(within(createDialog).getByRole('button', { name: '添加应用' }));
+    await user.selectOptions(screen.getByLabelText('选择应用'), 'erc_practice');
+    await user.click(screen.getByRole('button', { name: '保存应用' }));
+    expect(within(createDialog).getByRole('button', { name: /真题练习/ })).toBeInTheDocument();
+
+    await user.click(within(createDialog).getByRole('button', { name: '新建工作流' }));
+    const workflowDialog = await screen.findByRole('dialog', { name: '工作流' });
+    expect(within(workflowDialog).getByRole('option', { name: '真题练习 (应用)' })).toBeInTheDocument();
+    await user.type(within(workflowDialog).getByLabelText('工作流名称'), '应用工作流');
+    await user.selectOptions(
+      within(workflowDialog).getByLabelText('阶段 1 绑定任务'),
+      within(workflowDialog).getByRole('option', { name: '真题练习 (应用)' }),
+    );
+    await user.click(within(workflowDialog).getByRole('button', { name: '创建工作流' }));
+
+    await user.type(screen.getByLabelText('事件名称'), '应用事件');
+    await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
+    await user.type(screen.getByLabelText('到期时间'), '2026-06-20T10:00');
+    await user.click(screen.getByRole('button', { name: '创建事件' }));
+
+    try {
+      const overview = await screen.findByRole('dialog', { name: '事件总览' });
+      expect(within(overview).getByText('应用事件')).toBeInTheDocument();
+      expect(apiJson).toHaveBeenCalledWith(
+        '/todo/events/event-app-workflow/workflows',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(dispatchSpy.mock.calls.some(([event]) => event.type === 'ark:reload-focus')).toBe(true);
+    } finally {
+      dispatchSpy.mockRestore();
+    }
+  });
+
   it('places add-event actions in the modal footer', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {

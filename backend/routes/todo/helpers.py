@@ -1535,6 +1535,8 @@ def _row_to_focus_workflow_preset(row: asyncpg.Record) -> FocusWorkflowPresetOut
     return FocusWorkflowPresetOut(
         id=row["id"],
         user_id=int(row["user_id"]),
+        event_id=row.get("event_id") if hasattr(row, "get") else row["event_id"] if "event_id" in row else None,
+        event_name=row.get("event_name") if hasattr(row, "get") else row["event_name"] if "event_name" in row else None,
         name=str(row["name"]),
         focus_duration=int(row["focus_duration"]),
         break_duration=int(row["break_duration"]),
@@ -1551,9 +1553,9 @@ def _row_to_focus_workflow_preset(row: asyncpg.Record) -> FocusWorkflowPresetOut
 async def _get_default_focus_workflow_preset(conn: Any, user_id: int) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
-        SELECT id, user_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
+        SELECT id, user_id, event_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
         FROM focus_workflow_presets
-        WHERE user_id = $1 AND is_default = TRUE
+        WHERE user_id = $1 AND is_default = TRUE AND event_id IS NULL
         LIMIT 1
         """,
         int(user_id),
