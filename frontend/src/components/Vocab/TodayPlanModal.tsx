@@ -7,6 +7,7 @@ type Props = {
   initialFocusDuration: number; // in seconds
   isCompleted: boolean;
   isSaving: boolean;
+  syncNotice?: string | null;
   onClose: () => void;
   onSave: (totalTargetCount: number, addToTodayPlan: boolean, focusDuration: number) => Promise<void> | void;
 };
@@ -24,6 +25,7 @@ export default function TodayPlanModal({
   initialFocusDuration,
   isCompleted,
   isSaving,
+  syncNotice,
   onClose,
   onSave,
 }: Props) {
@@ -63,6 +65,7 @@ export default function TodayPlanModal({
             <p className="mt-2 text-xs text-white/50">
               {isCompleted ? '今天这本词书已经完成，是否继续再来一轮？' : '配置背单词任务参数，系统将根据您的设定自动添加并同步至主页今日计划。'}
             </p>
+            {syncNotice ? <p className="mt-2 text-xs text-emerald-200">{syncNotice}</p> : null}
           </div>
           <button
             type="button"
@@ -158,4 +161,3 @@ export default function TodayPlanModal({
     </div>
   );
 }
-

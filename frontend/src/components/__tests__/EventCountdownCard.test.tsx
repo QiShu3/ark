@@ -322,7 +322,7 @@ describe('EventCountdownCard', () => {
       if (url === '/api/vocab/decks') return [];
       if (url === '/todo/events' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
-        expect(payload.is_primary).toBe(true);
+        expect(payload.is_primary).toBe(false);
         const created = {
           id: 'event-workflow',
           user_id: 7,
@@ -335,6 +335,11 @@ describe('EventCountdownCard', () => {
         };
         createdEvents.push(created);
         return created;
+      }
+      if (url === '/todo/events/event-workflow' && options?.method === 'PATCH') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({ is_primary: true });
+        createdEvents[0] = { ...createdEvents[0], is_primary: true };
+        return createdEvents[0];
       }
       if (url === '/todo/tasks' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
@@ -453,7 +458,7 @@ describe('EventCountdownCard', () => {
       if (url === '/api/vocab/decks') return [];
       if (url === '/todo/events' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
-        expect(payload.is_primary).toBe(true);
+        expect(payload.is_primary).toBe(false);
         const created = {
           id: 'event-app-workflow',
           user_id: 7,
@@ -466,6 +471,29 @@ describe('EventCountdownCard', () => {
         };
         createdEvents.push(created);
         return created;
+      }
+      if (url === '/todo/events/event-app-workflow' && options?.method === 'PATCH') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({ is_primary: true });
+        createdEvents[0] = { ...createdEvents[0], is_primary: true };
+        return createdEvents[0];
+      }
+      if (url === '/todo/app-tasks/erc-practice/init' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          daily_article_target: 1,
+          default_focus_duration: 1500,
+          add_to_today_plan: true,
+          event_id: 'event-app-workflow',
+        });
+        return {
+          state: 'ready',
+          task_id: 'app-task-created',
+          config_id: 'app-config-created',
+          event_id: 'event-app-workflow',
+          event_name: '应用事件',
+          config: {},
+          completion_state: null,
+          blocked_reason: null,
+        };
       }
       if (url === '/todo/tasks' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');

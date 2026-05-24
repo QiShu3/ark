@@ -37,7 +37,7 @@ export function fetchERCPracticeAppTaskStatus() {
 export function initializeERCPracticeAppTask(payload: {
   default_focus_duration: number;
   add_to_today_plan: boolean;
-  event_id: string | null;
+  event_id?: string | null;
   daily_article_target: number;
 }) {
   return apiJson<AppTaskStatus>('/todo/app-tasks/erc-practice/init', {

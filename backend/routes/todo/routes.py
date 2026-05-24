@@ -145,6 +145,7 @@ def _row_to_event_plan_template_item(row: Any) -> EventPlanTemplateItemOut:
         content=row["content"],
         offset_days=int(row["offset_days"]),
         sort_order=int(row["sort_order"]),
+        details=_payload_dict(_row_value(row, "details", {})),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -162,6 +163,8 @@ def _row_to_event_plan_template(row: Any, items: list[Any]) -> EventPlanTemplate
         default_due_at=_row_value(row, "default_due_at"),
         default_is_primary=_row_value(row, "default_is_primary"),
         items=[_row_to_event_plan_template_item(item) for item in items],
+        app_configs=_payload_list(_row_value(row, "app_configs", [])),
+        workflows=_payload_list(_row_value(row, "workflows", [])),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -170,7 +173,7 @@ def _row_to_event_plan_template(row: Any, items: list[Any]) -> EventPlanTemplate
 async def _event_plan_template_out(conn: Any, row: Any) -> EventPlanTemplateOut:
     items = await conn.fetch(
         """
-        SELECT id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+        SELECT id, template_id, kind, title, content, offset_days, sort_order, details, created_at, updated_at
         FROM event_plan_template_items
         WHERE template_id = $1
         ORDER BY sort_order ASC, created_at ASC
@@ -191,9 +194,9 @@ async def _replace_event_plan_template_items(
         get_value = item.get if isinstance(item, dict) else lambda key, default=None: getattr(item, key, default)
         await conn.fetchrow(
             """
-            INSERT INTO event_plan_template_items(template_id, kind, title, content, offset_days, sort_order)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+            INSERT INTO event_plan_template_items(template_id, kind, title, content, offset_days, sort_order, details)
+            VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+            RETURNING id, template_id, kind, title, content, offset_days, sort_order, details, created_at, updated_at
             """,
             template_id,
             get_value("kind"),
@@ -201,6 +204,7 @@ async def _replace_event_plan_template_items(
             get_value("content"),
             get_value("offset_days"),
             get_value("sort_order", index) if get_value("sort_order", index) is not None else index,
+            _to_jsonb_param(get_value("details", {}) or {}),
         )
 
 
@@ -213,6 +217,19 @@ def _payload_dict(value: Any) -> dict[str, object]:
         decoded = json.loads(value)
         return dict(decoded) if isinstance(decoded, dict) else {}
     return {}
+
+
+def _payload_list(value: Any) -> list[dict[str, object]]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        decoded = json.loads(value)
+        if not isinstance(decoded, list):
+            return []
+        value = decoded
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
 
 
 async def _event_workbench_out(conn: Any, *, user_id: int, event_row: Any) -> EventWorkbenchOut:
@@ -263,21 +280,36 @@ def _focus_workflow_task_kwargs(task_row: Any | None) -> dict[str, Any]:
     }
 
 
-async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_type: str) -> AppTaskStatusOut:
+async def _app_task_status_for_event(
+    conn: Any,
+    *,
+    user_id: int,
+    app_id: str,
+    app_task_type: str,
+    event_row: Any,
+) -> AppTaskStatusOut:
     config = await _get_active_app_task_config(
         conn,
         user_id=user_id,
         app_id=app_id,
         app_task_type=app_task_type,
+        event_id=event_row["id"],
     )
     if config is None:
-        return AppTaskStatusOut(state="uninitialized")
+        return AppTaskStatusOut(
+            state="event_not_configured",
+            event_id=event_row["id"],
+            event_name=str(event_row["name"]),
+            blocked_reason="当前事件未配置该应用",
+        )
 
     config_dict = _config_payload(config["config"])
     if config["created_task_id"] is None:
         return AppTaskStatusOut(
             state="uninitialized",
             config_id=config["id"],
+            event_id=event_row["id"],
+            event_name=str(event_row["name"]),
             config=config_dict,
         )
 
@@ -293,6 +325,7 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
         FROM tasks
         WHERE id = $1
           AND user_id = $2
+          AND event_id = $6
           AND source_type = 'app'
           AND managed_by_app = TRUE
           AND app_id = $3
@@ -305,11 +338,14 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
         app_id,
         app_task_type,
         config["id"],
+        event_row["id"],
     )
     if task_row is None:
         return AppTaskStatusOut(
             state="config_invalid",
             config_id=config["id"],
+            event_id=event_row["id"],
+            event_name=str(event_row["name"]),
             blocked_reason="应用托管任务不存在",
             config=config_dict,
         )
@@ -327,9 +363,24 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
         state=state,
         task_id=task.id,
         config_id=config["id"],
+        event_id=event_row["id"],
+        event_name=str(event_row["name"]),
         completion_state=completion_state,
         blocked_reason=completion_state.blocked_reason if completion_state is not None else None,
         config=config_dict,
+    )
+
+
+async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_type: str) -> AppTaskStatusOut:
+    event_row = await get_primary_event_row(conn, user_id=user_id)
+    if event_row is None:
+        return AppTaskStatusOut(state="no_primary_event", blocked_reason="没有主事件，无法读取事件应用配置")
+    return await _app_task_status_for_event(
+        conn,
+        user_id=user_id,
+        app_id=app_id,
+        app_task_type=app_task_type,
+        event_row=event_row,
     )
 
 
@@ -363,6 +414,15 @@ async def _resolve_vocab_app_deck_id(conn: Any, raw_deck_id: str) -> str:
     return str(deck_row["deck_id"])
 
 
+async def _resolve_app_config_event(conn: Any, *, user_id: int, event_id: UUID | None) -> Any | None:
+    if event_id is not None:
+        event_row = await _get_event_for_user(conn, user_id=user_id, event_id=event_id)
+        if event_row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+        return event_row
+    return await get_primary_event_row(conn, user_id=user_id)
+
+
 @router.get("/app-tasks/vocab/status", response_model=AppTaskStatusOut)
 async def get_vocab_app_task_status(
     request: Request,
@@ -383,17 +443,16 @@ async def init_vocab_app_task(
     async with pool.acquire() as conn:
         async with conn.transaction():
             deck_id = await _resolve_vocab_app_deck_id(conn, body.deck_id)
-            if body.event_id is not None:
-                event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
-                if event_row is None:
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+            event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=body.event_id)
+            if event_row is None:
+                return AppTaskStatusOut(state="no_primary_event", blocked_reason="没有主事件，无法保存事件应用配置")
 
             config = {
                 "deck_id": deck_id,
                 "daily_target_count": body.daily_target_count,
                 "default_focus_duration": body.default_focus_duration,
                 "add_to_today_plan": body.add_to_today_plan,
-                "event_id": str(body.event_id) if body.event_id is not None else None,
+                "event_id": str(event_row["id"]),
             }
             await _create_or_update_managed_app_task(
                 conn,
@@ -402,9 +461,15 @@ async def init_vocab_app_task(
                 app_task_type="vocab_today",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
-                event_id=body.event_id,
+                event_id=event_row["id"],
             )
-            return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="vocab_today")
+            return await _app_task_status_for_event(
+                conn,
+                user_id=int(user.id),
+                app_id="vocab",
+                app_task_type="vocab_today",
+                event_row=event_row,
+            )
 
 
 @router.get("/app-tasks/erc/status", response_model=AppTaskStatusOut)
@@ -426,16 +491,15 @@ async def init_erc_app_task(
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            if body.event_id is not None:
-                event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
-                if event_row is None:
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+            event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=body.event_id)
+            if event_row is None:
+                return AppTaskStatusOut(state="no_primary_event", blocked_reason="没有主事件，无法保存事件应用配置")
             config = {
                 "review_scope": body.review_scope,
                 "daily_question_target": body.daily_question_target,
                 "default_focus_duration": body.default_focus_duration,
                 "add_to_today_plan": body.add_to_today_plan,
-                "event_id": str(body.event_id) if body.event_id is not None else None,
+                "event_id": str(event_row["id"]),
             }
             await _create_or_update_managed_app_task(
                 conn,
@@ -444,9 +508,15 @@ async def init_erc_app_task(
                 app_task_type="erc_review",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
-                event_id=body.event_id,
+                event_id=event_row["id"],
             )
-            return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
+            return await _app_task_status_for_event(
+                conn,
+                user_id=int(user.id),
+                app_id="erc",
+                app_task_type="erc_review",
+                event_row=event_row,
+            )
 
 
 @router.get("/app-tasks/erc-practice/status", response_model=AppTaskStatusOut)
@@ -468,15 +538,14 @@ async def init_erc_practice_app_task(
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            if body.event_id is not None:
-                event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=body.event_id)
-                if event_row is None:
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="关联事件不存在")
+            event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=body.event_id)
+            if event_row is None:
+                return AppTaskStatusOut(state="no_primary_event", blocked_reason="没有主事件，无法保存事件应用配置")
             config = {
                 "daily_article_target": body.daily_article_target,
                 "default_focus_duration": body.default_focus_duration,
                 "add_to_today_plan": body.add_to_today_plan,
-                "event_id": str(body.event_id) if body.event_id is not None else None,
+                "event_id": str(event_row["id"]),
             }
             await _create_or_update_managed_app_task(
                 conn,
@@ -485,9 +554,15 @@ async def init_erc_practice_app_task(
                 app_task_type="erc_practice",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
-                event_id=body.event_id,
+                event_id=event_row["id"],
             )
-            return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_practice")
+            return await _app_task_status_for_event(
+                conn,
+                user_id=int(user.id),
+                app_id="erc",
+                app_task_type="erc_practice",
+                event_row=event_row,
+            )
 
 
 @router.post("/tasks", response_model=TaskOut)
@@ -1575,7 +1650,7 @@ async def list_event_plan_templates(
         rows = await conn.fetch(
             """
             SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                   default_due_at, default_is_primary, created_at, updated_at
+                   default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
             FROM event_plan_templates
             WHERE user_id = $1
             ORDER BY updated_at DESC, created_at DESC
@@ -1598,11 +1673,11 @@ async def create_event_plan_template(
                 """
                 INSERT INTO event_plan_templates(
                     user_id, name, description, schedule_mode,
-                    default_event_name, default_start_date, default_due_at, default_is_primary
+                    default_event_name, default_start_date, default_due_at, default_is_primary, app_configs, workflows
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb)
                 RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                          default_due_at, default_is_primary, created_at, updated_at
+                          default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
                 """,
                 int(user.id),
                 body.name.strip(),
@@ -1612,6 +1687,8 @@ async def create_event_plan_template(
                 body.default_start_date,
                 body.default_due_at,
                 body.default_is_primary,
+                _to_jsonb_param(body.app_configs),
+                _to_jsonb_param(body.workflows),
             )
             if row is None:
                 raise HTTPException(status_code=500, detail="创建模板失败")
@@ -1630,7 +1707,7 @@ async def get_event_plan_template(
         row = await conn.fetchrow(
             """
             SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                   default_due_at, default_is_primary, created_at, updated_at
+                   default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
             FROM event_plan_templates
             WHERE id = $1 AND user_id = $2
             """,
@@ -1658,7 +1735,7 @@ async def update_event_plan_template(
             current = await conn.fetchrow(
                 """
                 SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                       default_due_at, default_is_primary, created_at, updated_at
+                       default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
                 FROM event_plan_templates
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1677,12 +1754,19 @@ async def update_event_plan_template(
                 "default_start_date",
                 "default_due_at",
                 "default_is_primary",
+                "app_configs",
+                "workflows",
             ):
                 if key not in patch:
                     continue
                 value = patch[key]
                 if key in {"name", "default_event_name"} and value is not None:
                     value = str(value).strip()
+                if key in {"app_configs", "workflows"}:
+                    value = _to_jsonb_param(value or [])
+                    args.append(value)
+                    sets.append(f"{key} = ${len(args)}::jsonb")
+                    continue
                 args.append(value)
                 sets.append(f"{key} = ${len(args)}")
             row = current
@@ -1697,7 +1781,7 @@ async def update_event_plan_template(
                     SET {", ".join(sets)}, updated_at = NOW()
                     WHERE id = ${template_i} AND user_id = ${user_i}
                     RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                              default_due_at, default_is_primary, created_at, updated_at
+                              default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
                     """,
                     *args,
                 )
@@ -1720,7 +1804,7 @@ async def copy_event_plan_template(
             source = await conn.fetchrow(
                 """
                 SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                       default_due_at, default_is_primary, created_at, updated_at
+                       default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
                 FROM event_plan_templates
                 WHERE id = $1 AND user_id = $2
                 """,
@@ -1731,7 +1815,7 @@ async def copy_event_plan_template(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
             source_items = await conn.fetch(
                 """
-                SELECT id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+                SELECT id, template_id, kind, title, content, offset_days, sort_order, details, created_at, updated_at
                 FROM event_plan_template_items
                 WHERE template_id = $1
                 ORDER BY sort_order ASC, created_at ASC
@@ -1742,11 +1826,11 @@ async def copy_event_plan_template(
                 """
                 INSERT INTO event_plan_templates(
                     user_id, name, description, schedule_mode,
-                    default_event_name, default_start_date, default_due_at, default_is_primary
+                    default_event_name, default_start_date, default_due_at, default_is_primary, app_configs, workflows
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb)
                 RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                          default_due_at, default_is_primary, created_at, updated_at
+                          default_due_at, default_is_primary, app_configs, workflows, created_at, updated_at
                 """,
                 int(user.id),
                 f"{source['name']} 副本",
@@ -1756,15 +1840,17 @@ async def copy_event_plan_template(
                 source["default_start_date"],
                 source["default_due_at"],
                 source["default_is_primary"],
+                _to_jsonb_param(source["app_configs"] or []),
+                _to_jsonb_param(source["workflows"] or []),
             )
             if row is None:
                 raise HTTPException(status_code=500, detail="复制模板失败")
             for item in source_items:
                 await conn.fetchrow(
                     """
-                    INSERT INTO event_plan_template_items(template_id, kind, title, content, offset_days, sort_order)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    RETURNING id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
+                    INSERT INTO event_plan_template_items(template_id, kind, title, content, offset_days, sort_order, details)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+                    RETURNING id, template_id, kind, title, content, offset_days, sort_order, details, created_at, updated_at
                     """,
                     row["id"],
                     item["kind"],
@@ -1772,6 +1858,7 @@ async def copy_event_plan_template(
                     item["content"],
                     item["offset_days"],
                     item["sort_order"],
+                    _to_jsonb_param(item["details"] or {}),
                 )
             return await _event_plan_template_out(conn, row)
 

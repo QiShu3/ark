@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiJson } from '../lib/api';
+import { getPrimaryEvent } from '../lib/events/api';
 import CalendarDateDrawer from './CalendarDateDrawer';
 import MultiWeekCalendarGrid from './MultiWeekCalendarGrid';
 import AppointmentEditModal from './AppointmentEditModal';
@@ -33,6 +34,7 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   const [weekCount, setWeekCount] = useState<WeekCount>(() => getStoredWeekCount());
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
+  const [primaryEventId, setPrimaryEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -73,11 +75,18 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
     Promise.all([
       apiJson<CalendarTask[]>(`/todo/tasks/calendar?start=${formatRangeParam(start)}&end=${formatRangeParam(end)}`),
       apiJson<CalendarAppointment[]>('/todo/appointments?view=all'),
+      getPrimaryEvent().catch(() => null),
     ])
-      .then(([nextTasks, nextAppointments]) => {
+      .then(([nextTasks, nextAppointments, primaryEvent]) => {
         if (cancelled) return;
-        setTasks(nextTasks);
-        setAppointments(nextAppointments.filter((appointment) => {
+        const eventId = primaryEvent?.id ?? null;
+        setPrimaryEventId(eventId);
+        const filteredTasks = eventId ? nextTasks.filter((t) => t.event_id === eventId) : nextTasks;
+        const filteredAppointments = eventId
+          ? nextAppointments.filter((a) => a.event_id === eventId)
+          : nextAppointments;
+        setTasks(filteredTasks);
+        setAppointments(filteredAppointments.filter((appointment) => {
           const endsAt = new Date(appointment.ends_at);
           return endsAt >= start && endsAt < end;
         }));
@@ -88,6 +97,7 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
         setError(err instanceof Error ? err.message : '加载安排日历失败');
         setTasks([]);
         setAppointments([]);
+        setPrimaryEventId(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

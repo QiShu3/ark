@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,15 @@ EventPlanItemKind = Literal["task", "appointment"]
 AppTaskId = Literal["vocab", "erc"]
 AppTaskType = Literal["vocab_today", "erc_review", "erc_practice"]
 AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
-AppTaskRuntimeState = Literal["uninitialized", "ready", "completed_today", "blocked", "config_invalid"]
+AppTaskRuntimeState = Literal[
+    "uninitialized",
+    "ready",
+    "completed_today",
+    "blocked",
+    "config_invalid",
+    "no_primary_event",
+    "event_not_configured",
+]
 CompletionPeriodType = Literal["once", "daily", "weekly", "monthly", "custom_days"]
 AppointmentStoredStatus = Literal["pending", "attended", "missed", "cancelled"]
 AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed", "cancelled"]
@@ -238,6 +246,7 @@ class EventPlanTemplateItemIn(BaseModel):
     content: str | None = None
     offset_days: int = Field(ge=0)
     sort_order: int = Field(default=0, ge=0)
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class EventPlanTemplateCreateRequest(BaseModel):
@@ -249,6 +258,8 @@ class EventPlanTemplateCreateRequest(BaseModel):
     default_due_at: datetime | None = None
     default_is_primary: bool | None = None
     items: list[EventPlanTemplateItemIn] = Field(default_factory=list)
+    app_configs: list[dict[str, Any]] = Field(default_factory=list)
+    workflows: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class EventPlanTemplateUpdateRequest(BaseModel):
@@ -260,6 +271,8 @@ class EventPlanTemplateUpdateRequest(BaseModel):
     default_due_at: datetime | None = None
     default_is_primary: bool | None = None
     items: list[EventPlanTemplateItemIn] | None = None
+    app_configs: list[dict[str, Any]] | None = None
+    workflows: list[dict[str, Any]] | None = None
 
 
 class EventPlanTemplateItemOut(BaseModel):
@@ -270,6 +283,7 @@ class EventPlanTemplateItemOut(BaseModel):
     content: str | None
     offset_days: int
     sort_order: int
+    details: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -285,6 +299,8 @@ class EventPlanTemplateOut(BaseModel):
     default_due_at: datetime | None
     default_is_primary: bool | None
     items: list[EventPlanTemplateItemOut]
+    app_configs: list[dict[str, Any]] = Field(default_factory=list)
+    workflows: list[dict[str, Any]] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -395,6 +411,8 @@ class AppTaskStatusOut(BaseModel):
     state: AppTaskRuntimeState
     task_id: UUID | None = None
     config_id: UUID | None = None
+    event_id: UUID | None = None
+    event_name: str | None = None
     completion_state: CompletionStateOut | None = None
     blocked_reason: str | None = None
     config: dict[str, object] = Field(default_factory=dict)

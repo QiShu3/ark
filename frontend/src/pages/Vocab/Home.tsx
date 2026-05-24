@@ -37,6 +37,11 @@ export default function VocabHome() {
   const [overviewDetailDeckId, setOverviewDetailDeckId] = useState<string | null>(null);
   const isTodayComplete = !!summary && summary.total_count > 0 && summary.pending_count === 0;
   const modalInitialTarget = summary ? (isTodayComplete ? summary.total_count + summary.daily_target_count : summary.daily_target_count) : 20;
+  const hasEventAppConfig = appTaskStatus
+    ? !['no_primary_event', 'event_not_configured', 'uninitialized', 'config_invalid'].includes(appTaskStatus.state)
+    : false;
+  const currentEventName = appTaskStatus?.event_name ?? null;
+  const appConfigNotice = currentEventName ? `该配置会同步到当前主事件「${currentEventName}」。` : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +95,7 @@ export default function VocabHome() {
       setSummary(payload);
       setSummaryError(null);
 
-      // 2. Initialize/Sync the Vocab App Task in todo module with add_to_today_plan and focus duration
+      // 2. Initialize/Sync the Vocab App Task in todo module with add_to_today_plan and focus duration.
       const initPayload = await initializeVocabAppTask({
         deck_id: activeDeck.id,
         daily_target_count: totalTargetCount,
@@ -162,7 +167,7 @@ export default function VocabHome() {
       id: 'vocab_today',
       name: '今日单词',
       focusWorkName: '今日单词',
-      isInitialized: appTaskStatus?.state !== 'uninitialized',
+      isInitialized: hasEventAppConfig,
       isSynced: typeof appTaskStatus?.config?.add_to_today_plan === 'boolean' ? appTaskStatus.config.add_to_today_plan : true,
       onSyncToggle: async (nextSynced: boolean) => {
         if (!activeDeck) return;
@@ -242,7 +247,24 @@ export default function VocabHome() {
                   {appTaskError ? <p className="mt-5 text-sm text-rose-200">{appTaskError}</p> : null}
 
                   <div className="mt-6 flex flex-wrap items-center gap-4">
-                    {appTaskStatus?.state === 'uninitialized' ? (
+                    {appTaskStatus?.state === 'no_primary_event' ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 opacity-60"
+                      >
+                        请先创建或设置主事件
+                      </button>
+                    ) : appTaskStatus?.state === 'event_not_configured' ? (
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen(true)}
+                        disabled={!activeDeck || appTaskBusy}
+                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                      >
+                        配置当前事件今日单词
+                      </button>
+                    ) : appTaskStatus?.state === 'uninitialized' ? (
                       <button
                         type="button"
                         onClick={initializeTodayWords}
@@ -278,6 +300,13 @@ export default function VocabHome() {
                     </button>
                     <div className="text-sm text-white/60">已完成 {summary.completed_count} / {summary.total_count}</div>
                   </div>
+                  {appTaskStatus?.state === 'event_not_configured' ? (
+                    <p className="mt-4 text-sm text-amber-100">
+                      当前主事件「{appTaskStatus.event_name}」尚未配置今日单词，请先在这里完成配置。
+                    </p>
+                  ) : appTaskStatus?.state === 'no_primary_event' ? (
+                    <p className="mt-4 text-sm text-amber-100">请先创建或设置主事件，再配置今日单词。</p>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -385,6 +414,7 @@ export default function VocabHome() {
           initialFocusDuration={typeof appTaskStatus?.config?.default_focus_duration === 'number' ? appTaskStatus.config.default_focus_duration : 1500}
           isCompleted={isTodayComplete}
           isSaving={settingsSaving}
+          syncNotice={appConfigNotice}
           onClose={() => setSettingsOpen(false)}
           onSave={handleSaveSettings}
         />

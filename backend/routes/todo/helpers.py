@@ -101,14 +101,27 @@ async def _get_active_app_task_config(
     user_id: int,
     app_id: str,
     app_task_type: str,
+    event_id: UUID | None,
 ) -> asyncpg.Record | dict[str, Any] | None:
+    if event_id is None:
+        return await conn.fetchrow(
+            """
+            SELECT id, user_id, event_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+            FROM app_task_configs
+            WHERE user_id = $1 AND app_id = $2 AND app_task_type = $3 AND status = 'active' AND event_id IS NULL
+            """,
+            user_id,
+            app_id,
+            app_task_type,
+        )
     return await conn.fetchrow(
         """
-        SELECT id, user_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+        SELECT id, user_id, event_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
         FROM app_task_configs
-        WHERE user_id = $1 AND app_id = $2 AND app_task_type = $3 AND status = 'active'
+        WHERE user_id = $1 AND event_id = $2 AND app_id = $3 AND app_task_type = $4 AND status = 'active'
         """,
         user_id,
+        event_id,
         app_id,
         app_task_type,
     )
@@ -121,16 +134,38 @@ async def _create_or_update_app_task_config(
     app_id: str,
     app_task_type: str,
     config: dict[str, Any],
+    event_id: UUID | None,
 ) -> asyncpg.Record | dict[str, Any]:
+    if event_id is None:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO app_task_configs(user_id, event_id, app_id, app_task_type, config, status)
+            VALUES ($1, NULL, $2, $3, $4::jsonb, 'active')
+            ON CONFLICT (user_id, app_id, app_task_type)
+            WHERE status = 'active' AND event_id IS NULL
+            DO UPDATE SET config = EXCLUDED.config, updated_at = NOW()
+            RETURNING id, user_id, event_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+            """,
+            user_id,
+            app_id,
+            app_task_type,
+            _to_jsonb_param(config),
+        )
+        if row is None:
+            raise HTTPException(status_code=500, detail="应用任务配置保存失败")
+        return row
+
     row = await conn.fetchrow(
         """
-        INSERT INTO app_task_configs(user_id, app_id, app_task_type, config, status)
-        VALUES ($1, $2, $3, $4::jsonb, 'active')
-        ON CONFLICT (user_id, app_id, app_task_type) WHERE status = 'active'
+        INSERT INTO app_task_configs(user_id, event_id, app_id, app_task_type, config, status)
+        VALUES ($1, $2, $3, $4, $5::jsonb, 'active')
+        ON CONFLICT (user_id, event_id, app_id, app_task_type)
+        WHERE status = 'active' AND event_id IS NOT NULL
         DO UPDATE SET config = EXCLUDED.config, updated_at = NOW()
-        RETURNING id, user_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
+        RETURNING id, user_id, event_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
         """,
         user_id,
+        event_id,
         app_id,
         app_task_type,
         _to_jsonb_param(config),
@@ -157,8 +192,16 @@ async def _create_or_update_managed_app_task(
         app_id=app_id,
         app_task_type=app_task_type,
         config=config,
+        event_id=event_id,
     )
     config_id = config_row["id"]
+    conflict_clause = (
+        "ON CONFLICT (user_id, app_id, app_task_type) "
+        "WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE AND event_id IS NULL"
+        if event_id is None
+        else "ON CONFLICT (user_id, event_id, app_id, app_task_type) "
+        "WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE AND event_id IS NOT NULL"
+    )
     row = await conn.fetchrow(
         f"""
         INSERT INTO tasks(
@@ -169,8 +212,7 @@ async def _create_or_update_managed_app_task(
             start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
-        ON CONFLICT (user_id, app_id, app_task_type)
-        WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE
+        {conflict_clause}
         DO UPDATE SET
             title = EXCLUDED.title,
             content = EXCLUDED.content,
@@ -226,7 +268,7 @@ async def _create_or_update_managed_app_task(
         app_id,
         app_task_type,
         config_id,
-        f"{app_id}:{app_task_type}",
+        f"{event_id}:{app_id}:{app_task_type}" if event_id is not None else f"{app_id}:{app_task_type}",
         True,
     )
 

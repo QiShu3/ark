@@ -48,6 +48,30 @@ export type EventPlanTemplateItemInput = {
   content?: string | null;
   offset_days: number;
   sort_order: number;
+  details?: Record<string, unknown>;
+};
+
+export type EventPlanTemplateAppConfigInput = {
+  client_id: string;
+  app_type: 'vocab_today' | 'erc_practice' | 'erc_review';
+  config: Record<string, unknown>;
+};
+
+export type EventPlanTemplateWorkflowInput = {
+  client_id: string;
+  name: string;
+  focus_duration: number;
+  break_duration: number;
+  default_focus_timer_mode: 'countdown' | 'countup';
+  phases: Array<{
+    phase_type: 'focus' | 'break';
+    duration: number;
+    timer_mode?: 'countdown' | 'countup' | null;
+    task_id?: string | null;
+    focus_work_type?: string | null;
+    is_temporary?: boolean;
+    record_focus?: boolean;
+  }>;
 };
 
 export type EventPlanTemplateInput = {
@@ -59,6 +83,8 @@ export type EventPlanTemplateInput = {
   default_due_at?: string | null;
   default_is_primary?: boolean | null;
   items: EventPlanTemplateItemInput[];
+  app_configs?: EventPlanTemplateAppConfigInput[];
+  workflows?: EventPlanTemplateWorkflowInput[];
 };
 
 export function createEventPlanTemplate(input: EventPlanTemplateInput): Promise<EventPlanTemplate> {
@@ -76,5 +102,4 @@ export function updateEventPlanTemplate(templateId: string, input: EventPlanTemp
     body: JSON.stringify(input),
   });
 }
-
 

@@ -6,10 +6,13 @@ import {
   getPrimaryEvent,
   listEventPlanTemplates,
   listEvents,
+  updateEvent,
   updateEventPlanTemplate,
   type EventCreateInput,
+  type EventPlanTemplateAppConfigInput,
   type EventPlanTemplateInput,
   type EventPlanTemplateItemInput,
+  type EventPlanTemplateWorkflowInput,
 } from '../lib/events/api';
 import {
   formatEventDateTime,
@@ -231,11 +234,55 @@ const EventCountdownCard: React.FC = () => {
   function buildCreateWorkbenchItems(template: EventPlanTemplate | undefined): CreateWorkbenchItemState[] {
     if (!template) return [];
     return template.items.map((item) => ({
-      clientId: makeCreateArrangementClientId(),
+      clientId: typeof item.details?.client_id === 'string' ? item.details.client_id : makeCreateArrangementClientId(),
       kind: item.kind,
       title: item.title,
       content: item.content ?? '',
       offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
+    }));
+  }
+
+  function buildConfiguredApps(template: EventPlanTemplate | undefined): ConfiguredAppState[] {
+    if (!template?.app_configs) return [];
+    return template.app_configs
+      .filter((item) => ['vocab_today', 'erc_practice', 'erc_review'].includes(item.app_type))
+      .map((item) => ({
+        clientId: item.client_id || makeConfiguredAppClientId(),
+        appType: item.app_type,
+        config: {
+          deckId: typeof item.config.deckId === 'string' ? item.config.deckId : undefined,
+          deckName: typeof item.config.deckName === 'string' ? item.config.deckName : undefined,
+          dailyTargetCount: typeof item.config.dailyTargetCount === 'number' ? item.config.dailyTargetCount : undefined,
+          dailyArticleTarget: typeof item.config.dailyArticleTarget === 'number' ? item.config.dailyArticleTarget : undefined,
+          reviewScope: item.config.reviewScope === 'mistakes' || item.config.reviewScope === 'all'
+            ? item.config.reviewScope
+            : item.config.reviewScope === 'due'
+              ? 'due'
+              : undefined,
+          dailyQuestionTarget: typeof item.config.dailyQuestionTarget === 'number' ? item.config.dailyQuestionTarget : undefined,
+          defaultFocusDuration: typeof item.config.defaultFocusDuration === 'number'
+            ? item.config.defaultFocusDuration
+            : 25 * 60,
+          addToTodayPlan: typeof item.config.addToTodayPlan === 'boolean' ? item.config.addToTodayPlan : true,
+        },
+      }));
+  }
+
+  function buildWorkflowDrafts(template: EventPlanTemplate | undefined): WorkflowPreset[] {
+    if (!template?.workflows) return [];
+    const now = new Date().toISOString();
+    return template.workflows.map((workflow) => ({
+      id: workflow.client_id || makeCreateWorkflowDraftId(),
+      user_id: 0,
+      event_id: null,
+      name: workflow.name,
+      focus_duration: workflow.focus_duration,
+      break_duration: workflow.break_duration,
+      default_focus_timer_mode: workflow.default_focus_timer_mode,
+      phases: normalizeWorkflowFormPhases(workflow.phases, workflow.default_focus_timer_mode),
+      is_default: false,
+      created_at: now,
+      updated_at: now,
     }));
   }
 
@@ -300,6 +347,8 @@ const EventCountdownCard: React.FC = () => {
       isPrimary: template.default_is_primary ?? CREATE_EVENT_DEFAULTS.isPrimary,
     });
     setCreateWorkbenchItems(buildCreateWorkbenchItems(template));
+    setConfiguredApps(buildConfiguredApps(template));
+    setCreateWorkflowDrafts(buildWorkflowDrafts(template));
     setCreateArrangementEditor(null);
     setTemplateStatus(null);
     setError(null);
@@ -715,12 +764,58 @@ const EventCountdownCard: React.FC = () => {
       content: item.content.trim() || null,
       offset_days: Math.max(0, Math.floor(item.offsetDays || 0)),
       sort_order: index,
+      details: {
+        client_id: item.clientId,
+        period_type: 'once',
+        custom_period_days: null,
+        max_completions_per_period: 1,
+        weekday_only: false,
+        time_inherits_from_event: false,
+        time_overridden: true,
+        task_type: item.kind === 'task' ? 'focus' : undefined,
+      },
     }));
     if (items.some((item) => !item.title)) {
       setError('请输入安排内容标题');
       return null;
     }
     return items;
+  }
+
+  function buildTemplateAppConfigs(): EventPlanTemplateAppConfigInput[] {
+    return configuredApps.map((app) => ({
+      client_id: app.clientId,
+      app_type: app.appType,
+      config: {
+        deckId: app.config.deckId ?? null,
+        deckName: app.config.deckName ?? null,
+        dailyTargetCount: app.config.dailyTargetCount ?? null,
+        dailyArticleTarget: app.config.dailyArticleTarget ?? null,
+        reviewScope: app.config.reviewScope ?? null,
+        dailyQuestionTarget: app.config.dailyQuestionTarget ?? null,
+        defaultFocusDuration: app.config.defaultFocusDuration,
+        addToTodayPlan: app.config.addToTodayPlan,
+      },
+    }));
+  }
+
+  function buildTemplateWorkflows(): EventPlanTemplateWorkflowInput[] {
+    return createWorkflowDrafts.map((workflow) => ({
+      client_id: workflow.id,
+      name: workflow.name,
+      focus_duration: workflow.focus_duration,
+      break_duration: workflow.break_duration,
+      default_focus_timer_mode: workflow.default_focus_timer_mode,
+      phases: workflow.phases.map((phase) => ({
+        phase_type: phase.phase_type,
+        duration: phase.duration,
+        timer_mode: phase.timer_mode,
+        task_id: phase.task_id,
+        focus_work_type: phase.focus_work_type,
+        is_temporary: phase.is_temporary,
+        record_focus: phase.record_focus,
+      })),
+    }));
   }
 
   function buildTemplatePayload(): EventPlanTemplateInput | null {
@@ -740,6 +835,8 @@ const EventCountdownCard: React.FC = () => {
       default_due_at: fromDateTimeLocalValue(createForm.dueAt),
       default_is_primary: createForm.isPrimary,
       items,
+      app_configs: buildTemplateAppConfigs(),
+      workflows: buildTemplateWorkflows(),
     };
   }
 
@@ -820,67 +917,33 @@ const EventCountdownCard: React.FC = () => {
       const createdEvent = await createEvent(payload);
       const workflowTaskIdMap = new Map<string, string>();
 
-      // Initialize configured applications
-      if (payload.is_primary) {
-        // If the event is primary, initialize the sub-app tasks immediately
-        for (const app of configuredApps) {
-          if (app.appType === 'vocab_today') {
-            const appTaskStatus = await initializeVocabAppTask({
-              deck_id: app.config.deckId!,
-              daily_target_count: app.config.dailyTargetCount!,
-              default_focus_duration: app.config.defaultFocusDuration,
-              add_to_today_plan: app.config.addToTodayPlan,
-              event_id: createdEvent.id,
-            });
-            if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
-          } else if (app.appType === 'erc_practice') {
-            const appTaskStatus = await initializeERCPracticeAppTask({
-              daily_article_target: app.config.dailyArticleTarget!,
-              default_focus_duration: app.config.defaultFocusDuration,
-              add_to_today_plan: app.config.addToTodayPlan,
-              event_id: createdEvent.id,
-            });
-            if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
-          } else if (app.appType === 'erc_review') {
-            const appTaskStatus = await initializeERCAppTask({
-              review_scope: app.config.reviewScope!,
-              daily_question_target: app.config.dailyQuestionTarget!,
-              default_focus_duration: app.config.defaultFocusDuration,
-              add_to_today_plan: app.config.addToTodayPlan,
-              event_id: createdEvent.id,
-            });
-            if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
-          }
-        }
-      } else {
-        // If the event is not primary, create passive placeholder tasks for the sub-apps
-        for (const app of configuredApps) {
-          const taskPayload: EventArrangementTaskInput = {
-            title: getConfiguredAppTaskTitle(app),
-            content: JSON.stringify({
-              deckId: app.config.deckId,
-              dailyTargetCount: app.config.dailyTargetCount,
-              dailyArticleTarget: app.config.dailyArticleTarget,
-              reviewScope: app.config.reviewScope,
-              dailyQuestionTarget: app.config.dailyQuestionTarget,
-              defaultFocusDuration: app.config.defaultFocusDuration,
-              addToTodayPlan: app.config.addToTodayPlan,
-            }),
-            event: createdEvent.name,
-            eventId: createdEvent.id,
-            periodType: 'once',
-            customPeriodDays: null,
-            maxCompletionsPerPeriod: 1,
-            weekdayOnly: false,
-            timeInheritsFromEvent: false,
-            timeOverridden: false,
-            taskType: 'focus',
-            appTaskType: app.appType,
-            startDate: null,
-            dueDate: null,
-          };
-          const createdTask = await createEventArrangementTask(createdEvent, taskPayload);
-          workflowTaskIdMap.set(app.clientId, createdTask.id);
+      for (const app of configuredApps) {
+        if (app.appType === 'vocab_today') {
+          const appTaskStatus = await initializeVocabAppTask({
+            deck_id: app.config.deckId!,
+            daily_target_count: app.config.dailyTargetCount!,
+            default_focus_duration: app.config.defaultFocusDuration,
+            add_to_today_plan: app.config.addToTodayPlan,
+            event_id: createdEvent.id,
+          });
+          if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
+        } else if (app.appType === 'erc_practice') {
+          const appTaskStatus = await initializeERCPracticeAppTask({
+            daily_article_target: app.config.dailyArticleTarget!,
+            default_focus_duration: app.config.defaultFocusDuration,
+            add_to_today_plan: app.config.addToTodayPlan,
+            event_id: createdEvent.id,
+          });
+          if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
+        } else if (app.appType === 'erc_review') {
+          const appTaskStatus = await initializeERCAppTask({
+            review_scope: app.config.reviewScope!,
+            daily_question_target: app.config.dailyQuestionTarget!,
+            default_focus_duration: app.config.defaultFocusDuration,
+            add_to_today_plan: app.config.addToTodayPlan,
+            event_id: createdEvent.id,
+          });
+          if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
         }
       }
 

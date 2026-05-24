@@ -38,6 +38,12 @@ export default function ERCHome() {
   const [reviewScope, setReviewScope] = useState<'due' | 'mistakes' | 'all'>('due');
   const [reviewDuration, setReviewDuration] = useState(25); // In minutes
 
+  const isConfiguredForCurrentEvent = (status: AppTaskStatus | null): boolean => (
+    !!status && !['no_primary_event', 'event_not_configured', 'uninitialized', 'config_invalid'].includes(status.state)
+  );
+  const currentEventName = practiceTaskStatus?.event_name || appTaskStatus?.event_name || null;
+  const appConfigNotice = currentEventName ? `该配置会同步到当前主事件「${currentEventName}」。` : null;
+
   // Load overview data
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +126,6 @@ export default function ERCHome() {
 
   const accuracy = overview ? Math.round(overview.accuracy * 100) : 0;
 
-  // Task Initialization functions
   const initializeReviewTask = async () => {
     setAppTaskBusy(true);
     try {
@@ -146,7 +151,6 @@ export default function ERCHome() {
         daily_article_target: 1,
         default_focus_duration: 1500,
         add_to_today_plan: true,
-        event_id: null,
       });
       setPracticeTaskStatus(payload);
       setAppTaskError(null);
@@ -196,7 +200,6 @@ export default function ERCHome() {
         daily_article_target: dailyArticleTarget,
         default_focus_duration: practiceDuration * 60,
         add_to_today_plan: typeof practiceTaskStatus?.config?.add_to_today_plan === 'boolean' ? practiceTaskStatus.config.add_to_today_plan : true,
-        event_id: null,
       });
       setPracticeTaskStatus(newPracticeStatus);
 
@@ -226,14 +229,13 @@ export default function ERCHome() {
       id: 'erc_practice',
       name: '真题练习',
       focusWorkName: '真题练习',
-      isInitialized: practiceTaskStatus?.state !== 'uninitialized',
+      isInitialized: isConfiguredForCurrentEvent(practiceTaskStatus),
       isSynced: typeof practiceTaskStatus?.config?.add_to_today_plan === 'boolean' ? practiceTaskStatus.config.add_to_today_plan : true,
       onSyncToggle: async (nextSynced: boolean) => {
         const payload = await initializeERCPracticeAppTask({
           daily_article_target: typeof practiceTaskStatus?.config?.daily_article_target === 'number' ? practiceTaskStatus.config.daily_article_target : 1,
           default_focus_duration: typeof practiceTaskStatus?.config?.default_focus_duration === 'number' ? practiceTaskStatus.config.default_focus_duration : 1500,
           add_to_today_plan: nextSynced,
-          event_id: null,
         });
         setPracticeTaskStatus(payload);
         setAppTaskError(null);
@@ -243,7 +245,7 @@ export default function ERCHome() {
       id: 'erc_review',
       name: '错题复习',
       focusWorkName: '开始复习',
-      isInitialized: appTaskStatus?.state !== 'uninitialized',
+      isInitialized: isConfiguredForCurrentEvent(appTaskStatus),
       isSynced: typeof appTaskStatus?.config?.add_to_today_plan === 'boolean' ? appTaskStatus.config.add_to_today_plan : true,
       onSyncToggle: async (nextSynced: boolean) => {
         const payload = await initializeERCAppTask({
@@ -292,6 +294,13 @@ export default function ERCHome() {
 
         {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
         {appTaskError ? <p className="mt-6 text-sm text-rose-200">{appTaskError}</p> : null}
+        {practiceTaskStatus?.state === 'no_primary_event' || appTaskStatus?.state === 'no_primary_event' ? (
+          <p className="mt-6 text-sm text-amber-100">请先创建或设置主事件，再配置阅读训练应用。</p>
+        ) : practiceTaskStatus?.state === 'event_not_configured' || appTaskStatus?.state === 'event_not_configured' ? (
+          <p className="mt-6 text-sm text-amber-100">
+            当前主事件「{currentEventName}」尚未完整配置阅读训练，请先在“安排管理与设置”中保存配置。
+          </p>
+        ) : null}
 
         {/* Overview Stats */}
         {overview ? (
@@ -362,7 +371,24 @@ export default function ERCHome() {
             </div>
 
             <div className="mt-6">
-              {practiceTaskStatus?.state === 'uninitialized' ? (
+              {practiceTaskStatus?.state === 'no_primary_event' ? (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 opacity-60"
+                >
+                  请先设置主事件
+                </button>
+              ) : practiceTaskStatus?.state === 'event_not_configured' ? (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  disabled={appTaskBusy}
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                >
+                  配置当前事件真题练习
+                </button>
+              ) : practiceTaskStatus?.state === 'uninitialized' ? (
                 <button
                   type="button"
                   onClick={initializePracticeTask}
@@ -428,7 +454,24 @@ export default function ERCHome() {
             </div>
 
             <div className="mt-6">
-              {appTaskStatus?.state === 'uninitialized' ? (
+              {appTaskStatus?.state === 'no_primary_event' ? (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 opacity-60"
+                >
+                  请先设置主事件
+                </button>
+              ) : appTaskStatus?.state === 'event_not_configured' ? (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  disabled={appTaskBusy}
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                >
+                  配置当前事件错题复习
+                </button>
+              ) : appTaskStatus?.state === 'uninitialized' ? (
                 <button
                   type="button"
                   onClick={initializeReviewTask}
@@ -480,6 +523,7 @@ export default function ERCHome() {
                 <p className="mt-2 text-xs text-white/50">
                   配置两个独立的子任务，系统将根据您的设定自动添加并同步至主页今日计划。
                 </p>
+                {appConfigNotice ? <p className="mt-2 text-xs text-indigo-200">{appConfigNotice}</p> : null}
               </div>
               <button
                 type="button"
@@ -613,4 +657,3 @@ export default function ERCHome() {
     </div>
   );
 }
-

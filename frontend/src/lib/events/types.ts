@@ -25,8 +25,32 @@ export type EventPlanTemplateItem = {
   content: string | null;
   offset_days: number;
   sort_order: number;
+  details?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+};
+
+export type EventPlanTemplateAppConfig = {
+  client_id: string;
+  app_type: 'vocab_today' | 'erc_practice' | 'erc_review';
+  config: Record<string, unknown>;
+};
+
+export type EventPlanTemplateWorkflow = {
+  client_id: string;
+  name: string;
+  focus_duration: number;
+  break_duration: number;
+  default_focus_timer_mode: 'countdown' | 'countup';
+  phases: Array<{
+    phase_type: 'focus' | 'break';
+    duration: number;
+    timer_mode?: 'countdown' | 'countup' | null;
+    task_id?: string | null;
+    focus_work_type?: string | null;
+    is_temporary?: boolean;
+    record_focus?: boolean;
+  }>;
 };
 
 export type EventPlanTemplate = {
@@ -40,6 +64,8 @@ export type EventPlanTemplate = {
   default_due_at?: string | null;
   default_is_primary?: boolean | null;
   items: EventPlanTemplateItem[];
+  app_configs?: EventPlanTemplateAppConfig[];
+  workflows?: EventPlanTemplateWorkflow[];
   created_at: string;
   updated_at: string;
 };

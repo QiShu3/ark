@@ -246,20 +246,8 @@ async def init_todo(app: Any) -> None:
             ADD CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type);
             """
         )
-        await conn.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_app_task_configs_active_unique
-            ON app_task_configs(user_id, app_id, app_task_type)
-            WHERE status = 'active';
-            """
-        )
-        await conn.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_active_app_managed
-            ON tasks(user_id, app_id, app_task_type)
-            WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE;
-            """
-        )
+        await conn.execute("DROP INDEX IF EXISTS idx_app_task_configs_active_unique;")
+        await conn.execute("DROP INDEX IF EXISTS uniq_tasks_active_app_managed;")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
         await conn.execute(
             """
@@ -603,6 +591,43 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS event_id UUID NULL REFERENCES events(id) ON DELETE CASCADE;"
         )
+        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS event_id UUID NULL;")
+        await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS fk_app_task_configs_event_id;")
+        await conn.execute(
+            """
+            ALTER TABLE app_task_configs
+            ADD CONSTRAINT fk_app_task_configs_event_id
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_app_task_configs_active_event_unique
+            ON app_task_configs(user_id, event_id, app_id, app_task_type)
+            WHERE status = 'active' AND event_id IS NOT NULL;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_app_task_configs_active_global_unique
+            ON app_task_configs(user_id, app_id, app_task_type)
+            WHERE status = 'active' AND event_id IS NULL;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_active_event_app_managed
+            ON tasks(user_id, event_id, app_id, app_task_type)
+            WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE AND event_id IS NOT NULL;
+            """
+        )
+        await conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_active_global_app_managed
+            ON tasks(user_id, app_id, app_task_type)
+            WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE AND event_id IS NULL;
+            """
+        )
         await conn.execute("DROP INDEX IF EXISTS uniq_focus_workflow_default_per_user;")
         await conn.execute(
             """
@@ -637,6 +662,8 @@ async def init_todo(app: Any) -> None:
               default_start_date DATE,
               default_due_at TIMESTAMPTZ,
               default_is_primary BOOLEAN,
+              app_configs JSONB NOT NULL DEFAULT '[]'::jsonb,
+              workflows JSONB NOT NULL DEFAULT '[]'::jsonb,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
@@ -647,6 +674,12 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS default_due_at TIMESTAMPTZ;")
         await conn.execute("ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS default_is_primary BOOLEAN;")
         await conn.execute(
+            "ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS app_configs JSONB NOT NULL DEFAULT '[]'::jsonb;"
+        )
+        await conn.execute(
+            "ALTER TABLE event_plan_templates ADD COLUMN IF NOT EXISTS workflows JSONB NOT NULL DEFAULT '[]'::jsonb;"
+        )
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS event_plan_template_items (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -656,10 +689,14 @@ async def init_todo(app: Any) -> None:
               content TEXT,
               offset_days INTEGER NOT NULL CHECK (offset_days >= 0),
               sort_order INTEGER NOT NULL DEFAULT 0,
+              details JSONB NOT NULL DEFAULT '{}'::jsonb,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
             """
+        )
+        await conn.execute(
+            "ALTER TABLE event_plan_template_items ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb;"
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_event_plan_templates_user_updated ON event_plan_templates(user_id, updated_at DESC);"

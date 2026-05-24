@@ -206,12 +206,17 @@ class _FakeTodoConn:
                 return {"deck_id": deck_id}
             return None
         if "FROM app_task_configs" in sql and "status = 'active'" in sql and "UPDATE app_task_configs" not in sql:
-            user_id, app_id, app_task_type = args[0], args[1], args[2]
+            if "event_id = $2" in sql:
+                user_id, event_id, app_id, app_task_type = args[0], args[1], args[2], args[3]
+            else:
+                user_id, app_id, app_task_type = args[0], args[1], args[2]
+                event_id = None
             return next(
                 (
                     config
                     for config in self.app_task_configs
                     if config["user_id"] == user_id
+                    and config.get("event_id") == event_id
                     and config["app_id"] == app_id
                     and config["app_task_type"] == app_task_type
                     and config["status"] == "active"
@@ -239,27 +244,33 @@ class _FakeTodoConn:
             return config
         if "INSERT INTO app_task_configs" in sql:
             now = datetime.now(UTC)
+            if "VALUES ($1, NULL" in sql:
+                user_id, event_id, app_id, app_task_type, config_arg = args[0], None, args[1], args[2], args[3]
+            else:
+                user_id, event_id, app_id, app_task_type, config_arg = args[0], args[1], args[2], args[3], args[4]
             existing = next(
                 (
                     item
                     for item in self.app_task_configs
-                    if item["user_id"] == args[0]
-                    and item["app_id"] == args[1]
-                    and item["app_task_type"] == args[2]
+                    if item["user_id"] == user_id
+                    and item.get("event_id") == event_id
+                    and item["app_id"] == app_id
+                    and item["app_task_type"] == app_task_type
                     and item["status"] == "active"
                 ),
                 None,
             )
             if existing is not None:
-                existing["config"] = json.loads(args[3])
+                existing["config"] = json.loads(config_arg)
                 existing["updated_at"] = now
                 return existing
             row = {
                 "id": uuid4(),
-                "user_id": args[0],
-                "app_id": args[1],
-                "app_task_type": args[2],
-                "config": json.loads(args[3]),
+                "user_id": user_id,
+                "event_id": event_id,
+                "app_id": app_id,
+                "app_task_type": app_task_type,
+                "config": json.loads(config_arg),
                 "status": "active",
                 "created_task_id": None,
                 "created_at": now,
@@ -290,12 +301,14 @@ class _FakeTodoConn:
             return {"id": task["id"]} if task is not None else None
         if "app task status task lookup" in sql:
             task_id, user_id, app_id, app_task_type, config_id = args[0], args[1], args[2], args[3], args[4]
+            event_id = args[5] if len(args) > 5 else None
             return next(
                 (
                     task
                     for task in self.tasks
                     if task["id"] == task_id
                     and task["user_id"] == user_id
+                    and (event_id is None or task["event_id"] == event_id)
                     and task["source_type"] == "app"
                     and task["managed_by_app"]
                     and task["app_id"] == app_id
@@ -333,6 +346,8 @@ class _FakeTodoConn:
                 "default_start_date": args[5] if len(args) > 5 else None,
                 "default_due_at": args[6] if len(args) > 6 else None,
                 "default_is_primary": args[7] if len(args) > 7 else None,
+                "app_configs": json.loads(args[8]) if len(args) > 8 else [],
+                "workflows": json.loads(args[9]) if len(args) > 9 else [],
                 "created_at": now,
                 "updated_at": now,
             }
@@ -349,6 +364,7 @@ class _FakeTodoConn:
                 "content": args[3],
                 "offset_days": args[4],
                 "sort_order": args[5],
+                "details": json.loads(args[6]) if len(args) > 6 else {},
                 "created_at": now,
                 "updated_at": now,
             }
@@ -384,10 +400,13 @@ class _FakeTodoConn:
                 "default_start_date",
                 "default_due_at",
                 "default_is_primary",
+                "app_configs",
+                "workflows",
             ):
                 match = re.search(rf"{field} = \$(\d+)", sql)
                 if match is not None:
-                    template[field] = args[int(match.group(1)) - 1]
+                    value = args[int(match.group(1)) - 1]
+                    template[field] = json.loads(value) if field in {"app_configs", "workflows"} else value
             template["updated_at"] = datetime.now(UTC)
             return template
         if "FROM events" in sql and "is_primary = TRUE" in sql:
@@ -464,12 +483,13 @@ class _FakeTodoConn:
                 }
                 self.tasks.append(row)
                 return row
-            if "ON CONFLICT (user_id, app_id, app_task_type)" in sql and len(args) == 28 and args[22] == "app":
+            if "ON CONFLICT" in sql and len(args) == 28 and args[22] == "app":
                 existing = next(
                     (
                         item
                         for item in self.tasks
                         if item["user_id"] == args[0]
+                        and item["event_id"] == args[10]
                         and item["source_type"] == "app"
                         and item["app_id"] == args[23]
                         and item["app_task_type"] == args[24]
@@ -936,6 +956,19 @@ def _build_app() -> FastAPI:
 @pytest_asyncio.fixture
 async def client(monkeypatch):
     conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    conn.events = [
+        {
+            "id": uuid4(),
+            "user_id": 7,
+            "name": "测试主事件",
+            "start_date": now.date(),
+            "due_at": now + timedelta(days=7),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
     pool = _FakePool(conn)
     monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
 
@@ -955,13 +988,48 @@ def vocab_deck_id() -> str:
 
 
 @pytest.mark.asyncio
-async def test_vocab_app_task_status_starts_uninitialized(client, auth_headers):
+async def test_vocab_app_task_status_starts_unconfigured_for_primary_event(client, auth_headers):
     response = await client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
     assert response.status_code == 200
     payload = response.json()
-    assert payload["state"] == "uninitialized"
+    assert payload["state"] == "event_not_configured"
     assert payload["task_id"] is None
     assert payload["config_id"] is None
+    assert payload["event_id"]
+
+
+@pytest.mark.asyncio
+async def test_vocab_app_task_status_without_primary_does_not_use_global_config(monkeypatch, auth_headers, vocab_deck_id):
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    conn.app_task_configs = [
+        {
+            "id": uuid4(),
+            "user_id": 7,
+            "event_id": None,
+            "app_id": "vocab",
+            "app_task_type": "vocab_today",
+            "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
+            "status": "active",
+            "created_task_id": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    transport = httpx.ASGITransport(app=_build_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "no_primary_event"
+    assert payload["config_id"] is None
+    assert payload["task_id"] is None
+    assert payload["event_id"] is None
+    assert payload["config"] == {}
 
 
 @pytest.mark.asyncio
@@ -969,10 +1037,24 @@ async def test_vocab_app_task_status_includes_config_before_task_exists(monkeypa
     conn = _FakeTodoConn()
     config_id = uuid4()
     now = datetime.now(UTC)
+    event_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "背单词事件",
+            "start_date": now.date(),
+            "due_at": now + timedelta(days=7),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
     conn.app_task_configs = [
         {
             "id": config_id,
             "user_id": 7,
+            "event_id": event_id,
             "app_id": "vocab",
             "app_task_type": "vocab_today",
             "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
@@ -1003,11 +1085,25 @@ async def test_vocab_app_task_status_rejects_unbound_created_task(monkeypatch, a
     config_id = uuid4()
     task_id = uuid4()
     now = datetime.now(UTC)
-    conn.tasks = [{**_task_row(title="普通任务"), "id": task_id}]
+    event_id = uuid4()
+    conn.events = [
+        {
+            "id": event_id,
+            "user_id": 7,
+            "name": "背单词事件",
+            "start_date": now.date(),
+            "due_at": now + timedelta(days=7),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+    conn.tasks = [{**_task_row(title="普通任务"), "id": task_id, "event_id": event_id}]
     conn.app_task_configs = [
         {
             "id": config_id,
             "user_id": 7,
+            "event_id": event_id,
             "app_id": "vocab",
             "app_task_type": "vocab_today",
             "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
@@ -1113,6 +1209,82 @@ async def test_vocab_app_task_init_returns_same_task_on_repeated_init(client, au
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["task_id"] == first.json()["task_id"]
+
+
+@pytest.mark.asyncio
+async def test_vocab_app_task_init_keeps_distinct_configs_per_event(monkeypatch, auth_headers, vocab_deck_id):
+    conn = _FakeTodoConn()
+    now = datetime.now(UTC)
+    event_a_id = uuid4()
+    event_b_id = uuid4()
+    conn.events = [
+        {
+            "id": event_a_id,
+            "user_id": 7,
+            "name": "事件 A",
+            "start_date": now.date(),
+            "due_at": now + timedelta(days=7),
+            "is_primary": True,
+            "created_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": event_b_id,
+            "user_id": 7,
+            "name": "事件 B",
+            "start_date": now.date(),
+            "due_at": now + timedelta(days=14),
+            "is_primary": False,
+            "created_at": now,
+            "updated_at": now,
+        },
+    ]
+    pool = _FakePool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    transport = httpx.ASGITransport(app=_build_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        first = await test_client.post(
+            "/todo/app-tasks/vocab/init",
+            json={
+                "deck_id": vocab_deck_id,
+                "daily_target_count": 20,
+                "default_focus_duration": 1500,
+                "add_to_today_plan": True,
+            },
+            headers=auth_headers,
+        )
+        promote = await test_client.patch(
+            f"/todo/events/{event_b_id}",
+            json={"is_primary": True},
+            headers=auth_headers,
+        )
+        second = await test_client.post(
+            "/todo/app-tasks/vocab/init",
+            json={
+                "deck_id": vocab_deck_id,
+                "daily_target_count": 30,
+                "default_focus_duration": 1800,
+                "add_to_today_plan": True,
+            },
+            headers=auth_headers,
+        )
+        status = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+
+    assert first.status_code == 200
+    assert promote.status_code == 200
+    assert second.status_code == 200
+    assert status.status_code == 200
+    assert first.json()["event_id"] == str(event_a_id)
+    assert second.json()["event_id"] == str(event_b_id)
+    assert first.json()["task_id"] != second.json()["task_id"]
+    assert len(conn.app_task_configs) == 2
+    assert {config["event_id"] for config in conn.app_task_configs} == {event_a_id, event_b_id}
+    assert [task for task in conn.tasks if task["source_type"] == "app" and task["app_task_type"] == "vocab_today"]
+    payload = status.json()
+    assert payload["event_id"] == str(event_b_id)
+    assert payload["event_name"] == "事件 B"
+    assert payload["config"]["daily_target_count"] == 30
 
 
 @pytest.mark.asyncio

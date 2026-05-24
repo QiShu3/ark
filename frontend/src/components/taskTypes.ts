@@ -2,7 +2,14 @@ export type CompletionPeriodType = 'once' | 'daily' | 'weekly' | 'monthly' | 'cu
 export type TaskSourceType = 'user' | 'app';
 export type AppTaskId = 'vocab' | 'erc';
 export type AppTaskType = 'vocab_today' | 'erc_review' | 'erc_practice';
-export type AppTaskRuntimeState = 'uninitialized' | 'ready' | 'completed_today' | 'blocked' | 'config_invalid';
+export type AppTaskRuntimeState =
+  | 'uninitialized'
+  | 'ready'
+  | 'completed_today'
+  | 'blocked'
+  | 'config_invalid'
+  | 'no_primary_event'
+  | 'event_not_configured';
 
 export interface CompletionState {
   completion_state: 'permanent' | 'available' | 'period_complete' | 'blocked';
@@ -56,6 +63,8 @@ export interface AppTaskStatus {
   state: AppTaskRuntimeState;
   task_id: string | null;
   config_id: string | null;
+  event_id?: string | null;
+  event_name?: string | null;
   completion_state: CompletionState | null;
   blocked_reason: string | null;
   config: Record<string, unknown>;
