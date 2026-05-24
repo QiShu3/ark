@@ -53,8 +53,6 @@ class _FakeTodoConn:
         self.focus_logs: list[dict[str, Any]] = []
         self.event_plan_templates: list[dict[str, Any]] = []
         self.event_plan_template_items: list[dict[str, Any]] = []
-        self.event_plan_drafts: list[dict[str, Any]] = []
-        self.event_plan_draft_items: list[dict[str, Any]] = []
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
         if "WITH bounds AS" in sql and "FROM log_durations ld" in sql:
@@ -74,12 +72,6 @@ class _FakeTodoConn:
             template_id = args[0]
             rows = [item for item in self.event_plan_template_items if item["template_id"] == template_id]
             return sorted(rows, key=lambda item: (item["sort_order"], item["created_at"]))
-        if "FROM event_plan_draft_items" in sql and "WHERE draft_id = $1" in sql:
-            draft_id = args[0]
-            rows = [item for item in self.event_plan_draft_items if item["draft_id"] == draft_id]
-            if "created_subject_id IS NULL" in sql:
-                rows = [item for item in rows if item["created_subject_id"] is None]
-            return sorted(rows, key=lambda item: (item["sort_order"], item["created_at"]))
         if "FROM tasks" in sql and "WHERE user_id = $1 AND event_id = $2" in sql:
             user_id, event_id = args
             rows = [
@@ -87,13 +79,17 @@ class _FakeTodoConn:
                 for task in self.tasks
                 if task["user_id"] == user_id and task["event_id"] == event_id and not task["is_deleted"]
             ]
-            return sorted(rows, key=lambda task: (task["due_date"] or datetime.max.replace(tzinfo=UTC), task["created_at"]))
+            return sorted(
+                rows, key=lambda task: (task["due_date"] or datetime.max.replace(tzinfo=UTC), task["created_at"])
+            )
         if "FROM appointments" in sql and "WHERE user_id = $1 AND event_id = $2" in sql:
             user_id, event_id = args
             rows = [
                 appointment
                 for appointment in self.appointments
-                if appointment["user_id"] == user_id and appointment["event_id"] == event_id and not appointment["is_deleted"]
+                if appointment["user_id"] == user_id
+                and appointment["event_id"] == event_id
+                and not appointment["is_deleted"]
             ]
             return sorted(rows, key=lambda appointment: (appointment["ends_at"], appointment["created_at"]))
         if "SELECT id FROM tasks WHERE user_id = $1 AND event_id = $2 AND is_deleted = FALSE" in sql:
@@ -108,7 +104,9 @@ class _FakeTodoConn:
             return [
                 {"id": appointment["id"]}
                 for appointment in self.appointments
-                if appointment["user_id"] == user_id and appointment["event_id"] == event_id and not appointment["is_deleted"]
+                if appointment["user_id"] == user_id
+                and appointment["event_id"] == event_id
+                and not appointment["is_deleted"]
             ]
         if "FROM tasks" in sql and "calendar range endpoint" in sql:
             user_id, range_start, range_end = args
@@ -148,7 +146,9 @@ class _FakeTodoConn:
                     continue
                 ends_at = appointment["ends_at"]
                 stored_status = appointment["status"]
-                derived_status = "needs_confirmation" if stored_status == "pending" and ends_at <= now else stored_status
+                derived_status = (
+                    "needs_confirmation" if stored_status == "pending" and ends_at <= now else stored_status
+                )
                 if only_needs_confirmation and derived_status != "needs_confirmation":
                     continue
                 if only_repeating and appointment["repeat_rule"] is None:
@@ -354,39 +354,6 @@ class _FakeTodoConn:
             }
             self.event_plan_template_items.append(row)
             return row
-        if "INSERT INTO event_plan_drafts" in sql:
-            draft_id = uuid4()
-            now = datetime.now(UTC)
-            row = {
-                "id": draft_id,
-                "event_id": args[0],
-                "user_id": args[1],
-                "source_template_id": args[2],
-                "created_at": now,
-                "updated_at": now,
-            }
-            self.event_plan_drafts.append(row)
-            return row
-        if "INSERT INTO event_plan_draft_items" in sql:
-            item_id = uuid4()
-            now = datetime.now(UTC)
-            row = {
-                "id": item_id,
-                "draft_id": args[0],
-                "kind": args[1],
-                "title": args[2],
-                "content": args[3],
-                "scheduled_for": args[4],
-                "starts_at": args[5],
-                "ends_at": args[6],
-                "payload_json": json.loads(args[7]) if isinstance(args[7], str) else args[7],
-                "sort_order": args[8],
-                "created_subject_id": None,
-                "created_at": now,
-                "updated_at": now,
-            }
-            self.event_plan_draft_items.append(row)
-            return row
         if "FROM event_plan_templates" in sql and "WHERE id = $1 AND user_id = $2" in sql:
             template_id, user_id = args[0], args[1]
             return next(
@@ -423,45 +390,6 @@ class _FakeTodoConn:
                     template[field] = args[int(match.group(1)) - 1]
             template["updated_at"] = datetime.now(UTC)
             return template
-        if "FROM event_plan_drafts" in sql and "WHERE event_id = $1 AND user_id = $2" in sql:
-            event_id, user_id = args[0], args[1]
-            return next(
-                (
-                    draft
-                    for draft in self.event_plan_drafts
-                    if draft["event_id"] == event_id and draft["user_id"] == user_id
-                ),
-                None,
-            )
-        if "UPDATE event_plan_draft_items" in sql and "RETURNING epdi.id" in sql:
-            item_id, event_id, user_id = args[-3], args[-2], args[-1]
-            draft_ids = {
-                draft["id"]
-                for draft in self.event_plan_drafts
-                if draft["event_id"] == event_id and draft["user_id"] == user_id
-            }
-            item = next(
-                (
-                    current
-                    for current in self.event_plan_draft_items
-                    if current["id"] == item_id
-                    and current["draft_id"] in draft_ids
-                    and current["created_subject_id"] is None
-                ),
-                None,
-            )
-            if item is None:
-                return None
-            for field in ("title", "content", "scheduled_for", "starts_at", "ends_at", "sort_order"):
-                match = re.search(rf"{field} = \$(\d+)", sql)
-                if match is not None:
-                    item[field] = args[int(match.group(1)) - 1]
-            match = re.search(r"payload_json = \$(\d+)::jsonb", sql)
-            if match is not None:
-                value = args[int(match.group(1)) - 1]
-                item["payload_json"] = json.loads(value) if isinstance(value, str) else value
-            item["updated_at"] = datetime.now(UTC)
-            return {"id": item["id"]}
         if "FROM events" in sql and "is_primary = TRUE" in sql:
             user_id = args[0]
             return next((event for event in self.events if event["user_id"] == user_id and event["is_primary"]), None)
@@ -623,14 +551,19 @@ class _FakeTodoConn:
             }
             self.tasks.append(row)
             return row
-        if "FROM tasks" in sql and "WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)" in sql:
+        if (
+            "FROM tasks" in sql
+            and "WHERE id = $1 AND user_id = $2 AND ($3::BOOLEAN = TRUE OR is_deleted = FALSE)" in sql
+        ):
             task_id, user_id = args[0], args[1]
             include_deleted = args[2]
             return next(
                 (
                     task
                     for task in self.tasks
-                    if task["id"] == task_id and task["user_id"] == user_id and (include_deleted or not task["is_deleted"])
+                    if task["id"] == task_id
+                    and task["user_id"] == user_id
+                    and (include_deleted or not task["is_deleted"])
                 ),
                 None,
             )
@@ -701,7 +634,10 @@ class _FakeTodoConn:
                 None,
             )
             return {"id": appointment["id"]} if appointment is not None else None
-        if "UPDATE events" in sql and "RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at" in sql:
+        if (
+            "UPDATE events" in sql
+            and "RETURNING id, user_id, name, start_date, due_at, is_primary, created_at, updated_at" in sql
+        ):
             event_id, user_id = args[-2], args[-1]
             event = next((item for item in self.events if item["id"] == event_id and item["user_id"] == user_id), None)
             if event is None:
@@ -761,7 +697,9 @@ class _FakeTodoConn:
                 (
                     appointment
                     for appointment in self.appointments
-                    if appointment["id"] == appointment_id and appointment["user_id"] == user_id and not appointment["is_deleted"]
+                    if appointment["id"] == appointment_id
+                    and appointment["user_id"] == user_id
+                    and not appointment["is_deleted"]
                 ),
                 None,
             )
@@ -827,7 +765,10 @@ class _FakeTodoConn:
             existing["status"] = status
             existing["updated_at"] = now
             return existing
-        if "SELECT COALESCE(SUM(fl.duration), 0)::BIGINT AS seconds" in sql and "JOIN tasks t ON t.id = fl.task_id" in sql:
+        if (
+            "SELECT COALESCE(SUM(fl.duration), 0)::BIGINT AS seconds" in sql
+            and "JOIN tasks t ON t.id = fl.task_id" in sql
+        ):
             user_id, event_id = args
             seconds = sum(
                 int(log["duration"])
@@ -849,7 +790,9 @@ class _FakeTodoConn:
             event_appointment_ids = {
                 appointment["id"]
                 for appointment in self.appointments
-                if appointment["user_id"] == user_id and appointment["event_id"] == event_id and not appointment["is_deleted"]
+                if appointment["user_id"] == user_id
+                and appointment["event_id"] == event_id
+                and not appointment["is_deleted"]
             }
             count = sum(
                 1
@@ -881,46 +824,6 @@ class _FakeTodoConn:
                     item for item in self.event_plan_template_items if item["template_id"] != template_id
                 ]
             return f"DELETE {deleted}"
-        if sql.startswith("DELETE FROM event_plan_drafts"):
-            event_id, user_id = args
-            draft_ids = {
-                draft["id"]
-                for draft in self.event_plan_drafts
-                if draft["event_id"] == event_id and draft["user_id"] == user_id
-            }
-            before = len(self.event_plan_drafts)
-            self.event_plan_drafts = [draft for draft in self.event_plan_drafts if draft["id"] not in draft_ids]
-            self.event_plan_draft_items = [
-                item for item in self.event_plan_draft_items if item["draft_id"] not in draft_ids
-            ]
-            return f"DELETE {before - len(self.event_plan_drafts)}"
-        if "DELETE FROM event_plan_draft_items epdi" in sql:
-            item_id, event_id, user_id = args
-            draft_ids = {
-                draft["id"]
-                for draft in self.event_plan_drafts
-                if draft["event_id"] == event_id and draft["user_id"] == user_id
-            }
-            before = len(self.event_plan_draft_items)
-            self.event_plan_draft_items = [
-                item
-                for item in self.event_plan_draft_items
-                if not (
-                    item["id"] == item_id
-                    and item["draft_id"] in draft_ids
-                    and item["created_subject_id"] is None
-                )
-            ]
-            return f"DELETE {before - len(self.event_plan_draft_items)}"
-        if "UPDATE event_plan_draft_items" in sql and "SET created_subject_id = $1" in sql:
-            subject_id, item_id, draft_id = args
-            updated = 0
-            for item in self.event_plan_draft_items:
-                if item["id"] == item_id and item["draft_id"] == draft_id:
-                    item["created_subject_id"] = subject_id
-                    item["updated_at"] = datetime.now(UTC)
-                    updated += 1
-            return f"UPDATE {updated}"
         if "UPDATE app_task_configs" in sql and "SET created_task_id = $1" in sql:
             task_id, config_id, user_id, app_id, app_task_type = args
             updated = 0
@@ -1000,7 +903,11 @@ class _FakeTodoConn:
             appointment_id, user_id = args
             updated = 0
             for appointment in self.appointments:
-                if appointment["id"] == appointment_id and appointment["user_id"] == user_id and not appointment["is_deleted"]:
+                if (
+                    appointment["id"] == appointment_id
+                    and appointment["user_id"] == user_id
+                    and not appointment["is_deleted"]
+                ):
                     appointment["is_deleted"] = True
                     appointment["updated_at"] = datetime.now(UTC)
                     updated += 1
@@ -2180,247 +2087,6 @@ def test_event_plan_template_crud_and_copy(monkeypatch) -> None:
     assert [item["name"] for item in list_after_delete.json()] == ["考试复习 副本"]
 
 
-def test_apply_event_plan_template_creates_single_draft(monkeypatch) -> None:
-    conn = _FakeTodoConn()
-    pool = _FakePool(conn)
-    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
-
-    app = _build_app()
-    client = TestClient(app)
-
-    event_resp = client.post(
-        "/todo/events",
-        json={
-            "name": "高数期末",
-            "start_date": "2026-05-20",
-            "due_at": "2026-06-20T09:00:00Z",
-            "is_primary": True,
-        },
-    )
-    template_resp = client.post(
-        "/todo/event-plan-templates",
-        json={
-            "name": "考试复习",
-            "schedule_mode": "before_due",
-            "items": [
-                {"kind": "task", "title": "完成第一轮复习", "offset_days": 14, "sort_order": 0},
-                {"kind": "appointment", "title": "模拟考试", "offset_days": 7, "sort_order": 1},
-            ],
-        },
-    )
-
-    apply_resp = client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
-        json={"template_id": template_resp.json()["id"]},
-    )
-
-    assert apply_resp.status_code == 200
-    draft = apply_resp.json()["plan_draft"]
-    assert len(draft["items"]) == 2
-    assert draft["items"][0]["title"] == "完成第一轮复习"
-    assert draft["items"][0]["scheduled_for"] == "2026-06-06T09:00:00Z"
-    assert draft["items"][1]["title"] == "模拟考试"
-    assert draft["items"][1]["ends_at"] == "2026-06-13T09:00:00Z"
-
-    second_template = client.post(
-        "/todo/event-plan-templates",
-        json={
-            "name": "冲刺模板",
-            "schedule_mode": "from_start",
-            "items": [{"kind": "task", "title": "第一天整理资料", "offset_days": 0, "sort_order": 0}],
-        },
-    )
-    second_apply = client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
-        json={"template_id": second_template.json()["id"]},
-    )
-    assert second_apply.status_code == 200
-    next_draft = second_apply.json()["plan_draft"]
-    assert len(next_draft["items"]) == 1
-    assert next_draft["items"][0]["scheduled_for"] == "2026-05-20T09:00:00Z"
-
-
-def test_event_plan_draft_can_create_item(monkeypatch) -> None:
-    conn = _FakeTodoConn()
-    pool = _FakePool(conn)
-    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
-
-    app = _build_app()
-    client = TestClient(app)
-
-    event_resp = client.post(
-        "/todo/events",
-        json={
-            "name": "高数期末",
-            "start_date": "2026-05-20",
-            "due_at": "2026-06-20T09:00:00Z",
-            "is_primary": True,
-        },
-    )
-
-    create_resp = client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/items",
-        json={
-            "kind": "appointment",
-            "title": "模拟考试",
-            "content": "提前半小时到场",
-            "starts_at": None,
-            "ends_at": "2026-06-13T09:00:00Z",
-            "sort_order": 0,
-        },
-    )
-
-    assert create_resp.status_code == 200
-    draft = create_resp.json()["plan_draft"]
-    assert draft["source_template_id"] is None
-    assert len(draft["items"]) == 1
-    assert draft["items"][0]["kind"] == "appointment"
-    assert draft["items"][0]["title"] == "模拟考试"
-    assert draft["items"][0]["content"] == "提前半小时到场"
-    assert draft["items"][0]["ends_at"] == "2026-06-13T09:00:00Z"
-
-
-def test_generate_event_plan_draft_creates_bound_arrangements(monkeypatch) -> None:
-    conn = _FakeTodoConn()
-    pool = _FakePool(conn)
-    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
-
-    app = _build_app()
-    client = TestClient(app)
-
-    event_resp = client.post(
-        "/todo/events",
-        json={
-            "name": "高数期末",
-            "start_date": "2026-05-20",
-            "due_at": "2026-06-20T09:00:00Z",
-            "is_primary": True,
-        },
-    )
-    template_resp = client.post(
-        "/todo/event-plan-templates",
-        json={
-            "name": "考试复习",
-            "schedule_mode": "before_due",
-            "items": [
-                {"kind": "task", "title": "完成第一轮复习", "offset_days": 14, "sort_order": 0},
-                {"kind": "appointment", "title": "模拟考试", "offset_days": 7, "sort_order": 1},
-            ],
-        },
-    )
-    client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
-        json={"template_id": template_resp.json()["id"]},
-    )
-
-    generate_resp = client.post(f"/todo/events/{event_resp.json()['id']}/plan-draft/generate")
-
-    assert generate_resp.status_code == 200
-    data = generate_resp.json()
-    assert data["plan_draft"]["items"] == []
-    assert [task["title"] for task in data["created_tasks"]] == ["完成第一轮复习"]
-    assert [appointment["title"] for appointment in data["created_appointments"]] == ["模拟考试"]
-    assert data["created_tasks"][0]["event_id"] == event_resp.json()["id"]
-    assert data["created_appointments"][0]["event_id"] == event_resp.json()["id"]
-
-
-def test_event_plan_draft_can_be_saved_as_template(monkeypatch) -> None:
-    conn = _FakeTodoConn()
-    pool = _FakePool(conn)
-    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
-
-    app = _build_app()
-    client = TestClient(app)
-
-    event_resp = client.post(
-        "/todo/events",
-        json={
-            "name": "高数期末",
-            "start_date": "2026-05-20",
-            "due_at": "2026-06-20T09:00:00Z",
-            "is_primary": True,
-        },
-    )
-    template_resp = client.post(
-        "/todo/event-plan-templates",
-        json={
-            "name": "考试复习",
-            "schedule_mode": "before_due",
-            "items": [
-                {"kind": "task", "title": "完成第一轮复习", "offset_days": 14, "sort_order": 0},
-                {"kind": "appointment", "title": "模拟考试", "offset_days": 7, "sort_order": 1},
-            ],
-        },
-    )
-    client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
-        json={"template_id": template_resp.json()["id"]},
-    )
-
-    save_resp = client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/save-as-template",
-        json={"name": "我的期末模板", "description": "来自事件草稿", "schedule_mode": "before_due"},
-    )
-
-    assert save_resp.status_code == 200
-    saved = save_resp.json()
-    assert saved["name"] == "我的期末模板"
-    assert saved["description"] == "来自事件草稿"
-    assert saved["schedule_mode"] == "before_due"
-    assert saved["default_event_name"] == "高数期末"
-    assert saved["default_start_date"] == "2026-05-20"
-    assert saved["default_due_at"] == "2026-06-20T09:00:00Z"
-    assert saved["default_is_primary"] is True
-    assert [(item["title"], item["offset_days"]) for item in saved["items"]] == [
-        ("完成第一轮复习", 14),
-        ("模拟考试", 7),
-    ]
-
-
-def test_event_plan_draft_can_update_source_template(monkeypatch) -> None:
-    conn = _FakeTodoConn()
-    pool = _FakePool(conn)
-    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
-
-    app = _build_app()
-    client = TestClient(app)
-
-    event_resp = client.post(
-        "/todo/events",
-        json={
-            "name": "高数期末",
-            "start_date": "2026-05-20",
-            "due_at": "2026-06-20T09:00:00Z",
-            "is_primary": True,
-        },
-    )
-    template_resp = client.post(
-        "/todo/event-plan-templates",
-        json={
-            "name": "考试复习",
-            "schedule_mode": "before_due",
-            "items": [{"kind": "task", "title": "完成第一轮复习", "offset_days": 14, "sort_order": 0}],
-        },
-    )
-    apply_resp = client.post(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/apply-template",
-        json={"template_id": template_resp.json()["id"]},
-    )
-    draft_item_id = apply_resp.json()["plan_draft"]["items"][0]["id"]
-    client.patch(
-        f"/todo/events/{event_resp.json()['id']}/plan-draft/items/{draft_item_id}",
-        json={"title": "精修错题"},
-    )
-
-    update_resp = client.post(f"/todo/events/{event_resp.json()['id']}/plan-draft/update-source-template")
-
-    assert update_resp.status_code == 200
-    updated = update_resp.json()
-    assert updated["id"] == template_resp.json()["id"]
-    assert updated["items"][0]["title"] == "精修错题"
-    assert updated["items"][0]["offset_days"] == 14
-
-
 def test_achievement_summary_without_primary_event_still_returns_global(monkeypatch) -> None:
     conn = _FakeTodoConn()
     pool = _FakePool(conn)
@@ -2658,8 +2324,7 @@ def test_achievement_summary_includes_full_first_version_pool(monkeypatch) -> No
     assert resp.status_code == 200
     data = resp.json()
     event_titles = {
-        item["title"]
-        for item in data["event_achievements"]["latest_unlocked"] + data["event_achievements"]["upcoming"]
+        item["title"] for item in data["event_achievements"]["latest_unlocked"] + data["event_achievements"]["upcoming"]
     }
     global_titles = {
         item["title"]
@@ -2775,7 +2440,9 @@ def test_complete_repeating_task_rejects_after_period_limit(monkeypatch) -> None
             subject_id=task["id"],
             completed_at=datetime.now(UTC) - timedelta(hours=1),
             counted_period_start=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0),
-            counted_period_end=(datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)),
+            counted_period_end=(
+                datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            ),
         )
     ]
     pool = _FakePool(conn)
@@ -2984,7 +2651,11 @@ class _WorkflowConn:
             task_id = args[0]
             user_id = int(args[1])
             task = next(
-                (item for item in self.tasks if item["id"] == task_id and int(item["user_id"]) == user_id and not item["is_deleted"]),
+                (
+                    item
+                    for item in self.tasks
+                    if item["id"] == task_id and int(item["user_id"]) == user_id and not item["is_deleted"]
+                ),
                 None,
             )
             if task is None:
@@ -3076,7 +2747,11 @@ class _WorkflowConn:
         return None
 
     async def execute(self, sql: str, *args: Any) -> str:
-        if "SET current_phase = $1" in sql and "runtime_task_id = NULL" in sql and "pending_task_selection = TRUE" in sql:
+        if (
+            "SET current_phase = $1" in sql
+            and "runtime_task_id = NULL" in sql
+            and "pending_task_selection = TRUE" in sql
+        ):
             self.workflow["current_phase"] = str(args[0])
             self.workflow["current_phase_index"] = int(args[1])
             self.workflow["task_id"] = None
@@ -3325,7 +3000,9 @@ def test_get_focus_workflow_current_exposes_app_managed_adapter(monkeypatch) -> 
 def test_get_focus_workflow_current_finishes_countup_phase_at_two_hours(monkeypatch) -> None:
     conn = _WorkflowConn()
     conn.workflow["pending_confirmation"] = False
-    conn.workflow["phases"] = [{"phase_type": "focus", "duration": 1500, "timer_mode": "countup", "task_id": str(conn.task_id)}]
+    conn.workflow["phases"] = [
+        {"phase_type": "focus", "duration": 1500, "timer_mode": "countup", "task_id": str(conn.task_id)}
+    ]
     conn.workflow["phase_started_at"] = datetime.now(UTC) - timedelta(hours=2, minutes=5)
     pool = _WorkflowPool(conn)
     monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
@@ -3413,7 +3090,9 @@ def test_focus_work_result_completed_records_app_managed_task_completion(monkeyp
             "runtime_task_id": conn.task_id,
             "active_focus_work_type": "vocab_today",
             "focus_work_display_state": "fullscreen",
-            "phases": [{"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}],
+            "phases": [
+                {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}
+            ],
         }
     )
     pool = _WorkflowPool(conn)
@@ -3458,7 +3137,9 @@ def test_focus_work_result_completed_round_does_not_record_app_managed_task_comp
             "runtime_task_id": conn.task_id,
             "active_focus_work_type": "vocab_today",
             "focus_work_display_state": "fullscreen",
-            "phases": [{"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}],
+            "phases": [
+                {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}
+            ],
         }
     )
     pool = _WorkflowPool(conn)
@@ -3699,7 +3380,11 @@ class _WorkflowPresetConn:
             preset_id = args[0]
             user_id = int(args[1])
             return next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
-        if "FROM focus_workflow_presets" in sql and "WHERE id = $1 AND user_id = $2" in sql and sql.strip().startswith("SELECT"):
+        if (
+            "FROM focus_workflow_presets" in sql
+            and "WHERE id = $1 AND user_id = $2" in sql
+            and sql.strip().startswith("SELECT")
+        ):
             preset_id = args[0]
             user_id = int(args[1])
             return next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
@@ -3715,7 +3400,9 @@ class _WorkflowPresetConn:
             if "SET is_default = TRUE" in sql:
                 preset_id = args[0]
                 user_id = int(args[1])
-                target = next((row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None)
+                target = next(
+                    (row for row in self.rows if row["id"] == preset_id and int(row["user_id"]) == user_id), None
+                )
                 if target is None:
                     return None
                 target["is_default"] = True

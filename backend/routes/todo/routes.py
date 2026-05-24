@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -87,12 +87,6 @@ from .schemas import (
     ERCPracticeAppTaskInitRequest,
     EventCreateRequest,
     EventOut,
-    EventPlanDraftItemCreateRequest,
-    EventPlanDraftItemOut,
-    EventPlanDraftItemUpdateRequest,
-    EventPlanDraftOut,
-    EventPlanDraftSaveAsTemplateRequest,
-    EventPlanTemplateApplyRequest,
     EventPlanTemplateCreateRequest,
     EventPlanTemplateItemOut,
     EventPlanTemplateOut,
@@ -221,114 +215,7 @@ def _payload_dict(value: Any) -> dict[str, object]:
     return {}
 
 
-def _row_to_event_plan_draft_item(row: Any) -> EventPlanDraftItemOut:
-    return EventPlanDraftItemOut(
-        id=row["id"],
-        draft_id=row["draft_id"],
-        kind=row["kind"],
-        title=str(row["title"]),
-        content=row["content"],
-        scheduled_for=row["scheduled_for"],
-        starts_at=row["starts_at"],
-        ends_at=row["ends_at"],
-        payload=_payload_dict(_row_value(row, "payload_json", {})),
-        sort_order=int(row["sort_order"]),
-        created_subject_id=row["created_subject_id"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
-
-
-def _row_to_event_plan_draft(row: Any, items: list[Any]) -> EventPlanDraftOut:
-    return EventPlanDraftOut(
-        id=row["id"],
-        event_id=row["event_id"],
-        user_id=int(row["user_id"]),
-        source_template_id=row["source_template_id"],
-        items=[
-            _row_to_event_plan_draft_item(item)
-            for item in items
-            if _row_value(item, "created_subject_id") is None
-        ],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
-
-
-async def _event_plan_draft_out(conn: Any, row: Any | None) -> EventPlanDraftOut | None:
-    if row is None:
-        return None
-    items = await conn.fetch(
-        """
-        SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
-               sort_order, created_subject_id, created_at, updated_at
-        FROM event_plan_draft_items
-        WHERE draft_id = $1
-        ORDER BY sort_order ASC, created_at ASC
-        """,
-        row["id"],
-    )
-    return _row_to_event_plan_draft(row, items)
-
-
-def _template_item_datetime(*, event_row: Any, schedule_mode: str, offset_days: int) -> datetime:
-    if schedule_mode == "from_start":
-        scheduled_date = event_row["start_date"] + timedelta(days=offset_days)
-        return datetime.combine(scheduled_date, time(hour=9), tzinfo=UTC)
-    scheduled_date = event_row["due_at"].date() - timedelta(days=offset_days)
-    return datetime.combine(scheduled_date, event_row["due_at"].timetz())
-
-
-def _draft_item_datetime(row: Any) -> datetime | None:
-    if row["kind"] == "appointment":
-        return row["ends_at"] or row["starts_at"] or row["scheduled_for"]
-    return row["scheduled_for"] or row["ends_at"] or row["starts_at"]
-
-
-def _draft_item_offset_days(*, event_row: Any, schedule_mode: str, item_row: Any) -> int:
-    item_at = _draft_item_datetime(item_row)
-    if item_at is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="安排内容缺少时间")
-    if schedule_mode == "from_start":
-        return max(0, (item_at.date() - event_row["start_date"]).days)
-    return max(0, (event_row["due_at"].date() - item_at.date()).days)
-
-
-async def _draft_items_for_template(conn: Any, *, draft_id: UUID, event_row: Any, schedule_mode: str) -> list[dict[str, Any]]:
-    rows = await conn.fetch(
-        """
-        SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
-               sort_order, created_subject_id, created_at, updated_at
-        FROM event_plan_draft_items
-        WHERE draft_id = $1 AND created_subject_id IS NULL
-        ORDER BY sort_order ASC, created_at ASC
-        """,
-        draft_id,
-    )
-    items: list[dict[str, Any]] = []
-    for index, row in enumerate(rows):
-        items.append(
-            {
-                "kind": row["kind"],
-                "title": str(row["title"]).strip(),
-                "content": row["content"],
-                "offset_days": _draft_item_offset_days(event_row=event_row, schedule_mode=schedule_mode, item_row=row),
-                "sort_order": index,
-            }
-        )
-    return items
-
-
 async def _event_workbench_out(conn: Any, *, user_id: int, event_row: Any) -> EventWorkbenchOut:
-    draft_row = await conn.fetchrow(
-        """
-        SELECT id, event_id, user_id, source_template_id, created_at, updated_at
-        FROM event_plan_drafts
-        WHERE event_id = $1 AND user_id = $2
-        """,
-        event_row["id"],
-        user_id,
-    )
     task_rows = await conn.fetch(
         """
         SELECT id, user_id, title, content, status,
@@ -359,7 +246,6 @@ async def _event_workbench_out(conn: Any, *, user_id: int, event_row: Any) -> Ev
     )
     return EventWorkbenchOut(
         event=_row_to_event(event_row),
-        plan_draft=await _event_plan_draft_out(conn, draft_row),
         created_tasks=[await _task_with_completion(conn, row) for row in task_rows],
         created_appointments=[await _appointment_with_completion(conn, row) for row in appointment_rows],
     )
@@ -619,7 +505,9 @@ async def create_task(
         or body.app_config_id
         or body.app_instance_key
     ):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建"
+        )
 
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
@@ -833,7 +721,9 @@ async def update_task(
         "managed_by_app",
     }
     if reserved_app_task_fields & patch.keys():
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建"
+        )
     if not patch:
         return await get_task(request, task_id, user)
 
@@ -1918,467 +1808,6 @@ async def get_event_workbench(
         return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
 
 
-@router.post("/events/{event_id}/plan-draft/apply-template", response_model=EventWorkbenchOut)
-async def apply_event_plan_template(
-    request: Request,
-    event_id: UUID,
-    body: EventPlanTemplateApplyRequest,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventWorkbenchOut:
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            template_row = await conn.fetchrow(
-                """
-                SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                       default_due_at, default_is_primary, created_at, updated_at
-                FROM event_plan_templates
-                WHERE id = $1 AND user_id = $2
-                """,
-                body.template_id,
-                int(user.id),
-            )
-            if template_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
-            template_items = await conn.fetch(
-                """
-                SELECT id, template_id, kind, title, content, offset_days, sort_order, created_at, updated_at
-                FROM event_plan_template_items
-                WHERE template_id = $1
-                ORDER BY sort_order ASC, created_at ASC
-                """,
-                body.template_id,
-            )
-            if not template_items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="事件模板没有安排内容")
-            await conn.execute("DELETE FROM event_plan_drafts WHERE event_id = $1 AND user_id = $2", event_id, int(user.id))
-            draft_row = await conn.fetchrow(
-                """
-                INSERT INTO event_plan_drafts(event_id, user_id, source_template_id)
-                VALUES ($1, $2, $3)
-                RETURNING id, event_id, user_id, source_template_id, created_at, updated_at
-                """,
-                event_id,
-                int(user.id),
-                body.template_id,
-            )
-            if draft_row is None:
-                raise HTTPException(status_code=500, detail="创建安排内容失败")
-            for item in template_items:
-                scheduled_at = _template_item_datetime(
-                    event_row=event_row,
-                    schedule_mode=str(template_row["schedule_mode"]),
-                    offset_days=int(item["offset_days"]),
-                )
-                starts_at = None
-                ends_at = scheduled_at if item["kind"] == "appointment" else None
-                scheduled_for = scheduled_at if item["kind"] == "task" else None
-                await conn.fetchrow(
-                    """
-                    INSERT INTO event_plan_draft_items(
-                        draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json, sort_order
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
-                    RETURNING id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
-                              sort_order, created_subject_id, created_at, updated_at
-                    """,
-                    draft_row["id"],
-                    item["kind"],
-                    item["title"],
-                    item["content"],
-                    scheduled_for,
-                    starts_at,
-                    ends_at,
-                    _to_jsonb_param({}),
-                    item["sort_order"],
-                )
-            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
-
-
-@router.post("/events/{event_id}/plan-draft/items", response_model=EventWorkbenchOut)
-async def create_event_plan_draft_item(
-    request: Request,
-    event_id: UUID,
-    body: EventPlanDraftItemCreateRequest,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventWorkbenchOut:
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            draft_row = await conn.fetchrow(
-                """
-                SELECT id, event_id, user_id, source_template_id, created_at, updated_at
-                FROM event_plan_drafts
-                WHERE event_id = $1 AND user_id = $2
-                """,
-                event_id,
-                int(user.id),
-            )
-            if draft_row is None:
-                draft_row = await conn.fetchrow(
-                    """
-                    INSERT INTO event_plan_drafts(event_id, user_id, source_template_id)
-                    VALUES ($1, $2, $3)
-                    RETURNING id, event_id, user_id, source_template_id, created_at, updated_at
-                    """,
-                    event_id,
-                    int(user.id),
-                    None,
-                )
-            if draft_row is None:
-                raise HTTPException(status_code=500, detail="创建安排内容失败")
-            await conn.fetchrow(
-                """
-                INSERT INTO event_plan_draft_items(
-                    draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json, sort_order
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
-                RETURNING id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
-                          sort_order, created_subject_id, created_at, updated_at
-                """,
-                draft_row["id"],
-                body.kind,
-                body.title.strip(),
-                body.content,
-                body.scheduled_for,
-                body.starts_at,
-                body.ends_at,
-                _to_jsonb_param(body.payload or {}),
-                body.sort_order,
-            )
-            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
-
-
-@router.patch("/events/{event_id}/plan-draft/items/{item_id}", response_model=EventWorkbenchOut)
-async def update_event_plan_draft_item(
-    request: Request,
-    event_id: UUID,
-    item_id: UUID,
-    body: EventPlanDraftItemUpdateRequest,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventWorkbenchOut:
-    patch = body.model_dump(exclude_unset=True)
-    if not patch:
-        return await get_event_workbench(request, event_id, user)
-    allowed_cols = {
-        "title": "title",
-        "content": "content",
-        "scheduled_for": "scheduled_for",
-        "starts_at": "starts_at",
-        "ends_at": "ends_at",
-        "sort_order": "sort_order",
-    }
-    sets: list[str] = []
-    args: list[Any] = []
-    for key, column in allowed_cols.items():
-        if key not in patch:
-            continue
-        args.append(patch[key])
-        sets.append(f"{column} = ${len(args)}")
-    if "payload" in patch:
-        args.append(_to_jsonb_param(patch["payload"] or {}))
-        sets.append(f"payload_json = ${len(args)}::jsonb")
-    if not sets:
-        return await get_event_workbench(request, event_id, user)
-    args.extend([item_id, event_id, int(user.id)])
-    item_i, event_i, user_i = len(args) - 2, len(args) - 1, len(args)
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            row = await conn.fetchrow(
-                f"""
-                UPDATE event_plan_draft_items epdi
-                SET {", ".join(sets)}, updated_at = NOW()
-                FROM event_plan_drafts epd
-                WHERE epdi.id = ${item_i}
-                  AND epdi.draft_id = epd.id
-                  AND epd.event_id = ${event_i}
-                  AND epd.user_id = ${user_i}
-                  AND epdi.created_subject_id IS NULL
-                RETURNING epdi.id
-                """,
-                *args,
-            )
-            if row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
-            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
-
-
-@router.delete("/events/{event_id}/plan-draft/items/{item_id}", response_model=EventWorkbenchOut)
-async def delete_event_plan_draft_item(
-    request: Request,
-    event_id: UUID,
-    item_id: UUID,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventWorkbenchOut:
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            tag = await conn.execute(
-                """
-                DELETE FROM event_plan_draft_items epdi
-                USING event_plan_drafts epd
-                WHERE epdi.id = $1
-                  AND epdi.draft_id = epd.id
-                  AND epd.event_id = $2
-                  AND epd.user_id = $3
-                  AND epdi.created_subject_id IS NULL
-                """,
-                item_id,
-                event_id,
-                int(user.id),
-            )
-            if not tag.startswith("DELETE ") or tag.endswith(" 0"):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
-            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
-
-
-@router.post("/events/{event_id}/plan-draft/save-as-template", response_model=EventPlanTemplateOut)
-async def save_event_plan_draft_as_template(
-    request: Request,
-    event_id: UUID,
-    body: EventPlanDraftSaveAsTemplateRequest,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventPlanTemplateOut:
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            draft_row = await conn.fetchrow(
-                """
-                SELECT id, event_id, user_id, source_template_id, created_at, updated_at
-                FROM event_plan_drafts
-                WHERE event_id = $1 AND user_id = $2
-                """,
-                event_id,
-                int(user.id),
-            )
-            if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
-            items = await _draft_items_for_template(
-                conn,
-                draft_id=draft_row["id"],
-                event_row=event_row,
-                schedule_mode=body.schedule_mode,
-            )
-            if not items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可保存的安排内容")
-            row = await conn.fetchrow(
-                """
-                INSERT INTO event_plan_templates(
-                    user_id, name, description, schedule_mode,
-                    default_event_name, default_start_date, default_due_at, default_is_primary
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                          default_due_at, default_is_primary, created_at, updated_at
-                """,
-                int(user.id),
-                body.name.strip(),
-                body.description,
-                body.schedule_mode,
-                event_row["name"],
-                event_row["start_date"],
-                event_row["due_at"],
-                event_row["is_primary"],
-            )
-            if row is None:
-                raise HTTPException(status_code=500, detail="另存模板失败")
-            await _replace_event_plan_template_items(conn, template_id=row["id"], items=items)
-            return await _event_plan_template_out(conn, row)
-
-
-@router.post("/events/{event_id}/plan-draft/update-source-template", response_model=EventPlanTemplateOut)
-async def update_event_plan_draft_source_template(
-    request: Request,
-    event_id: UUID,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventPlanTemplateOut:
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            draft_row = await conn.fetchrow(
-                """
-                SELECT id, event_id, user_id, source_template_id, created_at, updated_at
-                FROM event_plan_drafts
-                WHERE event_id = $1 AND user_id = $2
-                """,
-                event_id,
-                int(user.id),
-            )
-            if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
-            if draft_row["source_template_id"] is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="安排内容没有源模板")
-            template_row = await conn.fetchrow(
-                """
-                SELECT id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                       default_due_at, default_is_primary, created_at, updated_at
-                FROM event_plan_templates
-                WHERE id = $1 AND user_id = $2
-                """,
-                draft_row["source_template_id"],
-                int(user.id),
-            )
-            if template_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="源模板不存在")
-            items = await _draft_items_for_template(
-                conn,
-                draft_id=draft_row["id"],
-                event_row=event_row,
-                schedule_mode=str(template_row["schedule_mode"]),
-            )
-            if not items:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有可回写的安排内容")
-            updated_row = await conn.fetchrow(
-                """
-                UPDATE event_plan_templates
-                SET default_event_name = $1,
-                    default_start_date = $2,
-                    default_due_at = $3,
-                    default_is_primary = $4,
-                    updated_at = NOW()
-                WHERE id = $5 AND user_id = $6
-                RETURNING id, user_id, name, description, schedule_mode, default_event_name, default_start_date,
-                          default_due_at, default_is_primary, created_at, updated_at
-                """,
-                event_row["name"],
-                event_row["start_date"],
-                event_row["due_at"],
-                event_row["is_primary"],
-                draft_row["source_template_id"],
-                int(user.id),
-            )
-            if updated_row is None:
-                raise HTTPException(status_code=500, detail="回写模板失败")
-            await _replace_event_plan_template_items(conn, template_id=updated_row["id"], items=items)
-            return await _event_plan_template_out(conn, updated_row)
-
-
-@router.post("/events/{event_id}/plan-draft/generate", response_model=EventWorkbenchOut)
-async def generate_event_plan_draft(
-    request: Request,
-    event_id: UUID,
-    user: Annotated[Any, Depends(get_current_user)],
-) -> EventWorkbenchOut:
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            event_row = await _get_event_for_user(conn, user_id=int(user.id), event_id=event_id)
-            if event_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="事件不存在")
-            draft_row = await conn.fetchrow(
-                """
-                SELECT id, event_id, user_id, source_template_id, created_at, updated_at
-                FROM event_plan_drafts
-                WHERE event_id = $1 AND user_id = $2
-                """,
-                event_id,
-                int(user.id),
-            )
-            if draft_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="安排内容不存在")
-            draft_items = await conn.fetch(
-                """
-                SELECT id, draft_id, kind, title, content, scheduled_for, starts_at, ends_at, payload_json,
-                       sort_order, created_subject_id, created_at, updated_at
-                FROM event_plan_draft_items
-                WHERE draft_id = $1 AND created_subject_id IS NULL
-                ORDER BY sort_order ASC, created_at ASC
-                """,
-                draft_row["id"],
-            )
-            for item in draft_items:
-                payload = _payload_dict(item["payload_json"])
-                if item["kind"] == "task":
-                    due_date = item["scheduled_for"]
-                    task_row = await conn.fetchrow(
-                        """
-                        INSERT INTO tasks(
-                            user_id, title, content, status,
-                            current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
-                            event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                            weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type,
-                            start_date, due_date, source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
-                        )
-                        VALUES ($1, $2, $3, 'todo', 0, 0, 'daily', NULL, $4, '{}', $5, FALSE, 'once',
-                                NULL, 1, FALSE, FALSE, FALSE, FALSE, $6, NULL, $7, 'user', NULL, NULL, NULL, NULL, FALSE)
-                        RETURNING id, user_id, title, content, status,
-                                  current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
-                                  event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                                  weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type,
-                                  actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
-                                  source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
-                        """,
-                        int(user.id),
-                        item["title"],
-                        item["content"],
-                        event_row["name"],
-                        event_id,
-                        str(payload.get("task_type", "focus")),
-                        due_date,
-                    )
-                    if task_row is None:
-                        raise HTTPException(status_code=500, detail="生成任务失败")
-                    subject_id = task_row["id"]
-                else:
-                    ends_at = item["ends_at"] or item["scheduled_for"]
-                    if ends_at is None:
-                        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="日程草稿缺少结束时间")
-                    appointment_row = await conn.fetchrow(
-                        """
-                        INSERT INTO appointments(
-                            user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
-                            event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                            weekday_only, time_inherits_from_event, time_overridden
-                        )
-                        VALUES ($1, $2, $3, 'pending', $4, $5, $6, NULL, $7, FALSE, 'once', NULL, 1, FALSE, FALSE, FALSE)
-                        RETURNING id, user_id, title, content, status, starts_at, ends_at, repeat_rule, linked_task_id,
-                                  event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
-                                  weekday_only, time_inherits_from_event, time_overridden,
-                                  is_deleted, created_at, updated_at
-                        """,
-                        int(user.id),
-                        item["title"],
-                        item["content"],
-                        item["starts_at"],
-                        ends_at,
-                        payload.get("repeat_rule"),
-                        event_id,
-                    )
-                    if appointment_row is None:
-                        raise HTTPException(status_code=500, detail="生成日程失败")
-                    subject_id = appointment_row["id"]
-                await conn.execute(
-                    """
-                    UPDATE event_plan_draft_items
-                    SET created_subject_id = $1, updated_at = NOW()
-                    WHERE id = $2 AND draft_id = $3
-                    """,
-                    subject_id,
-                    item["id"],
-                    draft_row["id"],
-                )
-            return await _event_workbench_out(conn, user_id=int(user.id), event_row=event_row)
-
-
 @router.post("/events", response_model=EventOut)
 async def create_event(
     request: Request,
@@ -2806,7 +2235,12 @@ async def start_focus_workflow_preset(
             if first_phase_type == "focus" and active_focus_work_type is None:
                 phase_task_id = _phase_task_id_value(first_phase)
                 task_row = await _get_bindable_task(conn, int(user.id), phase_task_id)
-                if phase_task_id is None or task_row is None or bool(task_row["is_deleted"]) or str(task_row["status"]) == "done":
+                if (
+                    phase_task_id is None
+                    or task_row is None
+                    or bool(task_row["is_deleted"])
+                    or str(task_row["status"]) == "done"
+                ):
                     pending_task_selection = True
                     task_row = None
                 else:
@@ -3002,7 +2436,9 @@ async def get_focus_workflow_current(
                 if task_row is not None:
                     task_title = str(task_row["title"])
                     task_kwargs = _focus_workflow_task_kwargs(task_row)
-    return _row_to_focus_workflow(row, task_title=task_title, **{k: v for k, v in task_kwargs.items() if k != "task_title"})
+    return _row_to_focus_workflow(
+        row, task_title=task_title, **{k: v for k, v in task_kwargs.items() if k != "task_title"}
+    )
 
 
 @router.post("/focus/workflow/start-app-work", response_model=FocusWorkflowOut)
@@ -3106,7 +2542,9 @@ async def start_focus_workflow_app_work(
                 focus_work_progress_snapshot=None,
                 record_focus=bool(body.record_focus),
             )
-            await _start_focus_app_work_log(conn, int(user.id), row["id"], body.focus_work_type, bool(body.record_focus))
+            await _start_focus_app_work_log(
+                conn, int(user.id), row["id"], body.focus_work_type, bool(body.record_focus)
+            )
     return _row_to_focus_workflow(next_row)
 
 
@@ -3125,7 +2563,9 @@ async def submit_focus_work_result(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
             if str(row["current_phase"]) != "focus":
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
-            active_focus_work_type = row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
+            active_focus_work_type = (
+                row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
+            )
             if (
                 active_focus_work_type is None
                 and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None

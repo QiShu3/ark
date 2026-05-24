@@ -508,7 +508,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setWorkbench((current) => (
       current
         ? { ...current, event: updatedEvent }
-        : { event: updatedEvent, plan_draft: null, created_tasks: [], created_appointments: [] }
+        : { event: updatedEvent, created_tasks: [], created_appointments: [] }
     ));
   }
 

@@ -113,16 +113,22 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS manually_scheduled_for_today BOOLEAN NOT NULL DEFAULT FALSE;"
         )
-        await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) NOT NULL DEFAULT 'user';")
+        await conn.execute(
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_type VARCHAR(20) NOT NULL DEFAULT 'user';"
+        )
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_id VARCHAR(40) NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_task_type VARCHAR(80) NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_config_id UUID NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_instance_key VARCHAR(160) NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS managed_by_app BOOLEAN NOT NULL DEFAULT FALSE;")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_source_type;")
-        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app'));")
+        await conn.execute(
+            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app'));"
+        )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_id;")
-        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));")
+        await conn.execute(
+            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));"
+        )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute(
             "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
@@ -200,14 +206,20 @@ async def init_todo(app: Any) -> None:
             );
             """
         )
-        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE;"
+        )
         await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS app_id VARCHAR(40) NOT NULL;")
         await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS app_task_type VARCHAR(80) NOT NULL;")
-        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::JSONB;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::JSONB;"
+        )
         await conn.execute(
             "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';"
         )
-        await conn.execute("ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS created_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;")
+        await conn.execute(
+            "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS created_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;"
+        )
         await conn.execute(
             "ALTER TABLE app_task_configs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"
         )
@@ -426,9 +438,13 @@ async def init_todo(app: Any) -> None:
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS runtime_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL;"
         )
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ NULL;")
-        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS is_paused BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute(
+            "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS is_paused BOOLEAN NOT NULL DEFAULT FALSE;"
+        )
         await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ NULL;")
-        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS active_focus_work_type VARCHAR(40) NULL;")
+        await conn.execute(
+            "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS active_focus_work_type VARCHAR(40) NULL;"
+        )
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS focus_work_display_state VARCHAR(20) NULL;"
         )
@@ -436,7 +452,9 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS focus_work_progress_snapshot JSONB NULL;"
         )
-        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS record_focus BOOLEAN NOT NULL DEFAULT TRUE;")
+        await conn.execute(
+            "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS record_focus BOOLEAN NOT NULL DEFAULT TRUE;"
+        )
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS workflow_name VARCHAR(100) NOT NULL DEFAULT '默认工作流';"
         )
@@ -629,41 +647,4 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_event_plan_template_items_template_sort ON event_plan_template_items(template_id, sort_order ASC);"
-        )
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS event_plan_drafts (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              source_template_id UUID NULL REFERENCES event_plan_templates(id) ON DELETE SET NULL,
-              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """
-        )
-        await conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_event_plan_drafts_event ON event_plan_drafts(event_id);"
-        )
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS event_plan_draft_items (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              draft_id UUID NOT NULL REFERENCES event_plan_drafts(id) ON DELETE CASCADE,
-              kind VARCHAR(32) NOT NULL CHECK (kind IN ('task', 'appointment')),
-              title VARCHAR(255) NOT NULL,
-              content TEXT,
-              scheduled_for TIMESTAMPTZ,
-              starts_at TIMESTAMPTZ,
-              ends_at TIMESTAMPTZ,
-              payload_json JSONB NOT NULL DEFAULT '{}',
-              sort_order INTEGER NOT NULL DEFAULT 0,
-              created_subject_id UUID,
-              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """
-        )
-        await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_event_plan_draft_items_draft_sort ON event_plan_draft_items(draft_id, sort_order ASC);"
         )

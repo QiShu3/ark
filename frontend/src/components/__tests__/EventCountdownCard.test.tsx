@@ -159,7 +159,6 @@ describe('EventCountdownCard', () => {
     const overview = await screen.findByRole('dialog', { name: '事件总览' });
     expect(within(overview).getByText('高数期末')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '安排' })).not.toBeInTheDocument();
-    expect(apiJson).not.toHaveBeenCalledWith('/todo/events/event-2/plan-draft/apply-template', expect.anything());
   });
 
   it('shows template apply controls without the template workbench gear in the add-event editor', async () => {
@@ -572,7 +571,6 @@ describe('EventCountdownCard', () => {
             created_at: '2026-03-18T00:00:00Z',
             updated_at: '2026-03-18T00:00:00Z',
           },
-          plan_draft: null,
           created_tasks: [],
           created_appointments: [],
         };
@@ -648,7 +646,6 @@ describe('EventCountdownCard', () => {
             created_at: '2026-03-19T00:00:00Z',
             updated_at: '2026-03-19T00:00:00Z',
           },
-          plan_draft: null,
           created_tasks: [],
           created_appointments: [],
         };

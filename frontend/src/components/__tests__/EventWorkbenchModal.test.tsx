@@ -120,7 +120,6 @@ describe('EventWorkbenchModal', () => {
       if (url === '/todo/events/event-1/workbench') {
         return {
           event: nonPrimaryEvent,
-          plan_draft: null,
           created_tasks: [],
           created_appointments: [],
         };
@@ -213,15 +212,6 @@ describe('EventWorkbenchModal', () => {
       if (url === '/todo/events/event-1/workbench') {
         return {
           event,
-          plan_draft: {
-            id: 'legacy-draft',
-            event_id: 'event-1',
-            user_id: 7,
-            source_template_id: 'template-1',
-            created_at: '2026-05-18T00:00:00Z',
-            updated_at: '2026-05-18T00:00:00Z',
-            items: [],
-          },
           created_tasks: [eventTask],
           created_appointments: [eventAppointment],
         };
@@ -264,7 +254,6 @@ describe('EventWorkbenchModal', () => {
       if (url === '/todo/events/event-1/workbench') {
         return {
           event,
-          plan_draft: null,
           created_tasks: tasks,
           created_appointments: appointments,
         };
@@ -346,7 +335,6 @@ describe('EventWorkbenchModal', () => {
       if (url === '/todo/events/event-1/workbench') {
         return {
           event,
-          plan_draft: null,
           created_tasks: tasks,
           created_appointments: appointments,
         };

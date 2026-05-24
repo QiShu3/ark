@@ -1,5 +1,5 @@
 import { apiJson } from '../api';
-import type { EventItem, EventPlanDraftItem, EventPlanTemplate, EventWorkbench } from './types';
+import type { EventItem, EventPlanTemplate, EventWorkbench } from './types';
 
 export type EventCreateInput = Pick<EventItem, 'name' | 'start_date' | 'due_at' | 'is_primary'>;
 export type EventUpdateInput = Partial<EventCreateInput>;
@@ -38,81 +38,8 @@ export function getEventWorkbench(eventId: string): Promise<EventWorkbench> {
   return apiJson<EventWorkbench>(`/todo/events/${eventId}/workbench`);
 }
 
-export function generateEventPlanDraft(eventId: string): Promise<EventWorkbench> {
-  return apiJson<EventWorkbench>(`/todo/events/${eventId}/plan-draft/generate`, {
-    method: 'POST',
-  });
-}
-
-export type EventPlanDraftItemInput = Partial<Pick<
-  EventPlanDraftItem,
-  'title' | 'content' | 'scheduled_for' | 'starts_at' | 'ends_at' | 'payload' | 'sort_order'
->>;
-
-export type EventPlanDraftItemCreateInput = Pick<EventPlanDraftItem, 'kind' | 'title'> & EventPlanDraftItemInput;
-
-export function createEventPlanDraftItem(
-  eventId: string,
-  input: EventPlanDraftItemCreateInput,
-): Promise<EventWorkbench> {
-  return apiJson<EventWorkbench>(`/todo/events/${eventId}/plan-draft/items`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-}
-
-export function updateEventPlanDraftItem(
-  eventId: string,
-  itemId: string,
-  input: EventPlanDraftItemInput,
-): Promise<EventWorkbench> {
-  return apiJson<EventWorkbench>(`/todo/events/${eventId}/plan-draft/items/${itemId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-}
-
-export function deleteEventPlanDraftItem(eventId: string, itemId: string): Promise<EventWorkbench> {
-  return apiJson<EventWorkbench>(`/todo/events/${eventId}/plan-draft/items/${itemId}`, {
-    method: 'DELETE',
-  });
-}
-
-export type EventPlanDraftSaveAsTemplateInput = {
-  name: string;
-  description?: string | null;
-  schedule_mode: 'from_start' | 'before_due';
-};
-
-export function saveEventPlanDraftAsTemplate(
-  eventId: string,
-  input: EventPlanDraftSaveAsTemplateInput,
-): Promise<EventPlanTemplate> {
-  return apiJson<EventPlanTemplate>(`/todo/events/${eventId}/plan-draft/save-as-template`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-}
-
-export function updateEventPlanDraftSourceTemplate(eventId: string): Promise<EventPlanTemplate> {
-  return apiJson<EventPlanTemplate>(`/todo/events/${eventId}/plan-draft/update-source-template`, {
-    method: 'POST',
-  });
-}
-
 export function listEventPlanTemplates(): Promise<EventPlanTemplate[]> {
   return apiJson<EventPlanTemplate[]>('/todo/event-plan-templates');
-}
-
-export function applyEventPlanTemplate(eventId: string, templateId: string): Promise<EventWorkbench> {
-  return apiJson<EventWorkbench>(`/todo/events/${eventId}/plan-draft/apply-template`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ template_id: templateId }),
-  });
 }
 
 export type EventPlanTemplateItemInput = {
