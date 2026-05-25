@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
-  HOME_ONBOARDING_STORAGE_KEY,
-  HOME_ONBOARDING_RESTART_EVENT,
-  ONBOARDING_EVENTS,
-  type OnboardingEventName,
+  FIRST_GUIDE_STORAGE_KEY,
+  FIRST_GUIDE_RESTART_EVENT,
+  FIRST_GUIDE_EVENTS,
+  type FirstGuideEventName,
 } from '../lib/onboardingEvents';
 
 type OnboardingStep = {
@@ -13,9 +13,11 @@ type OnboardingStep = {
   anchor: string;
   title: string;
   body: string;
-  waitFor: OnboardingEventName;
+  waitFor: FirstGuideEventName;
   placement?: 'top' | 'bottom' | 'left' | 'right';
 };
+
+type FirstGuidePhase = 'idle' | 'intro' | 'steps' | 'complete';
 
 type AnchorRect = {
   top: number;
@@ -30,7 +32,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'primary-event',
     title: '先从主事件开始',
     body: 'Ark 会围绕一个阶段目标组织安排、工作流和专注记录。先点击这里进入事件总览。',
-    waitFor: ONBOARDING_EVENTS.primaryEventOpened,
+    waitFor: FIRST_GUIDE_EVENTS.primaryEventOpened,
     placement: 'right',
   },
   {
@@ -38,7 +40,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-add-button',
     title: '创建你的第一个事件',
     body: '点击“添加事件”，用模板快速生成一套可执行的学习安排。',
-    waitFor: ONBOARDING_EVENTS.addEventOpened,
+    waitFor: FIRST_GUIDE_EVENTS.addEventOpened,
     placement: 'top',
   },
   {
@@ -46,7 +48,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-store-button',
     title: '从事件商店选择模板',
     body: '这里有内置事件模板。点击“事件商店”，选择适合当前目标的模板。',
-    waitFor: ONBOARDING_EVENTS.eventStoreOpened,
+    waitFor: FIRST_GUIDE_EVENTS.eventStoreOpened,
     placement: 'bottom',
   },
   {
@@ -54,7 +56,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-store-template-kaoyan',
     title: '查看考研英语模板',
     body: '点击模板先查看内容。这个模板会带出事件、安排和工作流，让你直接看到 Ark 的完整使用链路。',
-    waitFor: ONBOARDING_EVENTS.storeTemplateSelected,
+    waitFor: FIRST_GUIDE_EVENTS.storeTemplateSelected,
     placement: 'left',
   },
   {
@@ -62,7 +64,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-store-save-selected',
     title: '保存到我的模板',
     body: '确认预览内容后，点击弹窗里的“保存”，把内置模板保存到你的事件模板中。',
-    waitFor: ONBOARDING_EVENTS.storeTemplateSaved,
+    waitFor: FIRST_GUIDE_EVENTS.storeTemplateSaved,
     placement: 'left',
   },
   {
@@ -70,7 +72,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-template-apply-button',
     title: '套用刚保存的模板',
     body: '回到添加事件窗口后，点击“套用模板”，表单会自动填入事件、安排和工作流草案。',
-    waitFor: ONBOARDING_EVENTS.templateApplied,
+    waitFor: FIRST_GUIDE_EVENTS.templateApplied,
     placement: 'bottom',
   },
   {
@@ -78,7 +80,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-create-button',
     title: '确认并创建事件',
     body: '模板内容已经填好。向下滑到底部，点击“创建事件”，把它变成你的正式计划。',
-    waitFor: ONBOARDING_EVENTS.eventCreated,
+    waitFor: FIRST_GUIDE_EVENTS.eventCreated,
     placement: 'top',
   },
   {
@@ -86,7 +88,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'event-overview-close',
     title: '回到首页查看结果',
     body: '事件已经创建完成。关闭事件总览，回到首页看看它带来的安排和工作流。',
-    waitFor: ONBOARDING_EVENTS.eventOverviewClosed,
+    waitFor: FIRST_GUIDE_EVENTS.eventOverviewClosed,
     placement: 'left',
   },
   {
@@ -94,7 +96,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'home-arrangements',
     title: '模板已经生成安排',
     body: '点击首页右侧的“安排”，可以看到新事件生成的任务和日程。',
-    waitFor: ONBOARDING_EVENTS.arrangementsOpened,
+    waitFor: FIRST_GUIDE_EVENTS.arrangementsOpened,
     placement: 'left',
   },
   {
@@ -102,7 +104,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'arrangements-close',
     title: '先回到首页',
     body: '看完模板生成的安排后，关闭安排管理，继续查看对应的工作流。',
-    waitFor: ONBOARDING_EVENTS.arrangementsClosed,
+    waitFor: FIRST_GUIDE_EVENTS.arrangementsClosed,
     placement: 'left',
   },
   {
@@ -110,7 +112,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'workflow-settings-button',
     title: '模板也生成了工作流',
     body: '点击第二行工作流板块右侧的齿轮，可以看到模板创建的专注流程。',
-    waitFor: ONBOARDING_EVENTS.workflowSettingsOpened,
+    waitFor: FIRST_GUIDE_EVENTS.workflowSettingsOpened,
     placement: 'left',
   },
   {
@@ -118,7 +120,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'workflow-settings-close',
     title: '回到首页启动它',
     body: '确认工作流已经生成后，关闭工作流预设窗口，准备开始第一轮专注。',
-    waitFor: ONBOARDING_EVENTS.workflowSettingsClosed,
+    waitFor: FIRST_GUIDE_EVENTS.workflowSettingsClosed,
     placement: 'left',
   },
   {
@@ -126,7 +128,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'workflow-start-button',
     title: '从一次专注开始推进',
     body: '点击“开始工作流”，Ark 会进入这个事件对应的专注节奏。',
-    waitFor: ONBOARDING_EVENTS.workflowStarted,
+    waitFor: FIRST_GUIDE_EVENTS.workflowStarted,
     placement: 'left',
   },
   {
@@ -134,7 +136,7 @@ const STEPS: OnboardingStep[] = [
     anchor: 'focus-work-complete-round',
     title: '完成本轮专注',
     body: '在专注工作弹窗里点击“结束本轮专注”，这会结束当前阶段并回到工作流节奏。',
-    waitFor: ONBOARDING_EVENTS.workflowPhaseEnded,
+    waitFor: FIRST_GUIDE_EVENTS.workflowPhaseEnded,
     placement: 'bottom',
   },
   {
@@ -142,14 +144,14 @@ const STEPS: OnboardingStep[] = [
     anchor: 'workflow-stop-button',
     title: '随时可以结束工作流',
     body: '在运行态悬浮到右侧第一行第一个板块，点击右上角的结束按钮，就能退出本次工作流。',
-    waitFor: ONBOARDING_EVENTS.workflowStopped,
+    waitFor: FIRST_GUIDE_EVENTS.workflowStopped,
     placement: 'left',
   },
 ];
 
 function getStoredState(): string | null {
   if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(HOME_ONBOARDING_STORAGE_KEY);
+  return window.localStorage.getItem(FIRST_GUIDE_STORAGE_KEY);
 }
 
 function readAnchorRect(anchor: string): AnchorRect {
@@ -211,13 +213,16 @@ function getBubbleStyle(rect: AnchorRect, placement: OnboardingStep['placement']
 }
 
 export default function HomeOnboarding() {
-  const [isActive, setIsActive] = useState(() => getStoredState() !== 'done' && getStoredState() !== 'skipped');
+  const [phase, setPhase] = useState<FirstGuidePhase>(() => {
+    const storedState = getStoredState();
+    return storedState === 'done' || storedState === 'skipped' ? 'idle' : 'intro';
+  });
   const [stepIndex, setStepIndex] = useState(0);
   const [anchorRect, setAnchorRect] = useState<AnchorRect>(null);
   const step = STEPS[stepIndex];
 
   useEffect(() => {
-    if (!isActive || !step) return;
+    if (phase !== 'steps' || !step) return;
     const syncRect = () => setAnchorRect(readAnchorRect(step.anchor));
     syncRect();
     const frame = window.requestAnimationFrame(syncRect);
@@ -230,40 +235,41 @@ export default function HomeOnboarding() {
       window.removeEventListener('resize', syncRect);
       window.removeEventListener('scroll', syncRect, true);
     };
-  }, [isActive, step]);
+  }, [phase, step]);
 
   useEffect(() => {
-    if (!isActive || !step) return;
+    if (phase !== 'steps' || !step) return;
     const handler = () => {
       if (stepIndex >= STEPS.length - 1) {
-        window.localStorage.setItem(HOME_ONBOARDING_STORAGE_KEY, 'done');
-        setIsActive(false);
+        setAnchorRect(null);
+        setPhase('complete');
         return;
       }
       setStepIndex((current) => current + 1);
     };
     window.addEventListener(step.waitFor, handler);
     return () => window.removeEventListener(step.waitFor, handler);
-  }, [isActive, step, stepIndex]);
+  }, [phase, step, stepIndex]);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (phase === 'idle') return;
     const handler = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      window.localStorage.setItem(HOME_ONBOARDING_STORAGE_KEY, 'skipped');
-      setIsActive(false);
+      window.localStorage.setItem(FIRST_GUIDE_STORAGE_KEY, 'skipped');
+      setPhase('idle');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isActive]);
+  }, [phase]);
 
   useEffect(() => {
     const handler = () => {
       setStepIndex(0);
-      setIsActive(true);
+      setAnchorRect(null);
+      setPhase('intro');
     };
-    window.addEventListener(HOME_ONBOARDING_RESTART_EVENT, handler);
-    return () => window.removeEventListener(HOME_ONBOARDING_RESTART_EVENT, handler);
+    window.addEventListener(FIRST_GUIDE_RESTART_EVENT, handler);
+    return () => window.removeEventListener(FIRST_GUIDE_RESTART_EVENT, handler);
   }, []);
 
   const highlightStyle = useMemo<CSSProperties>(() => {
@@ -276,7 +282,87 @@ export default function HomeOnboarding() {
     };
   }, [anchorRect]);
 
-  if (!isActive || !step) return null;
+  if (phase === 'idle') return null;
+
+  if (phase === 'intro') {
+    return createPortal(
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-4" aria-live="polite">
+        <div
+          role="dialog"
+          aria-label="首次引导"
+          className="w-[420px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-[#101827]/95 p-5 text-white shadow-2xl backdrop-blur-md"
+        >
+          <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">首次引导</div>
+          <h2 className="mt-3 text-xl font-semibold">欢迎来到 Ark</h2>
+          <p className="mt-3 text-sm leading-6 text-white/70">
+            我会带你走一遍从创建事件、生成安排，到启动工作流的完整链路。
+          </p>
+          <p className="mt-2 text-sm leading-6 text-white/60">
+            全程只需要按提示点击，不会影响你之后自由使用。
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/65 transition hover:border-white/20 hover:text-white"
+              onClick={() => {
+                window.localStorage.setItem(FIRST_GUIDE_STORAGE_KEY, 'skipped');
+                setPhase('idle');
+              }}
+            >
+              稍后再说
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-200"
+              onClick={() => {
+                setStepIndex(0);
+                setPhase('steps');
+              }}
+            >
+              开始体验
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  if (phase === 'complete') {
+    return createPortal(
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-4" aria-live="polite">
+        <div
+          role="dialog"
+          aria-label="首次引导"
+          className="w-[460px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-[#101827]/95 p-5 text-white shadow-2xl backdrop-blur-md"
+        >
+          <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">首次引导</div>
+          <h2 className="mt-3 text-xl font-semibold">体验完成</h2>
+          <p className="mt-3 text-sm leading-6 text-white/70">
+            你刚刚走完了一条 Ark 的核心链路：事件会生成安排，安排可以进入工作流，工作流再把专注推进下去。
+          </p>
+          <p className="mt-2 text-sm leading-6 text-white/60">
+            之后你可以从导航栏的书本按钮随时重新打开这段引导。
+          </p>
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-200"
+              onClick={() => {
+                window.localStorage.setItem(FIRST_GUIDE_STORAGE_KEY, 'done');
+                setPhase('idle');
+              }}
+            >
+              知道了
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  if (!step) return null;
 
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[120]" aria-live="polite">
@@ -301,8 +387,8 @@ export default function HomeOnboarding() {
             type="button"
             className="pointer-events-auto rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/65 transition hover:border-white/20 hover:text-white"
             onClick={() => {
-              window.localStorage.setItem(HOME_ONBOARDING_STORAGE_KEY, 'skipped');
-              setIsActive(false);
+              window.localStorage.setItem(FIRST_GUIDE_STORAGE_KEY, 'skipped');
+              setPhase('idle');
             }}
           >
             稍后再说

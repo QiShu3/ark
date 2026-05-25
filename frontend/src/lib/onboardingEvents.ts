@@ -1,31 +1,40 @@
-export const HOME_ONBOARDING_STORAGE_KEY = 'ark-home-onboarding-v1';
-export const HOME_ONBOARDING_RESTART_EVENT = 'ark:onboarding-home-restart';
+export const FIRST_GUIDE_STORAGE_KEY = 'ark-first-guide-v1';
+export const FIRST_GUIDE_RESTART_EVENT = 'ark:first-guide-restart';
 
-export const ONBOARDING_EVENTS = {
-  primaryEventOpened: 'ark:onboarding-primary-event-opened',
-  addEventOpened: 'ark:onboarding-add-event-opened',
-  eventStoreOpened: 'ark:onboarding-event-store-opened',
-  storeTemplateSelected: 'ark:onboarding-store-template-selected',
-  storeTemplateSaved: 'ark:onboarding-store-template-saved',
-  templateApplied: 'ark:onboarding-template-applied',
-  eventCreated: 'ark:onboarding-event-created',
-  eventOverviewClosed: 'ark:onboarding-event-overview-closed',
-  arrangementsOpened: 'ark:onboarding-arrangements-opened',
-  arrangementsClosed: 'ark:onboarding-arrangements-closed',
-  workflowSettingsOpened: 'ark:onboarding-workflow-settings-opened',
-  workflowSettingsClosed: 'ark:onboarding-workflow-settings-closed',
-  workflowStarted: 'ark:onboarding-workflow-started',
-  workflowPhaseEnded: 'ark:onboarding-workflow-phase-ended',
-  workflowStopped: 'ark:onboarding-workflow-stopped',
+export const FIRST_GUIDE_EVENTS = {
+  primaryEventOpened: 'ark:first-guide-primary-event-opened',
+  addEventOpened: 'ark:first-guide-add-event-opened',
+  eventStoreOpened: 'ark:first-guide-event-store-opened',
+  storeTemplateSelected: 'ark:first-guide-store-template-selected',
+  storeTemplateSaved: 'ark:first-guide-store-template-saved',
+  templateApplied: 'ark:first-guide-template-applied',
+  eventCreated: 'ark:first-guide-event-created',
+  eventOverviewClosed: 'ark:first-guide-event-overview-closed',
+  arrangementsOpened: 'ark:first-guide-arrangements-opened',
+  arrangementsClosed: 'ark:first-guide-arrangements-closed',
+  workflowSettingsOpened: 'ark:first-guide-workflow-settings-opened',
+  workflowSettingsClosed: 'ark:first-guide-workflow-settings-closed',
+  workflowStarted: 'ark:first-guide-workflow-started',
+  workflowPhaseEnded: 'ark:first-guide-workflow-phase-ended',
+  workflowStopped: 'ark:first-guide-workflow-stopped',
 } as const;
 
-export type OnboardingEventName = (typeof ONBOARDING_EVENTS)[keyof typeof ONBOARDING_EVENTS];
+export const HOME_ONBOARDING_STORAGE_KEY = FIRST_GUIDE_STORAGE_KEY;
+export const HOME_ONBOARDING_RESTART_EVENT = FIRST_GUIDE_RESTART_EVENT;
+export const ONBOARDING_EVENTS = FIRST_GUIDE_EVENTS;
 
-export function dispatchOnboardingEvent(name: OnboardingEventName): void {
+export type FirstGuideEventName = (typeof FIRST_GUIDE_EVENTS)[keyof typeof FIRST_GUIDE_EVENTS];
+export type OnboardingEventName = FirstGuideEventName;
+
+export function dispatchFirstGuideEvent(name: FirstGuideEventName): void {
   window.dispatchEvent(new CustomEvent(name));
 }
 
-export function restartHomeOnboarding(): void {
-  window.localStorage.removeItem(HOME_ONBOARDING_STORAGE_KEY);
-  window.dispatchEvent(new CustomEvent(HOME_ONBOARDING_RESTART_EVENT));
+export const dispatchOnboardingEvent = dispatchFirstGuideEvent;
+
+export function restartFirstGuide(): void {
+  window.localStorage.removeItem(FIRST_GUIDE_STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(FIRST_GUIDE_RESTART_EVENT));
 }
+
+export const restartHomeOnboarding = restartFirstGuide;

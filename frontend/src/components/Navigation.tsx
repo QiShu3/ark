@@ -7,7 +7,7 @@ import { BookOpen, Calendar, LogOut } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
-import { restartHomeOnboarding } from '../lib/onboardingEvents';
+import { restartFirstGuide } from '../lib/onboardingEvents';
 
 function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
@@ -112,7 +112,7 @@ const Navigation: React.FC = () => {
 
   function handleRestartOnboarding() {
     if (focusNavigationLocked) return;
-    restartHomeOnboarding();
+    restartFirstGuide();
     navigate('/');
   }
 

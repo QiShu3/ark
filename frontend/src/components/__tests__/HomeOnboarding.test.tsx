@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import HomeOnboarding from '../HomeOnboarding';
-import { HOME_ONBOARDING_STORAGE_KEY, ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
+import { FIRST_GUIDE_EVENTS, FIRST_GUIDE_STORAGE_KEY } from '../../lib/onboardingEvents';
 
 function dispatchGuideEvent(name: string) {
   act(() => {
@@ -47,7 +47,7 @@ describe('HomeOnboarding', () => {
     );
 
     const host = screen.getByTestId('stacking-host');
-    const dialog = screen.getByRole('dialog', { name: '首次体验引导' });
+    const dialog = screen.getByRole('dialog', { name: '首次引导' });
     expect(host).not.toContainElement(dialog);
     expect(document.body).toContainElement(dialog);
   });
@@ -60,12 +60,16 @@ describe('HomeOnboarding', () => {
       </>,
     );
 
+    act(() => {
+      screen.getByRole('button', { name: '开始体验' }).click();
+    });
+
     const dialog = screen.getByRole('dialog', { name: '首次体验引导' });
     expect(dialog).toHaveClass('pointer-events-none');
     expect(screen.getByRole('button', { name: '稍后再说' })).toHaveClass('pointer-events-auto');
   });
 
-  it('progresses through the guided click path and stores completion', async () => {
+  it('starts with a greeting, progresses through the guided click path, and stores completion after the ending', async () => {
     render(
       <>
         {renderAnchors()}
@@ -73,55 +77,63 @@ describe('HomeOnboarding', () => {
       </>,
     );
 
+    expect(screen.getByRole('dialog', { name: '首次引导' })).toHaveTextContent('欢迎来到 Ark');
+    expect(window.localStorage.getItem(FIRST_GUIDE_STORAGE_KEY)).toBeNull();
+
+    await screen.getByRole('button', { name: '开始体验' }).click();
     expect(screen.getByRole('dialog', { name: '首次体验引导' })).toHaveTextContent('先从主事件开始');
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.primaryEventOpened);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.primaryEventOpened);
     expect(await screen.findByText('创建你的第一个事件')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.addEventOpened);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.addEventOpened);
     expect(await screen.findByText('从事件商店选择模板')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.eventStoreOpened);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.eventStoreOpened);
     expect(await screen.findByText('查看考研英语模板')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.storeTemplateSelected);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.storeTemplateSelected);
     expect(await screen.findByText('保存到我的模板')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.storeTemplateSaved);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.storeTemplateSaved);
     expect(await screen.findByText('套用刚保存的模板')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.templateApplied);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.templateApplied);
     expect(await screen.findByText('确认并创建事件')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.eventCreated);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.eventCreated);
     expect(await screen.findByText('回到首页查看结果')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.eventOverviewClosed);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.eventOverviewClosed);
     expect(await screen.findByText('模板已经生成安排')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.arrangementsOpened);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.arrangementsOpened);
     expect(await screen.findByText('先回到首页')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.arrangementsClosed);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.arrangementsClosed);
     expect(await screen.findByText('模板也生成了工作流')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.workflowSettingsOpened);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowSettingsOpened);
     expect(await screen.findByText('回到首页启动它')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.workflowSettingsClosed);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowSettingsClosed);
     expect(await screen.findByText('从一次专注开始推进')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.workflowStarted);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowStarted);
     expect(await screen.findByText('完成本轮专注')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.workflowPhaseEnded);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowPhaseEnded);
     expect(await screen.findByText('随时可以结束工作流')).toBeInTheDocument();
 
-    dispatchGuideEvent(ONBOARDING_EVENTS.workflowStopped);
+    dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowStopped);
+    expect(await screen.findByText('体验完成')).toBeInTheDocument();
+    expect(window.localStorage.getItem(FIRST_GUIDE_STORAGE_KEY)).toBeNull();
+
+    await screen.getByRole('button', { name: '知道了' }).click();
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: '首次体验引导' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: '首次引导' })).not.toBeInTheDocument();
     });
-    expect(window.localStorage.getItem(HOME_ONBOARDING_STORAGE_KEY)).toBe('done');
+    expect(window.localStorage.getItem(FIRST_GUIDE_STORAGE_KEY)).toBe('done');
   });
 });

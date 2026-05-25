@@ -2300,7 +2300,7 @@ const EventCountdownCard: React.FC = () => {
 
       {templateConflict ? (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
           onClick={() => setTemplateConflict(null)}
         >
           <div
