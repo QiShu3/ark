@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-25 10:33 · 9bad384 · fix(backend): initialize events table before tasks table references it
+
+- 用户提出的需求：
+  - “/goal  打包成Docker镜像并成功启动”
+
+- 本次完成的工作：
+  - 排查 Docker 容器冷启动时的数据库初始化异常：发现在纯净 Postgres 环境下，`backend/routes/todo/db.py` 中 `init_todo` 会在 `tasks` 表初始化时为其添加 `event_id` 外键约束（引用 `events(id)`），但 `events` 表的创建逻辑在函数后半部分，导致容器冷启动时出现 `UndefinedTableError: relation "events" does not exist` 报错崩溃。
+  - 进行了热重构，将 `events` 关系表极其索引、主副字段扩展的全部创建及迁移逻辑安全移至 `init_todo` 最顶部（`CREATE EXTENSION IF NOT EXISTS pgcrypto;` 之后），彻底解决由于外键约束引发的创建顺序死锁问题。
+  - 彻底清除历史卷（`docker-compose down -v`）后全新构建（`docker-compose build`）并冷启动，`db`、`backend`、`frontend` 均成功拉起，后端容器完美输出 `Application startup complete.`，数据库全部表结构自动生成且连接极速健康。
+  - 通过 CLI `curl` 进行了前后端健康检验，确认前端 Nginx 正常响应 200；反向代理与路由分发（`/auth/login`）成功路由至后端容器并抛出标准 FastAPI 422 字段验证错误，标志着 Docker 镜像已完全打包成功并顺畅服务。
+
+- 验证情况：
+  - `docker-compose ps` 确认所有容器（`ark-backend-1`, `ark-db-1`, `ark-frontend-1`）状态为正常（Up & healthy）。
+  - `docker-compose logs backend` 确认后端启动无任何 Traceback 或数据库连接报错，输出 `"Application startup complete."`。
+  - `curl -I http://localhost` 验证前端 Nginx 正常返回 HTTP/1.1 200 OK。
+  - `curl -i -X POST http://localhost/auth/login -H "Content-Type: application/json" -d "{}"` 验证 Nginx 完美反向代理至 FastAPI 后端，返回 FastAPI 预期的 422 字段缺失错误。
+
 ### 2026-05-25 08:42 · 1ba7b13 · fix(frontend): remove right panel workflow launcher
 
 - 用户提出的需求：
