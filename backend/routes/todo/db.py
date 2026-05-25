@@ -153,6 +153,33 @@ async def init_todo(app: Any) -> None:
 
     async with pool.acquire() as conn:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+        # Create events table first because tasks, focus_workflows, etc. reference it
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS events (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              name VARCHAR(255) NOT NULL,
+              start_date DATE,
+              due_at TIMESTAMPTZ NOT NULL,
+              is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS start_date DATE;")
+        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;")
+        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;")
+        await conn.execute("UPDATE events SET start_date = DATE(due_at AT TIME ZONE 'UTC') WHERE start_date IS NULL;")
+        await conn.execute("ALTER TABLE events ALTER COLUMN name SET NOT NULL;")
+        await conn.execute("ALTER TABLE events ALTER COLUMN start_date SET NOT NULL;")
+        await conn.execute("ALTER TABLE events ALTER COLUMN due_at SET NOT NULL;")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_user_due_at ON events(user_id, due_at ASC);")
+        await conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_events_primary_per_user ON events(user_id) WHERE is_primary = TRUE;"
+        )
+
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tasks (
@@ -694,31 +721,7 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE focus_logs ADD CONSTRAINT chk_focus_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time);"
         )
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS events (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              name VARCHAR(255) NOT NULL,
-              start_date DATE,
-              due_at TIMESTAMPTZ NOT NULL,
-              is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """
-        )
-        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS start_date DATE;")
-        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ;")
-        await conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;")
-        await conn.execute("UPDATE events SET start_date = DATE(due_at AT TIME ZONE 'UTC') WHERE start_date IS NULL;")
-        await conn.execute("ALTER TABLE events ALTER COLUMN name SET NOT NULL;")
-        await conn.execute("ALTER TABLE events ALTER COLUMN start_date SET NOT NULL;")
-        await conn.execute("ALTER TABLE events ALTER COLUMN due_at SET NOT NULL;")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_events_user_due_at ON events(user_id, due_at ASC);")
-        await conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uniq_events_primary_per_user ON events(user_id) WHERE is_primary = TRUE;"
-        )
+        # events table already created at the start of init_todo
         await conn.execute(
             "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS event_id UUID NULL REFERENCES events(id) ON DELETE CASCADE;"
         )
