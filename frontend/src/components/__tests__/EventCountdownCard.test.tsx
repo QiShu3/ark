@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 
 import EventCountdownCard from '../EventCountdownCard';
 import { apiJson } from '../../lib/api';
+import { ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
 
 vi.mock('../../lib/api', () => ({
   apiJson: vi.fn(),
@@ -1080,5 +1081,148 @@ describe('EventCountdownCard', () => {
 
     expect(await screen.findByRole('dialog', { name: '安排' })).toBeInTheDocument();
     expect(screen.getByText('毕业设计')).toBeInTheDocument();
+  });
+
+  it('selects and saves the kaoyan english event-store template for onboarding', async () => {
+    const user = userEvent.setup();
+    const storeTemplateSelected = vi.fn();
+    const storeTemplateSaved = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.storeTemplateSelected, storeTemplateSelected);
+    window.addEventListener(ONBOARDING_EVENTS.storeTemplateSaved, storeTemplateSaved);
+
+    const storeTemplate = {
+      id: 'store-kaoyan',
+      slug: 'kaoyan-english',
+      category: '考试',
+      sort_order: 1,
+      name: '考研英语',
+      description: '考研英语冲刺模板',
+      schedule_mode: 'before_due' as const,
+      default_event_name: '考研英语冲刺',
+      default_start_date: '2026-05-25',
+      default_due_at: '2026-12-20T10:00:00Z',
+      default_is_primary: true,
+      items: [],
+      app_configs: [],
+      workflows: [],
+      created_at: '2026-05-25T00:00:00Z',
+      updated_at: '2026-05-25T00:00:00Z',
+    };
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-template-store') return [storeTemplate];
+      if (url === '/todo/event-plan-templates' && !options?.method) return [];
+      if (url === '/todo/event-plan-templates' && options?.method === 'POST') {
+        const payload = JSON.parse(options.body || '{}');
+        return {
+          id: 'template-kaoyan',
+          user_id: 7,
+          ...payload,
+          items: [],
+          app_configs: [],
+          workflows: [],
+          created_at: '2026-05-25T00:00:00Z',
+          updated_at: '2026-05-25T00:00:00Z',
+        };
+      }
+      return {};
+    });
+
+    try {
+      render(<EventCountdownCard />);
+
+      await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+      await user.click(screen.getByRole('button', { name: '添加事件' }));
+      await user.click(screen.getByRole('button', { name: /事件商店/ }));
+      await user.click(await screen.findByRole('button', { name: /考研英语/ }));
+      await user.click(screen.getByRole('button', { name: '保存' }));
+
+      expect(storeTemplateSelected).toHaveBeenCalledTimes(1);
+      expect(storeTemplateSaved).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText('事件模板')).toHaveValue('template-kaoyan');
+    } finally {
+      window.removeEventListener(ONBOARDING_EVENTS.storeTemplateSelected, storeTemplateSelected);
+      window.removeEventListener(ONBOARDING_EVENTS.storeTemplateSaved, storeTemplateSaved);
+    }
+  });
+
+  it('continues onboarding when saving an existing event-store template updates the conflict', async () => {
+    const user = userEvent.setup();
+    const storeTemplateSaved = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.storeTemplateSaved, storeTemplateSaved);
+
+    const existingTemplate = {
+      id: 'template-kaoyan',
+      user_id: 7,
+      name: '考研英语',
+      description: null,
+      schedule_mode: 'before_due' as const,
+      default_event_name: '旧考研英语',
+      default_start_date: null,
+      default_due_at: null,
+      default_is_primary: false,
+      items: [],
+      app_configs: [],
+      workflows: [],
+      created_at: '2026-05-25T00:00:00Z',
+      updated_at: '2026-05-25T00:00:00Z',
+    };
+    const storeTemplate = {
+      id: 'store-kaoyan',
+      slug: 'kaoyan-english',
+      category: '考试',
+      sort_order: 1,
+      name: '考研英语',
+      description: '考研英语冲刺模板',
+      schedule_mode: 'before_due' as const,
+      default_event_name: '考研英语冲刺',
+      default_start_date: '2026-05-25',
+      default_due_at: '2026-12-20T10:00:00Z',
+      default_is_primary: true,
+      items: [],
+      app_configs: [],
+      workflows: [],
+      created_at: '2026-05-25T00:00:00Z',
+      updated_at: '2026-05-25T00:00:00Z',
+    };
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { body?: string; method?: string }) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-template-store') return [storeTemplate];
+      if (url === '/todo/event-plan-templates' && !options?.method) return [existingTemplate];
+      if (url === '/todo/event-plan-templates/template-kaoyan' && options?.method === 'PATCH') {
+        return {
+          ...existingTemplate,
+          ...JSON.parse(options.body || '{}'),
+          updated_at: '2026-05-25T01:00:00Z',
+        };
+      }
+      return {};
+    });
+
+    try {
+      render(<EventCountdownCard />);
+
+      await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+      await user.click(screen.getByRole('button', { name: '添加事件' }));
+      await user.click(screen.getByRole('button', { name: /事件商店/ }));
+      await user.click(await screen.findByRole('button', { name: /考研英语/ }));
+      const storeSaveButton = screen.getByRole('button', { name: '保存' });
+      expect(storeSaveButton).toHaveAttribute('data-onboarding-anchor', 'event-store-save-selected');
+      await user.click(storeSaveButton);
+
+      const conflictDialog = await screen.findByRole('dialog', { name: '同名模板已存在' });
+      const updateButton = within(conflictDialog).getByRole('button', { name: '更新模板' });
+      expect(updateButton).toHaveAttribute('data-onboarding-anchor', 'event-store-save-selected');
+      await user.click(updateButton);
+
+      expect(storeTemplateSaved).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText('事件模板')).toHaveValue('template-kaoyan');
+    } finally {
+      window.removeEventListener(ONBOARDING_EVENTS.storeTemplateSaved, storeTemplateSaved);
+    }
   });
 });

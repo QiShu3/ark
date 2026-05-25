@@ -33,6 +33,7 @@ import {
 import { fetchVocabDecks, initializeVocabAppTask } from '../lib/vocab/api';
 import { initializeERCAppTask, initializeERCPracticeAppTask } from '../lib/erc/api';
 import { apiJson } from '../lib/api';
+import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import type { VocabDeck } from '../lib/vocab/types';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import WorkflowPresetModal from './WorkflowPresetModal';
@@ -99,6 +100,7 @@ type CreateArrangementEditorState = CreateWorkbenchItemState & {
 type TemplateConflictState = {
   template: EventPlanTemplate;
   payload: EventPlanTemplateInput;
+  source: 'manual' | 'store';
 };
 
 const CREATE_EVENT_DEFAULTS: EventFormState = {
@@ -134,6 +136,7 @@ const EventCountdownCard: React.FC = () => {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [showTemplateStore, setShowTemplateStore] = useState(false);
   const [storeTemplates, setStoreTemplates] = useState<EventTemplateStoreTemplate[]>([]);
+  const [selectedStoreTemplateId, setSelectedStoreTemplateId] = useState<string | null>(null);
   const [loadingTemplateStore, setLoadingTemplateStore] = useState(false);
   const [savingStoreTemplateId, setSavingStoreTemplateId] = useState<string | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -382,6 +385,7 @@ const EventCountdownCard: React.FC = () => {
       return;
     }
     applyTemplateToCreateForm(template);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.templateApplied);
   }
 
   function removeCreateWorkbenchItem(index: number): void {
@@ -685,6 +689,7 @@ const EventCountdownCard: React.FC = () => {
     setShowCreateEditor(true);
     setError(null);
     setTemplateStatus(null);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.addEventOpened);
   }
 
   function cancelCreate(): void {
@@ -697,6 +702,7 @@ const EventCountdownCard: React.FC = () => {
     setShowModal(false);
     cancelCreate();
     setError(null);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.eventOverviewClosed);
   }
 
   function buildCreatePayload(): EventCreateInput | null {
@@ -902,7 +908,7 @@ const EventCountdownCard: React.FC = () => {
       const templates = await listEventPlanTemplates();
       const sameNameTemplate = templates.find((template) => template.name.trim() === payload.name);
       if (sameNameTemplate) {
-        setTemplateConflict({ template: sameNameTemplate, payload });
+        setTemplateConflict({ template: sameNameTemplate, payload, source: 'manual' });
         return;
       }
       const createdTemplate = await createEventPlanTemplate(payload);
@@ -921,8 +927,12 @@ const EventCountdownCard: React.FC = () => {
     setTemplateStatus(null);
     try {
       const createdTemplate = await createEventPlanTemplate(templateConflict.payload);
+      const source = templateConflict.source;
       setTemplateConflict(null);
       rememberSavedTemplate(createdTemplate, '已保存为模板');
+      if (source === 'store') {
+        dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSaved);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存模板失败');
     } finally {
@@ -937,8 +947,12 @@ const EventCountdownCard: React.FC = () => {
     setTemplateStatus(null);
     try {
       const updatedTemplate = await updateEventPlanTemplate(templateConflict.template.id, templateConflict.payload);
+      const source = templateConflict.source;
       setTemplateConflict(null);
       rememberSavedTemplate(updatedTemplate, '已更新模板');
+      if (source === 'store') {
+        dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSaved);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新模板失败');
     } finally {
@@ -958,11 +972,12 @@ const EventCountdownCard: React.FC = () => {
       setTemplates(Array.isArray(nextTemplates) ? nextTemplates : []);
       const sameNameTemplate = nextTemplates.find((item) => item.name.trim() === payload.name.trim());
       if (sameNameTemplate) {
-        setTemplateConflict({ template: sameNameTemplate, payload });
+        setTemplateConflict({ template: sameNameTemplate, payload, source: 'store' });
         return;
       }
       const createdTemplate = await createEventPlanTemplate(payload);
       rememberSavedTemplate(createdTemplate, '已保存到我的事件模板');
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSaved);
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存模板失败');
     } finally {
@@ -1060,6 +1075,7 @@ const EventCountdownCard: React.FC = () => {
       }
 
       await finishCreatedEvent();
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.eventCreated);
       if (payload.is_primary || workflowDrafts.length > 0) {
         window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       }
@@ -1647,7 +1663,9 @@ const EventCountdownCard: React.FC = () => {
           setError(null);
           setShowCreateEditor(false);
           setShowModal(true);
+          dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
         }}
+        data-onboarding-anchor="primary-event"
         className="absolute left-12 top-24 z-20 w-44 h-44 rounded-full border-[6px] border-white/30 bg-black/15 flex flex-col items-center justify-center text-white/90 shadow-[0_0_15px_rgba(255,255,255,0.2)] backdrop-blur-sm transition-colors hover:bg-black/30"
       >
         <span className="text-sm tracking-[0.35em] uppercase text-white/60">
@@ -1674,6 +1692,7 @@ const EventCountdownCard: React.FC = () => {
                 {showCreateEditor ? '添加事件' : '事件总览'}
               </h3>
               <button
+                data-onboarding-anchor="event-overview-close"
                 onClick={closeModal}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
               >
@@ -1713,9 +1732,12 @@ const EventCountdownCard: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setShowTemplateStore(true);
+                            setSelectedStoreTemplateId(null);
+                            dispatchOnboardingEvent(ONBOARDING_EVENTS.eventStoreOpened);
                             if (storeTemplates.length === 0) void loadTemplateStore();
                           }}
                           disabled={loadingTemplateStore}
+                          data-onboarding-anchor="event-store-button"
                           className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <ShoppingBag size={16} aria-hidden="true" />
@@ -1725,6 +1747,7 @@ const EventCountdownCard: React.FC = () => {
                           type="button"
                           onClick={handleApplyTemplate}
                           disabled={loadingTemplates || !selectedTemplateId}
+                          data-onboarding-anchor="event-template-apply-button"
                           className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           套用模板
@@ -1856,6 +1879,7 @@ const EventCountdownCard: React.FC = () => {
                     type="button"
                     onClick={beginCreate}
                     disabled={submitting}
+                    data-onboarding-anchor="event-add-button"
                     className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     添加事件
@@ -1890,6 +1914,7 @@ const EventCountdownCard: React.FC = () => {
                     type="button"
                     onClick={() => void handleCreateEvent()}
                     disabled={submitting || savingTemplate}
+                    data-onboarding-anchor="event-create-button"
                     className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {submitting ? '提交中...' : '创建事件'}
@@ -1978,9 +2003,27 @@ const EventCountdownCard: React.FC = () => {
                       <h4 className="text-sm font-medium text-white/70">{category}</h4>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {categoryTemplates.map((template) => (
+                          /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */
                           <article
                             key={template.id}
-                            className="rounded-xl border border-white/10 bg-white/[0.04] p-4"
+                            role="button"
+                            tabIndex={0}
+                            data-onboarding-anchor={template.name.includes('考研英语') ? 'event-store-template-kaoyan' : undefined}
+                            onClick={() => {
+                              setSelectedStoreTemplateId(template.id);
+                              dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSelected);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ') return;
+                              event.preventDefault();
+                              setSelectedStoreTemplateId(template.id);
+                              dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSelected);
+                            }}
+                            className={`rounded-xl border p-4 transition-colors ${
+                              selectedStoreTemplateId === template.id
+                                ? 'border-cyan-300/60 bg-cyan-300/10'
+                                : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -1991,8 +2034,13 @@ const EventCountdownCard: React.FC = () => {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => void handleSaveStoreTemplate(template)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedStoreTemplateId(template.id);
+                                  void handleSaveStoreTemplate(template);
+                                }}
                                 disabled={savingTemplate || savingStoreTemplateId === template.id}
+                                data-onboarding-anchor={selectedStoreTemplateId === template.id && !templateConflict ? 'event-store-save-selected' : undefined}
                                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <Save size={15} aria-hidden="true" />
@@ -2066,6 +2114,7 @@ const EventCountdownCard: React.FC = () => {
                 type="button"
                 onClick={() => void updateConflictTemplate()}
                 disabled={savingTemplate}
+                data-onboarding-anchor={templateConflict.source === 'store' ? 'event-store-save-selected' : undefined}
                 className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 更新模板

@@ -75,6 +75,7 @@ export default function FocusWorkModalShell({
               type="button"
               onClick={onCompleteRound}
               disabled={busy}
+              data-onboarding-anchor="focus-work-complete-round"
               className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm text-blue-100 transition hover:border-blue-300/32 hover:bg-blue-300/16 disabled:cursor-not-allowed disabled:opacity-50"
             >
               结束本轮专注

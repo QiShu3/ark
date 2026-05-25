@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FocusWorkProvider from '../focus-work/FocusWorkProvider';
+import { ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
 
 const { apiJson } = vi.hoisted(() => ({
   apiJson: vi.fn(),
@@ -155,6 +156,8 @@ describe('FocusWorkProvider', () => {
 
   it('ends an app-managed focus round without completing the app task', async () => {
     const user = userEvent.setup();
+    const phaseEnded = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, phaseEnded);
     mockCurrentWorkflow({
       task_id: 'task-vocab',
       task_title: '今日单词',
@@ -167,27 +170,34 @@ describe('FocusWorkProvider', () => {
       pending_task_selection: false,
     });
 
-    render(
-      <FocusWorkProvider>
-        <div>App</div>
-      </FocusWorkProvider>,
-    );
-    await user.click(await screen.findByRole('button', { name: '结束本轮专注' }));
+    try {
+      render(
+        <FocusWorkProvider>
+          <div>App</div>
+        </FocusWorkProvider>,
+      );
+      const completeRoundButton = await screen.findByRole('button', { name: '结束本轮专注' });
+      expect(completeRoundButton).toHaveAttribute('data-onboarding-anchor', 'focus-work-complete-round');
+      await user.click(completeRoundButton);
 
-    expect(apiJson).toHaveBeenCalledWith(
-      '/todo/focus/workflow/focus-work-result',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          focus_work_type: 'vocab_today',
-          result: 'completed',
-          progress_snapshot: {
-            completedTask: false,
-          },
+      expect(apiJson).toHaveBeenCalledWith(
+        '/todo/focus/workflow/focus-work-result',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            focus_work_type: 'vocab_today',
+            result: 'completed',
+            progress_snapshot: {
+              completedTask: false,
+            },
+          }),
         }),
-      }),
-    );
-    expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
+      );
+      expect(phaseEnded).toHaveBeenCalledTimes(1);
+      expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
+    } finally {
+      window.removeEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, phaseEnded);
+    }
   });
 
   it('resumes paused app-managed focus work from the modal shell', async () => {

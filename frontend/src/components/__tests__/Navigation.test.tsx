@@ -7,6 +7,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import Navigation from '../Navigation';
 import { apiJson, checkIn, getCheckInStatus } from '../../lib/api';
 import { useAuthStore } from '../../lib/auth';
+import { HOME_ONBOARDING_RESTART_EVENT, HOME_ONBOARDING_STORAGE_KEY } from '../../lib/onboardingEvents';
 
 vi.mock('canvas-confetti', () => ({
   default: vi.fn(),
@@ -79,11 +80,13 @@ describe('Navigation', () => {
     expect(screen.getByRole('button', { name: 'Apps' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'About' })).toBeDisabled();
     expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
+    expect(screen.getByLabelText('重新进入首次体验引导')).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Home' }));
     await user.click(screen.getByRole('button', { name: 'Apps' }));
     await user.click(screen.getByRole('button', { name: 'About' }));
     await user.click(screen.getByLabelText('打开导航栏日历'));
+    await user.click(screen.getByLabelText('重新进入首次体验引导'));
 
     expect(screen.getByTestId('current-path')).toHaveTextContent('/vocab');
     expect(screen.queryByRole('dialog', { name: '多周安排日历' })).not.toBeInTheDocument();
@@ -124,5 +127,25 @@ describe('Navigation', () => {
     expect(useAuthStore.getState().expiresAt).toBeNull();
     expect(useAuthStore.getState().user).toBeNull();
     expect(screen.getByTestId('current-path')).toHaveTextContent('/login');
+  });
+
+  it('adds a book entry beside the brand to restart the first-experience guide', async () => {
+    const user = userEvent.setup();
+    const restartListener = vi.fn();
+    mockApiJson.mockResolvedValue(null);
+    window.localStorage.setItem(HOME_ONBOARDING_STORAGE_KEY, 'done');
+    window.addEventListener(HOME_ONBOARDING_RESTART_EVENT, restartListener);
+
+    try {
+      renderNavigation('/apps');
+
+      await user.click(screen.getByLabelText('重新进入首次体验引导'));
+
+      expect(window.localStorage.getItem(HOME_ONBOARDING_STORAGE_KEY)).toBeNull();
+      expect(restartListener).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('current-path')).toHaveTextContent('/');
+    } finally {
+      window.removeEventListener(HOME_ONBOARDING_RESTART_EVENT, restartListener);
+    }
   });
 });

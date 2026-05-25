@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
+import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import FocusStats from './FocusStats';
 import WorkflowProgressBar from './WorkflowProgressBar';
 import WorkflowPresetModal from './WorkflowPresetModal';
@@ -223,6 +224,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   function _closeWorkflowModal() {
     if (!_confirmWorkflowDiscard()) return;
     setShowWorkflowModal(false);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowSettingsClosed);
   }
 
   function _startNewWorkflowDraft() {
@@ -1131,6 +1133,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       setFocusWorkflow(res);
       await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow(), _loadTasks()]);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowStarted);
     } catch (e) {
       console.error('Failed to start workflow', e);
       alert(e instanceof Error ? e.message : '开始工作流失败');
@@ -1161,6 +1164,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       }
       await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowPhaseEnded);
     } catch (e) {
       console.error('Failed to confirm focus workflow', e);
       alert('阶段确认失败');
@@ -1201,6 +1205,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }
 
   async function _stopFocus() {
+    const wasWorkflowActive = !!focusWorkflow && focusWorkflow.state !== 'normal';
     try {
       await apiJson('/todo/focus/stop', {
         method: 'POST'
@@ -1208,6 +1213,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       setCurrentFocus(null);
       await Promise.all([_loadTasks(), _loadFocusWorkflow()]);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      if (wasWorkflowActive) {
+        dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowStopped);
+      }
     } catch (e) {
       console.error('Failed to stop focus', e);
     }
@@ -1730,6 +1738,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           await apiJson('/todo/focus/workflow/skip_phase', { method: 'POST' });
           await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
           window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+          dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowPhaseEnded);
         } catch (err) {
           console.error('Failed to skip phase', err);
         }
@@ -1895,7 +1904,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       displayTaskTitle = tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务';
     }
     const primaryActionLabel = isWorkflowActive
-      ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : '跳过阶段'))
+      ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : '结束本轮阶段'))
       : (isFocusing ? '结束专注' : (effectiveSelectedWorkflow ? '开始工作流' : '新建工作流'));
     const primaryActionSubtext = isFocusing || isWorkflowActive
       ? `${isWorkflowActive && isBreakPhase ? '' : '正在专注于：'}${displayTaskTitle}`
@@ -1912,6 +1921,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               role="button"
               tabIndex={0}
               aria-label={primaryActionAriaLabel}
+              data-onboarding-anchor={isWorkflowActive ? 'workflow-phase-action' : 'workflow-start-button'}
               className={`group relative flex-[2] bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${
                 isFocusing || isWorkflowActive ? 'bg-blue-500/10 border border-blue-500/20' : ''
               }`}
@@ -1926,10 +1936,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 }
               }}
             >
-              {/* 左上角结束工作流按钮 */}
+              {/* 右上角结束工作流按钮 */}
               {isWorkflowActive && (
                 <button
-                  className="absolute top-2 left-2 px-2 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100 z-10 w-10 flex items-center justify-center"
+                  aria-label="结束工作流"
+                  data-onboarding-anchor="workflow-stop-button"
+                  className="absolute top-2 right-2 px-2 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100 z-10 w-10 flex items-center justify-center"
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (confirm('当前正在工作流中，是否结束整个工作流？')) {
@@ -1959,9 +1971,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               </div>
               
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <span className="text-2xl font-bold">
-                  {primaryActionLabel}
-                </span>
+                <span className="text-2xl font-bold">{primaryActionLabel}</span>
                 {!isWorkflowActive && !isFocusing && effectiveSelectedWorkflow ? (
                   <button
                     type="button"
@@ -2004,7 +2014,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             </div>
           </div>
           <div 
-            onClick={() => setShowTaskModal(true)}
+            data-onboarding-anchor="home-arrangements"
+            onClick={() => {
+              setShowTaskModal(true);
+              dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsOpened);
+            }}
             className="flex-1 bg-white/5 rounded flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer relative group/task"
           >
             <span className="writing-vertical-rl text-lg font-bold tracking-widest">安排</span>
@@ -2219,7 +2233,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
                 <h2 className="text-xl font-bold text-white">安排管理</h2>
                 <button 
-                  onClick={() => setShowTaskModal(false)}
+                  aria-label="关闭安排管理"
+                  data-onboarding-anchor="arrangements-close"
+                  onClick={() => {
+                    setShowTaskModal(false);
+                    dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsClosed);
+                  }}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2990,10 +3009,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   </div>
                   {/* 右侧：设置弹窗 */}
                   <div
+                    data-onboarding-anchor="workflow-settings-button"
                     className="flex-[1] bg-white/5 hover:bg-white/15 transition-colors flex items-center justify-center cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
                       window.dispatchEvent(new Event('ark:open-workflow-modal'));
+                      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowSettingsOpened);
                     }}
                     title="工作流设置"
                   >

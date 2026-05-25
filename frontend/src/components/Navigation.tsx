@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { Calendar, LogOut } from 'lucide-react';
+import { BookOpen, Calendar, LogOut } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
+import { restartHomeOnboarding } from '../lib/onboardingEvents';
 
 function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
@@ -109,17 +110,35 @@ const Navigation: React.FC = () => {
     navigate('/login', { replace: true });
   }
 
+  function handleRestartOnboarding() {
+    if (focusNavigationLocked) return;
+    restartHomeOnboarding();
+    navigate('/');
+  }
+
   return (
     <>
       <nav className="fixed top-0 left-0 w-full h-16 bg-black/50 backdrop-blur-md text-white flex items-center px-6 z-50 border-b border-white/10">
-      <div 
-        className={`text-xl font-bold transition-colors ${
-          focusNavigationLocked ? 'cursor-not-allowed text-white/55' : 'cursor-pointer hover:text-blue-400'
-        }`}
-        aria-disabled={focusNavigationLocked}
-        onClick={() => navigateUnlessLocked('/')}
-      >
-        Ark Project
+      <div className="flex items-center gap-3">
+        <div
+          className={`text-xl font-bold transition-colors ${
+            focusNavigationLocked ? 'cursor-not-allowed text-white/55' : 'cursor-pointer hover:text-blue-400'
+          }`}
+          aria-disabled={focusNavigationLocked}
+          onClick={() => navigateUnlessLocked('/')}
+        >
+          Ark Project
+        </div>
+        <button
+          type="button"
+          aria-label="重新进入首次体验引导"
+          title="重新进入首次体验引导"
+          disabled={focusNavigationLocked}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:border-cyan-200/35 hover:bg-cyan-300/10 hover:text-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-200/60 disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/[0.03] disabled:text-white/30"
+          onClick={handleRestartOnboarding}
+        >
+          <BookOpen size={18} aria-hidden="true" />
+        </button>
       </div>
       <div className="flex-1 flex justify-center px-6">
         {workflowSnapshot ? <WorkflowNavProgress workflow={workflowSnapshot} /> : null}

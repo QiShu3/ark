@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PlaceholderCard from '../PlaceholderCard';
 import { apiJson } from '../../lib/api';
+import { ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
 
 vi.mock('../AchievementCard', () => ({
   default: () => <div data-testid="achievement-card">Achievement Card</div>,
@@ -210,6 +211,8 @@ describe('PlaceholderCard workflow UI', () => {
 
   it('shows the default workflow as the selected start target and starts it directly', async () => {
     const user = userEvent.setup();
+    const workflowStarted = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.workflowStarted, workflowStarted);
     const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
 
     mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
@@ -235,11 +238,117 @@ describe('PlaceholderCard workflow UI', () => {
     expect(await screen.findByText('开始工作流')).toBeInTheDocument();
     expect(screen.getByText('深度工作流')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '开始工作流 深度工作流' }));
+    try {
+      await user.click(screen.getByRole('button', { name: '开始工作流 深度工作流' }));
 
-    await waitFor(() => {
-      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/preset-default/start', { method: 'POST' });
+      await waitFor(() => {
+        expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/preset-default/start', { method: 'POST' });
+        expect(workflowStarted).toHaveBeenCalledTimes(1);
+      });
+    } finally {
+      window.removeEventListener(ONBOARDING_EVENTS.workflowStarted, workflowStarted);
+    }
+  });
+
+  it('dispatches onboarding progress when ending the current workflow phase', async () => {
+    const user = userEvent.setup();
+    const workflowPhaseEnded = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, workflowPhaseEnded);
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflow/current') {
+        return Promise.resolve({
+          state: 'focus',
+          workflow_name: '深度工作流',
+          current_phase_index: 0,
+          phases: [{ phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null }],
+          task_id: 'task-1',
+          task_title: '任务 A',
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: 1500,
+          phase_timer_mode: 'countdown',
+        });
+      }
+      if (path === '/todo/focus/workflow/skip_phase' && init?.method === 'POST') {
+        return Promise.resolve({
+          state: 'break',
+          task_id: null,
+          task_title: null,
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: 300,
+        });
+      }
+      return defaultApiResponse(path);
     });
+
+    try {
+      renderCard();
+
+      await user.click(await screen.findByRole('button', { name: /结束本轮阶段 任务 A/ }));
+
+      await waitFor(() => {
+        expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflow/skip_phase', { method: 'POST' });
+        expect(workflowPhaseEnded).toHaveBeenCalledTimes(1);
+      });
+    } finally {
+      window.removeEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, workflowPhaseEnded);
+    }
+  });
+
+  it('keeps ending the workflow on the first-row hover button and dispatches onboarding completion', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const workflowStopped = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.workflowStopped, workflowStopped);
+    let stopped = false;
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflow/current') {
+        return Promise.resolve(stopped
+          ? {
+              state: 'normal',
+              task_id: null,
+              task_title: null,
+              pending_confirmation: false,
+              pending_task_selection: false,
+              remaining_seconds: null,
+            }
+          : {
+              state: 'focus',
+              workflow_name: '深度工作流',
+              current_phase_index: 0,
+              phases: [{ phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null }],
+              task_id: 'task-1',
+              task_title: '任务 A',
+              pending_confirmation: false,
+              pending_task_selection: false,
+              remaining_seconds: 1500,
+              phase_timer_mode: 'countdown',
+            });
+      }
+      if (path === '/todo/focus/stop' && init?.method === 'POST') {
+        stopped = true;
+        return Promise.resolve({ ok: true });
+      }
+      return defaultApiResponse(path);
+    });
+
+    try {
+      renderCard();
+
+      await user.click(await screen.findByRole('button', { name: '结束工作流' }));
+
+      await waitFor(() => {
+        expect(confirmSpy).toHaveBeenCalledWith('当前正在工作流中，是否结束整个工作流？');
+        expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
+        expect(workflowStopped).toHaveBeenCalledTimes(1);
+      });
+    } finally {
+      window.removeEventListener(ONBOARDING_EVENTS.workflowStopped, workflowStopped);
+      confirmSpy.mockRestore();
+    }
   });
 
   it('uses the last selected workflow from localStorage before the default workflow', async () => {

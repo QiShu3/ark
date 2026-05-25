@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { apiJson } from '../../lib/api';
+import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
 import FocusWorkModalShell from './FocusWorkModalShell';
 import { getFocusWorkDefinition } from './focusWorkRegistry';
 import {
@@ -61,7 +62,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   }, []);
 
   async function startFocusWork(record: boolean) {
-    if (!pendingStart || busy) return;
+    if (!pendingStart || busy) return false;
     setBusy(true);
     try {
       const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/start-app-work', {
@@ -75,16 +76,18 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       setSnapshot(next);
       setPendingStart(null);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      return true;
     } catch (err) {
       console.error('Failed to start focus work', err);
       alert(err instanceof Error ? err.message : '进入专注工作失败');
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
   async function submitResult(result: FocusWorkResult, progressSnapshot: Record<string, unknown> = {}) {
-    if (!snapshot?.active_focus_work_type || busy) return;
+    if (!snapshot?.active_focus_work_type || busy) return false;
     setBusy(true);
     try {
       const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/focus-work-result', {
@@ -98,9 +101,11 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       });
       setSnapshot(next);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      return true;
     } catch (err) {
       console.error('Failed to submit focus work result', err);
       alert(err instanceof Error ? err.message : '提交专注结果失败');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -173,8 +178,11 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     void submitResult('abandoned');
   }
 
-  function completeCurrentFocusRound() {
-    void submitResult('completed', { completedTask: false });
+  async function completeCurrentFocusRound() {
+    const succeeded = await submitResult('completed', { completedTask: false });
+    if (succeeded) {
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowPhaseEnded);
+    }
   }
 
   return (
@@ -227,7 +235,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           busy={busy}
           onPause={() => void pauseFocusWork()}
           onResume={() => void resumeFocusWork()}
-          onCompleteRound={completeCurrentFocusRound}
+          onCompleteRound={() => void completeCurrentFocusRound()}
           onAbandon={abandonCurrentWork}
         >
           {activeDefinition.render({

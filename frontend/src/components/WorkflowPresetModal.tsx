@@ -140,6 +140,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
             </div>
             <button
               aria-label="关闭工作流预设弹窗"
+              data-onboarding-anchor="workflow-settings-close"
               onClick={onClose}
               className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
             >
