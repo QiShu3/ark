@@ -498,6 +498,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     : null;
 
   const defaultWorkflowName = selectedWorkflowDisplayName || '工作流';
+  const selectedWorkflowPhaseCount = effectiveSelectedWorkflow?.phases.length ?? 0;
 
   useEffect(() => {
     if (!selectedWorkflowPresetId) return;
@@ -2971,29 +2972,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 <AchievementCard />
               ) : mergePlaceholders ? (
                 <div className="flex w-full h-full rounded-lg overflow-hidden border border-white/10 group shadow-lg">
-                  {/* 左侧：一键运行 */}
+                  {/* 左侧：工作流状态 */}
                   <div
-                    className="flex-[3] bg-blue-500/10 hover:bg-blue-500/20 transition-colors flex items-center justify-center cursor-pointer border-r border-white/10 relative overflow-hidden"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // 尝试寻找未完成的专注任务，或者弹出提示
-                      const targetTask = _pickTodayFocusTask();
-                      if (targetTask) {
-                        _startFocus(targetTask.id);
-                      } else {
-                        alert('今日无待办任务，请先创建或安排任务');
-                      }
-                    }}
+                    className="flex-[3] bg-blue-500/10 flex items-center justify-center border-r border-white/10 relative overflow-hidden"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                      </div>
-                      <span className="font-bold text-white/90 text-sm tracking-wide">
-                        运行 {defaultWorkflowName}
+                    <div className="flex min-w-0 flex-col items-center gap-1 px-3 text-center">
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-blue-200/60">
+                        当前工作流
+                      </span>
+                      <span className="max-w-full truncate text-sm font-bold tracking-wide text-white/90">
+                        {defaultWorkflowName}
+                      </span>
+                      <span className="text-xs text-white/45">
+                        {effectiveSelectedWorkflow ? `${selectedWorkflowPhaseCount} 个阶段` : '尚未配置专注节奏'}
                       </span>
                     </div>
                   </div>

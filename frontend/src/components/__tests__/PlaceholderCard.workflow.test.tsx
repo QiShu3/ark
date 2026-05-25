@@ -413,7 +413,7 @@ describe('PlaceholderCard workflow UI', () => {
     ]);
   });
 
-  it('keeps the inactive split-card workflow launcher outside the main task entry unchanged', async () => {
+  it('keeps the inactive split-card workflow status outside the main task entry', async () => {
     const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
 
     mockApiJson.mockImplementation((path: string) => {
@@ -430,7 +430,10 @@ describe('PlaceholderCard workflow UI', () => {
     await waitFor(() => {
       expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows');
     });
-    expect(screen.getByText('运行 深度工作流')).toBeInTheDocument();
+    expect(screen.getByText('当前工作流')).toBeInTheDocument();
+    expect(screen.getByText('深度工作流')).toBeInTheDocument();
+    expect(screen.getByText('2 个阶段')).toBeInTheDocument();
+    expect(screen.queryByText('运行 深度工作流')).not.toBeInTheDocument();
     expect(screen.getByTitle('工作流设置')).toBeInTheDocument();
   });
 
