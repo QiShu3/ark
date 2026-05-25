@@ -82,7 +82,7 @@ describe('HomeOnboarding', () => {
     expect(await screen.findByText('从事件商店选择模板')).toBeInTheDocument();
 
     dispatchGuideEvent(ONBOARDING_EVENTS.eventStoreOpened);
-    expect(await screen.findByText('选择考研英语模板')).toBeInTheDocument();
+    expect(await screen.findByText('查看考研英语模板')).toBeInTheDocument();
 
     dispatchGuideEvent(ONBOARDING_EVENTS.storeTemplateSelected);
     expect(await screen.findByText('保存到我的模板')).toBeInTheDocument();

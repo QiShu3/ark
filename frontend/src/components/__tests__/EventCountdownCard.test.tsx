@@ -311,6 +311,72 @@ describe('EventCountdownCard', () => {
     expect(screen.queryByRole('dialog', { name: '事件商店' })).not.toBeInTheDocument();
   });
 
+  it('reloads event-store templates each time the store opens', async () => {
+    const user = userEvent.setup();
+    let storeLoads = 0;
+    const makeStoreTemplate = (deckId: string, deckName: string) => ({
+      id: 'store-kaoyan',
+      slug: 'kaoyan-english',
+      category: '考试',
+      name: '考研英语',
+      description: '考研英语冲刺模板',
+      schedule_mode: 'before_due' as const,
+      default_event_name: '考研英语',
+      default_start_date: '2026-05-25',
+      default_due_at: '2026-12-26T00:00:00Z',
+      default_is_primary: true,
+      sort_order: 1,
+      items: [],
+      app_configs: [
+        {
+          client_id: 'vocab_today',
+          app_type: 'vocab_today' as const,
+          config: {
+            deckId,
+            deckName,
+            dailyTargetCount: 20,
+            defaultFocusDuration: 1500,
+            addToTodayPlan: true,
+          },
+        },
+      ],
+      workflows: [],
+      created_at: '2026-05-25T00:00:00Z',
+      updated_at: '2026-05-25T00:00:00Z',
+    });
+
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') throw new Error('主事件不存在');
+      if (url === '/todo/events') return [];
+      if (url === '/todo/event-plan-templates') return [];
+      if (url === '/todo/event-template-store') {
+        storeLoads += 1;
+        return [storeLoads === 1 ? makeStoreTemplate('bec', 'bec') : makeStoreTemplate('kaoyan', '考研')];
+      }
+      return {};
+    });
+
+    render(<EventCountdownCard />);
+
+    await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
+    await user.click(screen.getByRole('button', { name: '添加事件' }));
+    await user.click(screen.getByRole('button', { name: /事件商店/ }));
+    await user.click(await screen.findByRole('button', { name: /考研英语/ }));
+
+    let previewDialog = await screen.findByRole('dialog', { name: '考研英语 模板内容' });
+    expect(within(previewDialog).getByText('词书 bec · 每日 20 词 · 专注 25 分钟')).toBeInTheDocument();
+    await user.click(within(previewDialog).getByRole('button', { name: '关闭' }));
+    await user.click(screen.getByRole('button', { name: '关闭事件商店' }));
+
+    await user.click(screen.getByRole('button', { name: /事件商店/ }));
+    await user.click(await screen.findByRole('button', { name: /考研英语/ }));
+
+    previewDialog = await screen.findByRole('dialog', { name: '考研英语 模板内容' });
+    expect(within(previewDialog).getByText('词书 考研 · 每日 20 词 · 专注 25 分钟')).toBeInTheDocument();
+    expect(within(previewDialog).queryByText('词书 bec · 每日 20 词 · 专注 25 分钟')).not.toBeInTheDocument();
+    expect(storeLoads).toBe(2);
+  });
+
   it('applies an event template to the add-event editor', async () => {
     const user = userEvent.setup();
     const template = {
@@ -1103,8 +1169,36 @@ describe('EventCountdownCard', () => {
       default_due_at: '2026-12-20T10:00:00Z',
       default_is_primary: true,
       items: [],
-      app_configs: [],
-      workflows: [],
+      app_configs: [
+        {
+          client_id: 'vocab_today',
+          app_type: 'vocab_today' as const,
+          config: {
+            deckId: 'kaoyan',
+            deckName: '考研',
+            dailyTargetCount: 20,
+            defaultFocusDuration: 1500,
+            addToTodayPlan: true,
+          },
+        },
+      ],
+      workflows: [
+        {
+          client_id: 'workflow-kaoyan',
+          name: '考研英语',
+          focus_duration: 1500,
+          break_duration: 300,
+          default_focus_timer_mode: 'countdown' as const,
+          phases: [
+            {
+              phase_type: 'focus' as const,
+              duration: 1500,
+              timer_mode: 'countdown' as const,
+              task_id: 'vocab_today',
+            },
+          ],
+        },
+      ],
       created_at: '2026-05-25T00:00:00Z',
       updated_at: '2026-05-25T00:00:00Z',
     };
@@ -1136,8 +1230,16 @@ describe('EventCountdownCard', () => {
       await user.click(await screen.findByRole('button', { name: /未设置主事件/i }));
       await user.click(screen.getByRole('button', { name: '添加事件' }));
       await user.click(screen.getByRole('button', { name: /事件商店/ }));
+      const storeDialog = await screen.findByRole('dialog', { name: '事件商店' });
       await user.click(await screen.findByRole('button', { name: /考研英语/ }));
-      await user.click(screen.getByRole('button', { name: '保存' }));
+      const previewDialog = await screen.findByRole('dialog', { name: '考研英语 模板内容' });
+      expect(within(previewDialog).getByText('词书 考研 · 每日 20 词 · 专注 25 分钟')).toBeInTheDocument();
+      expect(within(previewDialog).getByText('1. 专注 25 分钟 · 今日单词')).toBeInTheDocument();
+      expect(within(previewDialog).queryByLabelText('事件名称')).not.toBeInTheDocument();
+      expect(within(storeDialog).getByRole('button', { name: '保存' })).not.toHaveAttribute(
+        'data-onboarding-anchor',
+      );
+      await user.click(within(previewDialog).getByRole('button', { name: '保存' }));
 
       expect(storeTemplateSelected).toHaveBeenCalledTimes(1);
       expect(storeTemplateSaved).toHaveBeenCalledTimes(1);
@@ -1210,7 +1312,8 @@ describe('EventCountdownCard', () => {
       await user.click(screen.getByRole('button', { name: '添加事件' }));
       await user.click(screen.getByRole('button', { name: /事件商店/ }));
       await user.click(await screen.findByRole('button', { name: /考研英语/ }));
-      const storeSaveButton = screen.getByRole('button', { name: '保存' });
+      const previewDialog = await screen.findByRole('dialog', { name: '考研英语 模板内容' });
+      const storeSaveButton = within(previewDialog).getByRole('button', { name: '保存' });
       expect(storeSaveButton).toHaveAttribute('data-onboarding-anchor', 'event-store-save-selected');
       await user.click(storeSaveButton);
 

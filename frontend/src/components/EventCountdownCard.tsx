@@ -137,6 +137,7 @@ const EventCountdownCard: React.FC = () => {
   const [showTemplateStore, setShowTemplateStore] = useState(false);
   const [storeTemplates, setStoreTemplates] = useState<EventTemplateStoreTemplate[]>([]);
   const [selectedStoreTemplateId, setSelectedStoreTemplateId] = useState<string | null>(null);
+  const [previewStoreTemplate, setPreviewStoreTemplate] = useState<EventTemplateStoreTemplate | null>(null);
   const [loadingTemplateStore, setLoadingTemplateStore] = useState(false);
   const [savingStoreTemplateId, setSavingStoreTemplateId] = useState<string | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -894,6 +895,7 @@ const EventCountdownCard: React.FC = () => {
     setSelectedTemplateId(template.id);
     setTemplateStatus(status);
     setShowTemplateStore(false);
+    setPreviewStoreTemplate(null);
   }
 
   async function handleSaveTemplate(): Promise<void> {
@@ -1008,6 +1010,12 @@ const EventCountdownCard: React.FC = () => {
     } finally {
       setDeletingTemplate(false);
     }
+  }
+
+  function openStoreTemplatePreview(template: EventTemplateStoreTemplate): void {
+    setSelectedStoreTemplateId(template.id);
+    setPreviewStoreTemplate(template);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSelected);
   }
 
   async function submitCreateEvent(): Promise<void> {
@@ -1201,6 +1209,54 @@ const EventCountdownCard: React.FC = () => {
       return `每日 ${app.config.dailyArticleTarget} 篇文章, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
     }
     return `范围: ${app.config.reviewScope === 'due' ? '到期复习' : app.config.reviewScope === 'mistakes' ? '错题复习' : '全部'}, 每日 ${app.config.dailyQuestionTarget} 题, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
+  }
+
+  function getStoreAppName(appType: string): string {
+    if (appType === 'vocab_today') return '今日单词';
+    if (appType === 'erc_practice') return '真题练习';
+    if (appType === 'erc_review') return '错题复习';
+    return appType;
+  }
+
+  function getStoreAppSummary(app: EventTemplateStoreTemplate['app_configs'][number]): string {
+    const config = app.config ?? {};
+    const focusDuration = typeof config.defaultFocusDuration === 'number'
+      ? `专注 ${Math.round(config.defaultFocusDuration / 60)} 分钟`
+      : null;
+    if (app.app_type === 'vocab_today') {
+      const deckName = typeof config.deckName === 'string' && config.deckName
+        ? config.deckName
+        : typeof config.deckId === 'string'
+          ? config.deckId
+          : '未设置';
+      const dailyTarget = typeof config.dailyTargetCount === 'number' ? `每日 ${config.dailyTargetCount} 词` : null;
+      return [`词书 ${deckName}`, dailyTarget, focusDuration].filter(Boolean).join(' · ');
+    }
+    if (app.app_type === 'erc_practice') {
+      const dailyTarget = typeof config.dailyArticleTarget === 'number' ? `每日 ${config.dailyArticleTarget} 篇文章` : null;
+      return [dailyTarget, focusDuration].filter(Boolean).join(' · ');
+    }
+    if (app.app_type === 'erc_review') {
+      const scope = config.reviewScope === 'due'
+        ? '到期复习'
+        : config.reviewScope === 'mistakes'
+          ? '错题复习'
+          : config.reviewScope === 'all'
+            ? '全部'
+            : null;
+      const dailyTarget = typeof config.dailyQuestionTarget === 'number' ? `每日 ${config.dailyQuestionTarget} 题` : null;
+      return [scope, dailyTarget, focusDuration].filter(Boolean).join(' · ');
+    }
+    return focusDuration ?? '应用配置';
+  }
+
+  function getStoreTemplateBindingName(template: EventTemplateStoreTemplate, taskId: string | null | undefined): string | null {
+    if (!taskId) return null;
+    const app = template.app_configs?.find((item) => item.client_id === taskId);
+    if (app) return getStoreAppName(app.app_type);
+    const workbenchItem = template.items.find((item) => item.details?.client_id === taskId);
+    if (workbenchItem) return workbenchItem.title;
+    return taskId;
   }
 
   function renderAppEditor() {
@@ -1733,8 +1789,9 @@ const EventCountdownCard: React.FC = () => {
                           onClick={() => {
                             setShowTemplateStore(true);
                             setSelectedStoreTemplateId(null);
+                            setPreviewStoreTemplate(null);
                             dispatchOnboardingEvent(ONBOARDING_EVENTS.eventStoreOpened);
-                            if (storeTemplates.length === 0) void loadTemplateStore();
+                            void loadTemplateStore();
                           }}
                           disabled={loadingTemplateStore}
                           data-onboarding-anchor="event-store-button"
@@ -1965,7 +2022,10 @@ const EventCountdownCard: React.FC = () => {
       {showTemplateStore ? (
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
-          onClick={() => setShowTemplateStore(false)}
+          onClick={() => {
+            setShowTemplateStore(false);
+            setPreviewStoreTemplate(null);
+          }}
         >
           <div
             role="dialog"
@@ -1982,7 +2042,10 @@ const EventCountdownCard: React.FC = () => {
               <button
                 type="button"
                 aria-label="关闭事件商店"
-                onClick={() => setShowTemplateStore(false)}
+                onClick={() => {
+                  setShowTemplateStore(false);
+                  setPreviewStoreTemplate(null);
+                }}
                 className="rounded-full p-2 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
               >
                 <X size={18} aria-hidden="true" />
@@ -2009,15 +2072,11 @@ const EventCountdownCard: React.FC = () => {
                             role="button"
                             tabIndex={0}
                             data-onboarding-anchor={template.name.includes('考研英语') ? 'event-store-template-kaoyan' : undefined}
-                            onClick={() => {
-                              setSelectedStoreTemplateId(template.id);
-                              dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSelected);
-                            }}
+                            onClick={() => openStoreTemplatePreview(template)}
                             onKeyDown={(event) => {
                               if (event.key !== 'Enter' && event.key !== ' ') return;
                               event.preventDefault();
-                              setSelectedStoreTemplateId(template.id);
-                              dispatchOnboardingEvent(ONBOARDING_EVENTS.storeTemplateSelected);
+                              openStoreTemplatePreview(template);
                             }}
                             className={`rounded-xl border p-4 transition-colors ${
                               selectedStoreTemplateId === template.id
@@ -2040,7 +2099,11 @@ const EventCountdownCard: React.FC = () => {
                                   void handleSaveStoreTemplate(template);
                                 }}
                                 disabled={savingTemplate || savingStoreTemplateId === template.id}
-                                data-onboarding-anchor={selectedStoreTemplateId === template.id && !templateConflict ? 'event-store-save-selected' : undefined}
+                                data-onboarding-anchor={
+                                  selectedStoreTemplateId === template.id && !templateConflict && !previewStoreTemplate
+                                    ? 'event-store-save-selected'
+                                    : undefined
+                                }
                                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 <Save size={15} aria-hidden="true" />
@@ -2071,6 +2134,165 @@ const EventCountdownCard: React.FC = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showTemplateStore && previewStoreTemplate ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+          onClick={() => setPreviewStoreTemplate(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${previewStoreTemplate.name} 模板内容`}
+            className="flex max-h-[84vh] w-[720px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#151923] text-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-cyan-200/80">{previewStoreTemplate.category || '通用'}</div>
+                <h3 className="mt-1 truncate text-lg font-semibold">{previewStoreTemplate.name}</h3>
+                {previewStoreTemplate.description ? (
+                  <p className="mt-2 text-sm leading-5 text-white/55">{previewStoreTemplate.description}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                aria-label="关闭模板内容"
+                onClick={() => setPreviewStoreTemplate(null)}
+                className="rounded-full p-2 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 overflow-y-auto px-5 py-4">
+              <section>
+                <h4 className="text-sm font-medium text-white/75">事件信息</h4>
+                <div className="mt-3 grid gap-2 text-sm text-white/60 sm:grid-cols-2">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                    名称：{previewStoreTemplate.default_event_name || previewStoreTemplate.name}
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                    模式：{previewStoreTemplate.schedule_mode === 'before_due' ? '按截止倒推' : '按开始顺推'}
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                    开始：{previewStoreTemplate.default_start_date || '未设置'}
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                    到期：{previewStoreTemplate.default_due_at ? formatEventDateTime(previewStoreTemplate.default_due_at) : '未设置'}
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h4 className="text-sm font-medium text-white/75">应用配置</h4>
+                {previewStoreTemplate.app_configs?.length ? (
+                  <div className="mt-3 grid gap-2">
+                    {previewStoreTemplate.app_configs.map((app) => (
+                      <div
+                        key={app.client_id}
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2"
+                      >
+                        <div className="text-sm font-medium text-white">{getStoreAppName(app.app_type)}</div>
+                        <div className="mt-1 text-xs text-white/50">{getStoreAppSummary(app)}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+                    暂无应用配置
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h4 className="text-sm font-medium text-white/75">工作台内容</h4>
+                {previewStoreTemplate.items.length ? (
+                  <div className="mt-3 grid gap-2">
+                    {previewStoreTemplate.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2"
+                      >
+                        <div className="text-sm font-medium text-white">
+                          {item.kind === 'task' ? '任务' : '日程'} · {item.title}
+                        </div>
+                        {item.content ? <div className="mt-1 text-xs text-white/50">{item.content}</div> : null}
+                        <div className="mt-1 text-xs text-white/40">相对天数 {item.offset_days}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+                    暂无工作台内容
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h4 className="text-sm font-medium text-white/75">工作流</h4>
+                {previewStoreTemplate.workflows?.length ? (
+                  <div className="mt-3 grid gap-3">
+                    {previewStoreTemplate.workflows.map((workflow) => (
+                      <div
+                        key={workflow.client_id}
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-white">{workflow.name}</div>
+                          <div className="text-xs text-white/45">
+                            {workflow.default_focus_timer_mode === 'countdown' ? '倒计时' : '正计时'}
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-2">
+                          {workflow.phases.map((phase, index) => {
+                            const bindingName = getStoreTemplateBindingName(previewStoreTemplate, phase.task_id);
+                            return (
+                              <div
+                                key={`${workflow.client_id}-${index}`}
+                                className="rounded-md bg-black/20 px-3 py-2 text-xs text-white/55"
+                              >
+                                {index + 1}. {phase.phase_type === 'focus' ? '专注' : '休息'}
+                                {' '}
+                                {Math.round(phase.duration / 60)} 分钟
+                                {bindingName ? ` · ${bindingName}` : ''}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+                    暂无工作流
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setPreviewStoreTemplate(null)}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white"
+              >
+                关闭
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveStoreTemplate(previewStoreTemplate)}
+                disabled={savingTemplate || savingStoreTemplateId === previewStoreTemplate.id}
+                data-onboarding-anchor={selectedStoreTemplateId === previewStoreTemplate.id && !templateConflict ? 'event-store-save-selected' : undefined}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save size={15} aria-hidden="true" />
+                {savingStoreTemplateId === previewStoreTemplate.id ? '保存中...' : '保存'}
+              </button>
             </div>
           </div>
         </div>
