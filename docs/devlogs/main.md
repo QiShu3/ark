@@ -2,6 +2,24 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-25 08:42 · 1ba7b13 · fix(frontend): remove right panel workflow launcher
+
+- 用户提出的需求：
+  - “我想去掉「运行 {工作流名}」入口，你有什么想法吗？”
+  - “可以，只更改左侧 3/4 内容，不更改右侧 1/4 的内容”
+  - “好，提交代码吧”
+
+- 本次完成的工作：
+  - 将首页右侧面板第二行左侧 3/4 从可点击的「运行 {工作流名}」入口改为静态工作流状态展示。
+  - 移除了该区域直接启动今日专注任务的点击逻辑和播放图标，保留当前工作流名称与阶段数提示。
+  - 保持右侧 1/4 齿轮设置入口不变，运行中的工作流进度条展示逻辑不变。
+  - 更新 `PlaceholderCard.workflow.test.tsx`，覆盖新静态状态文案并确认旧「运行」入口不再出现。
+
+- 验证情况：
+  - `cd frontend && pnpm test -- --run src/components/__tests__/PlaceholderCard.workflow.test.tsx`，1 个测试文件 / 19 个测试通过。
+  - `cd frontend && pnpm check`，TypeScript 检查通过。
+  - 当前环境提示 Node v22.18.0 与项目期望 Node 20.x 不一致，但前端测试和类型检查通过。
+
 ### 2026-05-24 23:47 · c592bba · feat: add event store template cleanup
 
 - 用户提出的需求：
