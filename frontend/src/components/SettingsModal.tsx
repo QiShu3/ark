@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, User, X, Upload, Loader2 } from 'lucide-react';
 import { useCustomizationStore, CustomizationSettings } from '../lib/customization';
 import { useAuthStore } from '../lib/auth';
-import { uploadFile, updateProfile, getUserUploads } from '../lib/api';
+import { uploadFile, updateProfile, getUserUploads, UserUpload } from '../lib/api';
 
 type SettingsModalProps = {
   open: boolean;
@@ -55,9 +55,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const [charaUploading, setCharaUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // 上传数量计数（每类最多 3 张）
-  const [bgCount, setBgCount] = useState(0);
-  const [charaCount, setCharaCount] = useState(0);
+  // 用户已上传图片列表
+  const [uploads, setUploads] = useState<UserUpload[]>([]);
+  const bgUploads = uploads.filter((u) => u.category === 'background');
+  const charaUploads = uploads.filter((u) => u.category === 'character');
 
   // File input refs
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -81,14 +82,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     }
   }, [open, currentSettings.backgroundUrl, currentSettings.backgroundBlur, currentSettings.backgroundOpacity, currentSettings.showCharacter, currentSettings.characterUrl, currentSettings.characterScale, currentSettings.avatarUrl]);
 
-  // 打开弹窗时获取上传数量
+  // 打开弹窗时获取已上传图片
   useEffect(() => {
     if (!open) return;
     getUserUploads()
-      .then((uploads) => {
-        setBgCount(uploads.filter((u) => u.category === 'background').length);
-        setCharaCount(uploads.filter((u) => u.category === 'character').length);
-      })
+      .then(setUploads)
       .catch(() => {});
   }, [open]);
 
@@ -148,7 +146,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     try {
       const { url } = await uploadFile(file, 'background');
       updateSettings({ backgroundUrl: url });
-      setBgCount((c) => c + 1);
+      setUploads((prev) => [{ url, category: 'background', created_at: new Date().toISOString() }, ...prev]);
     } catch (err) {
       console.error('Background upload failed:', err);
     } finally {
@@ -164,7 +162,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     try {
       const { url } = await uploadFile(file, 'character');
       updateSettings({ characterUrl: url });
-      setCharaCount((c) => c + 1);
+      setUploads((prev) => [{ url, category: 'character', created_at: new Date().toISOString() }, ...prev]);
     } catch (err) {
       console.error('Character upload failed:', err);
     } finally {
@@ -341,6 +339,36 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   </div>
                 </div>
 
+                {/* 已上传背景图 */}
+                {bgUploads.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium text-white/70">我的背景</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {bgUploads.map((upload) => {
+                        const isActive = currentSettings.backgroundUrl === upload.url;
+                        return (
+                          <button
+                            key={upload.url}
+                            type="button"
+                            onClick={() => updateSettings({ backgroundUrl: upload.url })}
+                            className={`group relative aspect-video overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                              isActive
+                                ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
+                                : 'border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            <img
+                              src={upload.url}
+                              alt="已上传背景"
+                              className="h-full w-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* 上传本地背景图 */}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
@@ -353,7 +381,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       {bgUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                       {bgUploading ? '上传中…' : '或上传本地图片'}
                     </button>
-                    <span className="text-xs text-white/30">已上传 {bgCount}/3</span>
+                    <span className="text-xs text-white/30">已上传 {bgUploads.length}/3</span>
                   </div>
                   <input
                     ref={bgInputRef}
@@ -472,6 +500,36 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       </div>
                     </div>
 
+                    {/* 已上传立绘 */}
+                    {charaUploads.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-white/70">我的立绘</label>
+                        <div className="grid grid-cols-4 gap-3">
+                          {charaUploads.map((upload) => {
+                            const isActive = currentSettings.characterUrl === upload.url;
+                            return (
+                              <button
+                                key={upload.url}
+                                type="button"
+                                onClick={() => updateSettings({ characterUrl: upload.url })}
+                                className={`group relative aspect-[3/4] overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                                  isActive
+                                    ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
+                                    : 'border-white/10 hover:border-white/20'
+                                }`}
+                              >
+                                <img
+                                  src={upload.url}
+                                  alt="已上传立绘"
+                                  className="h-full w-full object-contain p-2 opacity-70 group-hover:opacity-90 transition-opacity"
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* 上传本地立绘 */}
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
@@ -484,7 +542,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                           {charaUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                           {charaUploading ? '上传中…' : '或上传本地图片'}
                         </button>
-                        <span className="text-xs text-white/30">已上传 {charaCount}/3</span>
+                        <span className="text-xs text-white/30">已上传 {charaUploads.length}/3</span>
                       </div>
                       <input
                         ref={charaInputRef}
