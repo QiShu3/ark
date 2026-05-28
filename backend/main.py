@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
@@ -35,6 +36,11 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=_lifespan, title="Ark Backend", version="0.1.0")
+
+# 确保本地静态上传目录存在并挂载
+uploads_dir = Path(__file__).resolve().parent / "uploads"
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

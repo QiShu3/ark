@@ -167,7 +167,7 @@ const Navigation: React.FC = () => {
             className="hover:text-blue-400 transition-colors disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:text-white/35"
             onClick={() => navigateUnlessLocked('/')}
           >
-            Home
+            首页
           </button>
           <button 
             type="button"
@@ -175,9 +175,9 @@ const Navigation: React.FC = () => {
             className="hover:text-blue-400 transition-colors disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:text-white/35"
             onClick={() => navigateUnlessLocked('/apps')}
           >
-            Apps
+            应用
           </button>
-          <button type="button" disabled className="hover:text-gray-300 cursor-not-allowed opacity-70">About</button>
+          <button type="button" disabled className="hover:text-gray-300 cursor-not-allowed opacity-70">关于</button>
         </div>
 
         {/* Check-in Icon */}

@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson } from '../lib/api';
+import { useCustomizationStore } from '../lib/customization';
 import BeianFooter from '../components/BeianFooter';
 
 type LoginResponse = {
@@ -72,8 +73,20 @@ export default function Login() {
       
       // 获取用户信息
       try {
-        const user = await apiJson<User>('/auth/me');
-        setUser(user);
+        const data = await apiJson<User & Record<string, unknown>>('/auth/me');
+        setUser(data);
+        // 同步个性化数据到 customization store
+        const serverData: Record<string, unknown> = {};
+        if (data.avatar_url) serverData.avatarUrl = data.avatar_url;
+        if (data.custom_background_url) serverData.backgroundUrl = data.custom_background_url;
+        if (data.custom_character_url) serverData.characterUrl = data.custom_character_url;
+        if (data.background_blur !== undefined) serverData.backgroundBlur = data.background_blur;
+        if (data.background_opacity !== undefined) serverData.backgroundOpacity = data.background_opacity;
+        if (data.show_character !== undefined) serverData.showCharacter = data.show_character;
+        if (data.character_scale !== undefined) serverData.characterScale = data.character_scale;
+        if (Object.keys(serverData).length > 0) {
+          useCustomizationStore.getState().loadFromServer(serverData);
+        }
       } catch (e) {
         console.error('Failed to fetch user info:', e);
       }
