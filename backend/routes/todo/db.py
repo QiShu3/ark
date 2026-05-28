@@ -29,8 +29,8 @@ async def _seed_event_template_store(conn: Any) -> None:
             "client_id": "vocab_today",
             "app_type": "vocab_today",
             "config": {
-                "deckId": "bec",
-                "deckName": None,
+                "deckId": "kaoyan",
+                "deckName": "考研",
                 "dailyTargetCount": 20,
                 "defaultFocusDuration": 1500,
                 "addToTodayPlan": True,
@@ -762,12 +762,12 @@ async def init_todo(app: Any) -> None:
             WHERE source_type = 'app' AND managed_by_app = TRUE AND is_deleted = FALSE AND event_id IS NULL;
             """
         )
-        await conn.execute("DROP INDEX IF EXISTS uniq_focus_workflow_default_per_user;")
+        await conn.execute("DROP INDEX IF EXISTS uniq_focus_workflow_global_default_per_user;")
         await conn.execute(
             """
-            CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_workflow_global_default_per_user
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_focus_workflow_default_per_user
             ON focus_workflow_presets(user_id)
-            WHERE is_default = TRUE AND event_id IS NULL;
+            WHERE is_default = TRUE;
             """
         )
         await conn.execute(

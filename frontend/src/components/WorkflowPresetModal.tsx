@@ -199,8 +199,10 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                         {showDefaultControls && preset.is_default && !isReadOnly ? (
                           <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/30">默认</span>
                         ) : null}
-                        {isReadOnly ? (
+                        {preset.event_id ? (
                           <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/55">事件</span>
+                        ) : isReadOnly ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/55">只读</span>
                         ) : null}
                         {isEditing && <span className="text-[10px] px-2 py-0.5 rounded bg-amber-400/20 text-amber-200">编辑中</span>}
                       </div>

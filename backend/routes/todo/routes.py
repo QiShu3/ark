@@ -2386,7 +2386,7 @@ async def create_focus_workflow_preset(
             should_default = body.is_default or existing_default is None
             if should_default:
                 await conn.execute(
-                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND event_id IS NULL",
+                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
                     int(user.id),
                 )
             phases = _normalize_workflow_phases(
@@ -2432,7 +2432,7 @@ async def update_focus_workflow_preset(
                 f"""
                 SELECT {WORKFLOW_PRESET_SELECT}
                 FROM focus_workflow_presets
-                WHERE id = $1 AND user_id = $2 AND event_id IS NULL
+                WHERE id = $1 AND user_id = $2
                 """,
                 preset_id,
                 int(user.id),
@@ -2441,7 +2441,7 @@ async def update_focus_workflow_preset(
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
             if patch.get("is_default") is True:
                 await conn.execute(
-                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND event_id IS NULL",
+                    "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
                     int(user.id),
                 )
             if "phases" in patch:
@@ -2484,7 +2484,7 @@ async def update_focus_workflow_preset(
                 f"""
                 UPDATE focus_workflow_presets
                 SET {", ".join(sets)}, updated_at = NOW()
-                WHERE id = ${p_i} AND user_id = ${u_i} AND event_id IS NULL
+                WHERE id = ${p_i} AND user_id = ${u_i}
                 RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 *args,
@@ -2504,14 +2504,14 @@ async def delete_focus_workflow_preset(
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                "SELECT id, is_default FROM focus_workflow_presets WHERE id = $1 AND user_id = $2 AND event_id IS NULL",
+                "SELECT id, is_default FROM focus_workflow_presets WHERE id = $1 AND user_id = $2",
                 preset_id,
                 int(user.id),
             )
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
             await conn.execute(
-                "DELETE FROM focus_workflow_presets WHERE id = $1 AND user_id = $2 AND event_id IS NULL",
+                "DELETE FROM focus_workflow_presets WHERE id = $1 AND user_id = $2",
                 preset_id,
                 int(user.id),
             )
@@ -2520,7 +2520,7 @@ async def delete_focus_workflow_preset(
                     """
                     SELECT id
                     FROM focus_workflow_presets
-                    WHERE user_id = $1 AND event_id IS NULL
+                    WHERE user_id = $1
                     ORDER BY updated_at DESC
                     LIMIT 1
                     """,
@@ -2547,7 +2547,7 @@ async def set_default_focus_workflow_preset(
                 f"""
                 SELECT {WORKFLOW_PRESET_SELECT}
                 FROM focus_workflow_presets
-                WHERE id = $1 AND user_id = $2 AND event_id IS NULL
+                WHERE id = $1 AND user_id = $2
                 """,
                 preset_id,
                 int(user.id),
@@ -2555,14 +2555,14 @@ async def set_default_focus_workflow_preset(
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工作流不存在")
             await conn.execute(
-                "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1 AND event_id IS NULL",
+                "UPDATE focus_workflow_presets SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1",
                 int(user.id),
             )
             updated = await conn.fetchrow(
                 f"""
                 UPDATE focus_workflow_presets
                 SET is_default = TRUE, updated_at = NOW()
-                WHERE id = $1 AND user_id = $2 AND event_id IS NULL
+                WHERE id = $1 AND user_id = $2
                 RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 preset_id,

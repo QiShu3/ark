@@ -415,7 +415,7 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.queryByText('事件：其他事件')).not.toBeInTheDocument();
   });
 
-  it('shows current-event workflows in the home workflow preset panel and keeps them read-only', async () => {
+  it('shows current-event workflows in the home workflow preset panel and allows editing, setting default, and deleting them', async () => {
     const user = userEvent.setup();
     const globalPreset = buildWorkflowPreset({ id: 'preset-global', name: '全局工作流', is_default: true });
     const eventPreset = buildWorkflowPreset({
@@ -433,9 +433,22 @@ describe('PlaceholderCard workflow UI', () => {
       is_default: false,
     });
 
-    mockApiJson.mockImplementation((path: string) => {
-      if (path === '/todo/focus/workflows') return Promise.resolve([globalPreset, eventPreset, otherPreset]);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflows') {
+        if (init?.method === 'PATCH' || init?.method === 'DELETE' || init?.method === 'POST') {
+          return Promise.resolve({});
+        }
+        return Promise.resolve([globalPreset, eventPreset, otherPreset]);
+      }
       if (path === '/todo/events') return Promise.resolve([primaryEvent]);
+      if (path.startsWith('/todo/events/event-1/workflows/')) {
+        return Promise.resolve({});
+      }
+      if (path === '/todo/focus/workflows/preset-event/default') {
+        return Promise.resolve({});
+      }
       return defaultApiResponse(path);
     });
 
@@ -444,12 +457,48 @@ describe('PlaceholderCard workflow UI', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '工作流预设' });
     expect(within(dialog).getByText('全局工作流')).toBeInTheDocument();
-    expect(within(dialog).getByText('期末冲刺')).toBeInTheDocument();
+    expect(within(dialog).getByText('期期末冲刺' ? '期末冲刺' : '期末冲刺')).toBeInTheDocument();
     expect(within(dialog).getByText('事件：高数期末')).toBeInTheDocument();
     expect(within(dialog).queryByText('其他事件工作流')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '复制工作流 期末冲刺' })).toBeInTheDocument();
+
+    // 1. Edit current-event workflow
     await user.click(within(dialog).getByText('期末冲刺'));
-    expect(screen.getByLabelText('工作流名称')).toHaveValue('');
+    expect(screen.getByLabelText('工作流名称')).toHaveValue('期末冲刺');
+
+    // Change name and save
+    await user.clear(screen.getByLabelText('工作流名称'));
+    await user.type(screen.getByLabelText('工作流名称'), '期末冲刺修改');
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith(
+        '/todo/events/event-1/workflows/preset-event',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining('"name":"期末冲刺修改"'),
+        })
+      );
+    });
+
+    // 2. Set as default
+    const eventPresetCard = screen.getByText('期末冲刺').closest('.border') as HTMLElement;
+    expect(eventPresetCard).toBeInTheDocument();
+    const setDefaultBtn = within(eventPresetCard).getByRole('button', { name: '设为默认' });
+    await user.click(setDefaultBtn);
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/preset-event/default', { method: 'POST' });
+    });
+
+    // 3. Delete event workflow
+    const deleteBtn = within(eventPresetCard).getByRole('button', { name: '删除' });
+    await user.click(deleteBtn);
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith('确认删除该工作流吗？');
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/events/event-1/workflows/preset-event', { method: 'DELETE' });
+    });
+
+    confirmSpy.mockRestore();
   });
 
   it('opens the workflow picker from the workflow name and switches without starting', async () => {

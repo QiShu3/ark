@@ -1074,11 +1074,20 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         is_default: workflowForm.isDefault,
       });
       if (editingWorkflowId) {
-        await apiJson(`/todo/focus/workflows/${editingWorkflowId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-        });
+        const preset = workflowPresets.find((item) => item.id === editingWorkflowId);
+        if (preset?.event_id) {
+          await apiJson(`/todo/events/${preset.event_id}/workflows/${editingWorkflowId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          });
+        } else {
+          await apiJson(`/todo/focus/workflows/${editingWorkflowId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          });
+        }
       } else {
         await apiJson('/todo/focus/workflows', {
           method: 'POST',
@@ -1101,7 +1110,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   async function _deleteWorkflowPreset(presetId: string) {
     if (!window.confirm('确认删除该工作流吗？')) return;
     try {
-      await apiJson(`/todo/focus/workflows/${presetId}`, { method: 'DELETE' });
+      const preset = workflowPresets.find((item) => item.id === presetId);
+      if (preset?.event_id) {
+        await apiJson(`/todo/events/${preset.event_id}/workflows/${presetId}`, { method: 'DELETE' });
+      } else {
+        await apiJson(`/todo/focus/workflows/${presetId}`, { method: 'DELETE' });
+      }
       if (editingWorkflowId === presetId) {
         setEditingWorkflowId(null);
       }
@@ -2172,7 +2186,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           onSubmit={_submitWorkflowPreset}
           onReset={_resetWorkflowForm}
           isTaskHiddenFromActionList={_isTaskHiddenFromActionList}
-          readOnlyPresetIds={visibleEventWorkflowPresetIds}
+          readOnlyPresetIds={[]}
         />
 
         {/* 专注时长统计悬浮页面 */}

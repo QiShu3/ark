@@ -1597,7 +1597,7 @@ async def _get_default_focus_workflow_preset(conn: Any, user_id: int) -> asyncpg
         """
         SELECT id, user_id, event_id, name, focus_duration, break_duration, default_focus_timer_mode, phases, is_default, created_at, updated_at
         FROM focus_workflow_presets
-        WHERE user_id = $1 AND is_default = TRUE AND event_id IS NULL
+        WHERE user_id = $1 AND is_default = TRUE
         LIMIT 1
         """,
         int(user_id),
