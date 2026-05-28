@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 16:24 · 7b1fdab · feat(frontend): sort events to render the primary event at the very top of the list
+
+- 用户提出的需求：
+  - 主事件永远在最上方
+
+- 本次完成的工作：
+  - 修改 `EventCountdownCard.tsx` 内的事件总览弹窗部分，对 `events` 列表进行在排序后映射渲染：`[...events].sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0)).map(...)`。
+  - 这保证了设置了 `is_primary: true` 的主事件始终被渲染在事件总览列表的第一位，而其他非主事件保持原本的相对排序。
+
+- 验证情况：
+  - 运行 `pnpm test`，所有 205 个前端测试用例全部以 100% 绿灯通过，无任何回归问题。
+  - 使用内置浏览器智能体重新登录并截图验证，确认“考研英语”（主事件）已完美地展示在事件总览列表的最顶部（排在“六级英语”和“论文投稿”之上）。
+
 ### 2026-05-28 16:20 · 6e80408 · style(frontend): refine event workflows list with ultra-compact capsules
 
 - 用户提出的需求：
