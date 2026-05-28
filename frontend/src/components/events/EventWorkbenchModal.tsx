@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import type { AchievementSummary } from '../achievementTypes';
 import { apiJson } from '../../lib/api';
@@ -1254,28 +1254,60 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             {eventWorkflows.map((workflow) => (
               <div
                 key={workflow.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 px-4 py-3.5 transition-all duration-300 shadow-sm hover:shadow-md"
               >
                 <button
                   type="button"
                   onClick={() => editEventWorkflow(workflow)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <div className="truncate text-sm font-medium text-white">{workflow.name}</div>
-                  <div className="mt-1 truncate text-xs text-white/45">{workflowSummary(workflow)}</div>
+                  <div className="truncate text-sm font-semibold text-white tracking-wide">{workflow.name}</div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {workflow.phases.map((phase, idx) => {
+                      const minutes = Math.round(phase.duration / 60);
+                      const isFocus = phase.phase_type === 'focus';
+                      const boundTask = phase.task_id ? taskArrangements.find(t => t.id === phase.task_id) : null;
+                      const taskTitle = boundTask ? boundTask.title : null;
+
+                      return (
+                        <React.Fragment key={idx}>
+                          {idx > 0 && <span className="text-white/10 text-xs">—</span>}
+                          <div className="inline-flex items-center gap-1 flex-wrap">
+                            {isFocus ? (
+                              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 border border-blue-500/25 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.06)]">
+                                <span>🎯</span>
+                                <span>专注 {minutes}m</span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.06)]">
+                                <span>☕</span>
+                                <span>休息 {minutes}m</span>
+                              </div>
+                            )}
+                            {taskTitle && (
+                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-white/5 border border-white/10 text-white/55 max-w-[120px] truncate" title={taskTitle}>
+                                <span>📋</span>
+                                <span className="truncate">{taskTitle}</span>
+                              </div>
+                            )}
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
                 </button>
                 <div className="flex shrink-0 gap-2">
                   <button
                     type="button"
                     onClick={() => copyEventWorkflow(workflow)}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+                    className="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors duration-200"
                   >
                     复制
                   </button>
                   <button
                     type="button"
                     onClick={() => void deleteEventWorkflow(workflow.id)}
-                    className="rounded-lg border border-red-400/20 bg-red-500/10 px-2 py-1 text-xs text-red-200 hover:bg-red-500/20"
+                    className="rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-500/20 transition-colors duration-200"
                   >
                     删除
                   </button>
