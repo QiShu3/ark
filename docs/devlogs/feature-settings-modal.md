@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 16:54 · 47a1d92 · style(frontend): enlarge SettingsModal and sidebar layout dimensions
+
+- 用户提出的需求：
+  - “面板太小了”
+
+- 本次完成的工作：
+  - 微调界面设置弹窗的尺寸布局，将弹窗整体宽度由 `720px` 拓宽至符合参考图精确比例的 `900px`，高度增加至 `620px`。
+  - 将左侧 Tab 导航侧边栏的宽度从 `200px` 拓宽至 `260px`，右侧设置内容区域拓宽至 `640px`，使界面布局更舒展，极大优化了中文设置标签的排版和右侧滑块与预设的视觉体验。
+
+- 验证情况：
+  - 运行 `pnpm check` 验证通过。
+
 ### 2026-05-28 16:50 · 9db0bba · feat(frontend): add tabbed settings modal for custom background and character
 
 - 用户提出的需求：
