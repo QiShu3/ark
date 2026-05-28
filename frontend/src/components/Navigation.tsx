@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { BookOpen, Calendar, LogOut, Settings } from 'lucide-react';
+import { BookOpen, Calendar, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 import { restartFirstGuide } from '../lib/onboardingEvents';
 import SettingsModal from './SettingsModal';
 import { useCustomizationStore } from '../lib/customization';
+import { useTheme } from '../hooks/useTheme';
 
 function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
@@ -26,6 +27,7 @@ const Navigation: React.FC = () => {
   const setUser = useAuthStore((s) => s.setUser);
   const clearSession = useAuthStore((s) => s.clear);
   const avatarUrl = useCustomizationStore((s) => s.avatarUrl);
+  const { themePreference, resolvedTheme, toggleResolvedTheme } = useTheme();
 
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -33,6 +35,10 @@ const Navigation: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const focusNavigationLocked = isFocusWorkNavigationLocked(workflowSnapshot);
+  const ThemeIcon = themePreference === 'system' ? Monitor : resolvedTheme === 'dark' ? Moon : Sun;
+  const nextThemeLabel = resolvedTheme === 'dark' ? '切换为日间模式' : '切换为夜间模式';
+  const themeButtonTitle =
+    themePreference === 'system' ? `跟随系统 · ${resolvedTheme === 'dark' ? '夜间' : '日间'}` : nextThemeLabel;
 
   /**
    * 加载当前工作流快照（用于导航栏中间的紧凑进度条）。
@@ -134,7 +140,7 @@ const Navigation: React.FC = () => {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 w-full h-16 bg-black/50 backdrop-blur-md text-white flex items-center px-6 z-50 border-b border-white/10">
+      <nav className="fixed left-0 top-0 z-50 flex h-16 w-full items-center border-b ark-border bg-[var(--ark-surface)] px-6 text-[var(--ark-text)] backdrop-blur-md">
       <div className="flex items-center gap-3">
         <div
           className={`text-xl font-bold transition-colors ${
@@ -217,6 +223,16 @@ const Navigation: React.FC = () => {
                 {user.username}
               </div>
             </div>
+            <button
+              type="button"
+              aria-label={focusNavigationLocked ? '切换外观模式' : nextThemeLabel}
+              title={themeButtonTitle}
+              disabled={focusNavigationLocked}
+              className="ark-focus-ring flex h-8 w-8 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={toggleResolvedTheme}
+            >
+              <ThemeIcon size={16} aria-hidden="true" />
+            </button>
             <button
               type="button"
               aria-label="打开界面设置"

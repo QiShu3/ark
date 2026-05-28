@@ -184,13 +184,13 @@ export default function VocabHome() {
   ];
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
+    <div className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
       <div className="mx-auto max-w-6xl">
         <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
-          <section className="rounded-[2rem] border border-white/10 bg-black/30 p-8 backdrop-blur-md">
-            <div className="text-sm uppercase tracking-[0.32em] text-white/45">Vocabulary</div>
+          <section className="ark-panel-card rounded-[2rem] p-8">
+            <div className="text-sm uppercase tracking-[0.32em] text-[var(--ark-text-faint)]">Vocabulary</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight">背单词</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-white/68">
+            <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ark-text-muted)]">
               先切词书，再进入今天的新词、复习和错题。第一期先把完整记忆流跑通，后续再叠更细的调度策略。
             </p>
 
@@ -205,41 +205,41 @@ export default function VocabHome() {
               />
             </div>
 
-            {loading ? <p className="mt-6 text-sm text-white/55">词书加载中…</p> : null}
+            {loading ? <p className="mt-6 text-sm text-[var(--ark-text-muted)]">词书加载中…</p> : null}
             {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
 
             {summary ? (
               <div className="mt-8 space-y-6">
-                <div className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-emerald-400/18 via-sky-400/10 to-transparent p-7 backdrop-blur-md">
-                  <div className="text-sm uppercase tracking-[0.28em] text-white/45">Today</div>
+                <div className="rounded-[2rem] border ark-border bg-gradient-to-br from-emerald-400/18 via-sky-400/10 to-transparent p-7 backdrop-blur-md">
+                  <div className="text-sm uppercase tracking-[0.28em] text-[var(--ark-text-faint)]">Today</div>
                   <div className="mt-3 text-3xl font-semibold tracking-tight">今日单词</div>
-                  <p className="mt-3 text-sm leading-6 text-white/65">今天这本词书要完成的学习任务，系统会先带你完成复习，再进入新词。</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ark-text-muted)]">今天这本词书要完成的学习任务，系统会先带你完成复习，再进入新词。</p>
 
                   <div className="mt-6 flex flex-wrap items-end gap-6">
                     <div>
-                      <div className="text-sm text-white/55">剩余</div>
-                      <div className="mt-2 text-5xl font-semibold text-white">{summary.pending_count}</div>
+                      <div className="text-sm text-[var(--ark-text-muted)]">剩余</div>
+                      <div className="mt-2 text-5xl font-semibold text-[var(--ark-text)]">{summary.pending_count}</div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">今日总量</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{summary.total_count}</div>
+                      <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                        <div className="text-xs uppercase tracking-[0.22em] text-[var(--ark-text-faint)]">今日总量</div>
+                        <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{summary.total_count}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">已完成</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{summary.completed_count}</div>
+                      <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                        <div className="text-xs uppercase tracking-[0.22em] text-[var(--ark-text-faint)]">已完成</div>
+                        <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{summary.completed_count}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">Learning</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{summary.learning_count}</div>
+                      <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                        <div className="text-xs uppercase tracking-[0.22em] text-[var(--ark-text-faint)]">Learning</div>
+                        <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{summary.learning_count}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">新词</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{summary.new_count}</div>
+                      <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                        <div className="text-xs uppercase tracking-[0.22em] text-[var(--ark-text-faint)]">新词</div>
+                        <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{summary.new_count}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/40">复习</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{summary.review_count}</div>
+                      <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                        <div className="text-xs uppercase tracking-[0.22em] text-[var(--ark-text-faint)]">复习</div>
+                        <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{summary.review_count}</div>
                       </div>
                     </div>
                   </div>
@@ -294,11 +294,11 @@ export default function VocabHome() {
                     <button
                       type="button"
                       onClick={() => setSettingsOpen(true)}
-                      className="inline-flex items-center rounded-full border border-white/10 bg-white/8 px-5 py-3 text-sm text-white/80 transition hover:border-white/25 hover:bg-white/12"
+                      className="ark-button-secondary inline-flex items-center rounded-full px-5 py-3 text-sm transition"
                     >
                       调整今日单词
                     </button>
-                    <div className="text-sm text-white/60">已完成 {summary.completed_count} / {summary.total_count}</div>
+                    <div className="text-sm text-[var(--ark-text-muted)]">已完成 {summary.completed_count} / {summary.total_count}</div>
                   </div>
                   {appTaskStatus?.state === 'event_not_configured' ? (
                     <p className="mt-4 text-sm text-amber-100">
@@ -318,8 +318,8 @@ export default function VocabHome() {
             {summaryError ? <p className="mt-6 text-sm text-rose-200">{summaryError}</p> : null}
           </section>
 
-          <section className="rounded-[2rem] border border-white/10 bg-white/6 p-8 backdrop-blur-md">
-            <div className="text-sm uppercase tracking-[0.32em] text-white/45">总览</div>
+          <section className="ark-panel-card rounded-[2rem] p-8">
+            <div className="text-sm uppercase tracking-[0.32em] text-[var(--ark-text-faint)]">总览</div>
 
             {overview ? (
               <div className="mt-5 space-y-5">
@@ -327,36 +327,36 @@ export default function VocabHome() {
                   <button
                     type="button"
                     onClick={() => openOverviewDetail('completed')}
-                    className="rounded-2xl border border-white/10 bg-black/20 p-5 text-left transition hover:border-white/25 hover:bg-black/30"
+                    className="ark-surface-subtle rounded-2xl border p-5 text-left transition hover:border-[var(--ark-border-strong)]"
                   >
-                    <div className="text-sm text-white/50">已完成词书</div>
-                    <div className="mt-3 text-3xl font-semibold text-white">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
-                    <div className="mt-2 text-sm text-white/55">全部单词都已进入 Review 状态的词书数量。</div>
+                    <div className="text-sm text-[var(--ark-text-muted)]">已完成词书</div>
+                    <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
+                    <div className="mt-2 text-sm text-[var(--ark-text-muted)]">全部单词都已进入 Review 状态的词书数量。</div>
                   </button>
                   <button
                     type="button"
                     onClick={() => openOverviewDetail('mastered')}
-                    className="rounded-2xl border border-white/10 bg-black/20 p-5 text-left transition hover:border-white/25 hover:bg-black/30"
+                    className="ark-surface-subtle rounded-2xl border p-5 text-left transition hover:border-[var(--ark-border-strong)]"
                   >
-                    <div className="text-sm text-white/50">累计掌握单词</div>
-                    <div className="mt-3 text-3xl font-semibold text-white">{overview.mastered_word_count}</div>
-                    <div className="mt-2 text-sm text-white/55">按 FSRS Review 口径统计的全局已掌握单词总数。</div>
+                    <div className="text-sm text-[var(--ark-text-muted)]">累计掌握单词</div>
+                    <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mastered_word_count}</div>
+                    <div className="mt-2 text-sm text-[var(--ark-text-muted)]">按 FSRS Review 口径统计的全局已掌握单词总数。</div>
                   </button>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => openOverviewDetail('current', activeDeck?.id)}
-                  className="w-full rounded-2xl border border-white/10 bg-black/20 p-5 text-left transition hover:border-white/25 hover:bg-black/30"
+                  className="ark-surface-subtle w-full rounded-2xl border p-5 text-left transition hover:border-[var(--ark-border-strong)]"
                 >
                   <div className="flex items-end justify-between gap-4">
                     <div>
-                      <div className="text-sm text-white/50">当前词书掌握度</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">{overview.current_deck.deck_name}</div>
+                      <div className="text-sm text-[var(--ark-text-muted)]">当前词书掌握度</div>
+                      <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{overview.current_deck.deck_name}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-white/50">已掌握</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">
+                      <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
+                      <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
                         {overview.current_deck.mastered_word_count} / {overview.current_deck.total_word_count}
                       </div>
                     </div>
@@ -370,35 +370,35 @@ export default function VocabHome() {
                   </div>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                      <div className="text-sm text-white/50">未开始</div>
-                      <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.unstarted_word_count}</div>
+                    <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                      <div className="text-sm text-[var(--ark-text-muted)]">未开始</div>
+                      <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.unstarted_word_count}</div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                      <div className="text-sm text-white/50">学习中</div>
-                      <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.learning_word_count}</div>
+                    <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                      <div className="text-sm text-[var(--ark-text-muted)]">学习中</div>
+                      <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.learning_word_count}</div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                      <div className="text-sm text-white/50">已掌握</div>
-                      <div className="mt-2 text-xl font-semibold text-white">{overview.current_deck.mastered_word_count}</div>
+                    <div className="ark-surface-subtle rounded-2xl border px-4 py-3">
+                      <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
+                      <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.mastered_word_count}</div>
                     </div>
                   </div>
                 </button>
 
                 <div>
-                  <div className="text-sm uppercase tracking-[0.24em] text-white/40">快捷入口</div>
+                  <div className="text-sm uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">快捷入口</div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <a href="#/vocab/study" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white/80 transition hover:border-white/25 hover:bg-white/10">
-                      <div className="text-base font-medium text-white">新词</div>
-                      <div className="mt-1 text-sm text-white/55">单独进入新词队列</div>
+                    <a href="#/vocab/study" className="ark-surface-subtle rounded-2xl border px-4 py-4 transition hover:border-[var(--ark-border-strong)]">
+                      <div className="text-base font-medium text-[var(--ark-text)]">新词</div>
+                      <div className="mt-1 text-sm text-[var(--ark-text-muted)]">单独进入新词队列</div>
                     </a>
-                    <a href="#/vocab/review" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white/80 transition hover:border-white/25 hover:bg-white/10">
-                      <div className="text-base font-medium text-white">复习</div>
-                      <div className="mt-1 text-sm text-white/55">单独清理到期复习</div>
+                    <a href="#/vocab/review" className="ark-surface-subtle rounded-2xl border px-4 py-4 transition hover:border-[var(--ark-border-strong)]">
+                      <div className="text-base font-medium text-[var(--ark-text)]">复习</div>
+                      <div className="mt-1 text-sm text-[var(--ark-text-muted)]">单独清理到期复习</div>
                     </a>
-                    <a href="#/vocab/mistakes" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white/80 transition hover:border-white/25 hover:bg-white/10">
-                      <div className="text-base font-medium text-white">错题</div>
-                      <div className="mt-1 text-sm text-white/55">快速查看薄弱词</div>
+                    <a href="#/vocab/mistakes" className="ark-surface-subtle rounded-2xl border px-4 py-4 transition hover:border-[var(--ark-border-strong)]">
+                      <div className="text-base font-medium text-[var(--ark-text)]">错题</div>
+                      <div className="mt-1 text-sm text-[var(--ark-text-muted)]">快速查看薄弱词</div>
                     </a>
                   </div>
                 </div>

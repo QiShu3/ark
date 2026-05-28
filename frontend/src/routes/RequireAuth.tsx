@@ -6,6 +6,7 @@ import { useAuthStore } from '../lib/auth';
 import Navigation from '../components/Navigation';
 import FocusWorkProvider from '../components/focus-work/FocusWorkProvider';
 import { useCustomizationStore } from '../lib/customization';
+import { useTheme } from '../hooks/useTheme';
 
 export default function RequireAuth() {
   const token = useAuthStore((s) => s.token);
@@ -16,6 +17,7 @@ export default function RequireAuth() {
   const backgroundUrl = useCustomizationStore((s) => s.backgroundUrl);
   const backgroundBlur = useCustomizationStore((s) => s.backgroundBlur);
   const backgroundOpacity = useCustomizationStore((s) => s.backgroundOpacity);
+  useTheme();
 
   useEffect(() => {
     if (token && expiresAt && Date.now() >= expiresAt) clear();
@@ -26,7 +28,10 @@ export default function RequireAuth() {
   }
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black text-white font-sans">
+    <div
+      data-testid="authenticated-shell"
+      className="ark-shell relative h-screen w-screen overflow-hidden font-sans"
+    >
       {/* 背景图片 */}
       <div className="fixed inset-0 z-0">
         <img 
@@ -39,7 +44,7 @@ export default function RequireAuth() {
           className="w-full h-full object-cover transition-all duration-300"
         />
         {/* 叠加一层渐变，增强文字可读性 */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60"></div>
+        <div data-testid="background-overlay" className="ark-background-overlay absolute inset-0"></div>
       </div>
 
       {/* 顶部导航 */}

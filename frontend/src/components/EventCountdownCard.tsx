@@ -1722,7 +1722,7 @@ const EventCountdownCard: React.FC = () => {
           dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
         }}
         data-onboarding-anchor="primary-event"
-        className="absolute left-12 top-24 z-20 w-44 h-44 rounded-full border-[6px] border-white/30 bg-black/15 flex flex-col items-center justify-center text-white/90 shadow-[0_0_15px_rgba(255,255,255,0.2)] backdrop-blur-sm transition-colors hover:bg-black/30"
+        className="ark-panel-card ark-focus-ring absolute left-12 top-24 z-20 flex h-44 w-44 flex-col items-center justify-center rounded-full border-[6px] text-[var(--ark-text)] shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-colors hover:bg-[var(--ark-surface-subtle)]"
       >
         <span className="text-sm tracking-[0.35em] uppercase text-white/60">
           {primaryEvent ? primaryEvent.name : '未设置主事件'}
@@ -1733,14 +1733,14 @@ const EventCountdownCard: React.FC = () => {
 
       {showModal ? (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="ark-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center"
           onClick={closeModal}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label={showCreateEditor ? '添加事件' : '事件总览'}
-            className="w-[760px] max-w-[94vw] h-[76vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            className="ark-modal flex h-[76vh] w-[760px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">

@@ -11,6 +11,146 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root,
+:root[data-theme="dark"] {
+  --ark-page-bg: #05070d;
+  --ark-text: rgba(255, 255, 255, 0.94);
+  --ark-text-muted: rgba(255, 255, 255, 0.62);
+  --ark-text-faint: rgba(255, 255, 255, 0.42);
+  --ark-surface: rgba(15, 23, 42, 0.56);
+  --ark-surface-strong: rgba(12, 18, 28, 0.92);
+  --ark-surface-subtle: rgba(255, 255, 255, 0.06);
+  --ark-border: rgba(255, 255, 255, 0.12);
+  --ark-border-strong: rgba(255, 255, 255, 0.22);
+  --ark-overlay: rgba(0, 0, 0, 0.62);
+  --ark-overlay-strong: rgba(0, 0, 0, 0.76);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.62));
+  --ark-focus-ring: rgba(96, 165, 250, 0.68);
+  --ark-accent: #60a5fa;
+  --ark-accent-soft: rgba(96, 165, 250, 0.16);
+}
+
+:root[data-theme="light"] {
+  --ark-page-bg: #eef4fb;
+  --ark-text: rgba(15, 23, 42, 0.92);
+  --ark-text-muted: rgba(51, 65, 85, 0.72);
+  --ark-text-faint: rgba(71, 85, 105, 0.52);
+  --ark-surface: rgba(255, 255, 255, 0.72);
+  --ark-surface-strong: rgba(255, 255, 255, 0.94);
+  --ark-surface-subtle: rgba(255, 255, 255, 0.52);
+  --ark-border: rgba(15, 23, 42, 0.12);
+  --ark-border-strong: rgba(15, 23, 42, 0.2);
+  --ark-overlay: rgba(241, 245, 249, 0.68);
+  --ark-overlay-strong: rgba(248, 250, 252, 0.84);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(248, 250, 252, 0.72), rgba(248, 250, 252, 0.38), rgba(226, 232, 240, 0.76));
+  --ark-focus-ring: rgba(37, 99, 235, 0.44);
+  --ark-accent: #2563eb;
+  --ark-accent-soft: rgba(37, 99, 235, 0.12);
+}
+
+.ark-shell {
+  background: var(--ark-page-bg);
+  color: var(--ark-text);
+}
+
+.ark-background-overlay {
+  background: var(--ark-background-overlay);
+}
+
+.ark-surface {
+  border-color: var(--ark-border);
+  background: var(--ark-surface);
+  color: var(--ark-text);
+}
+
+.ark-surface-strong {
+  border-color: var(--ark-border);
+  background: var(--ark-surface-strong);
+  color: var(--ark-text);
+}
+
+.ark-surface-subtle {
+  border-color: var(--ark-border);
+  background: var(--ark-surface-subtle);
+  color: var(--ark-text);
+}
+
+.ark-text {
+  color: var(--ark-text);
+}
+
+.ark-text-muted {
+  color: var(--ark-text-muted);
+}
+
+.ark-text-faint {
+  color: var(--ark-text-faint);
+}
+
+.ark-border {
+  border-color: var(--ark-border);
+}
+
+.ark-card-hover:hover {
+  border-color: var(--ark-border-strong);
+  background: var(--ark-surface-subtle);
+}
+
+.ark-focus-ring:focus-visible {
+  outline: 2px solid var(--ark-focus-ring);
+  outline-offset: 2px;
+}
+
+.ark-page {
+  color: var(--ark-text);
+}
+
+.ark-panel-card {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface);
+  color: var(--ark-text);
+  backdrop-filter: blur(12px);
+}
+
+.ark-panel-card:hover {
+  background: var(--ark-surface-subtle);
+}
+
+.ark-modal-backdrop {
+  background: var(--ark-overlay);
+  backdrop-filter: blur(6px);
+}
+
+.ark-modal {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface-strong);
+  color: var(--ark-text);
+}
+
+.ark-button-primary {
+  background: var(--ark-accent);
+  color: #fff;
+}
+
+.ark-button-primary:hover {
+  filter: brightness(1.06);
+}
+
+.ark-button-secondary {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface-subtle);
+  color: var(--ark-text-muted);
+}
+
+.ark-button-secondary:hover {
+  border-color: var(--ark-border-strong);
+  color: var(--ark-text);
+}
+
+:root[data-theme="light"] .ark-button-primary {
+  color: #fff;
+}
+
 @keyframes tag-edit-wiggle {
   0% {
     transform: rotate(-1.8deg);

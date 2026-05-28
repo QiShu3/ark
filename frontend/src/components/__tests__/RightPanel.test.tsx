@@ -21,6 +21,7 @@ describe('RightPanel', () => {
     render(<RightPanel collapsed={false} onToggle={onToggle} />);
 
     expect(screen.getByRole('button', { name: 'Collapse right panel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse right panel' })).toHaveClass('ark-surface');
     expect(screen.getByTestId('right-panel-content')).toHaveAttribute('aria-hidden', 'false');
 
     await user.click(screen.getByRole('button', { name: 'Collapse right panel' }));

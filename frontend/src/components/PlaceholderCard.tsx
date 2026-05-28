@@ -1929,7 +1929,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
     return (
       <>
-        <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-2 flex gap-2">
+        <div className="ark-panel-card flex flex-1 gap-2 rounded-lg p-2">
           <div className="flex-[2] flex flex-col rounded overflow-hidden">
             <div 
               role="button"
@@ -2057,14 +2057,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {showWorkflowPicker && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center"
             onClick={() => setShowWorkflowPicker(false)}
           >
             <div
               role="dialog"
               aria-modal="true"
               aria-labelledby="workflow-picker-title"
-              className="w-[520px] max-w-[92vw] max-h-[72vh] overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl"
+              className="ark-modal max-h-[72vh] w-[520px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex h-14 items-center justify-between border-b border-white/10 bg-white/5 px-5">
@@ -2121,11 +2121,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {showFocusTaskPicker && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center"
             onClick={() => setShowFocusTaskPicker(false)}
           >
             <div
-              className="w-[560px] max-w-[92vw] max-h-[72vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+              className="ark-modal max-h-[72vh] w-[560px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
@@ -2191,8 +2191,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {/* 专注时长统计悬浮页面 */}
         {showStatsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-[80%] h-[80%] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
+            <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
                 <h2 className="text-xl font-bold text-white">专注统计</h2>
@@ -2241,8 +2241,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {/* 安排悬浮页面 */}
         {showTaskModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-[80%] h-[80%] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
+            <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
                 <h2 className="text-xl font-bold text-white">安排管理</h2>
@@ -2487,11 +2487,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {showCreateTaskModal && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 pt-16"
+            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center pt-16 animate-in fade-in duration-200"
             onClick={_closeCreateTaskModal}
           >
             <div
-              className="w-[520px] max-w-[92vw] max-h-[calc(100vh-6rem)] flex flex-col bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200"
+              className="ark-modal relative flex max-h-[calc(100vh-6rem)] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
@@ -2814,11 +2814,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         )}
         {showTaskDraftModal && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center animate-in fade-in duration-200"
             onClick={_closeTaskDraftModal}
           >
             <div
-              className="w-[680px] max-w-[94vw] max-h-[78vh] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+              className="ark-modal flex max-h-[78vh] w-[680px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="h-16 shrink-0 border-b border-white/10 px-5 bg-white/5 flex items-center justify-between gap-4">
@@ -2922,11 +2922,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         )}
         {showTaskAssistantModal && (
           <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center animate-in fade-in duration-200"
             onClick={_resetTaskAssistant}
           >
             <div
-              className="w-[560px] h-[420px] max-w-[92vw] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+              className="ark-modal flex h-[420px] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex-[1] border-b border-white/10 px-5 bg-white/5 flex items-center justify-between">
@@ -2983,7 +2983,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     const subCardCount = mergePlaceholders ? 1 : split;
     const showWorkflowProgress = mergePlaceholders && focusWorkflow?.state !== 'normal';
     return (
-      <div className="flex-1 flex gap-2">
+      <div className="ark-panel-card flex flex-1 gap-2 rounded-lg p-2">
         {Array.from({ length: subCardCount }).map((_, subIndex) => (
           index === 2 && subIndex === 0 ? (
             <React.Fragment key={subIndex}><CalendarWidget className="flex-1" /></React.Fragment>
@@ -2993,14 +2993,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               onClick={
                 index === 3 && subIndex === 1 ? () => navigate('/apps') : undefined
               }
-              className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${
+              className={`ark-panel-card flex flex-1 items-center justify-center rounded-lg text-[var(--ark-text-muted)] transition-colors ${
                 index === 3 && subIndex === 1 ? 'cursor-pointer' : ''
               }`}
             >
               {showWorkflowProgress ? (
                 <WorkflowProgressBar workflow={workflowForProgress} />
               ) : index === 3 && subIndex === 1 ? (
-                <span className="text-white/80 font-medium">应用中心</span>
+                <span className="font-medium text-[var(--ark-text)]">应用中心</span>
               ) : index === 3 && subIndex === 0 ? (
                 <AchievementCard />
               ) : mergePlaceholders ? (
@@ -3013,10 +3013,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       <span className="text-[11px] font-medium uppercase tracking-wide text-blue-200/60">
                         当前工作流
                       </span>
-                      <span className="max-w-full truncate text-sm font-bold tracking-wide text-white/90">
+                      <span className="max-w-full truncate text-sm font-bold tracking-wide text-[var(--ark-text)]">
                         {defaultWorkflowName}
                       </span>
-                      <span className="text-xs text-white/45">
+                      <span className="text-xs text-[var(--ark-text-faint)]">
                         {effectiveSelectedWorkflow ? `${selectedWorkflowPhaseCount} 个阶段` : '尚未配置专注节奏'}
                       </span>
                     </div>
@@ -3032,7 +3032,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     }}
                     title="工作流设置"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60 group-hover:text-white/90 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--ark-text-muted)] transition-colors group-hover:text-[var(--ark-text)]">
                       <circle cx="12" cy="12" r="3"></circle>
                       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
@@ -3051,9 +3051,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   return (
     <div
       onClick={index === 0 ? () => setShowTaskModal(true) : undefined}
-      className={`flex-1 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 flex items-center justify-center text-white/50 hover:bg-white/20 transition-colors ${index === 0 ? 'cursor-pointer' : ''}`}
+      className={`ark-panel-card flex flex-1 items-center justify-center rounded-lg text-[var(--ark-text-muted)] transition-colors ${index === 0 ? 'cursor-pointer' : ''}`}
     >
-      <span className="font-medium text-lg text-white/80">{index === 0 ? '今日安排' : `占位区 ${index + 1}`}</span>
+      <span className="text-lg font-medium text-[var(--ark-text)]">{index === 0 ? '今日安排' : `占位区 ${index + 1}`}</span>
     </div>
   );
 };

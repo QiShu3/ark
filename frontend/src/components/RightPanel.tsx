@@ -39,7 +39,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
         aria-label={collapsed ? 'Expand right panel' : 'Collapse right panel'}
         onClick={onToggle}
         className={cn(
-          'absolute top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white/80 backdrop-blur-md transition-all duration-200 hover:bg-black/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70 lg:flex',
+          'ark-surface ark-focus-ring absolute top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center rounded-full text-[var(--ark-text-muted)] backdrop-blur-md transition-all duration-200 hover:text-[var(--ark-text)] lg:flex',
           collapsed ? 'right-0 h-24 w-4' : 'right-1 h-16 w-6',
         )}
       >

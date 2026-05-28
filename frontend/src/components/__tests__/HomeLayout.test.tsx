@@ -79,4 +79,23 @@ describe('App home layout', () => {
       'https://beian.miit.gov.cn/',
     );
   });
+
+  it('initializes the resolved theme on the authenticated shell', () => {
+    window.localStorage.setItem('ark-theme-preference', 'light');
+    useAuthStore.getState().setSession('token', 3600);
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<RequireAuth />}>
+            <Route path="/" element={<App />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light');
+    expect(screen.getByTestId('authenticated-shell')).toHaveClass('ark-shell');
+    expect(screen.getByTestId('background-overlay')).toHaveClass('ark-background-overlay');
+  });
 });
