@@ -291,6 +291,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   </div>
                   <div className="h-px bg-white/5" />
                   <div className="flex items-center justify-between">
+                    <span className="text-sm text-white/50">邮箱</span>
+                    <span className="text-sm font-medium text-white">{user?.email ?? '—'}</span>
+                  </div>
+                  <div className="h-px bg-white/5" />
+                  <div className="flex items-center justify-between">
                     <span className="text-sm text-white/50">注册时间</span>
                     <span className="text-sm font-medium text-white">
                       {user?.created_at ? formatDate(user.created_at) : '—'}

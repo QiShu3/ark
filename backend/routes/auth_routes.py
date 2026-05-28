@@ -54,6 +54,7 @@ class ProfileUpdateRequest(BaseModel):
 class UserPublic(BaseModel):
     id: int
     username: str
+    email: str | None = None
     is_active: bool
     is_admin: bool
     created_at: datetime
@@ -70,6 +71,7 @@ class UserPublic(BaseModel):
 class _AuthUser:
     id: int
     username: str
+    email: str | None
     is_active: bool
     is_admin: bool
     created_at: datetime
@@ -183,6 +185,7 @@ async def init_auth(app: Any) -> None:
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS background_opacity REAL DEFAULT 0.6;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS show_character BOOLEAN DEFAULT TRUE;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS character_scale REAL DEFAULT 1.0;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email TEXT DEFAULT NULL;")
         # 迁移：用户上传记录表（用于追踪文件归属和限额管理）
         await conn.execute(
             """
@@ -219,6 +222,7 @@ def _user_public_from_row(row: asyncpg.Record) -> UserPublic:
     return UserPublic(
         id=int(row["id"]),
         username=str(row["username"]),
+        email=row.get("email"),
         is_active=bool(row["is_active"]),
         is_admin=bool(row["is_admin"]),
         created_at=row["created_at"],
@@ -237,6 +241,7 @@ def _user_public_from_auth_user(user: _AuthUser) -> UserPublic:
     return UserPublic(
         id=user.id,
         username=user.username,
+        email=user.email,
         is_active=user.is_active,
         is_admin=user.is_admin,
         created_at=user.created_at,
@@ -255,7 +260,7 @@ async def _get_user_by_username(pool: asyncpg.Pool, username: str) -> asyncpg.Re
     async with pool.acquire() as conn:
         return await conn.fetchrow(
             """
-            SELECT id, username, password_hash, password_salt, is_active, is_admin, created_at,
+            SELECT id, username, email, password_hash, password_salt, is_active, is_admin, created_at,
                    avatar_url, custom_background_url, custom_character_url,
                    background_blur, background_opacity, show_character, character_scale
             FROM auth_users
@@ -289,7 +294,7 @@ async def _user_from_token(pool: asyncpg.Pool, token: str) -> _AuthUser | None:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT u.id, u.username, u.is_active, u.is_admin, u.created_at,
+            SELECT u.id, u.username, u.email, u.is_active, u.is_admin, u.created_at,
                    u.avatar_url, u.custom_background_url, u.custom_character_url,
                    u.background_blur, u.background_opacity, u.show_character, u.character_scale
             FROM auth_access_tokens t
@@ -305,6 +310,7 @@ async def _user_from_token(pool: asyncpg.Pool, token: str) -> _AuthUser | None:
     return _AuthUser(
         id=int(row["id"]),
         username=str(row["username"]),
+        email=row.get("email"),
         is_active=bool(row["is_active"]),
         is_admin=bool(row["is_admin"]),
         created_at=row["created_at"],
@@ -346,7 +352,7 @@ async def register(request: Request, payload: RegisterRequest) -> UserPublic:
             """
             INSERT INTO auth_users(username, password_hash, password_salt)
             VALUES ($1, $2, $3)
-            RETURNING id, username, is_active, is_admin, created_at,
+            RETURNING id, username, email, is_active, is_admin, created_at,
                       avatar_url, custom_background_url, custom_character_url,
                       background_blur, background_opacity, show_character, character_scale
             """,
@@ -412,7 +418,7 @@ async def list_users(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, username, is_active, is_admin, created_at,
+            SELECT id, username, email, is_active, is_admin, created_at,
                    avatar_url, custom_background_url, custom_character_url,
                    background_blur, background_opacity, show_character, character_scale
             FROM auth_users
@@ -520,7 +526,7 @@ async def update_profile(
     sql = (
         f"UPDATE auth_users SET {', '.join(set_clauses)} "
         f"WHERE id = {user_id_placeholder} "
-        f"RETURNING id, username, is_active, is_admin, created_at, "
+        f"RETURNING id, username, email, is_active, is_admin, created_at, "
         f"avatar_url, custom_background_url, custom_character_url, "
         f"background_blur, background_opacity, show_character, character_scale"
     )
