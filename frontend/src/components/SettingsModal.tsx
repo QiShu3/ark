@@ -89,11 +89,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       aria-label="界面设置"
     >
       <div
-        className="relative flex h-[520px] w-[720px] max-w-[92vw] overflow-hidden rounded-2xl border border-white/10 bg-[#121212]/90 shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-200"
+        className="relative flex h-[620px] w-[900px] max-w-[95vw] overflow-hidden rounded-2xl border border-white/10 bg-[#121212]/90 shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-200"
         onClick={(event) => event.stopPropagation()}
       >
         {/* 左侧侧边栏 */}
-        <div className="w-[200px] shrink-0 border-r border-white/10 bg-white/[0.02] flex flex-col p-4">
+        <div className="w-[260px] shrink-0 border-r border-white/10 bg-white/[0.02] flex flex-col p-4">
           <div className="mb-6 px-2">
             <h3 className="text-lg font-bold text-white">界面设置</h3>
             <p className="text-xs text-white/40">自定义你的专属空间</p>
