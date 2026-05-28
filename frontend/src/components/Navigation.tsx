@@ -9,6 +9,7 @@ import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 import { restartFirstGuide } from '../lib/onboardingEvents';
 import SettingsModal from './SettingsModal';
+import { useCustomizationStore } from '../lib/customization';
 
 function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
@@ -24,6 +25,7 @@ const Navigation: React.FC = () => {
   const token = useAuthStore((s) => s.token);
   const setUser = useAuthStore((s) => s.setUser);
   const clearSession = useAuthStore((s) => s.clear);
+  const avatarUrl = useCustomizationStore((s) => s.avatarUrl);
 
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -64,11 +66,23 @@ const Navigation: React.FC = () => {
 
   useEffect(() => {
     if (token && !user) {
-      apiJson<User>('/auth/me')
-        .then(setUser)
+      apiJson<User & Record<string, unknown>>('/auth/me')
+        .then((data) => {
+          setUser(data);
+          const serverData: Record<string, unknown> = {};
+          if (data.avatar_url) serverData.avatarUrl = data.avatar_url;
+          if (data.custom_background_url) serverData.backgroundUrl = data.custom_background_url;
+          if (data.custom_character_url) serverData.characterUrl = data.custom_character_url;
+          if (data.background_blur !== undefined) serverData.backgroundBlur = data.background_blur;
+          if (data.background_opacity !== undefined) serverData.backgroundOpacity = data.background_opacity;
+          if (data.show_character !== undefined) serverData.showCharacter = data.show_character;
+          if (data.character_scale !== undefined) serverData.characterScale = data.character_scale;
+          if (Object.keys(serverData).length > 0) {
+            useCustomizationStore.getState().loadFromServer(serverData);
+          }
+        })
         .catch((err) => {
             console.error('Failed to fetch user info:', err);
-            // Consider clearing token if 401, but apiJson handles 401 by redirecting to login
         });
     }
   }, [token, user, setUser]);
@@ -190,9 +204,13 @@ const Navigation: React.FC = () => {
         {user ? (
           <div className="flex items-center gap-3">
             <div className="relative group cursor-pointer">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-white/20">
-                {user.username.charAt(0).toUpperCase()}
-              </div>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={user.username} className="w-8 h-8 rounded-full object-cover border border-white/20" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-white/20">
+                  {user.username.charAt(0).toUpperCase()}
+                </div>
+              )}
 
               {/* 悬停显示的用户名 */}
               <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">

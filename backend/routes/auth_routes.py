@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -5,13 +6,18 @@ import os
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+
+_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
+_ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+_MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5MB
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
@@ -33,12 +39,29 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class ProfileUpdateRequest(BaseModel):
+    avatar_url: str | None = None
+    custom_background_url: str | None = None
+    custom_character_url: str | None = None
+    background_blur: int | None = None
+    background_opacity: float | None = None
+    show_character: bool | None = None
+    character_scale: float | None = None
+
+
 class UserPublic(BaseModel):
     id: int
     username: str
     is_active: bool
     is_admin: bool
     created_at: datetime
+    avatar_url: str | None = None
+    custom_background_url: str | None = None
+    custom_character_url: str | None = None
+    background_blur: int = 0
+    background_opacity: float = 0.6
+    show_character: bool = True
+    character_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -48,6 +71,13 @@ class _AuthUser:
     is_active: bool
     is_admin: bool
     created_at: datetime
+    avatar_url: str | None = None
+    custom_background_url: str | None = None
+    custom_character_url: str | None = None
+    background_blur: int = 0
+    background_opacity: float = 0.6
+    show_character: bool = True
+    character_scale: float = 1.0
 
 
 def _utc_now() -> datetime:
@@ -143,6 +173,14 @@ async def init_auth(app: Any) -> None:
         )
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_id ON auth_access_tokens(user_id);")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires_at ON auth_access_tokens(expires_at);")
+        # 迁移：为 auth_users 添加个性化配置列
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS custom_background_url TEXT DEFAULT NULL;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS custom_character_url TEXT DEFAULT NULL;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS background_blur INTEGER DEFAULT 0;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS background_opacity REAL DEFAULT 0.6;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS show_character BOOLEAN DEFAULT TRUE;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS character_scale REAL DEFAULT 1.0;")
 
 
 async def close_auth(app: Any) -> None:
@@ -161,12 +199,50 @@ def _pool_from_request(request: Request) -> asyncpg.Pool:
     return pool
 
 
+def _user_public_from_row(row: asyncpg.Record) -> UserPublic:
+    """从数据库行构造 UserPublic 实例。"""
+    return UserPublic(
+        id=int(row["id"]),
+        username=str(row["username"]),
+        is_active=bool(row["is_active"]),
+        is_admin=bool(row["is_admin"]),
+        created_at=row["created_at"],
+        avatar_url=row["avatar_url"],
+        custom_background_url=row["custom_background_url"],
+        custom_character_url=row["custom_character_url"],
+        background_blur=int(row["background_blur"] or 0),
+        background_opacity=float(row["background_opacity"] if row["background_opacity"] is not None else 0.6),
+        show_character=bool(row["show_character"] if row["show_character"] is not None else True),
+        character_scale=float(row["character_scale"] if row["character_scale"] is not None else 1.0),
+    )
+
+
+def _user_public_from_auth_user(user: _AuthUser) -> UserPublic:
+    """从 _AuthUser 实例构造 UserPublic。"""
+    return UserPublic(
+        id=user.id,
+        username=user.username,
+        is_active=user.is_active,
+        is_admin=user.is_admin,
+        created_at=user.created_at,
+        avatar_url=user.avatar_url,
+        custom_background_url=user.custom_background_url,
+        custom_character_url=user.custom_character_url,
+        background_blur=user.background_blur,
+        background_opacity=user.background_opacity,
+        show_character=user.show_character,
+        character_scale=user.character_scale,
+    )
+
+
 async def _get_user_by_username(pool: asyncpg.Pool, username: str) -> asyncpg.Record | None:
     """按用户名查找用户记录。"""
     async with pool.acquire() as conn:
         return await conn.fetchrow(
             """
-            SELECT id, username, password_hash, password_salt, is_active, is_admin, created_at
+            SELECT id, username, password_hash, password_salt, is_active, is_admin, created_at,
+                   avatar_url, custom_background_url, custom_character_url,
+                   background_blur, background_opacity, show_character, character_scale
             FROM auth_users
             WHERE username = $1
             """,
@@ -198,7 +274,9 @@ async def _user_from_token(pool: asyncpg.Pool, token: str) -> _AuthUser | None:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT u.id, u.username, u.is_active, u.is_admin, u.created_at
+            SELECT u.id, u.username, u.is_active, u.is_admin, u.created_at,
+                   u.avatar_url, u.custom_background_url, u.custom_character_url,
+                   u.background_blur, u.background_opacity, u.show_character, u.character_scale
             FROM auth_access_tokens t
             JOIN auth_users u ON u.id = t.user_id
             WHERE t.token = $1 AND t.expires_at > NOW()
@@ -215,6 +293,13 @@ async def _user_from_token(pool: asyncpg.Pool, token: str) -> _AuthUser | None:
         is_active=bool(row["is_active"]),
         is_admin=bool(row["is_admin"]),
         created_at=row["created_at"],
+        avatar_url=row["avatar_url"],
+        custom_background_url=row["custom_background_url"],
+        custom_character_url=row["custom_character_url"],
+        background_blur=int(row["background_blur"] or 0),
+        background_opacity=float(row["background_opacity"] if row["background_opacity"] is not None else 0.6),
+        show_character=bool(row["show_character"] if row["show_character"] is not None else True),
+        character_scale=float(row["character_scale"] if row["character_scale"] is not None else 1.0),
     )
 
 
@@ -246,19 +331,15 @@ async def register(request: Request, payload: RegisterRequest) -> UserPublic:
             """
             INSERT INTO auth_users(username, password_hash, password_salt)
             VALUES ($1, $2, $3)
-            RETURNING id, username, is_active, is_admin, created_at
+            RETURNING id, username, is_active, is_admin, created_at,
+                      avatar_url, custom_background_url, custom_character_url,
+                      background_blur, background_opacity, show_character, character_scale
             """,
             payload.username,
             password_hash,
             password_salt,
         )
-    return UserPublic(
-        id=int(row["id"]),
-        username=str(row["username"]),
-        is_active=bool(row["is_active"]),
-        is_admin=bool(row["is_admin"]),
-        created_at=row["created_at"],
-    )
+    return _user_public_from_row(row)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -300,13 +381,7 @@ async def logout(
 @router.get("/me", response_model=UserPublic)
 async def me(user: Annotated[_AuthUser, Depends(get_current_user)]) -> UserPublic:
     """获取当前登录用户信息。"""
-    return UserPublic(
-        id=user.id,
-        username=user.username,
-        is_active=user.is_active,
-        is_admin=user.is_admin,
-        created_at=user.created_at,
-    )
+    return _user_public_from_auth_user(user)
 
 
 @router.get("/users", response_model=list[UserPublic])
@@ -316,33 +391,87 @@ async def list_users(
 ) -> list[UserPublic]:
     """列出用户：管理员返回全部；非管理员仅返回自己。"""
     if not user.is_admin:
-        return [
-            UserPublic(
-                id=user.id,
-                username=user.username,
-                is_active=user.is_active,
-                is_admin=user.is_admin,
-                created_at=user.created_at,
-            )
-        ]
+        return [_user_public_from_auth_user(user)]
 
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, username, is_active, is_admin, created_at
+            SELECT id, username, is_active, is_admin, created_at,
+                   avatar_url, custom_background_url, custom_character_url,
+                   background_blur, background_opacity, show_character, character_scale
             FROM auth_users
             ORDER BY id DESC
             LIMIT 100
             """
         )
-    return [
-        UserPublic(
-            id=int(r["id"]),
-            username=str(r["username"]),
-            is_active=bool(r["is_active"]),
-            is_admin=bool(r["is_admin"]),
-            created_at=r["created_at"],
-        )
-        for r in rows
-    ]
+    return [_user_public_from_row(r) for r in rows]
+
+
+@router.post("/upload")
+async def upload_image(
+    file: UploadFile = File(...),
+    user: _AuthUser = Depends(get_current_user),
+) -> dict[str, str]:
+    """上传图片文件，返回可访问的 URL。"""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="缺少文件名")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in _ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"不支持的图片格式，允许: {', '.join(sorted(_ALLOWED_IMAGE_EXTENSIONS))}")
+
+    content = await file.read()
+    if len(content) > _MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小超过 5MB 限制")
+
+    file_hash = hashlib.sha256(content).hexdigest()
+    filename = f"{file_hash}.{ext}"
+    dest = _UPLOADS_DIR / filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(dest.write_bytes, content)
+
+    return {"url": f"/uploads/{filename}"}
+
+
+@router.patch("/profile", response_model=UserPublic)
+async def update_profile(
+    request: Request,
+    payload: ProfileUpdateRequest,
+    user: _AuthUser = Depends(get_current_user),
+) -> UserPublic:
+    """更新当前用户的个性化配置。"""
+    field_map: dict[str, Any] = {
+        "avatar_url": payload.avatar_url,
+        "custom_background_url": payload.custom_background_url,
+        "custom_character_url": payload.custom_character_url,
+        "background_blur": payload.background_blur,
+        "background_opacity": payload.background_opacity,
+        "show_character": payload.show_character,
+        "character_scale": payload.character_scale,
+    }
+    updates = {k: v for k, v in field_map.items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="未提供任何更新字段")
+
+    set_clauses = []
+    params: list[Any] = []
+    for i, (col, val) in enumerate(updates.items(), start=1):
+        set_clauses.append(f"{col} = ${i}")
+        params.append(val)
+    params.append(user.id)
+    user_id_placeholder = f"${len(params)}"
+
+    sql = (
+        f"UPDATE auth_users SET {', '.join(set_clauses)} "
+        f"WHERE id = {user_id_placeholder} "
+        f"RETURNING id, username, is_active, is_admin, created_at, "
+        f"avatar_url, custom_background_url, custom_character_url, "
+        f"background_blur, background_opacity, show_character, character_scale"
+    )
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(sql, *params)
+    if row is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return _user_public_from_row(row)

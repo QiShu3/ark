@@ -58,3 +58,26 @@ export async function checkIn(): Promise<void> {
 export async function getCheckInStatus(): Promise<CheckInStatus> {
   return apiJson<CheckInStatus>('/api/checkin/status');
 }
+
+export async function uploadFile(file: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await apiFetch('/auth/upload', { method: 'POST', body: form });
+  if (res.status === 401) {
+    useAuthStore.getState().clear();
+    if (!window.location.hash.startsWith('#/login')) window.location.hash = '#/login';
+  }
+  if (!res.ok) {
+    const detail = await _parseErrorDetail(res);
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateProfile(settings: Record<string, unknown>): Promise<unknown> {
+  return apiJson('/auth/profile', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+}
