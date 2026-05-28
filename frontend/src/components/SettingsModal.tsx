@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, User, X, Upload, Loader2 } from 'lucide-react';
-import { useCustomizationStore, CustomizationSettings } from '../lib/customization';
+import { useCustomizationStore, CustomizationSettings, DEFAULT_SETTINGS } from '../lib/customization';
 import { useAuthStore } from '../lib/auth';
-import { uploadFile, updateProfile, getUserUploads, UserUpload } from '../lib/api';
+import { uploadFile, updateProfile, getUserUploads, deleteUserUpload, UserUpload } from '../lib/api';
 
 type SettingsModalProps = {
   open: boolean;
@@ -168,6 +168,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     } finally {
       setCharaUploading(false);
       if (charaInputRef.current) charaInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteUpload = async (upload: UserUpload) => {
+    if (!window.confirm('确定要删除这张图片吗？删除后无法恢复。')) return;
+    try {
+      await deleteUserUpload(upload.url);
+      setUploads((prev) => prev.filter((u) => u.url !== upload.url));
+      // 如果删除的是当前选中的图片，重置为默认
+      if (upload.category === 'background' && currentSettings.backgroundUrl === upload.url) {
+        updateSettings({ backgroundUrl: DEFAULT_SETTINGS.backgroundUrl });
+      } else if (upload.category === 'character' && currentSettings.characterUrl === upload.url) {
+        updateSettings({ characterUrl: DEFAULT_SETTINGS.characterUrl });
+      }
+    } catch (err) {
+      console.error('Delete upload failed:', err);
     }
   };
 
@@ -352,22 +368,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       {bgUploads.map((upload) => {
                         const isActive = currentSettings.backgroundUrl === upload.url;
                         return (
-                          <button
-                            key={upload.url}
-                            type="button"
-                            onClick={() => updateSettings({ backgroundUrl: upload.url })}
-                            className={`group relative aspect-video overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
-                              isActive
-                                ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
-                                : 'border-white/10 hover:border-white/20'
-                            }`}
-                          >
-                            <img
-                              src={upload.url}
-                              alt="已上传背景"
-                              className="h-full w-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
-                            />
-                          </button>
+                          <div key={upload.url} className="relative group">
+                            <button
+                              type="button"
+                              onClick={() => updateSettings({ backgroundUrl: upload.url })}
+                              className={`w-full aspect-video overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                                isActive
+                                  ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
+                                  : 'border-white/10 hover:border-white/20'
+                              }`}
+                            >
+                              <img
+                                src={upload.url}
+                                alt="已上传背景"
+                                className="h-full w-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteUpload(upload); }}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-400 shadow-lg"
+                              title="删除图片"
+                            >
+                              <X size={12} className="text-white" />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -513,22 +538,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                           {charaUploads.map((upload) => {
                             const isActive = currentSettings.characterUrl === upload.url;
                             return (
-                              <button
-                                key={upload.url}
-                                type="button"
-                                onClick={() => updateSettings({ characterUrl: upload.url })}
-                                className={`group relative aspect-[3/4] overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
-                                  isActive
-                                    ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
-                                    : 'border-white/10 hover:border-white/20'
-                                }`}
-                              >
-                                <img
-                                  src={upload.url}
-                                  alt="已上传立绘"
-                                  className="h-full w-full object-contain p-2 opacity-70 group-hover:opacity-90 transition-opacity"
-                                />
-                              </button>
+                              <div key={upload.url} className="relative group">
+                                <button
+                                  type="button"
+                                  onClick={() => updateSettings({ characterUrl: upload.url })}
+                                  className={`w-full aspect-[3/4] overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                                    isActive
+                                      ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
+                                      : 'border-white/10 hover:border-white/20'
+                                  }`}
+                                >
+                                  <img
+                                    src={upload.url}
+                                    alt="已上传立绘"
+                                    className="h-full w-full object-contain p-2 opacity-70 group-hover:opacity-90 transition-opacity"
+                                  />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteUpload(upload); }}
+                                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-400 shadow-lg"
+                                  title="删除图片"
+                                >
+                                  <X size={12} className="text-white" />
+                                </button>
+                              </div>
                             );
                           })}
                         </div>

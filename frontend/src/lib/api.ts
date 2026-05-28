@@ -85,6 +85,14 @@ export async function getUserUploads(): Promise<UserUpload[]> {
   return apiJson<UserUpload[]>('/auth/uploads');
 }
 
+export async function deleteUserUpload(url: string): Promise<void> {
+  await apiJson('/auth/uploads', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+}
+
 export async function updateProfile(settings: Record<string, unknown>): Promise<unknown> {
   return apiJson('/auth/profile', {
     method: 'PATCH',

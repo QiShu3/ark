@@ -495,6 +495,37 @@ async def get_user_uploads(
     return [{"url": r["url"], "category": r["category"], "created_at": r["created_at"].isoformat()} for r in rows]
 
 
+class UploadDeleteRequest(BaseModel):
+    url: str
+
+
+@router.delete("/uploads")
+async def delete_user_upload(
+    request: Request,
+    payload: UploadDeleteRequest,
+    user: _AuthUser = Depends(get_current_user),
+) -> dict[str, str]:
+    """删除当前用户的一条上传记录及其文件。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "DELETE FROM user_uploads WHERE user_id = $1 AND url = $2 RETURNING url",
+            user.id, payload.url,
+        )
+    if row is None:
+        raise HTTPException(status_code=404, detail="上传记录不存在")
+    # 删除磁盘文件（如果无其他记录引用同一文件则删除）
+    file_path = _UPLOADS_DIR / Path(payload.url).name
+    if file_path.exists():
+        async with pool.acquire() as conn:
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM user_uploads WHERE url = $1", payload.url,
+            )
+        if count == 0:
+            await asyncio.to_thread(file_path.unlink)
+    return {"detail": "已删除"}
+
+
 @router.patch("/profile", response_model=UserPublic)
 async def update_profile(
     request: Request,
