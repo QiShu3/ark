@@ -2,6 +2,26 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 17:32 · cfa8a50 · feat: add image upload, profile sync, and settings profile tab
+
+- 用户提出的需求：
+  - "推进"（继续实现图片上传与多端同步功能）
+
+- 本次完成的工作：
+  - **后端**：在 `auth_users` 表中新增 7 个个性化列（`avatar_url`、`custom_background_url`、`custom_character_url`、`background_blur`、`background_opacity`、`show_character`、`character_scale`），使用 `ALTER TABLE ADD COLUMN IF NOT EXISTS` 实现平滑迁移。
+  - **后端**：新增 `POST /auth/upload` 图片上传接口，SHA256 内容寻址去重，限制 5MB 和图片格式。
+  - **后端**：新增 `PATCH /auth/profile` 增量更新接口，动态 SQL 仅更新非空字段。
+  - **后端**：升级 `UserPublic`、`_AuthUser` 模型以及所有用户端点，完整返回个性化属性。
+  - **前端**：在 `api.ts` 中新增 `uploadFile` 和 `updateProfile` API 函数。
+  - **前端**：`customization.ts` 新增 `avatarUrl` 字段和 `loadFromServer` 动作，支持登录后云端配置同步。
+  - **前端**：`Navigation.tsx` 支持渲染云端自定义头像，`/auth/me` 返回后自动同步个性化设置到 Store。
+  - **前端**：`SettingsModal.tsx` 新增「个人资料 (Profile)」Tab（含头像上传圆形区域、用户名、注册时间显示），个性化 Tab 新增背景和看板娘的本地图片上传热区，保存按钮调用 `updateProfile` 持久化到服务器。
+
+- 验证情况：
+  - `uv run ruff check routes/auth_routes.py` — All checks passed ✅
+  - `pnpm check` — 无新增 TS 错误（仅有预存无关报错）✅
+  - `npx vitest run` — 46 文件 203 测试全部通过 ✅
+
 ### 2026-05-28 17:08 · 9aaa888 · feat(frontend): merge avatar settings inside unified personalization tab
 
 - 用户提出的需求：
