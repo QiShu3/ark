@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 15:51 · e4625d9 · fix(frontend): remove redundant '安排' label from event details header
+
+- 用户提出的需求：
+  - 你看看左上角是不是有个文案叫 安排？这个文案不好，去掉这个文案吧
+
+- 本次完成的工作：
+  - 移除了主事件详情页/工作台弹窗（`EventWorkbenchModal.tsx`）左上角冗余的 “安排” 英文大小写文本，优化弹窗标题排版。
+  - 将事件名称标题的 `mt-1` (margin-top) 移除，保证在无副标题状态下事件标题的垂直居中视觉表现更佳。
+
+- 验证情况：
+  - 运行 `pnpm test`，所有 205 个前端测试用例全部以 100% 绿灯通过（包括涉及事件工作台的各项功能和 Onboarding 流程）。
+  - 使用内置浏览器智能体成功重新登录并截图验证，确认 “安排” 字样已彻底消失，头部标题更显 premium。
+
 ### 2026-05-28 15:43 · be712b4 · feat: allow editing/deleting event-attached workflows and setting them as global default
 
 - 用户提出的需求：
