@@ -1271,23 +1271,21 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
                       return (
                         <React.Fragment key={idx}>
-                          {idx > 0 && <span className="text-white/10 text-xs">—</span>}
-                          <div className="inline-flex items-center gap-1 flex-wrap">
+                          {idx > 0 && <span className="text-white/15 text-[10px]">→</span>}
+                          <div className="inline-flex items-center">
                             {isFocus ? (
-                              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 border border-blue-500/25 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.06)]">
-                                <span>🎯</span>
-                                <span>专注 {minutes}m</span>
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 border border-blue-500/25 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.06)]">
+                                <span>🎯 {minutes}m</span>
+                                {taskTitle && (
+                                  <>
+                                    <span className="text-blue-500/30 text-[10px]">|</span>
+                                    <span className="truncate max-w-[90px] text-blue-200/80" title={taskTitle}>{taskTitle}</span>
+                                  </>
+                                )}
                               </div>
                             ) : (
-                              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.06)]">
-                                <span>☕</span>
-                                <span>休息 {minutes}m</span>
-                              </div>
-                            )}
-                            {taskTitle && (
-                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-white/5 border border-white/10 text-white/55 max-w-[120px] truncate" title={taskTitle}>
-                                <span>📋</span>
-                                <span className="truncate">{taskTitle}</span>
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.06)]">
+                                <span>☕ {minutes}m</span>
                               </div>
                             )}
                           </div>
