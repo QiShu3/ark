@@ -1896,7 +1896,7 @@ const EventCountdownCard: React.FC = () => {
                     <div className="h-full min-h-[160px] flex items-center justify-center text-white/35">暂无事件</div>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      {events.map((event) => (
+                      {[...events].sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0)).map((event) => (
                         <button
                           key={event.id}
                           type="button"
