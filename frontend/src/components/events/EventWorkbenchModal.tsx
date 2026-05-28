@@ -1303,7 +1303,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-white/[0.04] px-5">
           <div>
-            <h2 className="text-xl font-semibold">{currentEvent.name}</h2>
+            <div className="text-xs uppercase tracking-[0.24em] text-white/45">事件总览</div>
+            <h2 className="mt-1 text-xl font-semibold">{currentEvent.name}</h2>
           </div>
           <button
             type="button"
@@ -1322,7 +1323,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold">事件总览</h3>
+                <h3 className="text-base font-semibold">基本信息</h3>
                 <div className="mt-3 grid gap-2 text-sm text-white/70 sm:grid-cols-2">
                   <div>开始日期 {currentEvent.start_date}</div>
                   <div>截止时间 {formatEventDateTime(currentEvent.due_at)}</div>
