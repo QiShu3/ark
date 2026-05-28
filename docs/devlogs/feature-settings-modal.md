@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 17:08 · 9aaa888 · feat(frontend): merge avatar settings inside unified personalization tab
+
+- 用户提出的需求：
+  - “看板娘应该也纳入个性化功能内”
+
+- 本次完成的工作：
+  - 重塑设置弹窗业务逻辑，将原本独立的“看板娘”标签页，作为子板块优雅合并入统一的“个性化 (Personalization)”大面板中。
+  - 在右侧个性化内容区，通过一条精致的半透明分割线将“背景自定义”与“前景看板娘”两个子部分串联起来，保持逻辑聚合、交互统一。
+
+- 验证情况：
+  - 运行 `pnpm check` 验证通过。
+
 ### 2026-05-28 16:55 · 64ca5c5 · style(frontend): further enlarge SettingsModal layout to ultra-wide desktop dimensions
 
 - 用户提出的需求：
