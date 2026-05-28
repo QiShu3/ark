@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { BookOpen, Calendar, LogOut } from 'lucide-react';
+import { BookOpen, Calendar, LogOut, Settings } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 import { restartFirstGuide } from '../lib/onboardingEvents';
+import SettingsModal from './SettingsModal';
 
 function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
@@ -27,6 +28,7 @@ const Navigation: React.FC = () => {
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const focusNavigationLocked = isFocusWorkNavigationLocked(workflowSnapshot);
 
@@ -199,6 +201,19 @@ const Navigation: React.FC = () => {
             </div>
             <button
               type="button"
+              aria-label="打开界面设置"
+              title="界面设置"
+              disabled={focusNavigationLocked}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-300/70 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                if (focusNavigationLocked) return;
+                setShowSettingsModal(true);
+              }}
+            >
+              <Settings size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               aria-label="退出登录"
               title="退出登录"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-300/70"
@@ -230,6 +245,7 @@ const Navigation: React.FC = () => {
     )}
 
     <MultiWeekCalendarModal open={showCalendarModal} onClose={() => setShowCalendarModal(false)} />
+    <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </>
   );
 };
