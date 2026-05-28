@@ -2,6 +2,26 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 15:43 · be712b4 · feat: allow editing/deleting event-attached workflows and setting them as global default
+
+- 用户提出的需求：
+  - 创建事件后，会附带生成工作流，但是这个附带生成的工作流不能在工作流预设中进行编辑。我希望 可以进行编辑，并且编辑结果也会同步到事件的工作预览中
+  - 为什么隐藏 设为默认 按钮呢？
+
+- 本次完成的工作：
+  - 实现了事件附带生成工作流的全面编辑与删除功能：
+    - 前端在 `PlaceholderCard.tsx` 的首页工作流设置面板入口移除 event-attached presets 的 read-only 限制（传入 `readOnlyPresetIds={[]}`），使它们可以直接点击载入表单进行编辑与删除。
+    - 前端在 `PlaceholderCard.tsx` 中优化 `_submitWorkflowPreset` 和 `_deleteWorkflowPreset`，如果当前编辑的预设带有 `event_id`，自动将 API 请求分发至事件专属的子路由 `/todo/events/{event_id}/workflows/{id}`。
+    - 前端在 `WorkflowPresetModal.tsx` 中为带 `event_id` 的预设增加“事件”标识徽章，保留其“设为默认”和“删除”按钮，确保用户能够一键将事件工作流置为全局默认或彻底移除。
+    - 后端在 `db.py` 中移除针对 `event_id IS NULL` 的 unique 索引限制，升级全局唯一默认工作流索引，使得所有工作流预设（不论是全局还是事件相关）均在全局范围内遵循至多有一个 `is_default = TRUE` 的业务逻辑。
+    - 后端在 `helpers.py` 和 `routes.py` 中去掉 `AND event_id IS NULL` 限制，确保在新建、更新、删除或设置默认时，都会全局统一将其他预设的 `is_default` 置为 `FALSE`，保持数据库约束一致性。
+  - 重构了前端测试：
+    - 将 `PlaceholderCard.workflow.test.tsx` 中的只读测试用例重构为 `shows current-event workflows in the home workflow preset panel and allows editing, setting default, and deleting them`，全面测试事件工作流载入、表单编辑保存、全局默认设置、删除联动等交互及 API 路由匹配情况。
+
+- 验证情况：
+  - 执行 `npx vitest run` 所有 205/205 个前端测试用例全部通过。
+  - 执行 `uv run pytest` 所有 169/169 个后端测试用例全部通过。
+
 ### 2026-05-28 15:20 · 1479a01 · fix(frontend): block click events outside highlighted target during onboarding
 
 - 用户提出的需求：
