@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, User, X, Upload, Loader2 } from 'lucide-react';
 import { useCustomizationStore, CustomizationSettings } from '../lib/customization';
 import { useAuthStore } from '../lib/auth';
-import { uploadFile, updateProfile } from '../lib/api';
+import { uploadFile, updateProfile, getUserUploads } from '../lib/api';
 
 type SettingsModalProps = {
   open: boolean;
@@ -55,6 +55,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const [charaUploading, setCharaUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // 上传数量计数（每类最多 3 张）
+  const [bgCount, setBgCount] = useState(0);
+  const [charaCount, setCharaCount] = useState(0);
+
   // File input refs
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -76,6 +80,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       };
     }
   }, [open, currentSettings.backgroundUrl, currentSettings.backgroundBlur, currentSettings.backgroundOpacity, currentSettings.showCharacter, currentSettings.characterUrl, currentSettings.characterScale, currentSettings.avatarUrl]);
+
+  // 打开弹窗时获取上传数量
+  useEffect(() => {
+    if (!open) return;
+    getUserUploads()
+      .then((uploads) => {
+        setBgCount(uploads.filter((u) => u.category === 'background').length);
+        setCharaCount(uploads.filter((u) => u.category === 'character').length);
+      })
+      .catch(() => {});
+  }, [open]);
 
   if (!open) return null;
 
@@ -131,8 +146,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     if (!file) return;
     setBgUploading(true);
     try {
-      const { url } = await uploadFile(file);
+      const { url } = await uploadFile(file, 'background');
       updateSettings({ backgroundUrl: url });
+      setBgCount((c) => c + 1);
     } catch (err) {
       console.error('Background upload failed:', err);
     } finally {
@@ -146,8 +162,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     if (!file) return;
     setCharaUploading(true);
     try {
-      const { url } = await uploadFile(file);
+      const { url } = await uploadFile(file, 'character');
       updateSettings({ characterUrl: url });
+      setCharaCount((c) => c + 1);
     } catch (err) {
       console.error('Character upload failed:', err);
     } finally {
@@ -335,15 +352,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/20 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                   />
                   {/* 上传本地背景图 */}
-                  <button
-                    type="button"
-                    onClick={() => bgInputRef.current?.click()}
-                    disabled={bgUploading}
-                    className="flex items-center gap-2 self-start rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-1.5 text-xs text-white/50 transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 hover:text-blue-400"
-                  >
-                    {bgUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                    {bgUploading ? '上传中…' : '或上传本地图片'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => bgInputRef.current?.click()}
+                      disabled={bgUploading}
+                      className="flex items-center gap-2 self-start rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-1.5 text-xs text-white/50 transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 hover:text-blue-400"
+                    >
+                      {bgUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {bgUploading ? '上传中…' : '或上传本地图片'}
+                    </button>
+                    <span className="text-xs text-white/30">已上传 {bgCount}/3</span>
+                  </div>
                   <input
                     ref={bgInputRef}
                     type="file"
@@ -472,15 +492,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                         className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/20 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                       />
                       {/* 上传本地立绘 */}
-                      <button
-                        type="button"
-                        onClick={() => charaInputRef.current?.click()}
-                        disabled={charaUploading}
-                        className="flex items-center gap-2 self-start rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-1.5 text-xs text-white/50 transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 hover:text-blue-400"
-                      >
-                        {charaUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                        {charaUploading ? '上传中…' : '或上传本地图片'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => charaInputRef.current?.click()}
+                          disabled={charaUploading}
+                          className="flex items-center gap-2 self-start rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-1.5 text-xs text-white/50 transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 hover:text-blue-400"
+                        >
+                          {charaUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                          {charaUploading ? '上传中…' : '或上传本地图片'}
+                        </button>
+                        <span className="text-xs text-white/30">已上传 {charaCount}/3</span>
+                      </div>
                       <input
                         ref={charaInputRef}
                         type="file"

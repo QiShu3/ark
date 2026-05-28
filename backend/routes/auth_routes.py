@@ -11,13 +11,15 @@ from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import asyncpg
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 _UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 _ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 _MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5MB
+_MAX_UPLOADS_PER_CATEGORY = 3
+_UPLOAD_CATEGORIES = {"background", "character"}
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
@@ -181,6 +183,19 @@ async def init_auth(app: Any) -> None:
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS background_opacity REAL DEFAULT 0.6;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS show_character BOOLEAN DEFAULT TRUE;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS character_scale REAL DEFAULT 1.0;")
+        # 迁移：用户上传记录表（用于追踪文件归属和限额管理）
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_uploads (
+              id BIGSERIAL PRIMARY KEY,
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              category TEXT NOT NULL,
+              url TEXT NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_user_uploads_user_category ON user_uploads(user_id, category);")
 
 
 async def close_auth(app: Any) -> None:
@@ -410,15 +425,20 @@ async def list_users(
 
 @router.post("/upload")
 async def upload_image(
+    request: Request,
     file: UploadFile = File(...),
+    category: str | None = Query(None, description="上传类别: background 或 character，不传则不限制"),
     user: _AuthUser = Depends(get_current_user),
 ) -> dict[str, str]:
-    """上传图片文件，返回可访问的 URL。"""
+    """上传图片文件，返回可访问的 URL。category 为 background/character 时限额 3 张，超出自动删除最旧的。"""
     if not file.filename:
         raise HTTPException(status_code=400, detail="缺少文件名")
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in _ALLOWED_IMAGE_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"不支持的图片格式，允许: {', '.join(sorted(_ALLOWED_IMAGE_EXTENSIONS))}")
+
+    if category is not None and category not in _UPLOAD_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"无效的 category，允许: {', '.join(sorted(_UPLOAD_CATEGORIES))}")
 
     content = await file.read()
     if len(content) > _MAX_UPLOAD_SIZE:
@@ -426,11 +446,47 @@ async def upload_image(
 
     file_hash = hashlib.sha256(content).hexdigest()
     filename = f"{file_hash}.{ext}"
+    url = f"/uploads/{filename}"
     dest = _UPLOADS_DIR / filename
     dest.parent.mkdir(parents=True, exist_ok=True)
     await asyncio.to_thread(dest.write_bytes, content)
 
-    return {"url": f"/uploads/{filename}"}
+    # 有 category 时进行限额管理
+    if category is not None:
+        pool = _pool_from_request(request)
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, url FROM user_uploads WHERE user_id = $1 AND category = $2 ORDER BY created_at ASC",
+                user.id, category,
+            )
+            # 超过限额时删除最旧的记录和对应文件
+            while len(rows) >= _MAX_UPLOADS_PER_CATEGORY:
+                oldest = rows.pop(0)
+                old_path = _UPLOADS_DIR / Path(str(oldest["url"])).name
+                if old_path.exists():
+                    await asyncio.to_thread(old_path.unlink)
+                await conn.execute("DELETE FROM user_uploads WHERE id = $1", oldest["id"])
+            await conn.execute(
+                "INSERT INTO user_uploads(user_id, category, url) VALUES($1, $2, $3)",
+                user.id, category, url,
+            )
+
+    return {"url": url}
+
+
+@router.get("/uploads")
+async def get_user_uploads(
+    request: Request,
+    user: _AuthUser = Depends(get_current_user),
+) -> list[dict[str, Any]]:
+    """获取当前用户的上传记录列表。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT url, category, created_at FROM user_uploads WHERE user_id = $1 ORDER BY created_at DESC",
+            user.id,
+        )
+    return [{"url": r["url"], "category": r["category"], "created_at": r["created_at"].isoformat()} for r in rows]
 
 
 @router.patch("/profile", response_model=UserPublic)

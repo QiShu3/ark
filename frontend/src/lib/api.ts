@@ -59,10 +59,11 @@ export async function getCheckInStatus(): Promise<CheckInStatus> {
   return apiJson<CheckInStatus>('/api/checkin/status');
 }
 
-export async function uploadFile(file: File): Promise<{ url: string }> {
+export async function uploadFile(file: File, category?: string): Promise<{ url: string }> {
   const form = new FormData();
   form.append('file', file);
-  const res = await apiFetch('/auth/upload', { method: 'POST', body: form });
+  const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+  const res = await apiFetch(`/auth/upload${qs}`, { method: 'POST', body: form });
   if (res.status === 401) {
     useAuthStore.getState().clear();
     if (!window.location.hash.startsWith('#/login')) window.location.hash = '#/login';
@@ -72,6 +73,16 @@ export async function uploadFile(file: File): Promise<{ url: string }> {
     throw new Error(detail || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+export interface UserUpload {
+  url: string;
+  category: string;
+  created_at: string;
+}
+
+export async function getUserUploads(): Promise<UserUpload[]> {
+  return apiJson<UserUpload[]>('/auth/uploads');
 }
 
 export async function updateProfile(settings: Record<string, unknown>): Promise<unknown> {
