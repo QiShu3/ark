@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 16:55 · 64ca5c5 · style(frontend): further enlarge SettingsModal layout to ultra-wide desktop dimensions
+
+- 用户提出的需求：
+  - “还是太小了”
+
+- 本次完成的工作：
+  - 进一步升级弹窗尺寸至桌面级超宽规格：整体宽度拓宽为 **`1160px`**，高度增加为 **`760px`**（支持高达 `88vh` 和 `96vw` 的响应式视图）。
+  - 将左侧 Tab 导航侧边栏拓宽为 **`280px`**，从而为右侧配置面板流出多达 **`880px`** 的巨大空间，确保任何比例的预设卡片和滑块操作都能拥有极佳的开阔视界。
+
+- 验证情况：
+  - 运行 `pnpm check` 验证通过。
+
 ### 2026-05-28 16:54 · 47a1d92 · style(frontend): enlarge SettingsModal and sidebar layout dimensions
 
 - 用户提出的需求：
