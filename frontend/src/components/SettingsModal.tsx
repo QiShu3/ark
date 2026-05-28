@@ -341,17 +341,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   </div>
                 </div>
 
-                {/* 自定义背景 URL */}
+                {/* 上传本地背景图 */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-white/70">自定义图片链接 (URL)</label>
-                  <input
-                    type="text"
-                    value={currentSettings.backgroundUrl}
-                    onChange={(e) => updateSettings({ backgroundUrl: e.target.value })}
-                    placeholder="输入图片或壁纸的 https 链接"
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/20 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                  />
-                  {/* 上传本地背景图 */}
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -481,17 +472,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       </div>
                     </div>
 
-                    {/* 自定义人物 URL */}
+                    {/* 上传本地立绘 */}
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-medium text-white/70">自定义立绘链接 (URL)</label>
-                      <input
-                        type="text"
-                        value={currentSettings.characterUrl}
-                        onChange={(e) => updateSettings({ characterUrl: e.target.value })}
-                        placeholder="输入立绘图片的 https 链接（透明背景 PNG 效果最佳）"
-                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/20 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                      />
-                      {/* 上传本地立绘 */}
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
