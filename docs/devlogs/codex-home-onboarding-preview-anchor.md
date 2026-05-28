@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 15:20 · 1479a01 · fix(frontend): block click events outside highlighted target during onboarding
+
+- 用户提出的需求：
+  - 看看教练标注部分，用户可以点击区域之外的部分，这会导致破坏引导
+
+- 本次完成的工作：
+  - 在 `HomeOnboarding` 中，将全屏遮罩 `bg-black/30` 替换为以当前 highlighted element 区域为中心掏空的 4-piece 阻断型遮罩
+  - 4 个遮罩分片均设置 `pointer-events-auto`，以拦截用户在高亮目标区域之外的任何点击，防止用户通过乱点破坏引导流程；同时由于主容器为 `pointer-events-none`，高亮空心区域没有任何元素遮挡，其下方的目标元素依然能够被正常点击推进
+  - 保持弹窗/对话框本身的类名与既有测试行为完美兼容
+
+- 验证情况：
+  - 运行 `pnpm test`，所有 205 个测试全部通过（包括 `does not let the guide bubble intercept clicks meant for the highlighted target` 等 onboard 相关测试）
+
 ### 2026-05-25 23:34 · 752f4bb · feat(frontend): add first guide greeting states
 
 - 用户提出的需求：
