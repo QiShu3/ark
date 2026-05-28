@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-28 16:08 · db7126f · style(frontend): implement visual capsule timeline for event workflows in workbench
+
+- 用户提出的需求：
+  - 这里的工作流内容显示不好看，你有什么想法吗？（选择采用方案 A 胶囊时序时间轴流进行视觉重构）
+
+- 本次完成的工作：
+  - 在主事件详情页/工作台弹窗（`EventWorkbenchModal.tsx`）中重构工作流预设的列表呈现：
+    - 抛弃原本单一乏味的文本汇总渲染，全新开发了 **“方案 A：胶囊时序时间轴流 (Timeline Capsules)”** 视觉组件。
+    - 将阶段以极具质感的小圆角胶囊组件顺序横向铺开（专注阶段为深蓝色 `bg-blue-500/10` 搭配 `🎯` 图标，休息阶段为翠绿色 `bg-emerald-500/10` 搭配 `☕` 图标）。
+    - 动态读取 `taskArrangements` 以识别并加载阶段绑定的任务，为绑定任务的阶段在右侧渲染一个精致的小挂件（`📋` + 任务标题），实现安排与工作流数据的直观穿透展示。
+    - 升级工作流卡片外观，将圆角增大为 `rounded-xl`，微调了衬底色与内边距，并加入了优雅的 `hover:bg-white/[0.06]` 和 `border-white/20` 悬停过渡微动效，极大提升视觉精致度。
+    - 引入并声明 React 导入依赖，彻底消除 React 缺失导致的 `ReferenceError` 异常。
+
+- 验证情况：
+  - 运行 `pnpm test`，所有 205 个前端测试用例全部以 100% 绿灯通过，功能状态完全健康。
+  - 使用内置浏览器智能体重新登录并截图验证，时序胶囊呈现极其精致，极具科幻高级感。
+
 ### 2026-05-28 16:00 · bee6abc · refactor(frontend): set '事件总览' as header category and rename metadata section to '基本信息'
 
 - 用户提出的需求：
