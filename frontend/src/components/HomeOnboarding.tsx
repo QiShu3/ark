@@ -366,7 +366,40 @@ export default function HomeOnboarding() {
 
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[120]" aria-live="polite">
-      <div className="absolute inset-0 bg-black/30" />
+      {anchorRect ? (
+        <>
+          {/* Top backdrop */}
+          <div
+            className="pointer-events-auto absolute top-0 left-0 right-0 bg-black/30"
+            style={{ height: Math.max(0, anchorRect.top - 8) }}
+          />
+          {/* Bottom backdrop */}
+          <div
+            className="pointer-events-auto absolute bottom-0 left-0 right-0 bg-black/30"
+            style={{ top: Math.max(0, anchorRect.top + anchorRect.height + 8) }}
+          />
+          {/* Left backdrop */}
+          <div
+            className="pointer-events-auto absolute left-0 bg-black/30"
+            style={{
+              top: Math.max(0, anchorRect.top - 8),
+              height: Math.max(0, anchorRect.height + 16),
+              width: Math.max(0, anchorRect.left - 8),
+            }}
+          />
+          {/* Right backdrop */}
+          <div
+            className="pointer-events-auto absolute right-0 bg-black/30"
+            style={{
+              top: Math.max(0, anchorRect.top - 8),
+              height: Math.max(0, anchorRect.height + 16),
+              left: Math.max(0, anchorRect.left + anchorRect.width + 8),
+            }}
+          />
+        </>
+      ) : (
+        <div className="pointer-events-auto absolute inset-0 bg-black/30" />
+      )}
       <div
         className="absolute rounded-2xl border-2 border-cyan-300/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.28),0_0_28px_rgba(103,232,249,0.45)] transition-all duration-200"
         style={highlightStyle}
