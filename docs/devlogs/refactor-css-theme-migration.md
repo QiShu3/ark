@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 15:57 · ee8aac7 · fix(frontend): make workflow progress bar colors theme-aware using global CSS variables
+
+- 用户提出的需求：
+  - "感觉 字体颜色还是不怎么好看"
+
+- 本次完成的工作：
+  - 彻底解决了工作流进度条（WorkflowNavProgress 组件）在日间/浅色模式（Light Theme）下字体与前景色对比度极低、视觉效果较差的底层设计缺陷。
+  - **移除硬编码暗色**：移除了组件中硬编码的暗色背景下好看但浅色下完全看不清的 `text-blue-300` / `text-orange-300` 等静态 Tailwind 颜色类。
+  - **全局定义语义化状态变量**：在 `index.css` 的全局 `:root` 和 `:root[data-theme="light"]` 下，将专注工作的核心蓝/黄状态字体的颜色变量（`--focus-work-blue-text`、`--focus-work-amber-text`，以及关联的背景、边框变量）进行全局化声明。使之在暗色模式下映射为舒缓高亮的浅色字，在日间模式下自适应映射为墨蓝/深橘等精美的高对比深色字。
+  - **自适应前景色融合（currentColor）**：将胶囊中的状态点、呼吸小波浪及交互按钮，统一重构为使用 `bg-current` / `bg-current/85` 等动态前景色继承技术，使得所有指示动画、小圆点和药丸按钮背景能够无缝、完美地同主字体颜色保持精巧一致。
+
+- 验证情况：
+  - 执行 `pnpm check` 完成 TypeScript 静态类型检查，完全通过。
+  - 执行 `pnpm test -- --run` 全量单元测试，全部 100% 绿灯通过。
+
 ### 2026-05-29 15:54 · d3dcc26 · style(frontend): absolutely center progress bar in navbar and upgrade visual typography
 
 - 用户提出的需求：
