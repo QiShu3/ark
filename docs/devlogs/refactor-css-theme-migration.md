@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 15:34 · bffc7cf · fix(frontend): adjust focus work header text contrast and opacity for day mode
+
+- 用户提出的需求：
+  - "日间模式下专注工作的导航栏字体可视化效果较差"
+
+- 本次完成的工作：
+  - 彻底重构了全屏专注工作视图顶栏（FocusWorkModalShell）中各类状态标签与“结束本轮专注”按钮在浅色/日间模式（Light Theme / Day Mode）下的视觉呈现与对比度设计。
+  - 弃用了在 React 组件中直接硬编码 Tailwind `amber-300`、`sky-300`、`emerald-300` 以及 `blue-300` 等明亮淡色 utility 类，改为使用高度灵活与契合规范的组件级 CSS 语义化变量：`--focus-work-amber-*`、`--focus-work-sky-*`、`--focus-work-emerald-*`、`--focus-work-blue-*`。
+  - 在 `index.css` 的暗色模式和浅色模式配置中定义对应的变量集。在浅色模式下，它们被自动反转并映射为优雅高对比的实体深色系（例如：绿色映射为 `#047857`、蓝色映射为 `#1d4ed8`、琥珀色映射为 `#b45309`、天蓝色映射为 `#0369a1`），使它们在浅色背板上极为清晰与显眼。
+  - 调优了副标题（如“背单词”）的 `--focus-work-text-faint` 变量在浅色模式下的色彩对比度，由轻薄的淡灰色提高为高雅耐看的深蓝灰色（不影响淡字层级的同时，大幅度提高可读性）。
+
+- 验证情况：
+  - 执行 `pnpm check` 进行静态 TypeScript 编译检查，完美通过。
+  - 执行 `pnpm test -- --run` 全量单元测试，全部 215 个用例 100% 通过，没有任何功能衰退或视觉层回归。
+
 ### 2026-05-29 15:25 · d6c3b13 · fix(frontend): change achievement summary list text colors to theme-aware classes for legibility
 
 - 用户提出的需求：
