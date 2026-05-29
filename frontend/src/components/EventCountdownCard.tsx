@@ -1101,9 +1101,9 @@ const EventCountdownCard: React.FC = () => {
   const numberClassName =
     countdownTone === 'due'
       ? 'bg-gradient-to-r from-cyan-300 via-violet-300 to-amber-300 bg-clip-text text-transparent'
-      : countdownTone === 'expired'
-        ? 'text-red-400'
-        : 'text-sky-300';
+    : countdownTone === 'expired'
+        ? 'text-[var(--ark-danger)]'
+        : 'text-[var(--ark-countdown-text)]';
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
   const templateStoreCategories = useMemo(() => {
     const groups = new Map<string, EventTemplateStoreTemplate[]>();
@@ -1724,11 +1724,11 @@ const EventCountdownCard: React.FC = () => {
         data-onboarding-anchor="primary-event"
         className="ark-panel-card ark-focus-ring absolute left-12 top-24 z-20 flex h-44 w-44 flex-col items-center justify-center rounded-full border-[6px] text-[var(--ark-text)] shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-colors hover:bg-[var(--ark-surface-subtle)]"
       >
-        <span className="text-sm tracking-[0.35em] uppercase text-white/60">
+        <span className="text-xs font-medium tracking-wide text-[var(--ark-text-muted)]">
           {primaryEvent ? primaryEvent.name : '未设置主事件'}
         </span>
-        <span className={`mt-3 text-4xl font-bold leading-none ${numberClassName}`}>{countdownText}</span>
-        <span className="mt-3 text-[11px] tracking-[0.3em] uppercase text-white/45">event</span>
+        <span className={`mt-3 text-4xl font-semibold leading-none ark-font-display ${numberClassName}`}>{countdownText}</span>
+        <span className="mt-3 text-[10px] tracking-[0.2em] uppercase text-[var(--ark-text-faint)]">event</span>
       </button>
 
       {showModal ? (
@@ -1744,7 +1744,7 @@ const EventCountdownCard: React.FC = () => {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-base font-semibold text-white">
                 {showCreateEditor ? '添加事件' : '事件总览'}
               </h3>
               <button

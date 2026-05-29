@@ -1650,7 +1650,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         {completedTasks.length > 0 && (
           <div className="flex flex-col gap-2 pt-4 border-t border-white/5 opacity-60">
             <div className="flex justify-between items-center px-1">
-              <h4 className="text-[10px] font-bold text-white/30 uppercase tracking-wider">
+              <h4 className="text-[10px] font-medium text-white/35 tracking-wide">
                 已完成 ({completedTasks.length})
               </h4>
               <button
@@ -1936,8 +1936,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               tabIndex={0}
               aria-label={primaryActionAriaLabel}
               data-onboarding-anchor={isWorkflowActive ? 'workflow-phase-action' : 'workflow-start-button'}
-              className={`group relative flex-[2] bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer ${
-                isFocusing || isWorkflowActive ? 'bg-blue-500/10 border border-blue-500/20' : ''
+              className={`group relative flex-[2] bg-[var(--ark-surface-subtle)] flex items-center justify-center hover:bg-[var(--ark-accent-soft)] transition-colors cursor-pointer ${
+                isFocusing || isWorkflowActive ? 'bg-[var(--ark-accent-soft)] border border-[color:var(--ark-accent)]' : ''
               }`}
               onClick={isFocusing || isWorkflowActive ? _handleFocusToggle : () => void _startSelectedWorkflow()}
               onKeyDown={(e) => {
@@ -1973,11 +1973,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
               <div className="flex flex-col items-center justify-center group-hover:opacity-0 transition-opacity duration-300">
                 {isWorkflowActive && (
-                  <span className="text-sm font-medium text-white/70 mb-1">
+                  <span className="text-sm font-medium text-[var(--ark-text-muted)] mb-1">
                     {focusWorkflow.state === 'focus' ? '专注阶段' : '休息阶段'}
                   </span>
                 )}
-                <span className={`text-4xl font-bold ${
+                <span className={`text-4xl font-semibold ark-font-display ${
                   isFocusing || isWorkflowActive ? 'text-blue-400' : ''
                 }`}>
                   {isFocusing || isWorkflowActive ? focusDurationStr : `${todayFocusMinutes}min`}
@@ -1985,12 +1985,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               </div>
               
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <span className="text-2xl font-bold">{primaryActionLabel}</span>
+                <span className="text-xl font-semibold ark-font-display">{primaryActionLabel}</span>
                 {!isWorkflowActive && !isFocusing && effectiveSelectedWorkflow ? (
                   <button
                     type="button"
                     aria-label={`切换工作流 ${effectiveSelectedWorkflow.name}`}
-                    className="mt-1 rounded-full border border-white/10 bg-black/25 px-3 py-1 text-sm text-white/65 transition hover:border-white/20 hover:bg-black/40 hover:text-white"
+                    className="ark-button-secondary mt-1 rounded-full px-3 py-1 text-sm transition"
                     onClick={(event) => {
                       event.stopPropagation();
                       setShowWorkflowPicker(true);
@@ -1999,7 +1999,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     {effectiveSelectedWorkflow.name}
                   </button>
                 ) : (
-                  <span className="text-sm text-white/60 mt-1">
+                  <span className="text-sm text-[var(--ark-text-muted)] mt-1">
                     {primaryActionSubtext}
                   </span>
                 )}
@@ -2021,10 +2021,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               </div>
             )}
             <div
-              className="flex-1 bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors cursor-pointer"
+              className="flex-1 bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] flex items-center justify-center hover:bg-[var(--ark-accent-soft)] transition-colors cursor-pointer"
               onClick={() => setShowStatsModal(true)}
             >
-              <span className="text-sm font-medium">每日目标：120min</span>
+              <span className="text-sm font-medium text-[var(--ark-text)]">每日目标：120min</span>
             </div>
           </div>
           <div 
@@ -2033,13 +2033,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               setShowTaskModal(true);
               dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsOpened);
             }}
-            className="flex-1 bg-white/5 rounded flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer relative group/task"
+            className="flex-1 bg-[var(--ark-surface-subtle)] rounded flex items-center justify-center hover:bg-[var(--ark-accent-soft)] transition-colors cursor-pointer relative group/task"
           >
-            <span className="writing-vertical-rl text-lg font-bold tracking-widest">安排</span>
+            <span className="writing-vertical-rl text-base font-medium tracking-wider">安排</span>
             
             {/* 右下角加号按钮 */}
             <button 
-              className="absolute bottom-2 right-2 w-8 h-8 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white shadow-lg transition-all hover:scale-105 active:scale-95 group-hover/task:opacity-100 opacity-60 backdrop-blur-sm"
+              className="absolute bottom-2 right-2 w-8 h-8 rounded-full border ark-border bg-[var(--ark-surface)] hover:bg-[var(--ark-accent-soft)] flex items-center justify-center text-[var(--ark-text-muted)] hover:text-[var(--ark-text)] shadow-lg transition-all hover:scale-105 active:scale-95 group-hover/task:opacity-100 opacity-70 backdrop-blur-sm"
               aria-label="快捷创建安排"
               onClick={(e) => {
                 e.stopPropagation();
@@ -2068,7 +2068,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex h-14 items-center justify-between border-b border-white/10 bg-white/5 px-5">
-                <h3 id="workflow-picker-title" className="text-lg font-bold text-white">选择工作流</h3>
+                <h3 id="workflow-picker-title" className="text-base font-semibold text-white">选择工作流</h3>
                 <button
                   type="button"
                   onClick={() => setShowWorkflowPicker(false)}
@@ -2129,7 +2129,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               onClick={(e) => e.stopPropagation()}
             >
               <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-                <h3 className="text-lg font-bold text-white">全部任务</h3>
+                <h3 className="text-base font-semibold text-white">全部任务</h3>
                 <button
                   onClick={() => setShowFocusTaskPicker(false)}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
@@ -2195,7 +2195,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
-                <h2 className="text-xl font-bold text-white">专注统计</h2>
+                <h2 className="text-base font-semibold text-white">专注统计</h2>
                 <button 
                   onClick={() => setShowStatsModal(false)}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
@@ -2245,7 +2245,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
-                <h2 className="text-xl font-bold text-white">安排管理</h2>
+                <h2 className="text-base font-semibold text-white">安排管理</h2>
                 <button 
                   aria-label="关闭安排管理"
                   data-onboarding-anchor="arrangements-close"
@@ -2318,7 +2318,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   }}
                 >
                   <div className="h-12 border-b border-white/5 flex items-center px-5 shrink-0 bg-white/[0.01]">
-                    <span className="font-bold text-white tracking-wide">安排总览</span>
+                    <span className="font-semibold text-white">安排总览</span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
                     {(() => {
@@ -2352,7 +2352,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           )}
                           {activeTodayTasks.length > 0 ? (
                             <div className="flex flex-col gap-2">
-                              <h4 className="text-[10px] font-bold text-blue-300 uppercase tracking-widest px-1 flex items-center gap-1">
+                              <h4 className="text-[10px] font-medium text-blue-300 tracking-wide px-1 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                 今日任务
                               </h4>
@@ -2366,7 +2366,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
                           {weekAppointments.length > 0 && (
                             <div className="flex flex-col gap-2">
-                              <h4 className="text-[10px] font-bold text-cyan-300 uppercase tracking-widest px-1 flex items-center gap-1">
+                              <h4 className="text-[10px] font-medium text-cyan-300 tracking-wide px-1 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
                                 本周日程
                               </h4>
@@ -2376,7 +2376,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
                           {needsConfirmationAppointments.length > 0 && (
                             <div className="flex flex-col gap-2">
-                              <h4 className="text-[10px] font-bold text-amber-300 uppercase tracking-widest px-1 flex items-center gap-1">
+                              <h4 className="text-[10px] font-medium text-amber-300 tracking-wide px-1 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
                                 待确认日程
                               </h4>
@@ -2387,7 +2387,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           {dones.length > 0 && (
                             <div className="flex flex-col gap-2 pt-4 border-t border-white/5 opacity-60">
                               <div className="flex justify-between items-center px-1">
-                                <h4 className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
+                                <h4 className="text-[10px] font-medium text-white/50 tracking-wide">
                                   已完成 ({dones.length})
                                 </h4>
                                 <button
@@ -2418,7 +2418,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           key={tab.id}
                           onClick={() => setActiveArrangementTab(tab.id as 'tasks' | 'appointments')}
                           className={`h-full relative px-1 text-sm transition-colors ${
-                            activeArrangementTab === tab.id ? 'text-white font-bold' : 'text-white/40 hover:text-white/60'
+                            activeArrangementTab === tab.id ? 'text-white font-semibold' : 'text-white/40 hover:text-white/60'
                           }`}
                         >
                           {tab.label}
@@ -2440,7 +2440,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           key={tab.id}
                           onClick={() => setActiveTab(tab.id as 'all' | 'daily' | 'weekly' | 'monthly' | 'custom')}
                           className={`h-full relative px-1 text-xs transition-colors ${
-                            activeTab === tab.id ? 'text-white font-bold' : 'text-white/35 hover:text-white/60'
+                            activeTab === tab.id ? 'text-white font-semibold' : 'text-white/35 hover:text-white/60'
                           }`}
                         >
                           {tab.label}
@@ -2456,7 +2456,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           key={tab.id}
                           onClick={() => setActiveAppointmentTab(tab.id as 'all' | 'today' | 'needs_confirmation' | 'repeating')}
                           className={`h-full relative px-1 text-xs transition-colors ${
-                            activeAppointmentTab === tab.id ? 'text-white font-bold' : 'text-white/35 hover:text-white/60'
+                            activeAppointmentTab === tab.id ? 'text-white font-semibold' : 'text-white/35 hover:text-white/60'
                           }`}
                         >
                           {tab.label}
@@ -2495,7 +2495,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               onClick={(e) => e.stopPropagation()}
             >
               <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-                <h3 className="text-lg font-bold text-white">创建安排</h3>
+                <h3 className="text-base font-semibold text-white">创建安排</h3>
                 <button
                   onClick={_closeCreateTaskModal}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
@@ -2823,7 +2823,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             >
               <div className="h-16 shrink-0 border-b border-white/10 px-5 bg-white/5 flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-bold text-white">识别到 {taskAssistantDrafts.length} 个安排草稿</h3>
+                  <h3 className="text-base font-semibold text-white">识别到 {taskAssistantDrafts.length} 个安排草稿</h3>
                   <p className="text-xs text-white/45 mt-1">请逐个确认，需要的草稿会进入现有创建表单。</p>
                 </div>
                 <button
@@ -2930,7 +2930,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex-[1] border-b border-white/10 px-5 bg-white/5 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white">安排解析助手</h3>
+                <h3 className="text-base font-semibold text-white">安排解析助手</h3>
                 <button
                   onClick={_resetTaskAssistant}
                   className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
@@ -3004,16 +3004,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               ) : index === 3 && subIndex === 0 ? (
                 <AchievementCard />
               ) : mergePlaceholders ? (
-                <div className="flex w-full h-full rounded-lg overflow-hidden border border-white/10 group shadow-lg">
+                <div className="flex w-full h-full rounded-lg overflow-hidden border border-[color:var(--ark-border)] group shadow-lg">
                   {/* 左侧：工作流状态 */}
                   <div
-                    className="flex-[3] bg-blue-500/10 flex items-center justify-center border-r border-white/10 relative overflow-hidden"
+                    className="flex-[3] bg-[var(--ark-accent-soft)] flex items-center justify-center border-r border-[color:var(--ark-border)] relative overflow-hidden"
                   >
                     <div className="flex min-w-0 flex-col items-center gap-1 px-3 text-center">
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-blue-200/60">
+                      <span className="text-[11px] font-medium text-[var(--ark-text-muted)]">
                         当前工作流
                       </span>
-                      <span className="max-w-full truncate text-sm font-bold tracking-wide text-[var(--ark-text)]">
+                      <span className="max-w-full truncate text-sm font-semibold text-[var(--ark-text)]">
                         {defaultWorkflowName}
                       </span>
                       <span className="text-xs text-[var(--ark-text-faint)]">
@@ -3024,7 +3024,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   {/* 右侧：设置弹窗 */}
                   <div
                     data-onboarding-anchor="workflow-settings-button"
-                    className="flex-[1] bg-white/5 hover:bg-white/15 transition-colors flex items-center justify-center cursor-pointer"
+                    className="flex-[1] bg-[var(--ark-surface-subtle)] hover:bg-[var(--ark-accent-soft)] transition-colors flex items-center justify-center cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
                       window.dispatchEvent(new Event('ark:open-workflow-modal'));

@@ -143,8 +143,8 @@ const Navigation: React.FC = () => {
       <nav className="fixed left-0 top-0 z-50 flex h-16 w-full items-center border-b ark-border bg-[var(--ark-surface)] px-6 text-[var(--ark-text)] backdrop-blur-md">
       <div className="flex items-center gap-3">
         <div
-          className={`text-xl font-bold transition-colors ${
-            focusNavigationLocked ? 'cursor-not-allowed text-white/55' : 'cursor-pointer hover:text-blue-400'
+          className={`text-lg font-semibold ark-font-display transition-colors ${
+            focusNavigationLocked ? 'cursor-not-allowed text-[var(--ark-text-faint)]' : 'cursor-pointer hover:text-[var(--ark-accent)]'
           }`}
           aria-disabled={focusNavigationLocked}
           onClick={() => navigateUnlessLocked('/')}
@@ -156,7 +156,7 @@ const Navigation: React.FC = () => {
           aria-label="重新进入首次体验引导"
           title="重新进入首次体验引导"
           disabled={focusNavigationLocked}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:border-cyan-200/35 hover:bg-cyan-300/10 hover:text-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-200/60 disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/[0.03] disabled:text-white/30"
+          className="ark-focus-ring flex h-9 w-9 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
           onClick={handleRestartOnboarding}
         >
           <BookOpen size={18} aria-hidden="true" />
@@ -167,23 +167,23 @@ const Navigation: React.FC = () => {
       </div>
       <div className="ml-auto flex items-center gap-6">
         <div className="flex gap-4">
-          <button 
+          <button
             type="button"
             disabled={focusNavigationLocked}
-            className="hover:text-blue-400 transition-colors disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:text-white/35"
+            className="text-sm transition-colors hover:text-[var(--ark-accent)] disabled:cursor-not-allowed disabled:text-[var(--ark-text-faint)] disabled:hover:text-[var(--ark-text-faint)]"
             onClick={() => navigateUnlessLocked('/')}
           >
             首页
           </button>
-          <button 
+          <button
             type="button"
             disabled={focusNavigationLocked}
-            className="hover:text-blue-400 transition-colors disabled:cursor-not-allowed disabled:text-white/35 disabled:hover:text-white/35"
+            className="text-sm transition-colors hover:text-[var(--ark-accent)] disabled:cursor-not-allowed disabled:text-[var(--ark-text-faint)] disabled:hover:text-[var(--ark-text-faint)]"
             onClick={() => navigateUnlessLocked('/apps')}
           >
             应用
           </button>
-          <button type="button" disabled className="hover:text-gray-300 cursor-not-allowed opacity-70">关于</button>
+          <button type="button" disabled className="text-sm hover:text-gray-300 cursor-not-allowed opacity-70">关于</button>
         </div>
 
         {/* Check-in Icon */}
@@ -192,7 +192,7 @@ const Navigation: React.FC = () => {
             type="button"
             aria-label="打开导航栏日历"
             disabled={focusNavigationLocked}
-            className="relative flex items-center justify-center text-gray-300 hover:text-white transition-colors disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:text-gray-500"
+            className="relative flex items-center justify-center text-[var(--ark-text-muted)] transition-colors hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:text-[var(--ark-text-faint)] disabled:hover:text-[var(--ark-text-faint)]"
             title={checkInState.is_checked_in_today ? `已打卡 / 连续 ${checkInState.current_streak} 天` : "今日未打卡"}
             onClick={() => {
               if (focusNavigationLocked) return;
@@ -238,7 +238,7 @@ const Navigation: React.FC = () => {
               aria-label="打开界面设置"
               title="界面设置"
               disabled={focusNavigationLocked}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-300/70 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ark-focus-ring flex h-8 w-8 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 if (focusNavigationLocked) return;
                 setShowSettingsModal(true);
@@ -250,7 +250,7 @@ const Navigation: React.FC = () => {
               type="button"
               aria-label="退出登录"
               title="退出登录"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-white/20 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-300/70"
+              className="ark-focus-ring flex h-8 w-8 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)]"
               onClick={handleLogout}
             >
               <LogOut size={16} aria-hidden="true" />
@@ -259,7 +259,7 @@ const Navigation: React.FC = () => {
         ) : (
           <button 
             onClick={() => navigate('/login')}
-            className="text-sm bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-full transition-colors"
+            className="ark-button-secondary text-sm px-4 py-1.5 rounded-full transition-colors"
           >
             Login
           </button>
@@ -271,9 +271,9 @@ const Navigation: React.FC = () => {
     {showToast && checkInState && (
       <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] animate-[slide-in-top_0.5s_ease-out]">
         <div className="bg-black/80 backdrop-blur-lg border border-white/20 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
-          <span className="text-lg font-bold text-green-400">✅ 今日已打卡</span>
+          <span className="text-sm font-medium text-green-400">✅ 今日已打卡</span>
           <div className="w-px h-4 bg-white/20"></div>
-          <span className="text-lg font-bold text-orange-400">🔥 连续打卡 {checkInState.current_streak} 天</span>
+          <span className="text-sm font-medium text-orange-400">🔥 连续打卡 {checkInState.current_streak} 天</span>
         </div>
       </div>
     )}

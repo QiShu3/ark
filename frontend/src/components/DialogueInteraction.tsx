@@ -31,7 +31,7 @@ const DialogueInteraction: React.FC = () => {
               )}
             >
               <div className="flex items-center gap-2 overflow-hidden">
-                <span className="font-mono text-blue-400 text-xs tracking-wider opacity-70">
+                <span className="ark-font-mono text-blue-400 text-xs opacity-70">
                   0{idx + 1}
                 </span>
                 <span className="text-white/90 truncate text-sm">{suggestion}</span>
@@ -41,7 +41,7 @@ const DialogueInteraction: React.FC = () => {
           ))}
 
           <div className="relative w-full group">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-purple-400 text-xs tracking-wider opacity-70 z-10">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 ark-font-mono text-purple-400 text-xs opacity-70 z-10">
               0{DEFAULT_SUGGESTIONS.length + 1}
             </div>
             <input
@@ -71,7 +71,7 @@ const DialogueInteraction: React.FC = () => {
 
         <div className="relative w-full">
           <div className="absolute top-0 -translate-y-1/2 left-4 px-6 py-2 bg-gradient-to-r from-slate-500/90 to-slate-700/90 rounded-xl backdrop-blur-md border border-white/10 shadow-[0_0_15px_rgba(100,116,139,0.4)] z-10">
-            <span className="text-white font-bold tracking-wider text-sm md:text-base drop-shadow-md">
+            <span className="text-white font-semibold text-sm md:text-base drop-shadow-md">
               莫宁
             </span>
           </div>
@@ -93,7 +93,7 @@ const DialogueInteraction: React.FC = () => {
             <div className="relative z-10 h-full overflow-y-auto pr-2">
               <MarkdownContent
                 content={DEFAULT_DIALOGUE}
-                className="text-white/95 text-sm md:text-base font-medium tracking-wide leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+                className="text-white/95 text-sm md:text-base font-medium leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
               />
             </div>
           </div>

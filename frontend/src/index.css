@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  line-height: 1.5;
+  /* Font tokens - system font stacks only, no remote fonts */
+  --ark-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --ark-font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --ark-font-mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  font-family: var(--ark-font-sans);
+  line-height: 1.6;
   font-weight: 400;
 
   font-synthesis: none;
@@ -28,24 +33,28 @@
   --ark-focus-ring: rgba(96, 165, 250, 0.68);
   --ark-accent: #60a5fa;
   --ark-accent-soft: rgba(96, 165, 250, 0.16);
+  --ark-countdown-text: #7dd3fc;
+  --ark-danger: #f87171;
 }
 
 :root[data-theme="light"] {
-  --ark-page-bg: #eef4fb;
-  --ark-text: rgba(15, 23, 42, 0.92);
-  --ark-text-muted: rgba(51, 65, 85, 0.72);
-  --ark-text-faint: rgba(71, 85, 105, 0.52);
-  --ark-surface: rgba(255, 255, 255, 0.72);
-  --ark-surface-strong: rgba(255, 255, 255, 0.94);
-  --ark-surface-subtle: rgba(255, 255, 255, 0.52);
-  --ark-border: rgba(15, 23, 42, 0.12);
-  --ark-border-strong: rgba(15, 23, 42, 0.2);
-  --ark-overlay: rgba(241, 245, 249, 0.68);
-  --ark-overlay-strong: rgba(248, 250, 252, 0.84);
-  --ark-background-overlay: linear-gradient(to bottom, rgba(248, 250, 252, 0.72), rgba(248, 250, 252, 0.38), rgba(226, 232, 240, 0.76));
-  --ark-focus-ring: rgba(37, 99, 235, 0.44);
+  --ark-page-bg: #dbe7f3;
+  --ark-text: rgba(15, 23, 42, 0.96);
+  --ark-text-muted: rgba(30, 41, 59, 0.78);
+  --ark-text-faint: rgba(51, 65, 85, 0.62);
+  --ark-surface: rgba(226, 236, 248, 0.78);
+  --ark-surface-strong: rgba(241, 245, 249, 0.94);
+  --ark-surface-subtle: rgba(204, 218, 236, 0.66);
+  --ark-border: rgba(30, 41, 59, 0.18);
+  --ark-border-strong: rgba(30, 41, 59, 0.3);
+  --ark-overlay: rgba(226, 232, 240, 0.72);
+  --ark-overlay-strong: rgba(248, 250, 252, 0.9);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(241, 245, 249, 0.46), rgba(226, 232, 240, 0.2), rgba(15, 23, 42, 0.34));
+  --ark-focus-ring: rgba(37, 99, 235, 0.5);
   --ark-accent: #2563eb;
-  --ark-accent-soft: rgba(37, 99, 235, 0.12);
+  --ark-accent-soft: rgba(37, 99, 235, 0.14);
+  --ark-countdown-text: #0369a1;
+  --ark-danger: #dc2626;
 }
 
 .ark-shell {
@@ -178,6 +187,14 @@
   100% {
     transform: translateX(100%);
   }
+}
+
+.ark-font-display {
+  font-family: var(--ark-font-display);
+}
+
+.ark-font-mono {
+  font-family: var(--ark-font-mono);
 }
 
 .calendar-task-label {
