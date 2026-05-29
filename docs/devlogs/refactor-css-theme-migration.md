@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:38 · 1d8acb7 · refactor(frontend): remove click modal trigger from workflow space capsule
+
+- 用户提出的需求：
+  - "不想要这个悬浮太空舱，感觉太重了，直接去掉 打开「工作流预设弹窗」 这个功能吧！"
+
+- 本次完成的工作：
+  - **移除了太空舱的全局点击弹出事件**：在 `WorkflowNavProgress.tsx` 中去掉了外层太空舱容器 div 的 `onClick`（原本派发 `ark:open-workflow-modal` 打开预设弹窗）、`onKeyDown` 键盘监听、`role="button"` 属性以及 `cursor-pointer` 等样式。使运行中的悬浮太空舱胶囊退化为一个**纯净、静谧的状态与进度展示面板**，不再多余干扰用户。
+  - **保留了局部的必要点击交互**：在工作流处于 `pending_confirmation`（等待过渡确认）状态时，胶囊内部独立的「▶ 继续」按钮交互完全保留，可点性不受影响。
+  - **重构单元测试并移除过时用例**：修改了 `WorkflowNavProgress.test.tsx` 单元测试，将原先基于 `screen.getByRole('button', { name: /工作流进度/i })` 的所有页面节点断言，均优雅重构为基于更严谨、更具无障碍访问语义的 `screen.getByLabelText(/工作流进度/i)` 进行查询；同时删除了已不再使用的点击弹出工作流配置弹窗的集成测试用例，确保测试全量 100% 绿灯。
+
+- 验证情况：
+  - 执行 `pnpm test` 完成单元测试检查，全量 214 个测试用例 100% 成功。
+
 ### 2026-05-29 16:18 · 860739c · feat(frontend): replace ugly browser alert dialogs with a unified premium Toast notification system
 
 - 用户提出的需求：
