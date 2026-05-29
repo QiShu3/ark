@@ -190,12 +190,12 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       {children}
 
       {pendingStart ? (
-        <div className="fixed inset-x-0 bottom-0 top-16 z-[70] flex items-center justify-center bg-black/62 backdrop-blur-sm">
+        <div className="ark-focus-work-shell ark-focus-work-backdrop fixed inset-x-0 bottom-0 top-16 z-[90] flex items-center justify-center backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="focus-work-record-title"
-            className="w-[min(92vw,30rem)] rounded-[2rem] border border-white/12 bg-[#0b0f14]/95 p-6 shadow-2xl"
+            className="ark-focus-work-dialog w-[min(92vw,30rem)] rounded-[2rem] border p-6 shadow-2xl"
           >
             <div className="text-xs uppercase tracking-[0.24em] text-white/35">Focus Work</div>
             <h2 id="focus-work-record-title" className="mt-3 text-2xl font-semibold text-white">

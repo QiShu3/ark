@@ -27,9 +27,9 @@ export default function AchievementCard() {
         type="button"
         aria-label="成就"
         onClick={() => setIsOpen(true)}
-        className="flex h-full w-full flex-col justify-center rounded-lg border border-white/20 bg-white/10 p-3 text-left transition-colors hover:bg-white/15"
+        className="ark-panel-card flex h-full w-full flex-col justify-center rounded-lg p-3 text-left transition-colors hover:bg-[var(--ark-surface-subtle)]"
       >
-        <span className="text-center text-white/80 font-medium">成就</span>
+        <span className="text-center text-[var(--ark-text)] font-medium">成就</span>
       </button>
 
       <AchievementModal

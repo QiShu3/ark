@@ -1,14 +1,540 @@
 @import "tailwindcss";
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  line-height: 1.5;
+  /* Font tokens - system font stacks only, no remote fonts */
+  --ark-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --ark-font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --ark-font-mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  font-family: var(--ark-font-sans);
+  line-height: 1.6;
   font-weight: 400;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root,
+:root[data-theme="dark"] {
+  --ark-page-bg: #05070d;
+  --ark-text: rgba(255, 255, 255, 0.94);
+  --ark-text-muted: rgba(255, 255, 255, 0.62);
+  --ark-text-faint: rgba(255, 255, 255, 0.42);
+  --ark-surface: rgba(15, 23, 42, 0.56);
+  --ark-surface-strong: rgba(12, 18, 28, 0.92);
+  --ark-surface-subtle: rgba(255, 255, 255, 0.06);
+  --ark-border: rgba(255, 255, 255, 0.12);
+  --ark-border-strong: rgba(255, 255, 255, 0.22);
+  --ark-overlay: rgba(0, 0, 0, 0.62);
+  --ark-overlay-strong: rgba(0, 0, 0, 0.76);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.62));
+  --ark-focus-ring: rgba(96, 165, 250, 0.68);
+  --ark-accent: #60a5fa;
+  --ark-accent-soft: rgba(96, 165, 250, 0.16);
+  --ark-countdown-text: #7dd3fc;
+  --ark-danger: #f87171;
+}
+
+:root[data-theme="light"] {
+  --ark-page-bg: #dbe7f3;
+  --ark-text: rgba(15, 23, 42, 0.96);
+  --ark-text-muted: rgba(30, 41, 59, 0.78);
+  --ark-text-faint: rgba(51, 65, 85, 0.62);
+  --ark-surface: rgba(226, 236, 248, 0.78);
+  --ark-surface-strong: rgba(241, 245, 249, 0.94);
+  --ark-surface-subtle: rgba(204, 218, 236, 0.66);
+  --ark-border: rgba(30, 41, 59, 0.18);
+  --ark-border-strong: rgba(30, 41, 59, 0.3);
+  --ark-overlay: rgba(226, 232, 240, 0.72);
+  --ark-overlay-strong: rgba(248, 250, 252, 0.9);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(241, 245, 249, 0.46), rgba(226, 232, 240, 0.2), rgba(15, 23, 42, 0.34));
+  --ark-focus-ring: rgba(37, 99, 235, 0.5);
+  --ark-accent: #2563eb;
+  --ark-accent-soft: rgba(37, 99, 235, 0.14);
+  --ark-countdown-text: #0369a1;
+  --ark-danger: #dc2626;
+}
+
+.ark-shell {
+  background: var(--ark-page-bg);
+  color: var(--ark-text);
+}
+
+.ark-background-overlay {
+  background: var(--ark-background-overlay);
+}
+
+.ark-surface {
+  border-color: var(--ark-border);
+  background: var(--ark-surface);
+  color: var(--ark-text);
+}
+
+.ark-surface-strong {
+  border-color: var(--ark-border);
+  background: var(--ark-surface-strong);
+  color: var(--ark-text);
+}
+
+.ark-surface-subtle {
+  border-color: var(--ark-border);
+  background: var(--ark-surface-subtle);
+  color: var(--ark-text);
+}
+
+.ark-text {
+  color: var(--ark-text);
+}
+
+.ark-text-muted {
+  color: var(--ark-text-muted);
+}
+
+.ark-text-faint {
+  color: var(--ark-text-faint);
+}
+
+.ark-border {
+  border-color: var(--ark-border);
+}
+
+.ark-card-hover:hover {
+  border-color: var(--ark-border-strong);
+  background: var(--ark-surface-subtle);
+}
+
+.ark-focus-ring:focus-visible {
+  outline: 2px solid var(--ark-focus-ring);
+  outline-offset: 2px;
+}
+
+.ark-page {
+  color: var(--ark-text);
+}
+
+.ark-panel-card {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface);
+  color: var(--ark-text);
+  backdrop-filter: blur(12px);
+}
+
+.ark-panel-card:hover {
+  background: var(--ark-surface-subtle);
+}
+
+.ark-modal-backdrop {
+  background: var(--ark-overlay);
+  backdrop-filter: blur(6px);
+}
+
+.ark-modal {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface-strong);
+  color: var(--ark-text);
+}
+
+:root[data-theme="light"] .ark-modal {
+  background: rgba(239, 246, 255, 0.96);
+  box-shadow: 0 28px 90px rgba(51, 65, 85, 0.24);
+}
+
+:root[data-theme="light"] .ark-modal :is(input, select, textarea) {
+  border-color: rgba(51, 65, 85, 0.22);
+  background: rgba(226, 236, 248, 0.82);
+  color: var(--ark-text);
+}
+
+:root[data-theme="light"] .ark-modal :is(input, select, textarea):focus {
+  border-color: rgba(37, 99, 235, 0.46);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+:root[data-theme="light"] .ark-modal :is(input, textarea)::placeholder {
+  color: rgba(71, 85, 105, 0.58);
+}
+
+:root[data-theme="light"] .ark-modal :is(input, select, textarea):disabled,
+:root[data-theme="light"] .ark-modal button:disabled {
+  opacity: 0.72;
+}
+
+:root[data-theme="light"] .ark-modal [role="group"][aria-label="添加事件操作"] {
+  border-color: rgba(51, 65, 85, 0.16);
+  background: rgba(241, 245, 249, 0.96);
+  box-shadow: 0 -14px 34px rgba(51, 65, 85, 0.1);
+}
+
+:root[data-theme="light"] .ark-modal [role="group"][aria-label="添加事件操作"] button:not(.bg-blue-600):not(.bg-blue-500) {
+  border-color: rgba(51, 65, 85, 0.18);
+  background: rgba(203, 213, 225, 0.64);
+  color: var(--ark-text);
+}
+
+:root[data-theme="light"] .ark-modal [role="group"][aria-label="添加事件操作"] button:not(.bg-blue-600):not(.bg-blue-500):hover {
+  background: rgba(191, 219, 254, 0.7);
+}
+
+:root[data-theme="light"] .ark-modal :is(.rounded-xl, .rounded-lg).border {
+  border-color: rgba(51, 65, 85, 0.16);
+}
+
+:root[data-theme="light"] .ark-modal :is(.text-blue-300, .text-blue-400, .text-sky-300, .text-sky-400) {
+  color: #1d4ed8;
+}
+
+:root[data-theme="light"] .ark-modal :is(.text-emerald-300, .text-emerald-400) {
+  color: #047857;
+}
+
+:root[data-theme="light"] .ark-modal :is(.text-red-200, .text-red-300, .text-red-400, .text-rose-200, .text-rose-300, .text-rose-400) {
+  color: #b91c1c;
+}
+
+:root[data-theme="light"] .ark-modal .event-danger-button:disabled {
+  opacity: 1;
+  border-color: rgba(185, 28, 28, 0.28);
+  background: rgba(239, 68, 68, 0.1);
+  color: #0f172a;
+}
+
+.ark-button-primary {
+  background: var(--ark-accent);
+  color: #fff;
+}
+
+.ark-button-primary:hover {
+  filter: brightness(1.06);
+}
+
+.ark-button-secondary {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface-subtle);
+  color: var(--ark-text-muted);
+}
+
+.ark-button-secondary:hover {
+  border-color: var(--ark-border-strong);
+  color: var(--ark-text);
+}
+
+:root[data-theme="light"] .ark-button-primary {
+  color: #fff;
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-modal-backdrop, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .text-white,
+    .text-white\/95,
+    .text-white\/90,
+    .text-white\/85,
+    .text-white\/80,
+    .text-white\/75,
+    .text-white\/70
+  ):not(
+    .bg-blue-600 *,
+    .bg-blue-500 *,
+    .bg-indigo-600 *,
+    .bg-indigo-500 *,
+    .bg-sky-600 *,
+    .bg-sky-500 *,
+    .bg-emerald-600 *,
+    .bg-emerald-500 *,
+    .bg-red-600 *,
+    .bg-red-500 *,
+    .bg-rose-600 *,
+    .bg-rose-500 *,
+    .bg-purple-600 *,
+    .bg-purple-500 *
+  ) {
+  color: var(--ark-text);
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-modal-backdrop, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .text-white\/65,
+    .text-white\/60,
+    .text-white\/55,
+    .text-white\/50
+  ) {
+  color: var(--ark-text-muted);
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-modal-backdrop, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .text-white\/45,
+    .text-white\/40,
+    .text-white\/35,
+    .text-white\/30,
+    .text-white\/25
+  ) {
+  color: var(--ark-text-faint);
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-modal-backdrop, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .placeholder\:text-white\/35::placeholder,
+    .placeholder\:text-white\/30::placeholder
+  ) {
+  color: var(--ark-text-faint);
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-modal-backdrop, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .border-white,
+    .border-white\/30,
+    .border-white\/25,
+    .border-white\/20,
+    .border-white\/15,
+    .border-white\/14,
+    .border-white\/12,
+    .border-white\/10,
+    .border-white\/8,
+    .border-white\/6
+  ) {
+  border-color: var(--ark-border);
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .bg-black\/30,
+    .bg-black\/24,
+    .bg-black\/22,
+    .bg-black\/20,
+    .bg-black\/18
+  ) {
+  background: var(--ark-surface-subtle);
+}
+
+:root[data-theme="light"] :is(.ark-page, .ark-panel-card, .ark-modal, .ark-surface, .ark-surface-strong, .ark-surface-subtle)
+  :is(
+    .bg-white\/12,
+    .bg-white\/10,
+    .bg-white\/8,
+    .bg-white\/6,
+    .bg-white\/5,
+    .bg-white\/4,
+    .bg-white\/3,
+    .bg-white\/2,
+    .bg-white\/\[0\.05\],
+    .bg-white\/\[0\.04\],
+    .bg-white\/\[0\.03\]
+  ) {
+  background: var(--ark-surface-subtle);
+}
+
+.ark-light-safe {
+  color: var(--ark-text);
+}
+
+.ark-dialogue {
+  --dialogue-shade: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.8), transparent);
+  --dialogue-option-bg: rgba(0, 0, 0, 0.4);
+  --dialogue-option-border: rgba(255, 255, 255, 0.1);
+  --dialogue-option-text: rgba(255, 255, 255, 0.9);
+  --dialogue-index: #60a5fa;
+  --dialogue-input-placeholder: rgba(255, 255, 255, 0.3);
+  --dialogue-speaker-bg: linear-gradient(to right, rgba(100, 116, 139, 0.9), rgba(51, 65, 85, 0.9));
+  --dialogue-speaker-text: #fff;
+  --dialogue-box-bg: rgba(0, 0, 0, 0.5);
+  --dialogue-box-border: transparent;
+  --dialogue-message: rgba(255, 255, 255, 0.95);
+  --dialogue-volume-bg: rgba(255, 255, 255, 0.05);
+  --dialogue-volume-text: rgba(255, 255, 255, 0.4);
+  --dialogue-glow: rgba(59, 130, 246, 0.1);
+}
+
+:root[data-theme="light"] .ark-dialogue {
+  --dialogue-shade: linear-gradient(to top, rgba(226, 232, 240, 0.92), rgba(226, 232, 240, 0.5), transparent);
+  --dialogue-option-bg: rgba(226, 236, 248, 0.68);
+  --dialogue-option-border: rgba(51, 65, 85, 0.18);
+  --dialogue-option-text: rgba(15, 23, 42, 0.88);
+  --dialogue-index: #2563eb;
+  --dialogue-input-placeholder: rgba(71, 85, 105, 0.62);
+  --dialogue-speaker-bg: rgba(203, 218, 238, 0.92);
+  --dialogue-speaker-text: rgba(15, 23, 42, 0.95);
+  --dialogue-box-bg: rgba(241, 245, 249, 0.82);
+  --dialogue-box-border: rgba(51, 65, 85, 0.16);
+  --dialogue-message: rgba(15, 23, 42, 0.95);
+  --dialogue-volume-bg: rgba(51, 65, 85, 0.08);
+  --dialogue-volume-text: rgba(30, 41, 59, 0.72);
+  --dialogue-glow: rgba(37, 99, 235, 0.08);
+}
+
+.ark-dialogue-shade {
+  background: var(--dialogue-shade);
+}
+
+.ark-dialogue-option,
+.ark-dialogue-input {
+  border: 1px solid var(--dialogue-option-border);
+  background: var(--dialogue-option-bg);
+  color: var(--dialogue-option-text);
+}
+
+.ark-dialogue-index {
+  color: var(--dialogue-index);
+  opacity: 0.86;
+}
+
+.ark-dialogue-option-text,
+.ark-dialogue-input {
+  color: var(--dialogue-option-text);
+}
+
+.ark-dialogue-input::placeholder {
+  color: var(--dialogue-input-placeholder);
+}
+
+.ark-dialogue-send {
+  color: var(--dialogue-input-placeholder);
+}
+
+.ark-dialogue-speaker {
+  border: 1px solid var(--dialogue-option-border);
+  background: var(--dialogue-speaker-bg);
+  color: var(--dialogue-speaker-text);
+  box-shadow: 0 10px 28px rgba(51, 65, 85, 0.18);
+}
+
+.ark-dialogue-box {
+  border: 1px solid var(--dialogue-box-border);
+  background: var(--dialogue-box-bg);
+}
+
+.ark-dialogue-glow {
+  background: var(--dialogue-glow);
+}
+
+.ark-dialogue-volume {
+  background: var(--dialogue-volume-bg);
+  color: var(--dialogue-volume-text);
+}
+
+.ark-dialogue-message {
+  color: var(--dialogue-message);
+}
+
+.ark-focus-work-shell {
+  --focus-work-backdrop: rgba(0, 0, 0, 0.58);
+  --focus-work-surface: rgba(8, 11, 16, 0.95);
+  --focus-work-surface-raised: rgba(12, 16, 22, 0.92);
+  --focus-work-surface-soft: rgba(255, 255, 255, 0.08);
+  --focus-work-surface-muted: rgba(0, 0, 0, 0.22);
+  --focus-work-header: rgba(255, 255, 255, 0.04);
+  --focus-work-border: rgba(255, 255, 255, 0.12);
+  --focus-work-border-strong: rgba(255, 255, 255, 0.22);
+  --focus-work-text: rgba(255, 255, 255, 0.94);
+  --focus-work-text-muted: rgba(255, 255, 255, 0.68);
+  --focus-work-text-faint: rgba(255, 255, 255, 0.42);
+  --focus-work-shadow: 0 28px 100px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"] .ark-focus-work-shell {
+  --focus-work-backdrop: rgba(203, 213, 225, 0.62);
+  --focus-work-surface: rgba(248, 250, 252, 0.96);
+  --focus-work-surface-raised: rgba(255, 255, 255, 0.94);
+  --focus-work-surface-soft: rgba(37, 99, 235, 0.08);
+  --focus-work-surface-muted: rgba(226, 232, 240, 0.76);
+  --focus-work-header: rgba(226, 232, 240, 0.6);
+  --focus-work-border: rgba(51, 65, 85, 0.16);
+  --focus-work-border-strong: rgba(37, 99, 235, 0.28);
+  --focus-work-text: rgba(15, 23, 42, 0.94);
+  --focus-work-text-muted: rgba(51, 65, 85, 0.74);
+  --focus-work-text-faint: rgba(71, 85, 105, 0.56);
+  --focus-work-shadow: 0 28px 100px rgba(51, 65, 85, 0.22);
+}
+
+.ark-focus-work-backdrop {
+  background: var(--focus-work-backdrop);
+}
+
+.ark-focus-work-dialog {
+  border-color: var(--focus-work-border);
+  background: var(--focus-work-surface);
+  color: var(--focus-work-text);
+  box-shadow: var(--focus-work-shadow);
+}
+
+.ark-focus-work-header {
+  border-color: var(--focus-work-border);
+  background: var(--focus-work-header);
+}
+
+.ark-focus-work-pause-backdrop {
+  background: var(--focus-work-backdrop);
+}
+
+.ark-focus-work-pause-card {
+  border-color: var(--focus-work-border);
+  background: var(--focus-work-surface-raised);
+}
+
+.ark-focus-work-shell .text-white,
+.ark-focus-work-shell .text-white\/90,
+.ark-focus-work-shell .text-white\/86,
+.ark-focus-work-shell .text-white\/85,
+.ark-focus-work-shell .text-white\/82,
+.ark-focus-work-shell .text-white\/80,
+.ark-focus-work-shell .text-white\/78,
+.ark-focus-work-shell .text-white\/75,
+.ark-focus-work-shell .text-white\/72,
+.ark-focus-work-shell .text-white\/70 {
+  color: var(--focus-work-text);
+}
+
+.ark-focus-work-shell .text-white\/65,
+.ark-focus-work-shell .text-white\/62,
+.ark-focus-work-shell .text-white\/60,
+.ark-focus-work-shell .text-white\/58,
+.ark-focus-work-shell .text-white\/55,
+.ark-focus-work-shell .text-white\/52,
+.ark-focus-work-shell .text-white\/50 {
+  color: var(--focus-work-text-muted);
+}
+
+.ark-focus-work-shell .text-white\/48,
+.ark-focus-work-shell .text-white\/45,
+.ark-focus-work-shell .text-white\/40,
+.ark-focus-work-shell .text-white\/38,
+.ark-focus-work-shell .text-white\/35,
+.ark-focus-work-shell .text-white\/28,
+.ark-focus-work-shell .text-white\/25 {
+  color: var(--focus-work-text-faint);
+}
+
+.ark-focus-work-shell .border-white,
+.ark-focus-work-shell .border-white\/20,
+.ark-focus-work-shell .border-white\/15,
+.ark-focus-work-shell .border-white\/14,
+.ark-focus-work-shell .border-white\/12,
+.ark-focus-work-shell .border-white\/10,
+.ark-focus-work-shell .border-white\/8,
+.ark-focus-work-shell .border-white\/6 {
+  border-color: var(--focus-work-border);
+}
+
+.ark-focus-work-shell .bg-black\/30,
+.ark-focus-work-shell .bg-black\/24,
+.ark-focus-work-shell .bg-black\/22,
+.ark-focus-work-shell .bg-black\/20,
+.ark-focus-work-shell .bg-black\/18,
+.ark-focus-work-shell .bg-slate-950\/70,
+.ark-focus-work-shell .bg-slate-950\/60,
+.ark-focus-work-shell .bg-\[\#0c1015\]\/60,
+.ark-focus-work-shell .bg-\[\#0d1015\]\/60,
+.ark-focus-work-shell .bg-\[\#0d1015\]\/40 {
+  background: var(--focus-work-surface-muted);
+}
+
+.ark-focus-work-shell .bg-white\/10,
+.ark-focus-work-shell .bg-white\/8,
+.ark-focus-work-shell .bg-white\/6,
+.ark-focus-work-shell .bg-white\/5,
+.ark-focus-work-shell .bg-white\/4 {
+  background: var(--focus-work-surface-soft);
 }
 
 @keyframes tag-edit-wiggle {
@@ -38,6 +564,14 @@
   100% {
     transform: translateX(100%);
   }
+}
+
+.ark-font-display {
+  font-family: var(--ark-font-display);
+}
+
+.ark-font-mono {
+  font-family: var(--ark-font-mono);
 }
 
 .calendar-task-label {

@@ -13,10 +13,10 @@ describe('AppCenter', () => {
     );
 
     expect(screen.getByText('应用中心')).toBeInTheDocument();
+    expect(screen.getByRole('main', { name: '应用中心' })).toHaveClass('ark-page');
     expect(screen.getByText('背单词')).toBeInTheDocument();
     expect(screen.getByText('阅读训练')).toBeInTheDocument();
     expect(screen.getAllByRole('button')).toHaveLength(2);
     expect(screen.queryByText('添加应用')).not.toBeInTheDocument();
   });
 });
-

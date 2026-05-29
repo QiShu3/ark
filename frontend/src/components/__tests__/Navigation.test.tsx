@@ -33,6 +33,7 @@ function renderNavigation(initialPath = '/vocab') {
   useAuthStore.getState().setUser({
     id: 1,
     username: 'qishu',
+    email: 'qishu@example.com',
     is_active: true,
     is_admin: false,
     created_at: '2026-05-14T00:00:00Z',
@@ -76,15 +77,15 @@ describe('Navigation', () => {
 
     renderNavigation();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Apps' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'About' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '首页' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: '应用' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '关于' })).toBeDisabled();
     expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
     expect(screen.getByLabelText('重新进入首次体验引导')).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Home' }));
-    await user.click(screen.getByRole('button', { name: 'Apps' }));
-    await user.click(screen.getByRole('button', { name: 'About' }));
+    await user.click(screen.getByRole('button', { name: '首页' }));
+    await user.click(screen.getByRole('button', { name: '应用' }));
+    await user.click(screen.getByRole('button', { name: '关于' }));
     await user.click(screen.getByLabelText('打开导航栏日历'));
     await user.click(screen.getByLabelText('重新进入首次体验引导'));
 
@@ -110,8 +111,8 @@ describe('Navigation', () => {
 
     renderNavigation();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Apps' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '首页' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: '应用' })).toBeDisabled();
     expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
   });
 
@@ -147,5 +148,37 @@ describe('Navigation', () => {
     } finally {
       window.removeEventListener(HOME_ONBOARDING_RESTART_EVENT, restartListener);
     }
+  });
+
+  it('quick toggles the resolved theme from the navbar', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockResolvedValue(null);
+    window.localStorage.setItem('ark-theme-preference', 'light');
+
+    renderNavigation('/apps');
+
+    const toggle = await screen.findByRole('button', { name: '切换为夜间模式' });
+    await user.click(toggle);
+
+    expect(window.localStorage.getItem('ark-theme-preference')).toBe('dark');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+  });
+
+  it('disables the theme toggle while fullscreen focus work is active', async () => {
+    mockApiJson.mockResolvedValue({
+      state: 'focus',
+      current_phase_index: 0,
+      phases: [{ phase_type: 'focus', duration: 1500, focus_work_type: 'vocab_today' }],
+      pending_confirmation: false,
+      pending_task_selection: false,
+      remaining_seconds: 1200,
+      elapsed_seconds: 300,
+      active_focus_work_type: 'vocab_today',
+      focus_work_display_state: 'fullscreen',
+    });
+
+    renderNavigation();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '切换外观模式' })).toBeDisabled());
   });
 });

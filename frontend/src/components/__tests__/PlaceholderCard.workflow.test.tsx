@@ -457,7 +457,7 @@ describe('PlaceholderCard workflow UI', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '工作流预设' });
     expect(within(dialog).getByText('全局工作流')).toBeInTheDocument();
-    expect(within(dialog).getByText('期期末冲刺' ? '期末冲刺' : '期末冲刺')).toBeInTheDocument();
+    expect(within(dialog).getByText('期末冲刺')).toBeInTheDocument();
     expect(within(dialog).getByText('事件：高数期末')).toBeInTheDocument();
     expect(within(dialog).queryByText('其他事件工作流')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '复制工作流 期末冲刺' })).toBeInTheDocument();

@@ -60,13 +60,13 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
         type="button"
         aria-label="打开多周任务日历"
         onClick={() => setShowMultiWeekCalendar(true)}
-        className={`bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-3 flex flex-col text-left hover:bg-white/[0.14] transition-colors ${className}`}
+        className={`ark-panel-card rounded-lg p-3 flex flex-col text-left transition-colors hover:bg-[var(--ark-surface-subtle)] ${className}`}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-white/85 text-sm font-semibold">日历</span>
-          <span className="text-white/60 text-xs">{monthLabel}</span>
+          <span className="text-[var(--ark-text)] text-sm font-semibold">日历</span>
+          <span className="text-[var(--ark-text-muted)] text-xs">{monthLabel}</span>
         </div>
-        <div className="grid grid-cols-7 gap-1 text-[10px] text-white/45 mb-1">
+        <div className="grid grid-cols-7 gap-1 text-[10px] text-[var(--ark-text-faint)] mb-1">
           {weekdays.map((day) => (
             <div key={day} className="h-5 flex items-center justify-center">
               {day}
@@ -90,8 +90,8 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
                     : cell.inCurrentMonth
                       ? isChecked 
                         ? 'bg-[#E5989B]/90 text-white font-bold shadow-sm' 
-                        : 'text-white/80 bg-white/[0.03]'
-                      : 'text-white/25'
+                        : 'text-[var(--ark-text-muted)] bg-[var(--ark-surface-subtle)]'
+                      : 'text-[var(--ark-text-faint)]'
                 }`}
               >
                 {cell.day}

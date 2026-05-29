@@ -16,7 +16,7 @@ function App() {
   }, [rightPanelCollapsed]);
 
   return (
-    <div className="relative z-10 flex w-full h-full pt-0">
+    <div className="ark-page relative z-10 flex w-full h-full pt-0">
       <LeftPanel collapsed={rightPanelCollapsed} />
       <RightPanel collapsed={rightPanelCollapsed} onToggle={() => setRightPanelCollapsed((prev) => !prev)} />
       <HomeOnboarding />
