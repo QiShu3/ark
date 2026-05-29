@@ -297,19 +297,10 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       data-layout={layoutMode}
-      className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-full backdrop-blur-md transition-all duration-300 cursor-pointer overflow-hidden hover:brightness-[0.98] dark:hover:brightness-110 ${activeBgClass} ${activeBorderClass} ${activeShadowClass} ${widthClass}`}
-      onClick={() => window.dispatchEvent(new Event('ark:open-workflow-modal'))}
+      className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-full backdrop-blur-md transition-all duration-300 overflow-hidden ${activeBgClass} ${activeBorderClass} ${activeShadowClass} ${widthClass}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          window.dispatchEvent(new Event('ark:open-workflow-modal'));
-        }
-      }}
       aria-label={`工作流进度：${titleText}，${ariaText}`}
     >
       <IconComponent

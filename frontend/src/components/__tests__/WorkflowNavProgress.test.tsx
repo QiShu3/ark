@@ -37,7 +37,7 @@ describe('WorkflowNavProgress', () => {
 
     expect(screen.getByText('专注中')).toBeInTheDocument();
     expect(screen.getByText('12:34')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /工作流进度/i })).toHaveAttribute('data-layout', 'compact');
+    expect(screen.getByLabelText(/工作流进度/i)).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByTestId('workflow-nav-pulse')).toHaveAttribute('data-phase', 'focus');
     expect(screen.queryByText('1/2')).not.toBeInTheDocument();
   });
@@ -55,7 +55,7 @@ describe('WorkflowNavProgress', () => {
 
     expect(screen.getByText('休息中')).toBeInTheDocument();
     expect(screen.getByText('02:00')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /工作流进度/i })).toHaveAttribute('data-layout', 'compact');
+    expect(screen.getByLabelText(/工作流进度/i)).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByTestId('workflow-nav-pulse')).toHaveAttribute('data-phase', 'break');
   });
 
@@ -144,17 +144,6 @@ describe('WorkflowNavProgress', () => {
     expect(screen.queryByText('1/1')).not.toBeInTheDocument();
   });
 
-  it('opens the workflow modal when the chip is clicked', async () => {
-    const user = userEvent.setup();
-    const openSpy = vi.fn();
-    window.addEventListener('ark:open-workflow-modal', openSpy);
-
-    render(<WorkflowNavProgress workflow={makeWorkflow()} />);
-    await user.click(screen.getByRole('button', { name: /工作流进度/i }));
-
-    expect(openSpy).toHaveBeenCalledTimes(1);
-    window.removeEventListener('ark:open-workflow-modal', openSpy);
-  });
 
   it('keeps the resting focus chip compact and hides the task title by default', () => {
     render(
@@ -165,7 +154,7 @@ describe('WorkflowNavProgress', () => {
       />,
     );
 
-    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    const chip = screen.getByLabelText(/工作流进度/i);
     expect(chip).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByText('专注中')).toBeInTheDocument();
     expect(screen.queryByText('撰写周报')).not.toBeInTheDocument();
@@ -182,7 +171,7 @@ describe('WorkflowNavProgress', () => {
       />,
     );
 
-    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    const chip = screen.getByLabelText(/工作流进度/i);
     await user.hover(chip);
 
     expect(chip).toHaveAttribute('data-layout', 'hover');
@@ -207,7 +196,7 @@ describe('WorkflowNavProgress', () => {
       />,
     );
 
-    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    const chip = screen.getByLabelText(/工作流进度/i);
     await user.hover(chip);
 
     expect(chip).toHaveAttribute('data-layout', 'compact');
@@ -228,7 +217,7 @@ describe('WorkflowNavProgress', () => {
       />,
     );
 
-    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    const chip = screen.getByLabelText(/工作流进度/i);
     expect(chip).toHaveAttribute('data-layout', 'feedback');
     expect(screen.getByText('开始休息')).toBeInTheDocument();
     expect(screen.getByText('04:56')).toBeInTheDocument();
@@ -252,7 +241,7 @@ describe('WorkflowNavProgress', () => {
       vi.advanceTimersByTime(1800);
     });
 
-    const chip = screen.getByRole('button', { name: /工作流进度/i });
+    const chip = screen.getByLabelText(/工作流进度/i);
     expect(chip).toHaveAttribute('data-layout', 'compact');
     expect(screen.getByText('休息中')).toBeInTheDocument();
   });
