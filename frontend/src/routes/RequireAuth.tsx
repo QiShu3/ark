@@ -7,6 +7,8 @@ import Navigation from '../components/Navigation';
 import FocusWorkProvider from '../components/focus-work/FocusWorkProvider';
 import { useCustomizationStore } from '../lib/customization';
 import { useTheme } from '../hooks/useTheme';
+import ToastContainer from '../components/ToastContainer';
+import '../lib/toast';
 
 export default function RequireAuth() {
   const token = useAuthStore((s) => s.token);
@@ -55,6 +57,7 @@ export default function RequireAuth() {
         <Outlet />
       </FocusWorkProvider>
 
+      <ToastContainer />
       <BeianFooter />
     </div>
   );
