@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:00 · e950fb5 · feat(frontend): implement glassmorphic Aurora Glow style for workflow capsule
+
+- 用户提出的需求：
+  - "还是不怎么好看，给我几个方案来选择吧"
+  - 选用 方案三：极光微光拟物玻璃态 (Aurora Glow Glass)
+
+- 本次完成的工作：
+  - **极光微光背景与阴影轮廓**：在 `WorkflowNavProgress.tsx` 中移除纯扁平背景色，改为使用自适应的柔和半透明极光主题背景（`bg-[var(--focus-work-blue-bg)]` 或 `bg-[var(--focus-work-amber-bg)]`）、柔和极光轮廓边框（`border-[var(--focus-work-blue-border)]` 或 `border-[var(--focus-work-amber-border)]`） and 带有微亮发光的彩色极光背影（`shadow-[0_0_20px_rgba(...)]`），与 `backdrop-blur-md` 结合，构建出极具现代感和流动美的极光磨砂玻璃胶囊质感。
+  - **高保真高对比文字**：为完美还原方案三设计，主状态标题与时钟数字不再直接硬编码着色，而是采用极简高级的主体文字色 `text-ark-text`，使得在柔光极光边框的衬托下，玻璃上的文字展现出极高的对比度与精致清晰的纯净视认性。
+  - **极简玻璃磨砂交互键**：将右侧的“▶ 继续”交互按钮重构为与方案三完美一致的柔和磨砂晶莹质感键（`bg-ark-surface-subtle hover:bg-ark-surface border border-ark-border text-ark-text`），在极光胶囊内显得极其协调而高端。
+
+- 验证情况：
+  - 执行 `pnpm check` 类型检查完全通过。
+  - 执行 `pnpm test -- --run` 全量单元测试，全部 100% 顺利通过。
+
 ### 2026-05-29 15:57 · ee8aac7 · fix(frontend): make workflow progress bar colors theme-aware using global CSS variables
 
 - 用户提出的需求：
