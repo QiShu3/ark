@@ -2,6 +2,24 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:07 · 9cba359 · fix(frontend): make Floating Space Capsule background and shadows fully theme-aware for day and night modes
+
+- 用户提出的需求：
+  - "你没有日夜间模式适配吗？怎么我打开夜间模式ui没有发生变化？"
+
+- 本次完成的工作：
+  - **修复日夜间模式切换不联动缺陷**：深入定位到项目的主题切换是由 `document.documentElement` 上的 `data-theme` 属性（`light`/`dark`）动态控制，而不是通过 Tailwind 默认的 `dark:` class 前缀修饰符。原先硬编码的 `dark:bg-[var(--ark-surface-strong)]` 会导致手动或系统切换夜间模式时胶囊样式完全不响应。
+  - **声明胶囊级全局主题变量**：在 `index.css` 的 `:root` 与 `:root[data-theme="light"]` 下分别定制了太空舱的专属语义变量：
+    * **背景色**：`--workflow-capsule-bg` 映射为浅色 `rgba(255, 255, 255, 0.95)` / 深色 `rgba(12, 18, 28, 0.92)`。
+    * **外边框**：`--workflow-capsule-border` 映射为浅色 `rgba(15, 23, 42, 0.08)` / 深色 `rgba(255, 255, 255, 0.1)`。
+    * **内发光环**：`--workflow-capsule-ring` 映射为浅色 `rgba(15, 23, 42, 0.04)` / 深色 `rgba(255, 255, 255, 0.05)`。
+    * **悬浮投影**：`--workflow-capsule-shadow` 映射为浅色 `rgba(15, 23, 42, 0.12)` / 深色 `rgba(0, 0, 0, 0.5)`。
+  - **解耦 Tailwind dark 前缀**：将 `WorkflowNavProgress.tsx` 中的 `activeBgClass`、`activeBorderClass` 和 `activeShadowClass` 完全换用上面定义的 CSS 主题自定义属性。此时，无论用户怎样点击切换日/夜间模式，整个太空舱胶囊的实体白板、重力投影和极细内衬线都会完美、即时且丝滑地完成切换。
+
+- 验证情况：
+  - 执行 `pnpm check` 类型检查完全通过。
+  - 执行 `pnpm test -- --run` 全量单元测试，全部 100% 成功。
+
 ### 2026-05-29 16:04 · ad96def · feat(frontend): implement Floating Space Capsule visual design with state-aware Lucide icons and elevated shadow
 
 - 用户提出的需求：
