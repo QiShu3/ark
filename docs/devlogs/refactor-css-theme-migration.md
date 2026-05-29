@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:11 · 2c1897e · feat(frontend): remove unused Home, Apps, and About menu links from Navigation bar
+
+- 用户提出的需求：
+  - "去掉这三个元素，已经没有用了" (上传包含“首页”“应用”“关于”的截图)
+
+- 本次完成的工作：
+  - **移除了冗余导航链接**：在 `Navigation.tsx` 中彻底删除了不再使用的“首页”、“应用”与“关于”三个菜单按钮（即对应的 `<div className="flex gap-4">` 及其内层 `button` 块），使导航栏右侧更加清爽，给中间绝对居中的工作流太空舱进度条留出更完美的呼吸感与极简视觉层级。
+  - **同步重构单元测试用例**：在 `Navigation.test.tsx` 中，删除了已不存在的“首页”、“应用”、“关于”三个按钮的 `toBeDisabled` 禁用状态及 `user.click` 模拟点击的断言，将其平滑迁移为只针对导航栏中依然存在的“日历（打开导航栏日历）”以及“书本（重新进入首次体验引导）”两个动作入口的锁定测试，确保所有自动化测试完全逻辑一致且安全通过。
+
+- 验证情况：
+  - 执行 `pnpm check` 完成静态 TypeScript 检查，完全通过。
+  - 执行 `pnpm test -- --run Navigation.test.tsx` 测试，全部 6 个测试用例 100% 绿灯顺利通过。
+
 ### 2026-05-29 16:07 · 9cba359 · fix(frontend): make Floating Space Capsule background and shadows fully theme-aware for day and night modes
 
 - 用户提出的需求：
