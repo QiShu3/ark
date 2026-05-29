@@ -272,7 +272,7 @@ export default function ERCHome() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link to="/erc/library" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 hover:bg-white/90 transition shadow-lg shadow-white/5">
+            <Link to="/erc/library" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 hover:bg-ark-surface-subtle transition shadow-lg shadow-white/5">
               进入题库
             </Link>
             <button
@@ -384,7 +384,7 @@ export default function ERCHome() {
                   type="button"
                   onClick={() => setSettingsOpen(true)}
                   disabled={appTaskBusy}
-                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                 >
                   配置当前事件真题练习
                 </button>
@@ -393,7 +393,7 @@ export default function ERCHome() {
                   type="button"
                   onClick={initializePracticeTask}
                   disabled={appTaskBusy}
-                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                 >
                   启用真题练习
                 </button>
@@ -402,7 +402,7 @@ export default function ERCHome() {
                   type="button"
                   onClick={startPracticeFocusWork}
                   disabled={!practiceTaskStatus?.task_id || appTaskBusy || practiceTaskStatus?.state === 'completed_today'}
-                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                 >
                   {practiceTaskStatus?.state === 'completed_today' ? '今日练习已完成' : '开始真题练习'}
                 </button>
@@ -467,7 +467,7 @@ export default function ERCHome() {
                   type="button"
                   onClick={() => setSettingsOpen(true)}
                   disabled={appTaskBusy}
-                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                 >
                   配置当前事件错题复习
                 </button>
@@ -476,7 +476,7 @@ export default function ERCHome() {
                   type="button"
                   onClick={initializeReviewTask}
                   disabled={appTaskBusy}
-                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                 >
                   启用错题复习
                 </button>
@@ -485,7 +485,7 @@ export default function ERCHome() {
                   type="button"
                   onClick={startReviewFocusWork}
                   disabled={!appTaskStatus?.task_id || appTaskBusy || appTaskStatus?.state === 'completed_today'}
-                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                  className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                 >
                   {appTaskStatus?.state === 'completed_today' ? '今日复习已完成' : '开始复习'}
                 </button>
@@ -496,11 +496,11 @@ export default function ERCHome() {
 
         {/* Recommended Article */}
         {overview?.recommended_article ? (
-          <section className="mt-8 border-t border-white/10 pt-6">
-            <div className="text-sm text-white/55">今日推荐练习</div>
+          <section className="mt-8 border-t border-ark-border pt-6">
+            <div className="text-sm text-ark-text-muted">今日推荐练习</div>
             <Link
               to={`/erc/articles/${overview.recommended_article.article_id}/practice`}
-              className="mt-3 inline-flex rounded-full border border-white/15 px-6 py-3 text-sm text-indigo-200 bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition"
+              className="mt-3 inline-flex rounded-full border border-ark-border px-6 py-3 text-sm text-indigo-200 bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition"
             >
               {overview.recommended_article.year} 年 Text {overview.recommended_article.text_no} · {overview.recommended_article.title || '无标题文章'}
             </Link>
@@ -646,7 +646,7 @@ export default function ERCHome() {
                 type="button"
                 disabled={settingsSaving}
                 onClick={handleSaveSettings}
-                className="rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                className="rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
               >
                 {settingsSaving ? '保存中…' : '保存设置并同步'}
               </button>

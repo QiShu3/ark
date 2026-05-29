@@ -286,24 +286,24 @@ export default function HomeOnboarding() {
 
   if (phase === 'intro') {
     return createPortal(
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-4" aria-live="polite">
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ark-overlay px-4" aria-live="polite">
         <div
           role="dialog"
           aria-label="首次引导"
-          className="w-[420px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-[#101827]/95 p-5 text-white shadow-2xl backdrop-blur-md"
+          className="w-[420px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-5 text-ark-text shadow-2xl backdrop-blur-md"
         >
           <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">首次引导</div>
           <h2 className="mt-3 text-xl font-semibold">欢迎来到 Ark</h2>
-          <p className="mt-3 text-sm leading-6 text-white/70">
+          <p className="mt-3 text-sm leading-6 text-ark-text">
             我会带你走一遍从创建事件、生成安排，到启动工作流的完整链路。
           </p>
-          <p className="mt-2 text-sm leading-6 text-white/60">
+          <p className="mt-2 text-sm leading-6 text-ark-text-muted">
             全程只需要按提示点击，不会影响你之后自由使用。
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"
-              className="rounded-full border border-white/10 px-4 py-2 text-sm text-white/65 transition hover:border-white/20 hover:text-white"
+              className="rounded-full border border-ark-border px-4 py-2 text-sm text-ark-text-muted transition hover:border-ark-border hover:text-ark-text"
               onClick={() => {
                 window.localStorage.setItem(FIRST_GUIDE_STORAGE_KEY, 'skipped');
                 setPhase('idle');
@@ -330,18 +330,18 @@ export default function HomeOnboarding() {
 
   if (phase === 'complete') {
     return createPortal(
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-4" aria-live="polite">
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ark-overlay px-4" aria-live="polite">
         <div
           role="dialog"
           aria-label="首次引导"
-          className="w-[460px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-[#101827]/95 p-5 text-white shadow-2xl backdrop-blur-md"
+          className="w-[460px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-5 text-ark-text shadow-2xl backdrop-blur-md"
         >
           <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">首次引导</div>
           <h2 className="mt-3 text-xl font-semibold">体验完成</h2>
-          <p className="mt-3 text-sm leading-6 text-white/70">
+          <p className="mt-3 text-sm leading-6 text-ark-text">
             你刚刚走完了一条 Ark 的核心链路：事件会生成安排，安排可以进入工作流，工作流再把专注推进下去。
           </p>
-          <p className="mt-2 text-sm leading-6 text-white/60">
+          <p className="mt-2 text-sm leading-6 text-ark-text-muted">
             之后你可以从导航栏的书本按钮随时重新打开这段引导。
           </p>
           <div className="mt-5 flex justify-end">
@@ -370,17 +370,17 @@ export default function HomeOnboarding() {
         <>
           {/* Top backdrop */}
           <div
-            className="pointer-events-auto absolute top-0 left-0 right-0 bg-black/30"
+            className="pointer-events-auto absolute top-0 left-0 right-0 bg-ark-surface-subtle"
             style={{ height: Math.max(0, anchorRect.top - 8) }}
           />
           {/* Bottom backdrop */}
           <div
-            className="pointer-events-auto absolute bottom-0 left-0 right-0 bg-black/30"
+            className="pointer-events-auto absolute bottom-0 left-0 right-0 bg-ark-surface-subtle"
             style={{ top: Math.max(0, anchorRect.top + anchorRect.height + 8) }}
           />
           {/* Left backdrop */}
           <div
-            className="pointer-events-auto absolute left-0 bg-black/30"
+            className="pointer-events-auto absolute left-0 bg-ark-surface-subtle"
             style={{
               top: Math.max(0, anchorRect.top - 8),
               height: Math.max(0, anchorRect.height + 16),
@@ -389,7 +389,7 @@ export default function HomeOnboarding() {
           />
           {/* Right backdrop */}
           <div
-            className="pointer-events-auto absolute right-0 bg-black/30"
+            className="pointer-events-auto absolute right-0 bg-ark-surface-subtle"
             style={{
               top: Math.max(0, anchorRect.top - 8),
               height: Math.max(0, anchorRect.height + 16),
@@ -398,7 +398,7 @@ export default function HomeOnboarding() {
           />
         </>
       ) : (
-        <div className="pointer-events-auto absolute inset-0 bg-black/30" />
+        <div className="pointer-events-auto absolute inset-0 bg-ark-surface-subtle" />
       )}
       <div
         className="absolute rounded-2xl border-2 border-cyan-300/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.28),0_0_28px_rgba(103,232,249,0.45)] transition-all duration-200"
@@ -407,18 +407,18 @@ export default function HomeOnboarding() {
       <div
         role="dialog"
         aria-label="首次体验引导"
-        className="pointer-events-none absolute rounded-2xl border border-cyan-200/20 bg-[#101827]/95 p-4 text-white shadow-2xl backdrop-blur-md"
+        className="pointer-events-none absolute rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-4 text-ark-text shadow-2xl backdrop-blur-md"
         style={getBubbleStyle(anchorRect, step.placement)}
       >
         <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">
           {stepIndex + 1} / {STEPS.length}
         </div>
         <h2 className="mt-2 text-lg font-semibold">{step.title}</h2>
-        <p className="mt-2 text-sm leading-6 text-white/70">{step.body}</p>
+        <p className="mt-2 text-sm leading-6 text-ark-text">{step.body}</p>
         <div className="mt-4 flex items-center justify-between gap-3">
           <button
             type="button"
-            className="pointer-events-auto rounded-full border border-white/10 px-3 py-1.5 text-sm text-white/65 transition hover:border-white/20 hover:text-white"
+            className="pointer-events-auto rounded-full border border-ark-border px-3 py-1.5 text-sm text-ark-text-muted transition hover:border-ark-border hover:text-ark-text"
             onClick={() => {
               window.localStorage.setItem(FIRST_GUIDE_STORAGE_KEY, 'skipped');
               setPhase('idle');

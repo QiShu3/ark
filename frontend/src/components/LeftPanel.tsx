@@ -16,7 +16,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({ collapsed }) => {
   return (
     <div
       className={cn(
-        'h-full relative border-r border-white/10 transition-all duration-300 ease-out overflow-hidden',
+        'h-full relative border-r border-ark-border transition-all duration-300 ease-out overflow-hidden',
         collapsed ? 'w-[65%] lg:w-[calc(100%-1rem)]' : 'w-[65%] lg:w-[65%]',
       )}
     >

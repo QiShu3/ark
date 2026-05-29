@@ -48,16 +48,16 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
           <span className={`font-bold text-sm tracking-wide ${activeColorText}`}>
             {phaseLabel(phaseType)}阶段 {metrics.activePhaseIndex + 1}
           </span>
-          <span className="font-mono text-sm text-white/90 font-medium bg-black/20 px-1.5 py-0.5 rounded">
+          <span className="font-mono text-sm text-ark-text font-medium bg-ark-surface-subtle px-1.5 py-0.5 rounded">
             {timerText}
           </span>
           {targetHint ? (
-            <span className="text-xs font-medium text-white/55 bg-white/5 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-medium text-ark-text-muted bg-ark-surface-subtle px-2 py-0.5 rounded-full">
               {targetHint}
             </span>
           ) : null}
         </div>
-        <span className="text-xs font-bold text-white/40 tracking-wider">
+        <span className="text-xs font-bold text-ark-text-faint tracking-wider">
           {Math.round(metrics.percent)}%
         </span>
       </div>
@@ -83,7 +83,7 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
           }
 
           const isFocusPhase = phase.phase_type === 'focus';
-          const trackBg = 'bg-white/10';
+          const trackBg = 'bg-ark-surface-subtle';
           const fillGradient = isFocusPhase 
             ? 'linear-gradient(90deg, #60a5fa, #3b82f6)' 
             : 'linear-gradient(90deg, #fb923c, #f97316)';

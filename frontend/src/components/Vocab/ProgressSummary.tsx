@@ -13,10 +13,10 @@ export default function ProgressSummary({ summary }: { summary: VocabTodaySummar
       {items.map((item) => (
         <div
           key={item.key}
-          className={`rounded-3xl border border-white/10 bg-gradient-to-br ${item.accent} p-5 backdrop-blur-md`}
+          className={`rounded-3xl border border-ark-border bg-gradient-to-br ${item.accent} p-5 backdrop-blur-md`}
         >
-          <div className="text-sm text-white/60">{item.label}</div>
-          <div className="mt-2 text-3xl font-semibold text-white">
+          <div className="text-sm text-ark-text-muted">{item.label}</div>
+          <div className="mt-2 text-3xl font-semibold text-ark-text">
             {summary[item.key]}
           </div>
         </div>

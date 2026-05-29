@@ -21,9 +21,9 @@ export default function VocabReview() {
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">今日复习</h1>
-            <p className="mt-3 text-white/65">先回忆，再提交结果。间隔和掌握度由后端统一推进。</p>
+            <p className="mt-3 text-ark-text-muted">先回忆，再提交结果。间隔和掌握度由后端统一推进。</p>
           </div>
-          <a href="#/vocab/mistakes" className="text-sm text-white/65 transition hover:text-white">
+          <a href="#/vocab/mistakes" className="text-sm text-ark-text-muted transition hover:text-ark-text">
             查看错题池
           </a>
         </div>
@@ -40,7 +40,7 @@ export default function VocabReview() {
         </div>
 
         <div className="mt-8 space-y-6">
-          {session.loading ? <p className="text-sm text-white/55">复习队列加载中…</p> : null}
+          {session.loading ? <p className="text-sm text-ark-text-muted">复习队列加载中…</p> : null}
           {session.error ? <p className="text-sm text-rose-200">{session.error}</p> : null}
 
           {session.currentItem ? (
@@ -53,13 +53,13 @@ export default function VocabReview() {
                     type="button"
                     disabled={session.submitting}
                     onClick={() => void session.submit(action.value)}
-                    className="rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-2xl border border-ark-border bg-ark-surface-subtle px-4 py-3 text-sm transition hover:border-ark-border hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {action.label}
                   </button>
                 ))}
               </div>
-              <a href={`#/vocab/words/${session.currentItem.id}`} className="inline-block text-sm text-white/65 transition hover:text-white">
+              <a href={`#/vocab/words/${session.currentItem.id}`} className="inline-block text-sm text-ark-text-muted transition hover:text-ark-text">
                 查看单词详情
               </a>
             </>
@@ -68,7 +68,7 @@ export default function VocabReview() {
           {session.lastResult ? <ReviewResultPanel result={session.lastResult} /> : null}
 
           {!session.loading && !session.error && !session.currentItem ? (
-            <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">当前没有到期复习词。</div>
+            <div className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-8 text-ark-text-muted">当前没有到期复习词。</div>
           ) : null}
         </div>
       </div>

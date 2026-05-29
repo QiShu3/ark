@@ -100,7 +100,7 @@ export default function Login() {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black text-white font-sans">
+    <div className="relative w-screen h-screen overflow-hidden bg-black text-ark-text font-sans">
       <div className="fixed inset-0 z-0">
         <img
           src={`${import.meta.env.BASE_URL}images/background.jpg`}
@@ -111,7 +111,7 @@ export default function Login() {
       </div>
 
       <div className="relative z-10 w-full h-full flex items-center justify-center p-6">
-        <div className="relative w-full max-w-md bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-lg">
+        <div className="relative w-full max-w-md bg-ark-overlay backdrop-blur-md border border-ark-border rounded-2xl p-6 shadow-lg">
           <button
             type="button"
             onClick={() => {
@@ -120,53 +120,53 @@ export default function Login() {
               setConfirmPassword('');
               setMode((m) => (m === 'login' ? 'register' : 'login'));
             }}
-            className="absolute top-4 right-4 text-sm text-white/70 hover:text-white bg-white/10 hover:bg-white/15 border border-white/15 rounded-lg px-3 py-1.5"
+            className="absolute top-4 right-4 text-sm text-ark-text hover:text-ark-text bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border rounded-lg px-3 py-1.5"
           >
             {mode === 'login' ? '注册' : '登录'}
           </button>
 
           <div className="text-xl font-semibold mb-1">{mode === 'login' ? '登录' : '注册'}</div>
-          <div className="text-white/60 text-sm mb-6">
+          <div className="text-ark-text-muted text-sm mb-6">
             {mode === 'login' ? '请输入账号与密码' : '创建账号后将自动登录'}
           </div>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm text-white/70">用户名</label>
+              <label className="text-sm text-ark-text">用户名</label>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full h-11 rounded-lg bg-white/10 border border-white/15 px-3 outline-none focus:border-white/30"
+                className="w-full h-11 rounded-lg bg-ark-surface-subtle border border-ark-border px-3 outline-none focus:border-ark-border"
                 placeholder="username"
                 autoComplete="username"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-white/70">密码</label>
+              <label className="text-sm text-ark-text">密码</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-11 rounded-lg bg-white/10 border border-white/15 px-3 outline-none focus:border-white/30"
+                className="w-full h-11 rounded-lg bg-ark-surface-subtle border border-ark-border px-3 outline-none focus:border-ark-border"
                 placeholder="password"
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
               {password.length > 0 && password.length < 8 ? (
                 <div className="text-xs text-red-200">密码至少 8 位</div>
               ) : (
-                <div className="text-xs text-white/40">密码至少 8 位</div>
+                <div className="text-xs text-ark-text-faint">密码至少 8 位</div>
               )}
             </div>
 
             {mode === 'register' ? (
               <div className="space-y-2">
-                <label className="text-sm text-white/70">确认密码</label>
+                <label className="text-sm text-ark-text">确认密码</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full h-11 rounded-lg bg-white/10 border border-white/15 px-3 outline-none focus:border-white/30"
+                  className="w-full h-11 rounded-lg bg-ark-surface-subtle border border-ark-border px-3 outline-none focus:border-ark-border"
                   placeholder="confirm password"
                   autoComplete="new-password"
                 />
@@ -190,7 +190,7 @@ export default function Login() {
                 password.length < 8 ||
                 (mode === 'register' && (!confirmPassword || confirmPassword !== password))
               }
-              className="w-full h-11 rounded-lg bg-white/15 hover:bg-white/20 border border-white/15 disabled:opacity-50"
+              className="w-full h-11 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border disabled:opacity-50"
             >
               {isSubmitting ? (mode === 'register' ? '注册中...' : '登录中...') : mode === 'register' ? '注册并登录' : '登录'}
             </button>

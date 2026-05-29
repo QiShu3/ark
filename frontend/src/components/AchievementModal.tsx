@@ -161,7 +161,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pb-6 pt-20 backdrop-blur-sm ${overlayAnimationClass} md:items-center md:px-6 md:py-6`}
+      className={`fixed inset-0 z-[80] flex items-start justify-center bg-ark-overlay px-4 pb-6 pt-20 backdrop-blur-sm ${overlayAnimationClass} md:items-center md:px-6 md:py-6`}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -169,21 +169,21 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
     >
       <div
         ref={dialogRef}
-        className={`w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d0f16] p-5 ${surfaceAnimationClass}`}
+        className={`w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-ark-border bg-[#0d0f16] p-5 ${surfaceAnimationClass}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-bold text-white">
+            <h3 className="text-xl font-bold text-ark-text">
               {summary?.active_event ? `成就 · ${summary.active_event.name}` : '成就'}
             </h3>
-            <p className="mt-2 text-sm text-white/55">上半部分跟随事件切换，下半部分的全局成就始终显示。</p>
+            <p className="mt-2 text-sm text-ark-text-muted">上半部分跟随事件切换，下半部分的全局成就始终显示。</p>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
+            className="rounded-full p-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
             aria-label="关闭成就弹窗"
           >
             ×
@@ -199,7 +199,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
               className={`rounded-full px-3 py-2 text-sm ${
                 summary?.active_event?.id === eventItem.id
                   ? 'bg-amber-300 text-black'
-                  : 'border border-white/10 bg-white/5 text-white/70'
+                  : 'border border-ark-border bg-ark-surface-subtle text-ark-text'
               }`}
             >
               {eventItem.name}
@@ -215,8 +215,8 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
 
         {summary?.event_achievements ? (
           <section className="mt-6">
-            <h4 className="text-sm font-semibold text-white/90">当前事件成就</h4>
-            <div className="mt-2 text-xs text-white/55">{summary.event_achievements.summary_text}</div>
+            <h4 className="text-sm font-semibold text-ark-text">当前事件成就</h4>
+            <div className="mt-2 text-xs text-ark-text-muted">{summary.event_achievements.summary_text}</div>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               {summary.event_achievements.latest_unlocked.map((item) => (
                 <AchievementBadgeCard key={item.id} item={item} />
@@ -227,14 +227,14 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
             </div>
           </section>
         ) : (
-          <section className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+          <section className="mt-6 rounded-2xl border border-ark-border bg-ark-surface-subtle p-4 text-sm text-ark-text-muted">
             暂无主事件成就，设置主事件后这里会显示当前事件的进展。
           </section>
         )}
 
-        <section className="mt-6 border-t border-white/10 pt-6">
-          <h4 className="text-sm font-semibold text-white/90">全局成就</h4>
-          <div className="mt-2 text-xs text-white/55">{summary?.global_achievements.summary_text}</div>
+        <section className="mt-6 border-t border-ark-border pt-6">
+          <h4 className="text-sm font-semibold text-ark-text">全局成就</h4>
+          <div className="mt-2 text-xs text-ark-text-muted">{summary?.global_achievements.summary_text}</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             {summary?.global_achievements.latest_unlocked.map((item) => (
               <AchievementBadgeCard key={item.id} item={item} tone="global" />

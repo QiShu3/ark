@@ -131,18 +131,18 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   }
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" role="dialog" aria-label="多周安排日历">
-      <div className="flex h-[86vh] w-[92vw] max-w-[1500px] overflow-hidden rounded-[2rem] border border-white/15 bg-slate-950/75 text-white shadow-2xl backdrop-blur-2xl">
+    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-ark-overlay p-6 backdrop-blur-sm" role="dialog" aria-label="多周安排日历">
+      <div className="flex h-[86vh] w-[92vw] max-w-[1500px] overflow-hidden rounded-[2rem] border border-ark-border bg-ark-surface-subtle text-ark-text shadow-2xl backdrop-blur-2xl">
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="relative z-20 flex h-20 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-white/[0.03] px-6">
+          <header className="relative z-20 flex h-20 shrink-0 items-center justify-between gap-4 border-b border-ark-border bg-ark-surface-subtle px-6">
             <div className="relative flex items-center gap-3 text-2xl font-black tracking-tight">
-              <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/20 bg-white/[0.06] text-sm">▦</span>
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-ark-border bg-ark-surface-subtle text-sm">▦</span>
               <button
                 type="button"
                 aria-label={`打开年月选择器，当前 ${monthLabel}`}
                 aria-expanded={showMonthPicker}
                 onClick={toggleMonthPicker}
-                className="rounded-xl px-2 py-1 text-left transition-colors hover:bg-white/[0.06]"
+                className="rounded-xl px-2 py-1 text-left transition-colors hover:bg-ark-surface-subtle"
               >
                 {monthLabel}
               </button>
@@ -150,23 +150,23 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
                 <div
                   role="dialog"
                   aria-label="选择年份和月份"
-                  className="absolute left-10 top-14 z-30 w-[320px] rounded-2xl border border-white/15 bg-slate-950 p-4 shadow-2xl"
+                  className="absolute left-10 top-14 z-30 w-[320px] rounded-2xl border border-ark-border bg-slate-950 p-4 shadow-2xl"
                 >
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <button
                       type="button"
                       aria-label="上一年"
                       onClick={() => setPickerYear((year) => year - 1)}
-                      className="rounded-lg border border-white/15 bg-white/[0.05] px-3 py-1 text-sm text-white/80 hover:bg-white/[0.08]"
+                      className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-1 text-sm text-ark-text hover:bg-ark-surface-subtle"
                     >
                       ‹
                     </button>
-                    <div className="text-base font-bold text-white">{pickerYear}年</div>
+                    <div className="text-base font-bold text-ark-text">{pickerYear}年</div>
                     <button
                       type="button"
                       aria-label="下一年"
                       onClick={() => setPickerYear((year) => year + 1)}
-                      className="rounded-lg border border-white/15 bg-white/[0.05] px-3 py-1 text-sm text-white/80 hover:bg-white/[0.08]"
+                      className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-1 text-sm text-ark-text hover:bg-ark-surface-subtle"
                     >
                       ›
                     </button>
@@ -183,7 +183,7 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
                           className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
                             isActive
                               ? 'border-cyan-300/40 bg-cyan-300/18 text-cyan-50'
-                              : 'border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08]'
+                              : 'border-ark-border bg-ark-surface-subtle text-ark-text hover:bg-ark-surface-subtle'
                           }`}
                         >
                           {month + 1}月
@@ -196,16 +196,16 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
             </div>
             <div className="flex items-center gap-3">
               {loading ? <span aria-label="日历加载中" className="h-2.5 w-2.5 rounded-full bg-cyan-300/80 animate-pulse" /> : null}
-              <button type="button" className="grid h-10 w-10 place-items-center rounded-xl border border-white/20 bg-white/[0.06] text-xl hover:bg-white/[0.1]">
+              <button type="button" className="grid h-10 w-10 place-items-center rounded-xl border border-ark-border bg-ark-surface-subtle text-xl hover:bg-ark-surface-subtle">
                 +
               </button>
-              <div className="flex h-10 overflow-hidden rounded-xl border border-white/20 bg-white/[0.06]">
+              <div className="flex h-10 overflow-hidden rounded-xl border border-ark-border bg-ark-surface-subtle">
                 <button
                   type="button"
                   aria-pressed={weekCount === 2}
                   aria-label="显示 2 周"
                   onClick={() => updateWeekCount(2)}
-                  className={`px-4 text-sm font-bold ${weekCount === 2 ? 'bg-cyan-300/20 text-cyan-50' : 'text-white/60'}`}
+                  className={`px-4 text-sm font-bold ${weekCount === 2 ? 'bg-cyan-300/20 text-cyan-50' : 'text-ark-text-muted'}`}
                 >
                   2 周
                 </button>
@@ -214,23 +214,23 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
                   aria-pressed={weekCount === 3}
                   aria-label="显示 3 周"
                   onClick={() => updateWeekCount(3)}
-                  className={`px-4 text-sm font-bold ${weekCount === 3 ? 'bg-cyan-300/20 text-cyan-50' : 'text-white/60'}`}
+                  className={`px-4 text-sm font-bold ${weekCount === 3 ? 'bg-cyan-300/20 text-cyan-50' : 'text-ark-text-muted'}`}
                 >
                   3 周
                 </button>
               </div>
-              <div className="flex h-10 overflow-hidden rounded-xl border border-white/20 bg-white/[0.06]">
-                <button type="button" aria-label="上一段日期" onClick={() => setAnchorDate((date) => addDays(date, -weekCount * 7))} className="px-4 text-xl text-white/80">
+              <div className="flex h-10 overflow-hidden rounded-xl border border-ark-border bg-ark-surface-subtle">
+                <button type="button" aria-label="上一段日期" onClick={() => setAnchorDate((date) => addDays(date, -weekCount * 7))} className="px-4 text-xl text-ark-text">
                   ‹
                 </button>
-                <button type="button" onClick={() => setAnchorDate(new Date())} className="border-x border-white/10 px-4 text-sm font-bold">
+                <button type="button" onClick={() => setAnchorDate(new Date())} className="border-x border-ark-border px-4 text-sm font-bold">
                   今天
                 </button>
-                <button type="button" aria-label="下一段日期" onClick={() => setAnchorDate((date) => addDays(date, weekCount * 7))} className="px-4 text-xl text-white/80">
+                <button type="button" aria-label="下一段日期" onClick={() => setAnchorDate((date) => addDays(date, weekCount * 7))} className="px-4 text-xl text-ark-text">
                   ›
                 </button>
               </div>
-              <button type="button" onClick={onClose} className="rounded-xl border border-white/20 bg-white/[0.06] px-4 py-2 text-sm font-bold text-white/75 hover:bg-white/[0.1]">
+              <button type="button" onClick={onClose} className="rounded-xl border border-ark-border bg-ark-surface-subtle px-4 py-2 text-sm font-bold text-ark-text hover:bg-ark-surface-subtle">
                 关闭
               </button>
             </div>

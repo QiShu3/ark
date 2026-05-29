@@ -130,12 +130,12 @@ export default function ERCPractice() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm uppercase tracking-[0.28em] text-white/45">Practice</div>
-            <h1 className="mt-2 text-2xl font-semibold text-white">
+            <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Practice</div>
+            <h1 className="mt-2 text-2xl font-semibold text-ark-text">
               {article ? `${article.year} Text ${article.text_no}` : '整篇练习'}
             </h1>
           </div>
-          <Link to="/erc/library" className="text-sm text-white/65 hover:text-white">
+          <Link to="/erc/library" className="text-sm text-ark-text-muted hover:text-ark-text">
             返回题库
           </Link>
         </div>
@@ -146,11 +146,11 @@ export default function ERCPractice() {
           <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
             <article
               aria-label="阅读原文"
-              className="space-y-7 rounded-2xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/20 backdrop-blur-2xl backdrop-saturate-125 lg:p-8"
+              className="space-y-7 rounded-2xl border border-ark-border bg-ark-surface-subtle p-6 shadow-2xl shadow-black/20 backdrop-blur-2xl backdrop-saturate-125 lg:p-8"
             >
               {article.paragraphs.map((paragraph) => (
-                <p key={paragraph.paragraph_no} className="grid grid-cols-[2rem_minmax(0,76ch)] gap-4 text-[1.02rem] leading-9 text-white/86">
-                  <span className="text-right text-sm leading-9 text-white/28">{paragraph.paragraph_no}</span>
+                <p key={paragraph.paragraph_no} className="grid grid-cols-[2rem_minmax(0,76ch)] gap-4 text-[1.02rem] leading-9 text-ark-text">
+                  <span className="text-right text-sm leading-9 text-ark-text-faint">{paragraph.paragraph_no}</span>
                   <span>{paragraph.text}</span>
                 </p>
               ))}
@@ -158,16 +158,16 @@ export default function ERCPractice() {
 
             <section className="space-y-5">
               {article.vocabulary_summary && article.vocabulary_summary.total_word_count > 0 ? (
-                <section className="rounded-2xl border border-white/10 bg-white/[0.07] p-5 backdrop-blur-xl">
+                <section className="rounded-2xl border border-ark-border bg-ark-surface-subtle p-5 backdrop-blur-xl">
                   <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
-                      <div className="text-sm text-white/50">阅读前词汇预热</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">
+                      <div className="text-sm text-ark-text-muted">阅读前词汇预热</div>
+                      <div className="mt-2 text-2xl font-semibold text-ark-text">
                         {Math.round(article.vocabulary_summary.mastery_rate * 100)}%
-                        <span className="ml-2 text-sm font-normal text-white/55">已掌握</span>
+                        <span className="ml-2 text-sm font-normal text-ark-text-muted">已掌握</span>
                       </div>
                     </div>
-                    <div className="text-right text-sm text-white/60">
+                    <div className="text-right text-sm text-ark-text-muted">
                       预计生词 {article.vocabulary_summary.unfamiliar_count} / {article.vocabulary_summary.total_word_count}
                     </div>
                   </div>
@@ -177,16 +177,16 @@ export default function ERCPractice() {
                       {article.vocabulary_summary.preview_words.map((item) => (
                         <span
                           key={`${item.word}-${item.state}`}
-                          className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/72"
+                          className="rounded-full border border-ark-border bg-ark-surface-subtle px-3 py-1 text-xs text-ark-text"
                           title={vocabularyStateLabel[item.state] ?? item.state}
                         >
                           {item.word}
-                          <span className="ml-2 text-white/38">{vocabularyStateLabel[item.state] ?? item.state}</span>
+                          <span className="ml-2 text-ark-text-faint">{vocabularyStateLabel[item.state] ?? item.state}</span>
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-4 text-sm text-white/58">这篇文章的预习词已经全部掌握，可以直接开练。</p>
+                    <p className="mt-4 text-sm text-ark-text-muted">这篇文章的预习词已经全部掌握，可以直接开练。</p>
                   )}
 
                   {article.vocabulary_summary.unfamiliar_count > 0 ? (
@@ -195,11 +195,11 @@ export default function ERCPractice() {
                         type="button"
                         onClick={handleStartPreheat}
                         disabled={preheatLoading}
-                        className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                        className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                       >
                         {preheatLoading ? '加载中...' : '先预热单词'}
                       </button>
-                      <span className="text-xs text-white/45">预热结果会同步到背单词进度</span>
+                      <span className="text-xs text-ark-text-faint">预热结果会同步到背单词进度</span>
                     </div>
                   ) : null}
                 </section>
@@ -213,12 +213,12 @@ export default function ERCPractice() {
                 <section className="space-y-4">
                   {currentPreheatItem ? (
                     <>
-                      <div className="flex items-center justify-between gap-4 text-sm text-white/55">
+                      <div className="flex items-center justify-between gap-4 text-sm text-ark-text-muted">
                         <span>预热词 {preheatItems.length} 个待完成</span>
                         <button
                           type="button"
                           onClick={() => setPreheatStarted(false)}
-                          className="text-white/55 transition hover:text-white"
+                          className="text-ark-text-muted transition hover:text-ark-text"
                         >
                           收起
                         </button>
@@ -231,10 +231,10 @@ export default function ERCPractice() {
                             type="button"
                             disabled={preheatSubmitting}
                             onClick={() => void handleSubmitPreheat(action.value)}
-                            className="rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-left transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-2xl border border-ark-border bg-ark-surface-subtle px-4 py-3 text-left transition hover:border-ark-border hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <div className="text-sm font-medium text-white">{action.label}</div>
-                            <div className="mt-1 text-xs text-white/50">{action.hint}</div>
+                            <div className="text-sm font-medium text-ark-text">{action.label}</div>
+                            <div className="mt-1 text-xs text-ark-text-muted">{action.hint}</div>
                           </button>
                         ))}
                       </div>
@@ -249,15 +249,15 @@ export default function ERCPractice() {
               ) : null}
 
               {article.questions.map((question) => (
-                <fieldset key={question.question_id} className="rounded-2xl border border-white/10 bg-black/22 p-5">
-                  <legend className="text-base font-medium text-white">
+                <fieldset key={question.question_id} className="rounded-2xl border border-ark-border bg-ark-surface-subtle p-5">
+                  <legend className="text-base font-medium text-ark-text">
                     {question.question_no}. {question.stem}
                   </legend>
                   <div className="mt-4 space-y-2">
                     {(Object.keys(question.options) as OptionKey[]).map((key) => (
                       <label
                         key={key}
-                        className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/8 px-3 py-2 text-sm text-white/75 transition hover:border-white/18 hover:bg-white/5"
+                        className="flex cursor-pointer items-start gap-3 rounded-xl border border-ark-border px-3 py-2 text-sm text-ark-text transition hover:border-ark-border hover:bg-ark-surface-subtle"
                       >
                         <input
                           type="radio"
@@ -269,7 +269,7 @@ export default function ERCPractice() {
                           className="mt-1"
                         />
                         <span>
-                          <span className="mr-2 font-semibold text-white">{key}</span>
+                          <span className="mr-2 font-semibold text-ark-text">{key}</span>
                           {question.options[key]}
                         </span>
                       </label>
@@ -289,7 +289,7 @@ export default function ERCPractice() {
             </section>
           </div>
         ) : (
-          <p className="text-sm text-white/55">文章加载中...</p>
+          <p className="text-sm text-ark-text-muted">文章加载中...</p>
         )}
       </div>
     </div>

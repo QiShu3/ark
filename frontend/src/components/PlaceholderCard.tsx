@@ -1452,14 +1452,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           }
         }}
         onClick={() => _openEditTask(task)}
-        className="group flex flex-col gap-1.5 p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all cursor-pointer relative"
+        className="group flex flex-col gap-1.5 p-3 rounded-xl bg-ark-surface-subtle border border-ark-border hover:bg-ark-surface-subtle hover:border-ark-border transition-all cursor-pointer relative"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-1">
             <div className={`w-1.5 h-1.5 shrink-0 rounded-full ${
               isCompletedLike ? 'bg-green-500/50' : (task.task_type === 'checkin' ? 'bg-emerald-500/70' : 'bg-blue-400/50')
             }`} />
-            <span className={`font-medium text-sm line-clamp-1 ${isCompletedLike ? 'text-white/40 line-through decoration-white/30' : 'text-white/90'}`}>
+            <span className={`font-medium text-sm line-clamp-1 ${isCompletedLike ? 'text-ark-text-faint line-through decoration-white/30' : 'text-ark-text'}`}>
               {task.title}
             </span>
           </div>
@@ -1484,7 +1484,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {_isTaskCompletable(task) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
-                    className="p-1 rounded hover:bg-green-500/20 text-white/40 hover:text-green-400"
+                    className="p-1 rounded hover:bg-green-500/20 text-ark-text-faint hover:text-green-400"
                     title="完成"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1495,7 +1495,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {task.status === 'done' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); _handleUndoCompleteTask(e, task); }}
-                    className="p-1 rounded hover:bg-blue-500/20 text-white/40 hover:text-blue-400"
+                    className="p-1 rounded hover:bg-blue-500/20 text-ark-text-faint hover:text-blue-400"
                     title="撤销完成"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1507,7 +1507,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {task.status === 'done' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); _handleDeleteTask(e, task); }}
-                    className="p-1 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400"
+                    className="p-1 rounded hover:bg-red-500/20 text-ark-text-faint hover:text-red-400"
                     title="删除"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1549,23 +1549,23 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         onClick={() => _openEditAppointment(appointment)}
         className={`group flex flex-col gap-1.5 p-3 rounded-xl border transition-all cursor-pointer relative ${
           isCancelled
-            ? 'bg-white/[0.025] border-white/5 opacity-55'
+            ? 'bg-ark-surface-subtle border-ark-border opacity-55'
             : isNeedsConfirmation
               ? 'bg-amber-500/10 border-amber-400/20 hover:bg-amber-500/15'
-              : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+              : 'bg-ark-surface-subtle border-ark-border hover:bg-ark-surface-subtle hover:border-ark-border'
         }`}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <div className={`w-1.5 h-1.5 shrink-0 rounded-full ${
-              isCancelled ? 'bg-white/30' : isNeedsConfirmation ? 'bg-amber-400' : 'bg-cyan-300/70'
+              isCancelled ? 'bg-ark-text-faint' : isNeedsConfirmation ? 'bg-amber-400' : 'bg-cyan-300/70'
             }`} />
-            <span className={`font-medium text-sm line-clamp-1 ${isCancelled ? 'text-white/40 line-through decoration-white/25' : 'text-white/90'}`}>
+            <span className={`font-medium text-sm line-clamp-1 ${isCancelled ? 'text-ark-text-faint line-through decoration-white/25' : 'text-ark-text'}`}>
               {appointment.title}
             </span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[10px] px-1.5 py-0.5 rounded border bg-white/5 border-white/10 text-white/45">
+            <span className="text-[10px] px-1.5 py-0.5 rounded border bg-ark-surface-subtle border-ark-border text-ark-text-faint">
               {_formatShortDateTime(appointment.ends_at)}
             </span>
             {isNeedsConfirmation ? (
@@ -1581,7 +1581,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); _handleCompleteAppointment(e, appointment); }}
-                className="p-1 rounded hover:bg-green-500/20 text-white/40 hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="p-1 rounded hover:bg-green-500/20 text-ark-text-faint hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="完成日程"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1591,7 +1591,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             ) : null}
           </div>
         </div>
-        <div className="pl-3.5 text-[11px] text-white/40">
+        <div className="pl-3.5 text-[11px] text-ark-text-faint">
           {isNeedsConfirmation ? '待确认' : isCancelled ? '已取消' : '截止时间'}
         </div>
       </div>
@@ -1616,7 +1616,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   function _renderFilteredTasksPane() {
     if (tasksLoading && tasks.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-white/30 animate-pulse">
+        <div className="flex flex-col items-center justify-center h-full text-ark-text-faint animate-pulse">
           <span className="text-sm">加载中...</span>
         </div>
       );
@@ -1634,7 +1634,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
     if (activeTasks.length === 0 && completedTasks.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-white/30">
+        <div className="flex flex-col items-center justify-center h-full text-ark-text-faint">
           <span className="text-sm">暂无任务</span>
         </div>
       );
@@ -1648,9 +1648,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           </div>
         )}
         {completedTasks.length > 0 && (
-          <div className="flex flex-col gap-2 pt-4 border-t border-white/5 opacity-60">
+          <div className="flex flex-col gap-2 pt-4 border-t border-ark-border opacity-60">
             <div className="flex justify-between items-center px-1">
-              <h4 className="text-[10px] font-medium text-white/35 tracking-wide">
+              <h4 className="text-[10px] font-medium text-ark-text-faint tracking-wide">
                 已完成 ({completedTasks.length})
               </h4>
               <button
@@ -1670,7 +1670,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   function _renderFilteredAppointmentsPane() {
     if (appointmentsLoading && appointments.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-white/30 animate-pulse">
+        <div className="flex flex-col items-center justify-center h-full text-ark-text-faint animate-pulse">
           <span className="text-sm">加载中...</span>
         </div>
       );
@@ -1688,7 +1688,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
     if (filtered.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-white/30">
+        <div className="flex flex-col items-center justify-center h-full text-ark-text-faint">
           <span className="text-sm">暂无日程</span>
         </div>
       );
@@ -2067,12 +2067,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               className="ark-modal max-h-[72vh] w-[520px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex h-14 items-center justify-between border-b border-white/10 bg-white/5 px-5">
-                <h3 id="workflow-picker-title" className="text-base font-semibold text-white">选择工作流</h3>
+              <div className="flex h-14 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
+                <h3 id="workflow-picker-title" className="text-base font-semibold text-ark-text">选择工作流</h3>
                 <button
                   type="button"
                   onClick={() => setShowWorkflowPicker(false)}
-                  className="rounded-full p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
+                  className="rounded-full p-2 text-ark-text-muted transition hover:bg-ark-surface-subtle hover:text-ark-text"
                   aria-label="关闭选择工作流"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2092,17 +2092,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       onClick={() => _selectWorkflowPreset(preset.id)}
                       className={`w-full rounded-xl border px-4 py-3 text-left transition ${
                         selected
-                          ? 'border-blue-400/40 bg-blue-500/10 text-white'
-                          : 'border-white/10 bg-white/5 text-white/85 hover:bg-white/10'
+                          ? 'border-blue-400/40 bg-blue-500/10 text-ark-text'
+                          : 'border-ark-border bg-ark-surface-subtle text-ark-text hover:bg-ark-surface-subtle'
                       }`}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-medium">{preset.name}</span>
                           {preset.is_default ? <span className="text-xs text-blue-200/70">默认</span> : null}
                         </div>
-                        <div className="mt-1 text-xs text-white/45">共 {preset.phases.length} 个阶段</div>
+                        <div className="mt-1 text-xs text-ark-text-faint">共 {preset.phases.length} 个阶段</div>
                         {preset.event_name ? (
-                          <div className="mt-1 text-xs text-white/45">事件：{preset.event_name}</div>
+                          <div className="mt-1 text-xs text-ark-text-faint">事件：{preset.event_name}</div>
                         ) : null}
                       </button>
                     );
@@ -2110,7 +2110,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 <button
                   type="button"
                   onClick={_openNewWorkflowFromPicker}
-                  className="mt-2 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/75 transition hover:border-white/30 hover:bg-white/10 hover:text-white"
+                  className="mt-2 rounded-xl border border-dashed border-ark-border bg-ark-surface-subtle px-4 py-3 text-left text-sm font-medium text-ark-text transition hover:border-ark-border hover:bg-ark-surface-subtle hover:text-ark-text"
                 >
                   新建工作流
                 </button>
@@ -2128,11 +2128,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               className="ark-modal max-h-[72vh] w-[560px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-                <h3 className="text-base font-semibold text-white">全部任务</h3>
+              <div className="h-14 border-b border-ark-border flex items-center justify-between px-5 bg-ark-surface-subtle">
+                <h3 className="text-base font-semibold text-ark-text">全部任务</h3>
                 <button
                   onClick={() => setShowFocusTaskPicker(false)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -2148,18 +2148,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     aria-label={`选择任务 ${task.title}`}
                     className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
                       focusTargetTaskId === task.id
-                          ? 'border-blue-500/40 bg-blue-500/10 text-white'
-                          : 'border-white/10 bg-white/5 text-white/85 hover:bg-white/10'
+                          ? 'border-blue-500/40 bg-blue-500/10 text-ark-text'
+                          : 'border-ark-border bg-ark-surface-subtle text-ark-text hover:bg-ark-surface-subtle'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span>{task.title}</span>
-                      <span className="text-xs text-white/45">待办</span>
+                      <span className="text-xs text-ark-text-faint">待办</span>
                     </div>
                   </button>
                 ))}
                 {arrangementTasks.filter((task) => task.status !== 'done' && !_isTaskHiddenFromActionList(task)).length === 0 && (
-                  <div className="text-center text-white/35 py-6">暂无任务</div>
+                  <div className="text-center text-ark-text-faint py-6">暂无任务</div>
                 )}
               </div>
             </div>
@@ -2194,11 +2194,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
             <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
-              <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
-                <h2 className="text-base font-semibold text-white">专注统计</h2>
+              <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
+                <h2 className="text-base font-semibold text-ark-text">专注统计</h2>
                 <button 
                   onClick={() => setShowStatsModal(false)}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -2244,8 +2244,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
             <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
-              <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
-                <h2 className="text-base font-semibold text-white">安排管理</h2>
+              <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
+                <h2 className="text-base font-semibold text-ark-text">安排管理</h2>
                 <button 
                   aria-label="关闭安排管理"
                   data-onboarding-anchor="arrangements-close"
@@ -2253,7 +2253,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     setShowTaskModal(false);
                     dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsClosed);
                   }}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -2267,7 +2267,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {/* 左栏：安排总览 */}
                 <div 
                   aria-label="安排总览面板"
-                  className="w-[360px] min-w-[360px] border-r border-white/10 bg-black/20 flex flex-col transition-colors z-10"
+                  className="w-[360px] min-w-[360px] border-r border-ark-border bg-ark-surface-subtle flex flex-col transition-colors z-10"
                   onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; }}
                   onDragLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
                   onDrop={async (e) => {
@@ -2317,8 +2317,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     }
                   }}
                 >
-                  <div className="h-12 border-b border-white/5 flex items-center px-5 shrink-0 bg-white/[0.01]">
-                    <span className="font-semibold text-white">安排总览</span>
+                  <div className="h-12 border-b border-ark-border flex items-center px-5 shrink-0 bg-ark-surface-subtle">
+                    <span className="font-semibold text-ark-text">安排总览</span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
                     {(() => {
@@ -2385,9 +2385,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           )}
                           
                           {dones.length > 0 && (
-                            <div className="flex flex-col gap-2 pt-4 border-t border-white/5 opacity-60">
+                            <div className="flex flex-col gap-2 pt-4 border-t border-ark-border opacity-60">
                               <div className="flex justify-between items-center px-1">
-                                <h4 className="text-[10px] font-medium text-white/50 tracking-wide">
+                                <h4 className="text-[10px] font-medium text-ark-text-muted tracking-wide">
                                   已完成 ({dones.length})
                                 </h4>
                                 <button
@@ -2408,7 +2408,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
                 {/* 右栏：安排仓库 */}
                 <div className="flex-1 flex flex-col bg-transparent relative">
-                  <div className="h-12 border-b border-white/10 flex items-center justify-between px-6 gap-6 shrink-0 bg-white/[0.01]">
+                  <div className="h-12 border-b border-ark-border flex items-center justify-between px-6 gap-6 shrink-0 bg-ark-surface-subtle">
                     <div className="flex h-full items-center gap-5">
                       {[
                         { id: 'tasks', label: '任务' },
@@ -2418,7 +2418,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           key={tab.id}
                           onClick={() => setActiveArrangementTab(tab.id as 'tasks' | 'appointments')}
                           className={`h-full relative px-1 text-sm transition-colors ${
-                            activeArrangementTab === tab.id ? 'text-white font-semibold' : 'text-white/40 hover:text-white/60'
+                            activeArrangementTab === tab.id ? 'text-ark-text font-semibold' : 'text-ark-text-faint hover:text-ark-text-muted'
                           }`}
                         >
                           {tab.label}
@@ -2440,7 +2440,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           key={tab.id}
                           onClick={() => setActiveTab(tab.id as 'all' | 'daily' | 'weekly' | 'monthly' | 'custom')}
                           className={`h-full relative px-1 text-xs transition-colors ${
-                            activeTab === tab.id ? 'text-white font-semibold' : 'text-white/35 hover:text-white/60'
+                            activeTab === tab.id ? 'text-ark-text font-semibold' : 'text-ark-text-faint hover:text-ark-text-muted'
                           }`}
                         >
                           {tab.label}
@@ -2456,7 +2456,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           key={tab.id}
                           onClick={() => setActiveAppointmentTab(tab.id as 'all' | 'today' | 'needs_confirmation' | 'repeating')}
                           className={`h-full relative px-1 text-xs transition-colors ${
-                            activeAppointmentTab === tab.id ? 'text-white font-semibold' : 'text-white/35 hover:text-white/60'
+                            activeAppointmentTab === tab.id ? 'text-ark-text font-semibold' : 'text-ark-text-faint hover:text-ark-text-muted'
                           }`}
                         >
                           {tab.label}
@@ -2494,11 +2494,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               className="ark-modal relative flex max-h-[calc(100vh-6rem)] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="h-14 shrink-0 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
-                <h3 className="text-base font-semibold text-white">创建安排</h3>
+              <div className="h-14 shrink-0 border-b border-ark-border flex items-center justify-between px-5 bg-ark-surface-subtle">
+                <h3 className="text-base font-semibold text-ark-text">创建安排</h3>
                 <button
                   onClick={_closeCreateTaskModal}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -2509,19 +2509,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
               <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">安排类型</label>
+                  <label className="text-sm text-ark-text">安排类型</label>
                   <select
                     aria-label="安排类型"
                     value={createArrangementKind}
                     onChange={(e) => setCreateArrangementKind(e.target.value as CreateArrangementKind)}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   >
                     <option value="task">任务</option>
                     <option value="appointment">日程</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">标题</label>
+                  <label className="text-sm text-ark-text">标题</label>
                   <input
                     aria-label="标题"
                     value={createArrangementKind === 'appointment' ? createAppointmentForm.title : createTaskForm.title}
@@ -2531,13 +2531,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                         : setCreateTaskForm((s) => ({ ...s, title: e.target.value }))
                     )}
                     placeholder={createArrangementKind === 'appointment' ? '例如：参加站会' : '例如：完成周报'}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     autoFocus
                   />
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm text-white/70">关联事件</label>
+                  <label className="text-sm text-ark-text">关联事件</label>
                   <select
                     aria-label="关联事件"
                     value={createArrangementKind === 'appointment' ? createAppointmentForm.eventId : createTaskForm.eventId}
@@ -2549,7 +2549,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       }
                       setCreateTaskForm((s) => _syncTaskEventSelection(s, nextEventId, arrangementEvents));
                     }}
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   >
                     <option value="">不绑定事件</option>
                     {arrangementEvents.map((event) => (
@@ -2563,27 +2563,27 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {createArrangementKind === 'appointment' ? (
                   <>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm text-white/70">备注</label>
+                      <label className="text-sm text-ark-text">备注</label>
                       <textarea
                         value={createAppointmentForm.content}
                         onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, content: e.target.value }))}
                         placeholder="可选：补充地点、材料或注意事项"
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
+                        className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">开始时间</label>
+                        <label className="text-sm text-ark-text">开始时间</label>
                         <input
                           aria-label="开始时间"
                           type="datetime-local"
                           value={createAppointmentForm.startsAt}
                           onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, startsAt: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">结束时间</label>
+                        <label className="text-sm text-ark-text">结束时间</label>
                         <input
                           aria-label="结束时间"
                           type="datetime-local"
@@ -2599,29 +2599,29 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                               timeInheritsFromEvent: !!selectedEvent,
                             };
                           })}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm text-white/70">重复规则</label>
+                      <label className="text-sm text-ark-text">重复规则</label>
                       <input
                         aria-label="重复规则"
                         value={createAppointmentForm.repeatRule}
                         onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, repeatRule: e.target.value }))}
                         placeholder="例如：weekly"
-                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">完成周期</label>
+                        <label className="text-sm text-ark-text">完成周期</label>
                         <select
                           aria-label="完成周期"
                           value={createAppointmentForm.periodType}
                           onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, periodType: e.target.value as CompletionPeriodType }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         >
                           <option value="once">一次性</option>
                           <option value="daily">每天</option>
@@ -2631,39 +2631,39 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                         </select>
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">单周期最多完成次数</label>
+                        <label className="text-sm text-ark-text">单周期最多完成次数</label>
                         <input
                           aria-label="单周期最多完成次数"
                           type="number"
                           min={1}
                           value={createAppointmentForm.maxCompletionsPerPeriod}
                           onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, maxCompletionsPerPeriod: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                     </div>
 
                     {createAppointmentForm.periodType === 'custom_days' && (
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">自定义完成周期（天）</label>
+                        <label className="text-sm text-ark-text">自定义完成周期（天）</label>
                         <input
                           aria-label="自定义完成周期（天）"
                           type="number"
                           min={1}
                           value={createAppointmentForm.customPeriodDays}
                           onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, customPeriodDays: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                     )}
 
-                    <label className="flex items-center gap-3 text-sm text-white/80">
+                    <label className="flex items-center gap-3 text-sm text-ark-text">
                       <input
                         aria-label="仅工作日可完成"
                         type="checkbox"
                         checked={createAppointmentForm.weekdayOnly}
                         onChange={(e) => setCreateAppointmentForm((s) => ({ ...s, weekdayOnly: e.target.checked }))}
-                        className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+                        className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
                       />
                       仅工作日可完成
                     </label>
@@ -2671,7 +2671,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 ) : (
                   <>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm text-white/70">截止日期</label>
+                      <label className="text-sm text-ark-text">截止日期</label>
                         <input
                           aria-label="截止日期"
                           type="datetime-local"
@@ -2687,18 +2687,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                               timeInheritsFromEvent: !!selectedEvent,
                             };
                           })}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">完成周期</label>
+                        <label className="text-sm text-ark-text">完成周期</label>
                         <select
                           aria-label="完成周期"
                           value={createTaskForm.periodType}
                           onChange={(e) => setCreateTaskForm((s) => ({ ...s, periodType: e.target.value as CompletionPeriodType }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         >
                           <option value="once">一次性</option>
                           <option value="daily">每天</option>
@@ -2708,50 +2708,50 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                         </select>
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">单周期最多完成次数</label>
+                        <label className="text-sm text-ark-text">单周期最多完成次数</label>
                         <input
                           aria-label="单周期最多完成次数"
                           type="number"
                           min={1}
                           value={createTaskForm.maxCompletionsPerPeriod}
                           onChange={(e) => setCreateTaskForm((s) => ({ ...s, maxCompletionsPerPeriod: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                     </div>
 
                     {createTaskForm.periodType === 'custom_days' && (
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">自定义完成周期（天）</label>
+                        <label className="text-sm text-ark-text">自定义完成周期（天）</label>
                         <input
                           aria-label="自定义完成周期（天）"
                           type="number"
                           min={1}
                           value={createTaskForm.customPeriodDays}
                           onChange={(e) => setCreateTaskForm((s) => ({ ...s, customPeriodDays: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                     )}
 
-                    <label className="flex items-center gap-3 text-sm text-white/80">
+                    <label className="flex items-center gap-3 text-sm text-ark-text">
                       <input
                         aria-label="仅工作日可完成"
                         type="checkbox"
                         checked={createTaskForm.weekdayOnly}
                         onChange={(e) => setCreateTaskForm((s) => ({ ...s, weekdayOnly: e.target.checked }))}
-                        className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+                        className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
                       />
                       仅工作日可完成
                     </label>
                     {showCreateTaskMoreFields && (
                       <>
                         <div className="flex flex-col gap-2">
-                          <label className="text-sm text-white/70">任务类型</label>
+                          <label className="text-sm text-ark-text">任务类型</label>
                             <select
                               value={createTaskForm.taskType}
                               onChange={(e) => setCreateTaskForm((s) => ({ ...s, taskType: e.target.value as 'focus' | 'checkin' }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             >
                               <option value="focus">专注任务</option>
                               <option value="checkin">快速打卡</option>
@@ -2759,23 +2759,23 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           </div>
 
                         <div className="flex flex-col gap-2">
-                          <label className="text-sm text-white/70">备注</label>
+                          <label className="text-sm text-ark-text">备注</label>
                           <textarea
                             value={createTaskForm.content}
                             onChange={(e) => setCreateTaskForm((s) => ({ ...s, content: e.target.value }))}
                             placeholder="可选：补充描述/拆解步骤"
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
+                            className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[88px] resize-none"
                           />
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                           <div className="flex flex-col gap-2">
-                            <label className="text-sm text-white/70">开始日期</label>
+                            <label className="text-sm text-ark-text">开始日期</label>
                             <input
                               type="datetime-local"
                               value={createTaskForm.startDate}
                               onChange={(e) => setCreateTaskForm((s) => ({ ...s, startDate: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                              className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                             />
                           </div>
                         </div>
@@ -2786,10 +2786,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
                 {createTaskError && <div className="text-sm text-red-400">{createTaskError}</div>}
               </div>
-              <div className="p-5 pt-3 shrink-0 border-t border-white/10 flex items-center justify-end gap-3 bg-[#1a1a1a]">
+              <div className="p-5 pt-3 shrink-0 border-t border-ark-border flex items-center justify-end gap-3 bg-ark-surface-strong">
                   <button
                     onClick={_closeCreateTaskModal}
-                    className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+                    className="px-4 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text hover:text-ark-text transition-colors"
                     disabled={createTaskSubmitting}
                   >
                     取消
@@ -2821,14 +2821,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               className="ark-modal flex max-h-[78vh] w-[680px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="h-16 shrink-0 border-b border-white/10 px-5 bg-white/5 flex items-center justify-between gap-4">
+              <div className="h-16 shrink-0 border-b border-ark-border px-5 bg-ark-surface-subtle flex items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-semibold text-white">识别到 {taskAssistantDrafts.length} 个安排草稿</h3>
-                  <p className="text-xs text-white/45 mt-1">请逐个确认，需要的草稿会进入现有创建表单。</p>
+                  <h3 className="text-base font-semibold text-ark-text">识别到 {taskAssistantDrafts.length} 个安排草稿</h3>
+                  <p className="text-xs text-ark-text-faint mt-1">请逐个确认，需要的草稿会进入现有创建表单。</p>
                 </div>
                 <button
                   onClick={_closeTaskDraftModal}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
                   aria-label="关闭安排草稿"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2844,15 +2844,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     key={draft.id}
                     className={`rounded-xl border p-4 transition-colors ${
                       draft.state === 'pending'
-                        ? 'bg-white/5 border-white/10'
-                        : 'bg-white/[0.02] border-white/5 opacity-60'
+                        ? 'bg-ark-surface-subtle border-ark-border'
+                        : 'bg-ark-surface-subtle border-ark-border opacity-60'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-white/35">#{idx + 1}</span>
-                          <h4 className="font-semibold text-white truncate">{draft.title || draft.rawTitle}</h4>
+                          <span className="text-xs text-ark-text-faint">#{idx + 1}</span>
+                          <h4 className="font-semibold text-ark-text truncate">{draft.title || draft.rawTitle}</h4>
                           <span
                             className={`text-[10px] px-2 py-0.5 rounded-full border ${
                               draft.kind === 'appointment'
@@ -2866,16 +2866,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/20">已创建</span>
                           )}
                           {draft.state === 'ignored' && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/10">已忽略</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-ark-surface-subtle text-ark-text-faint border border-ark-border">已忽略</span>
                           )}
                         </div>
                         {draft.content ? (
-                          <p className="text-sm text-white/65 mt-2 line-clamp-2">{draft.content}</p>
+                          <p className="text-sm text-ark-text-muted mt-2 line-clamp-2">{draft.content}</p>
                         ) : null}
                         {draft.sourceText ? (
-                          <p className="text-xs text-white/35 mt-2 line-clamp-2">依据：{draft.sourceText}</p>
+                          <p className="text-xs text-ark-text-faint mt-2 line-clamp-2">依据：{draft.sourceText}</p>
                         ) : null}
-                        <div className="flex flex-wrap gap-2 mt-3 text-xs text-white/45">
+                        <div className="flex flex-wrap gap-2 mt-3 text-xs text-ark-text-faint">
                           {draft.kind === 'appointment' ? (
                             <>
                               {_formatDraftDateLabel('开始', draft.startsAt) ? <span>{_formatDraftDateLabel('开始', draft.startsAt)}</span> : null}
@@ -2894,7 +2894,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           <>
                             <button
                               onClick={() => _ignoreTaskDraft(draft.id)}
-                              className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white transition-colors"
+                              className="px-3 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text-muted hover:text-ark-text transition-colors"
                             >
                               忽略
                             </button>
@@ -2929,11 +2929,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               className="ark-modal flex h-[420px] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex-[1] border-b border-white/10 px-5 bg-white/5 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-white">安排解析助手</h3>
+              <div className="flex-[1] border-b border-ark-border px-5 bg-ark-surface-subtle flex items-center justify-between">
+                <h3 className="text-base font-semibold text-ark-text">安排解析助手</h3>
                 <button
                   onClick={_resetTaskAssistant}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
                   aria-label="关闭安排解析助手"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2947,7 +2947,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   value={taskAssistantInput}
                   onChange={(e) => setTaskAssistantInput(e.target.value)}
                   placeholder="请输入安排目标、截止时间、优先级等信息，助手会自动帮你判断任务或日程"
-                  className="w-full h-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                  className="w-full h-full px-4 py-3 rounded-xl bg-ark-surface-subtle border border-ark-border text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
                   autoFocus
                 />
                 {taskAssistantError ? <div className="text-sm text-red-400">{taskAssistantError}</div> : null}
@@ -2958,7 +2958,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     setShowTaskAssistantModal(false);
                     _openCreateTaskModal();
                   }}
-                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-colors"
+                  className="px-4 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text hover:text-ark-text transition-colors"
                   disabled={taskAssistantSubmitting}
                 >
                   自定义安排

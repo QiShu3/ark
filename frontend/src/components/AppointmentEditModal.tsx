@@ -156,21 +156,21 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 pt-16 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-ark-overlay pt-16 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
       role="dialog"
       aria-label="编辑日程"
     >
       <div
-        className="relative flex max-h-[calc(100vh-6rem)] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] shadow-2xl animate-in zoom-in-95 duration-200"
+        className="relative flex max-h-[calc(100vh-6rem)] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-ark-surface-strong shadow-2xl animate-in zoom-in-95 duration-200"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-white/5 px-5">
-          <h3 className="text-lg font-bold text-white">编辑日程</h3>
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
+          <h3 className="text-lg font-bold text-ark-text">编辑日程</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-full p-2 text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
             aria-label="关闭编辑日程弹窗"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -182,22 +182,22 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-white/70">标题</label>
+            <label className="text-sm text-ark-text">标题</label>
             <input
               aria-label="标题"
               value={form.title}
               onChange={(e) => setForm((state) => ({ ...state, title: e.target.value }))}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-white/70">状态</label>
+            <label className="text-sm text-ark-text">状态</label>
             <select
               aria-label="状态"
               value={form.status}
               onChange={(e) => setForm((state) => ({ ...state, status: e.target.value as AppointmentStoredStatus }))}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             >
               <option value="pending">待出席</option>
               <option value="attended">已出席</option>
@@ -207,27 +207,27 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-white/70">备注</label>
+            <label className="text-sm text-ark-text">备注</label>
             <textarea
               value={form.content}
               onChange={(e) => setForm((state) => ({ ...state, content: e.target.value }))}
-              className="min-h-[88px] w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="min-h-[88px] w-full resize-none rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">开始时间</label>
+              <label className="text-sm text-ark-text">开始时间</label>
               <input
                 aria-label="开始时间"
                 type="datetime-local"
                 value={form.startsAt}
                 onChange={(e) => setForm((state) => ({ ...state, startsAt: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">结束时间</label>
+              <label className="text-sm text-ark-text">结束时间</label>
               <input
                 aria-label="结束时间"
                 type="datetime-local"
@@ -243,18 +243,18 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
                     timeInheritsFromEvent: !!selectedEvent,
                   };
                 })}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-white/70">关联事件</label>
+            <label className="text-sm text-ark-text">关联事件</label>
             <select
               aria-label="关联事件"
               value={form.eventId}
               onChange={(e) => setForm((state) => syncAppointmentEventSelection(state, e.target.value, events))}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             >
               <option value="">不绑定事件</option>
               {events.map((event) => (
@@ -266,24 +266,24 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-white/70">重复规则</label>
+            <label className="text-sm text-ark-text">重复规则</label>
             <input
               aria-label="重复规则"
               value={form.repeatRule}
               onChange={(e) => setForm((state) => ({ ...state, repeatRule: e.target.value }))}
               placeholder="例如：weekly"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">完成周期</label>
+              <label className="text-sm text-ark-text">完成周期</label>
               <select
                 aria-label="完成周期"
                 value={form.periodType}
                 onChange={(e) => setForm((state) => ({ ...state, periodType: e.target.value as CompletionPeriodType }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 <option value="once">一次性</option>
                 <option value="daily">每天</option>
@@ -293,39 +293,39 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
               </select>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">单周期最多完成次数</label>
+              <label className="text-sm text-ark-text">单周期最多完成次数</label>
               <input
                 aria-label="单周期最多完成次数"
                 type="number"
                 min={1}
                 value={form.maxCompletionsPerPeriod}
                 onChange={(e) => setForm((state) => ({ ...state, maxCompletionsPerPeriod: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
           </div>
 
           {form.periodType === 'custom_days' ? (
             <div className="flex flex-col gap-2">
-              <label className="text-sm text-white/70">自定义完成周期（天）</label>
+              <label className="text-sm text-ark-text">自定义完成周期（天）</label>
               <input
                 aria-label="自定义完成周期（天）"
                 type="number"
                 min={1}
                 value={form.customPeriodDays}
                 onChange={(e) => setForm((state) => ({ ...state, customPeriodDays: Number(e.target.value) }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
           ) : null}
 
-          <label className="flex items-center gap-3 text-sm text-white/80">
+          <label className="flex items-center gap-3 text-sm text-ark-text">
             <input
               aria-label="仅工作日可完成"
               type="checkbox"
               checked={form.weekdayOnly}
               onChange={(e) => setForm((state) => ({ ...state, weekdayOnly: e.target.checked }))}
-              className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+              className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
             />
             仅工作日可完成
           </label>
@@ -333,11 +333,11 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
           {error ? <div className="text-sm text-red-400">{error}</div> : null}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-white/10 bg-[#1a1a1a] p-5 pt-3">
+        <div className="flex items-center justify-end gap-3 border-t border-ark-border bg-ark-surface-strong p-5 pt-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-2 text-ark-text transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
             disabled={submitting}
           >
             取消

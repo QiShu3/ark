@@ -211,15 +211,15 @@ const Navigation: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="relative group cursor-pointer">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={user.username} className="w-8 h-8 rounded-full object-cover border border-white/20" />
+                <img src={avatarUrl} alt={user.username} className="w-8 h-8 rounded-full object-cover border border-ark-border" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-white/20">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-ark-border">
                   {user.username.charAt(0).toUpperCase()}
                 </div>
               )}
 
               {/* 悬停显示的用户名 */}
-              <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+              <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-ark-overlay backdrop-blur-md border border-ark-border rounded-lg text-sm text-ark-text opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
                 {user.username}
               </div>
             </div>
@@ -270,9 +270,9 @@ const Navigation: React.FC = () => {
     {/* Toast Notification */}
     {showToast && checkInState && (
       <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] animate-[slide-in-top_0.5s_ease-out]">
-        <div className="bg-black/80 backdrop-blur-lg border border-white/20 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
+        <div className="bg-ark-overlay backdrop-blur-lg border border-ark-border px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
           <span className="text-sm font-medium text-green-400">✅ 今日已打卡</span>
-          <div className="w-px h-4 bg-white/20"></div>
+          <div className="w-px h-4 bg-ark-surface-subtle"></div>
           <span className="text-sm font-medium text-orange-400">🔥 连续打卡 {checkInState.current_streak} 天</span>
         </div>
       </div>

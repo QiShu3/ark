@@ -36,8 +36,8 @@ export default function FocusWorkModalShell({
       >
         <header className="ark-focus-work-header flex items-center justify-between gap-4 border-b px-6 py-4">
           <div className="min-w-0">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/38">{subtitle}</div>
-            <h2 id="focus-work-modal-title" className="mt-1 truncate text-xl font-semibold text-white">
+            <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">{subtitle}</div>
+            <h2 id="focus-work-modal-title" className="mt-1 truncate text-xl font-semibold text-[var(--focus-work-text)]">
               {title}
             </h2>
           </div>
@@ -59,7 +59,7 @@ export default function FocusWorkModalShell({
               type="button"
               onClick={isPaused ? onResume : onPause}
               disabled={busy}
-              className="rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:bg-white/12 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] hover:text-[var(--focus-work-text)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPaused ? '继续专注' : '暂停专注'}
             </button>
@@ -67,7 +67,7 @@ export default function FocusWorkModalShell({
               type="button"
               onClick={onAbandon}
               disabled={busy}
-              className="rounded-full border border-white/12 bg-white/8 px-4 py-2 text-sm text-white/72 transition hover:border-white/24 hover:bg-white/12 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] hover:text-[var(--focus-work-text)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               放弃本阶段
             </button>
@@ -89,9 +89,9 @@ export default function FocusWorkModalShell({
           {isPaused ? (
             <div className="ark-focus-work-pause-backdrop absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm">
               <div className="ark-focus-work-pause-card w-[min(28rem,92vw)] rounded-[2rem] border p-8 text-center shadow-2xl">
-                <div className="text-xs uppercase tracking-[0.24em] text-white/35">Paused</div>
-                <h3 className="mt-4 text-3xl font-semibold text-white">专注已暂停</h3>
-                <p className="mt-3 text-sm leading-6 text-white/60">继续后会从当前阶段接着计时，暂停期间不会提交业务动作。</p>
+                <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Paused</div>
+                <h3 className="mt-4 text-3xl font-semibold text-[var(--focus-work-text)]">专注已暂停</h3>
+                <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">继续后会从当前阶段接着计时，暂停期间不会提交业务动作。</p>
               </div>
             </div>
           ) : null}

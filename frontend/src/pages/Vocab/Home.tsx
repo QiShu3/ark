@@ -251,7 +251,7 @@ export default function VocabHome() {
                       <button
                         type="button"
                         disabled
-                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 opacity-60"
+                        className="inline-flex items-center rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 opacity-60"
                       >
                         请先创建或设置主事件
                       </button>
@@ -260,7 +260,7 @@ export default function VocabHome() {
                         type="button"
                         onClick={() => setSettingsOpen(true)}
                         disabled={!activeDeck || appTaskBusy}
-                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                        className="inline-flex items-center rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                       >
                         配置当前事件今日单词
                       </button>
@@ -269,7 +269,7 @@ export default function VocabHome() {
                         type="button"
                         onClick={initializeTodayWords}
                         disabled={!activeDeck || appTaskBusy}
-                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                        className="inline-flex items-center rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                       >
                         初始化今日单词
                       </button>
@@ -277,7 +277,7 @@ export default function VocabHome() {
                       <button
                         type="button"
                         onClick={() => setSettingsOpen(true)}
-                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90"
+                        className="inline-flex items-center rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle"
                       >
                         今日已完成
                       </button>
@@ -286,7 +286,7 @@ export default function VocabHome() {
                         type="button"
                         onClick={startTodayFocusWork}
                         disabled={!appTaskStatus?.task_id || appTaskBusy}
-                        className="inline-flex items-center rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                        className="inline-flex items-center rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
                       >
                         {summary.completed_count > 0 ? '继续今日单词' : '开始今日单词'}
                       </button>
@@ -362,7 +362,7 @@ export default function VocabHome() {
                     </div>
                   </div>
 
-                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/8">
+                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-ark-surface-subtle">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-sky-300 to-cyan-200 transition-[width] duration-300"
                       style={{ width: `${currentDeckMasteryPercent}%` }}

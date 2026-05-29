@@ -125,19 +125,19 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/72 p-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="总览明细">
-      <div className="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#101218] text-white shadow-2xl shadow-black/45">
-        <div className="border-b border-white/10 px-7 py-6">
+    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-ark-overlay p-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="总览明细">
+      <div className="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-ark-border bg-ark-surface-strong text-ark-text shadow-2xl shadow-black/45">
+        <div className="border-b border-ark-border px-7 py-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-sm uppercase tracking-[0.28em] text-white/40">Overview</div>
+              <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Overview</div>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight">总览明细</h2>
-              <p className="mt-3 text-sm leading-6 text-white/60">从首页的总览数字往下展开，直接看到词书和单词层面的实际内容。</p>
+              <p className="mt-3 text-sm leading-6 text-ark-text-muted">从首页的总览数字往下展开，直接看到词书和单词层面的实际内容。</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-white/10 px-3 py-2 text-sm text-white/70 transition hover:border-white/25 hover:text-white"
+              className="rounded-full border border-ark-border px-3 py-2 text-sm text-ark-text transition hover:border-ark-border hover:text-ark-text"
               aria-label="关闭总览明细弹窗"
             >
               关闭
@@ -156,8 +156,8 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
                 onClick={() => setActiveTab(key as OverviewDetailTab)}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
                   activeTab === key
-                    ? 'border-white/20 bg-white text-slate-950'
-                    : 'border-white/10 bg-white/5 text-white/75 hover:border-white/25 hover:bg-white/10'
+                    ? 'border-ark-border bg-white text-slate-950'
+                    : 'border-ark-border bg-ark-surface-subtle text-ark-text hover:border-ark-border hover:bg-ark-surface-subtle'
                 }`}
               >
                 {label}
@@ -169,10 +169,10 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
         <div className="flex-1 overflow-y-auto px-7 py-6">
           {activeTab === 'completed' ? (
             <div className="space-y-4">
-              <div className="text-sm text-white/55">这里列出已经全部进入 Review 状态的词书。点击任意词书，可以继续查看它的单词表。</div>
-              {loading ? <div className="text-sm text-white/55">已完成词书加载中…</div> : null}
+              <div className="text-sm text-ark-text-muted">这里列出已经全部进入 Review 状态的词书。点击任意词书，可以继续查看它的单词表。</div>
+              {loading ? <div className="text-sm text-ark-text-muted">已完成词书加载中…</div> : null}
               {error ? <div className="text-sm text-rose-200">{error}</div> : null}
-              {!loading && !error && completedDecks.length === 0 ? <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-6 text-sm text-white/55">目前还没有完成的词书。</div> : null}
+              {!loading && !error && completedDecks.length === 0 ? <div className="rounded-3xl border border-ark-border bg-ark-surface-subtle px-5 py-6 text-sm text-ark-text-muted">目前还没有完成的词书。</div> : null}
               <div className="grid gap-3">
                 {completedDecks.map((deck) => (
                   <button
@@ -183,16 +183,16 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
                       setCurrentFilter('all');
                       setActiveTab('current');
                     }}
-                    className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5 text-left transition hover:border-white/25 hover:bg-white/10"
+                    className="rounded-3xl border border-ark-border bg-ark-surface-subtle px-5 py-5 text-left transition hover:border-ark-border hover:bg-ark-surface-subtle"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
-                        <div className="text-xl font-semibold text-white">{deck.deck_name}</div>
-                        <div className="mt-2 text-sm text-white/55">全部 {deck.total_word_count} 个单词都已进入 Review。</div>
+                        <div className="text-xl font-semibold text-ark-text">{deck.deck_name}</div>
+                        <div className="mt-2 text-sm text-ark-text-muted">全部 {deck.total_word_count} 个单词都已进入 Review。</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-white/45">已掌握</div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{deck.mastered_word_count} / {deck.total_word_count}</div>
+                        <div className="text-sm text-ark-text-faint">已掌握</div>
+                        <div className="mt-2 text-2xl font-semibold text-ark-text">{deck.mastered_word_count} / {deck.total_word_count}</div>
                       </div>
                     </div>
                   </button>
@@ -203,21 +203,21 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
 
           {activeTab === 'mastered' ? (
             <div className="space-y-4">
-              <div className="text-sm text-white/55">这里按英文单词去重，同一个词即使出现在不同词书，也只会显示一行。</div>
-              {loading ? <div className="text-sm text-white/55">累计掌握单词加载中…</div> : null}
+              <div className="text-sm text-ark-text-muted">这里按英文单词去重，同一个词即使出现在不同词书，也只会显示一行。</div>
+              {loading ? <div className="text-sm text-ark-text-muted">累计掌握单词加载中…</div> : null}
               {error ? <div className="text-sm text-rose-200">{error}</div> : null}
-              {!loading && !error ? <div className="text-sm text-white/45">共 {masteredWords.length} 个去重后的已掌握单词</div> : null}
+              {!loading && !error ? <div className="text-sm text-ark-text-faint">共 {masteredWords.length} 个去重后的已掌握单词</div> : null}
               <div className="grid gap-3">
                 {masteredWords.map((item) => (
-                  <section key={item.id} className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
+                  <section key={item.id} className="rounded-3xl border border-ark-border bg-ark-surface-subtle px-5 py-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
-                        <div className="text-xl font-semibold text-white">{item.word}</div>
-                        <div className="mt-2 text-sm text-white/60">{renderTranslations(item.translations)}</div>
+                        <div className="text-xl font-semibold text-ark-text">{item.word}</div>
+                        <div className="mt-2 text-sm text-ark-text-muted">{renderTranslations(item.translations)}</div>
                       </div>
                       <div className="flex flex-wrap justify-end gap-2">
                         {item.source_deck_names.map((deckName) => (
-                          <span key={`${item.id}-${deckName}`} className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/70">
+                          <span key={`${item.id}-${deckName}`} className="rounded-full border border-ark-border bg-ark-surface-subtle px-3 py-1 text-xs text-ark-text">
                             {deckName}
                           </span>
                         ))}
@@ -233,8 +233,8 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <div className="text-sm text-white/45">当前查看</div>
-                  <div className="mt-2 text-xl font-semibold text-white">{currentDeckName}</div>
+                  <div className="text-sm text-ark-text-faint">当前查看</div>
+                  <div className="mt-2 text-xl font-semibold text-ark-text">{currentDeckName}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -249,8 +249,8 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
                       onClick={() => setCurrentFilter(key as CurrentWordFilter)}
                       className={`rounded-full border px-4 py-2 text-sm transition ${
                         currentFilter === key
-                          ? 'border-white/20 bg-white text-slate-950'
-                          : 'border-white/10 bg-white/5 text-white/75 hover:border-white/25 hover:bg-white/10'
+                          ? 'border-ark-border bg-white text-slate-950'
+                          : 'border-ark-border bg-ark-surface-subtle text-ark-text hover:border-ark-border hover:bg-ark-surface-subtle'
                       }`}
                     >
                       {label}
@@ -258,18 +258,18 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
                   ))}
                 </div>
               </div>
-              {loading ? <div className="text-sm text-white/55">词表加载中…</div> : null}
+              {loading ? <div className="text-sm text-ark-text-muted">词表加载中…</div> : null}
               {error ? <div className="text-sm text-rose-200">{error}</div> : null}
-              {!loading && !error ? <div className="text-sm text-white/45">当前筛选下共 {currentWords.length} 个单词</div> : null}
+              {!loading && !error ? <div className="text-sm text-ark-text-faint">当前筛选下共 {currentWords.length} 个单词</div> : null}
               <div className="grid gap-3">
                 {currentWords.map((item) => (
-                  <section key={item.id} className="rounded-3xl border border-white/10 bg-white/5 px-5 py-5">
+                  <section key={item.id} className="rounded-3xl border border-ark-border bg-ark-surface-subtle px-5 py-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
-                        <div className="text-xl font-semibold text-white">{item.word}</div>
-                        <div className="mt-2 text-sm text-white/60">{renderTranslations(item.translations)}</div>
+                        <div className="text-xl font-semibold text-ark-text">{item.word}</div>
+                        <div className="mt-2 text-sm text-ark-text-muted">{renderTranslations(item.translations)}</div>
                       </div>
-                      <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/70">
+                      <div className="rounded-full border border-ark-border bg-ark-surface-subtle px-3 py-1 text-xs text-ark-text">
                         {item.mastery_state === 'unstarted' ? '未开始' : item.mastery_state === 'learning' ? '学习中' : '已掌握'}
                       </div>
                     </div>

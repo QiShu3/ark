@@ -11,11 +11,11 @@ export default function StudyCard({ item }: { item: VocabReviewItem }) {
   }, [item.id]);
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-black/30 p-6 backdrop-blur-md">
+    <section className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-6 backdrop-blur-md">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-4xl font-semibold tracking-tight">{item.word}</div>
-          <div className="mt-2 flex gap-4 text-sm text-white/55">
+          <div className="mt-2 flex gap-4 text-sm text-ark-text-muted">
             {item.us_pronunciation ? <span>US /{item.us_pronunciation}/</span> : null}
             {item.uk_pronunciation ? <span>UK /{item.uk_pronunciation}/</span> : null}
           </div>
@@ -23,7 +23,7 @@ export default function StudyCard({ item }: { item: VocabReviewItem }) {
         <button
           type="button"
           onClick={() => setRevealed((prev) => !prev)}
-          className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 transition hover:border-white/30"
+          className="rounded-full border border-ark-border px-4 py-2 text-sm text-ark-text transition hover:border-ark-border"
         >
           {revealed ? '收起释义' : '显示释义'}
         </button>

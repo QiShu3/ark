@@ -34,13 +34,13 @@ export default function AchievementBadgeCard({ item, tone = 'event' }: Achieveme
 
   return (
     <div className={`rounded-2xl border p-3 ${baseTone} ${lockedTone}`}>
-      <div className="text-sm font-semibold text-white">{item.title}</div>
-      <div className="mt-2 text-xs leading-5 text-white/60">{item.description}</div>
+      <div className="text-sm font-semibold text-ark-text">{item.title}</div>
+      <div className="mt-2 text-xs leading-5 text-ark-text-muted">{item.description}</div>
       {canShowProgress ? (
         <div className="mt-3">
-          {progressLabel ? <div className="text-xs text-white/70">{progressLabel}</div> : null}
+          {progressLabel ? <div className="text-xs text-ark-text">{progressLabel}</div> : null}
           <div
-            className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"
+            className="mt-2 h-1.5 overflow-hidden rounded-full bg-ark-surface-subtle"
             role="progressbar"
             aria-label={`${item.title}进度`}
             aria-valuemin={0}

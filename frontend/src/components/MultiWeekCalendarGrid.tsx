@@ -26,9 +26,9 @@ const MultiWeekCalendarGrid: React.FC<MultiWeekCalendarGridProps> = ({
   onDotClick,
 }) => (
   <div className="min-w-[1080px]">
-    <div className="grid h-12 grid-cols-7 border-b border-white/10 bg-white/[0.02]">
+    <div className="grid h-12 grid-cols-7 border-b border-ark-border bg-ark-surface-subtle">
       {WEEKDAYS.map((weekday) => (
-        <div key={weekday} className="grid place-items-center text-sm font-bold text-white/55">
+        <div key={weekday} className="grid place-items-center text-sm font-bold text-ark-text-muted">
           {weekday}
         </div>
       ))}

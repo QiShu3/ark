@@ -39,7 +39,7 @@ export const Interactive = () => {
   }
 
   return (
-    <div className="w-[720px] max-w-[92vw] p-5 bg-[#151515] rounded-xl border border-white/10 flex flex-col gap-3">
+    <div className="w-[720px] max-w-[92vw] p-5 bg-ark-surface-strong rounded-xl border border-ark-border flex flex-col gap-3">
       <WorkflowProgressBar
         workflow={{
           state: 'focus',
@@ -57,7 +57,7 @@ export const Interactive = () => {
           推进 30s
         </button>
         <button
-          className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white text-sm"
+          className="px-3 py-1.5 rounded bg-ark-surface-subtle hover:bg-ark-surface-subtle text-ark-text text-sm"
           onClick={() => setElapsed(0)}
         >
           重置

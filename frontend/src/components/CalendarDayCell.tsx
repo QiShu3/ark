@@ -21,7 +21,7 @@ type CalendarDayCellProps = {
 function dotClassName(item: CalendarDot): string {
   if (item.kind === 'appointment') {
     if (item.status === 'needs_confirmation') return 'bg-amber-300 ring-2 ring-amber-300/30';
-    if (item.status === 'cancelled') return 'bg-white/35';
+    if (item.status === 'cancelled') return 'bg-ark-text-faint';
     return 'bg-fuchsia-300';
   }
   return item.status === 'done' ? 'bg-emerald-300/70' : 'bg-cyan-300';
@@ -34,7 +34,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
   return (
     <div
       data-testid="calendar-day-cell"
-      className={`relative min-h-[236px] min-w-0 overflow-visible border-r border-b border-white/[0.08] bg-white/[0.018] p-3 text-left transition-colors ${
+      className={`relative min-h-[236px] min-w-0 overflow-visible border-r border-b border-ark-border bg-ark-surface-subtle p-3 text-left transition-colors ${
         isToday ? 'bg-cyan-300/[0.08]' : ''
       }`}
       style={rowHeight ? { minHeight: rowHeight } : undefined}
@@ -47,7 +47,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent" />
       <div
-        className="pointer-events-none relative z-10 flex items-start justify-between gap-2 text-white/80"
+        className="pointer-events-none relative z-10 flex items-start justify-between gap-2 text-ark-text"
         style={{ minHeight: CALENDAR_DAY_HEADER_HEIGHT }}
       >
         <span
@@ -57,7 +57,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
         >
           {day.getDate()}
         </span>
-        <span className="text-xs font-semibold text-white/35">{itemCount} 项</span>
+        <span className="text-xs font-semibold text-ark-text-faint">{itemCount} 项</span>
       </div>
       {dotItems.length ? (
         <div
@@ -74,7 +74,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
                 event.stopPropagation();
                 onDotClick?.(item);
               }}
-              className="flex w-full items-center justify-start gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 text-[11px] font-medium text-white/72 shadow-sm transition-colors hover:bg-white/10 hover:text-white"
+              className="flex w-full items-center justify-start gap-1.5 rounded-full border border-ark-border bg-ark-surface-subtle px-2 text-[11px] font-medium text-ark-text shadow-sm transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
               style={{ height: CALENDAR_DOT_ROW_HEIGHT }}
             >
               <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClassName(item)}`} />
@@ -82,7 +82,7 @@ const CalendarDayCell: React.FC<CalendarDayCellProps> = ({ day, itemCount, dotIt
             </button>
           ))}
           {dotItems.length > CALENDAR_MAX_VISIBLE_DOTS ? (
-            <span className="text-[10px] font-semibold text-white/45">+{dotItems.length - CALENDAR_MAX_VISIBLE_DOTS}</span>
+            <span className="text-[10px] font-semibold text-ark-text-faint">+{dotItems.length - CALENDAR_MAX_VISIBLE_DOTS}</span>
           ) : null}
         </div>
       ) : null}

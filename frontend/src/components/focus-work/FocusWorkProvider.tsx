@@ -197,11 +197,11 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
             aria-labelledby="focus-work-record-title"
             className="ark-focus-work-dialog w-[min(92vw,30rem)] rounded-[2rem] border p-6 shadow-2xl"
           >
-            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Focus Work</div>
-            <h2 id="focus-work-record-title" className="mt-3 text-2xl font-semibold text-white">
+            <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Focus Work</div>
+            <h2 id="focus-work-record-title" className="mt-3 text-2xl font-semibold text-[var(--focus-work-text)]">
               记录这次专注吗？
             </h2>
-            <p className="mt-3 text-sm leading-6 text-white/60">
+            <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">
               选择记录后，这次子应用工作会进入专注时间；不记录也会进入专注状态，只是不会写入专注时间。
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -209,7 +209,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
                 type="button"
                 onClick={() => void startFocusWork(true)}
                 disabled={busy}
-                className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-60"
+                className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
               >
                 记录并进入
               </button>
@@ -217,7 +217,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
                 type="button"
                 onClick={() => void startFocusWork(false)}
                 disabled={busy}
-                className="rounded-full border border-white/14 bg-white/8 px-5 py-3 text-sm text-white/80 transition hover:border-white/24 hover:bg-white/12 disabled:opacity-60"
+                className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
               >
                 不记录，直接进入
               </button>

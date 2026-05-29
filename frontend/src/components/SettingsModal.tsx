@@ -300,21 +300,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                     type="button"
                     onClick={() => avatarInputRef.current?.click()}
                     disabled={avatarUploading}
-                    className="group relative w-[120px] h-[120px] rounded-full overflow-hidden border-2 border-white/15 hover:border-blue-500/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    className="group relative w-[120px] h-[120px] rounded-full overflow-hidden border-2 border-ark-border hover:border-blue-500/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                   >
                     {currentSettings.avatarUrl ? (
                       <img src={currentSettings.avatarUrl} alt="头像" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white">
+                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-ark-text">
                         {user?.username.charAt(0).toUpperCase() ?? '?'}
                       </div>
                     )}
                     {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-0 bg-ark-overlay flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       {avatarUploading ? (
-                        <Loader2 size={24} className="text-white animate-spin" />
+                        <Loader2 size={24} className="text-ark-text animate-spin" />
                       ) : (
-                        <Upload size={24} className="text-white" />
+                        <Upload size={24} className="text-ark-text" />
                       )}
                     </div>
                   </button>
@@ -405,7 +405,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                           key={preset.name}
                           type="button"
                           onClick={() => updateSettings({ backgroundUrl: preset.url })}
-                          className={`group relative aspect-video overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                          className={`group relative aspect-video overflow-hidden rounded-lg border bg-ark-surface-subtle text-left transition-all ${
                             isActive
                               ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
                               : 'ark-border hover:border-[var(--ark-border-strong)]'
@@ -416,7 +416,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                             alt={preset.name}
                             className="h-full w-full object-cover opacity-60 group-hover:opacity-85 transition-opacity"
                           />
-                          <div className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-1 text-[10px] text-white/80 text-center truncate">
+                          <div className="absolute inset-x-0 bottom-0 bg-ark-overlay px-2 py-1 text-[10px] text-ark-text text-center truncate">
                             {preset.name}
                           </div>
                         </button>
@@ -437,7 +437,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                             <button
                               type="button"
                               onClick={() => updateSettings({ backgroundUrl: upload.url })}
-                              className={`w-full aspect-video overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                              className={`w-full aspect-video overflow-hidden rounded-lg border bg-ark-surface-subtle text-left transition-all ${
                                 isActive
                                   ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
                                   : 'ark-border hover:border-[var(--ark-border-strong)]'
@@ -455,7 +455,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                               className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-400 shadow-lg"
                               title="删除图片"
                             >
-                              <X size={12} className="text-white" />
+                              <X size={12} className="text-ark-text" />
                             </button>
                           </div>
                         );
@@ -502,7 +502,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       step="1"
                       value={currentSettings.backgroundBlur}
                       onChange={(e) => updateSettings({ backgroundBlur: Number(e.target.value) })}
-                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/10 accent-blue-500 focus:outline-none"
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-ark-surface-subtle accent-blue-500 focus:outline-none"
                     />
                     <div className="flex justify-between text-[10px] text-[var(--ark-text-faint)]">
                       <span>清晰</span>
@@ -523,7 +523,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       step="0.05"
                       value={currentSettings.backgroundOpacity}
                       onChange={(e) => updateSettings({ backgroundOpacity: Number(e.target.value) })}
-                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/10 accent-blue-500 focus:outline-none"
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-ark-surface-subtle accent-blue-500 focus:outline-none"
                     />
                     <div className="flex justify-between text-[10px] text-[var(--ark-text-faint)]">
                       <span>透明</span>
@@ -551,7 +551,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                     type="button"
                     onClick={() => updateSettings({ showCharacter: !currentSettings.showCharacter })}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      currentSettings.showCharacter ? 'bg-blue-600' : 'bg-white/15'
+                      currentSettings.showCharacter ? 'bg-blue-600' : 'bg-ark-surface-subtle'
                     }`}
                   >
                     <span
@@ -575,7 +575,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                               key={preset.name}
                               type="button"
                               onClick={() => updateSettings({ characterUrl: preset.url })}
-                              className={`group relative aspect-[3/4] overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                              className={`group relative aspect-[3/4] overflow-hidden rounded-lg border bg-ark-surface-subtle text-left transition-all ${
                                 isActive
                                   ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
                                   : 'ark-border hover:border-[var(--ark-border-strong)]'
@@ -586,7 +586,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                                 alt={preset.name}
                                 className="h-full w-full object-contain p-2 opacity-70 group-hover:opacity-90 transition-opacity"
                               />
-                              <div className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-0.5 text-[9px] text-white/80 text-center truncate">
+                              <div className="absolute inset-x-0 bottom-0 bg-ark-overlay px-2 py-0.5 text-[9px] text-ark-text text-center truncate">
                                 {preset.name}
                               </div>
                             </button>
@@ -607,7 +607,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                                 <button
                                   type="button"
                                   onClick={() => updateSettings({ characterUrl: upload.url })}
-                                  className={`w-full aspect-[3/4] overflow-hidden rounded-lg border bg-white/5 text-left transition-all ${
+                                  className={`w-full aspect-[3/4] overflow-hidden rounded-lg border bg-ark-surface-subtle text-left transition-all ${
                                     isActive
                                       ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]'
                                       : 'ark-border hover:border-[var(--ark-border-strong)]'
@@ -625,7 +625,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                                   className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-400 shadow-lg"
                                   title="删除图片"
                                 >
-                                  <X size={12} className="text-white" />
+                                  <X size={12} className="text-ark-text" />
                                 </button>
                               </div>
                             );
@@ -670,7 +670,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                         step="0.05"
                         value={currentSettings.characterScale}
                         onChange={(e) => updateSettings({ characterScale: Number(e.target.value) })}
-                        className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/10 accent-blue-500 focus:outline-none"
+                        className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-ark-surface-subtle accent-blue-500 focus:outline-none"
                       />
                       <div className="flex justify-between text-[10px] text-[var(--ark-text-faint)]">
                         <span>缩小 (50%)</span>

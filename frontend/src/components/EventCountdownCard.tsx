@@ -1267,7 +1267,7 @@ const EventCountdownCard: React.FC = () => {
     return (
       <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3 text-left">
         {appEditor.index === null ? (
-          <label className="grid gap-1 text-xs text-white/60">
+          <label className="grid gap-1 text-xs text-ark-text-muted">
             选择应用
             <select
               aria-label="选择应用"
@@ -1283,7 +1283,7 @@ const EventCountdownCard: React.FC = () => {
                   };
                 });
               }}
-              className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             >
               {unconfiguredTypes.map((type) => (
                 <option key={type} value={type}>
@@ -1293,7 +1293,7 @@ const EventCountdownCard: React.FC = () => {
             </select>
           </label>
         ) : (
-          <div className="text-sm font-medium text-white/80">
+          <div className="text-sm font-medium text-ark-text">
             应用：
             <span className="text-blue-300">
               {appEditor.appType === 'vocab_today' ? '今日单词' : appEditor.appType === 'erc_practice' ? '真题练习' : '错题复习'}
@@ -1303,7 +1303,7 @@ const EventCountdownCard: React.FC = () => {
 
         {appEditor.appType === 'vocab_today' ? (
           <>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               选择词书
               <select
                 aria-label="选择词书"
@@ -1311,7 +1311,7 @@ const EventCountdownCard: React.FC = () => {
                 onChange={(event) => setAppEditor((current) => (
                   current ? { ...current, deckId: event.target.value } : current
                 ))}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 <option value="">选择词书</option>
                 {decks.map((deck) => (
@@ -1321,7 +1321,7 @@ const EventCountdownCard: React.FC = () => {
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               每日目标词数
               <input
                 aria-label="每日目标词数"
@@ -1334,14 +1334,14 @@ const EventCountdownCard: React.FC = () => {
                     ? { ...current, dailyTargetCount: Math.max(1, Math.min(500, Number(event.target.value) || 20)) }
                     : current
                 ))}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </label>
           </>
         ) : null}
 
         {appEditor.appType === 'erc_practice' ? (
-          <label className="grid gap-1 text-xs text-white/60">
+          <label className="grid gap-1 text-xs text-ark-text-muted">
             每日目标文章数
             <input
               aria-label="每日目标文章数"
@@ -1354,14 +1354,14 @@ const EventCountdownCard: React.FC = () => {
                   ? { ...current, dailyArticleTarget: Math.max(1, Math.min(50, Number(event.target.value) || 1)) }
                   : current
               ))}
-              className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </label>
         ) : null}
 
         {appEditor.appType === 'erc_review' ? (
           <>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               复习范围
               <select
                 aria-label="复习范围"
@@ -1369,14 +1369,14 @@ const EventCountdownCard: React.FC = () => {
                 onChange={(event) => setAppEditor((current) => (
                   current ? { ...current, reviewScope: event.target.value as AppEditorState['reviewScope'] } : current
                 ))}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 <option value="due">到期复习 (due)</option>
                 <option value="mistakes">全部错题 (mistakes)</option>
                 <option value="all">全部题目 (all)</option>
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               每日目标题数
               <input
                 aria-label="每日目标题数"
@@ -1389,13 +1389,13 @@ const EventCountdownCard: React.FC = () => {
                     ? { ...current, dailyQuestionTarget: Math.max(1, Math.min(200, Number(event.target.value) || 10)) }
                     : current
                 ))}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </label>
           </>
         ) : null}
 
-        <label className="grid gap-1 text-xs text-white/60">
+        <label className="grid gap-1 text-xs text-ark-text-muted">
           默认专注时长 (分钟)
           <input
             aria-label="默认专注时长 (分钟)"
@@ -1405,11 +1405,11 @@ const EventCountdownCard: React.FC = () => {
             onChange={(event) => setAppEditor((current) => (
               current ? { ...current, focusDurationMin: Math.max(1, Number(event.target.value) || 25) } : current
             ))}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </label>
 
-        <label className="flex items-center gap-2 text-xs text-white/70">
+        <label className="flex items-center gap-2 text-xs text-ark-text">
           <input
             aria-label="同步到今日计划"
             type="checkbox"
@@ -1417,7 +1417,7 @@ const EventCountdownCard: React.FC = () => {
             onChange={(event) => setAppEditor((current) => (
               current ? { ...current, addToTodayPlan: event.target.checked } : current
             ))}
-            className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+            className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
           />
           同步到今日计划
         </label>
@@ -1435,7 +1435,7 @@ const EventCountdownCard: React.FC = () => {
           <button
             type="button"
             onClick={() => setAppEditor(null)}
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+            className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
           >
             取消
           </button>
@@ -1456,8 +1456,8 @@ const EventCountdownCard: React.FC = () => {
       .filter(type => !configuredApps.some(app => app.appType === type));
 
     return (
-      <div className="flex min-h-[100px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3 text-left">
-        <div className="text-sm font-medium text-white/80">应用任务配置</div>
+      <div className="flex min-h-[100px] flex-col rounded-lg border border-ark-border bg-ark-surface-subtle p-3 text-left">
+        <div className="text-sm font-medium text-ark-text">应用任务配置</div>
         <div className="mt-3 grid flex-1 content-start gap-2">
           {configuredApps.map((app, index) => (
             appEditor?.index === index ? (
@@ -1467,12 +1467,12 @@ const EventCountdownCard: React.FC = () => {
                 key={`app-item-${index}`}
                 type="button"
                 onClick={() => beginEditConfiguredApp(index)}
-                className="min-h-12 rounded-lg bg-white/[0.05] border border-white/10 px-3 py-2 text-left hover:bg-white/10 flex flex-col justify-center animate-fadeIn"
+                className="min-h-12 rounded-lg bg-ark-surface-subtle border border-ark-border px-3 py-2 text-left hover:bg-ark-surface-subtle flex flex-col justify-center animate-fadeIn"
               >
-                <div className="text-sm font-semibold text-white">
+                <div className="text-sm font-semibold text-ark-text">
                   {app.appType === 'vocab_today' ? '今日单词' : app.appType === 'erc_practice' ? '真题练习' : '错题复习'}
                 </div>
-                <div className="text-xs text-white/50 mt-1 truncate">
+                <div className="text-xs text-ark-text-muted mt-1 truncate">
                   {getAppConfigSummary(app)}
                 </div>
               </button>
@@ -1485,12 +1485,12 @@ const EventCountdownCard: React.FC = () => {
             <button
               type="button"
               onClick={beginAddConfiguredApp}
-              className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-center text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+              className="min-h-10 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-2 text-center text-sm text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
             >
               添加应用
             </button>
           ) : appEditor === null ? (
-            <div className="text-xs text-white/45 text-center py-2">已添加全部可用应用</div>
+            <div className="text-xs text-ark-text-faint text-center py-2">已添加全部可用应用</div>
           ) : null}
         </div>
       </div>
@@ -1511,7 +1511,7 @@ const EventCountdownCard: React.FC = () => {
     const previewTime = previewWorkbenchItemTime(createArrangementEditor, selectedTemplate);
     return (
       <div className="grid gap-2 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
-        <label className="grid gap-1 text-xs text-white/60">
+        <label className="grid gap-1 text-xs text-ark-text-muted">
           {label}标题
           <input
             aria-label={`${label}标题`}
@@ -1519,10 +1519,10 @@ const EventCountdownCard: React.FC = () => {
             onChange={(event) => setCreateArrangementEditor((current) => (
               current ? { ...current, title: event.target.value } : current
             ))}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </label>
-        <label className="grid gap-1 text-xs text-white/60">
+        <label className="grid gap-1 text-xs text-ark-text-muted">
           {label}备注
           <input
             aria-label={`${label}备注`}
@@ -1530,10 +1530,10 @@ const EventCountdownCard: React.FC = () => {
             onChange={(event) => setCreateArrangementEditor((current) => (
               current ? { ...current, content: event.target.value } : current
             ))}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </label>
-        <label className="grid gap-1 text-xs text-white/60">
+        <label className="grid gap-1 text-xs text-ark-text-muted">
           {label}相对天数
           <input
             aria-label={`${label}相对天数`}
@@ -1545,11 +1545,11 @@ const EventCountdownCard: React.FC = () => {
                 ? { ...current, offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)) }
                 : current
             ))}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </label>
         {previewTime ? (
-          <div className="text-xs text-white/45">时间预览 {formatEventDateTime(previewTime)}</div>
+          <div className="text-xs text-ark-text-faint">时间预览 {formatEventDateTime(previewTime)}</div>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
           {createArrangementEditor.index !== null ? (
@@ -1564,7 +1564,7 @@ const EventCountdownCard: React.FC = () => {
           <button
             type="button"
             onClick={cancelCreateArrangementEditor}
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+            className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
           >
             取消
           </button>
@@ -1603,8 +1603,8 @@ const EventCountdownCard: React.FC = () => {
     const allItems = [...virtualItems, ...manualItems];
 
     return (
-      <div className="flex min-h-[132px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
-        <div className="text-sm font-medium text-white/80">{label}</div>
+      <div className="flex min-h-[132px] flex-col rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
+        <div className="text-sm font-medium text-ark-text">{label}</div>
         <div className="mt-3 grid flex-1 content-start gap-2">
           {allItems.map(({ item, index, isVirtual }) => {
             if (isVirtual) {
@@ -1615,7 +1615,7 @@ const EventCountdownCard: React.FC = () => {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{item.title}</div>
-                    <div className="text-xs text-white/40 mt-1 truncate">{item.content}</div>
+                    <div className="text-xs text-ark-text-faint mt-1 truncate">{item.content}</div>
                   </div>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-normal shrink-0 ml-2">
                     托管
@@ -1630,7 +1630,7 @@ const EventCountdownCard: React.FC = () => {
                 key={`${kind}-${index}`}
                 type="button"
                 onClick={() => beginEditCreateArrangementItem(index)}
-                className="min-h-10 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
+                className="min-h-10 rounded-lg bg-ark-surface-subtle px-3 py-2 text-left text-sm font-medium text-ark-text hover:bg-ark-surface-subtle"
               >
                 {item.title || `未命名${label}`}
               </button>
@@ -1642,7 +1642,7 @@ const EventCountdownCard: React.FC = () => {
           <button
             type="button"
             onClick={() => beginAddCreateArrangementItem(kind)}
-            className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-left text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+            className="min-h-10 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-2 text-left text-sm text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
           >
             添加{label}
           </button>
@@ -1653,23 +1653,23 @@ const EventCountdownCard: React.FC = () => {
 
   function renderCreateWorkflowSection() {
     return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h4 className="text-base font-semibold text-white">工作流</h4>
-            <p className="mt-1 text-sm text-white/45">事件创建后保存到当前事件</p>
+            <h4 className="text-base font-semibold text-ark-text">工作流</h4>
+            <p className="mt-1 text-sm text-ark-text-faint">事件创建后保存到当前事件</p>
           </div>
           <button
             type="button"
             onClick={openNewCreateWorkflow}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+            className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text"
           >
             新建工作流
           </button>
         </div>
 
         {createWorkflowDrafts.length === 0 ? (
-          <div className="mt-4 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+          <div className="mt-4 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint">
             暂无工作流
           </div>
         ) : (
@@ -1677,21 +1677,21 @@ const EventCountdownCard: React.FC = () => {
             {createWorkflowDrafts.map((workflow) => (
               <div
                 key={workflow.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2"
               >
                 <button
                   type="button"
                   onClick={() => editCreateWorkflowDraft(workflow)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <div className="truncate text-sm font-medium text-white">{workflow.name}</div>
-                  <div className="mt-1 truncate text-xs text-white/45">{workflowDraftSummary(workflow)}</div>
+                  <div className="truncate text-sm font-medium text-ark-text">{workflow.name}</div>
+                  <div className="mt-1 truncate text-xs text-ark-text-faint">{workflowDraftSummary(workflow)}</div>
                 </button>
                 <div className="flex shrink-0 gap-2">
                   <button
                     type="button"
                     onClick={() => copyCreateWorkflowDraft(workflow)}
-                    className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+                    className="rounded-lg border border-ark-border px-2 py-1 text-xs text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
                   >
                     复制
                   </button>
@@ -1744,13 +1744,13 @@ const EventCountdownCard: React.FC = () => {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-14 border-b ark-border flex items-center justify-between px-5 bg-[var(--ark-surface-subtle)]">
-              <h3 className="text-base font-semibold text-white">
+              <h3 className="text-base font-semibold text-ark-text">
                 {showCreateEditor ? '添加事件' : '事件总览'}
               </h3>
               <button
                 data-onboarding-anchor="event-overview-close"
                 onClick={closeModal}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+                className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -1765,16 +1765,16 @@ const EventCountdownCard: React.FC = () => {
 
               {showCreateEditor ? (
                 <div className="flex flex-col gap-4">
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
                       <div className="flex flex-wrap items-end gap-3">
                         <div className="min-w-[220px] flex-1 flex flex-col gap-2">
-                          <label className="text-sm text-white/70">事件模板</label>
+                          <label className="text-sm text-ark-text">事件模板</label>
                           <select
                             aria-label="事件模板"
                             value={selectedTemplateId}
                             onChange={(event) => setSelectedTemplateId(event.target.value)}
                             disabled={loadingTemplates}
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <option value="">{loadingTemplates ? '模板加载中...' : '选择事件模板'}</option>
                             {templates.map((template) => (
@@ -1795,7 +1795,7 @@ const EventCountdownCard: React.FC = () => {
                           }}
                           disabled={loadingTemplateStore}
                           data-onboarding-anchor="event-store-button"
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-ark-border bg-ark-surface-subtle text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <ShoppingBag size={16} aria-hidden="true" />
                           事件商店
@@ -1805,7 +1805,7 @@ const EventCountdownCard: React.FC = () => {
                           onClick={handleApplyTemplate}
                           disabled={loadingTemplates || !selectedTemplateId}
                           data-onboarding-anchor="event-template-apply-button"
-                          className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white/75 hover:bg-white/10 hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          className="px-3 py-2 rounded-lg border border-ark-border bg-ark-surface-subtle text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           套用模板
                         </button>
@@ -1823,61 +1823,61 @@ const EventCountdownCard: React.FC = () => {
 
                     <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr_auto] md:items-end">
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">事件名称</label>
+                        <label className="text-sm text-ark-text">事件名称</label>
                         <input
                           aria-label="事件名称"
                           value={createForm.name}
                           onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
                           placeholder="例如：论文投稿截止"
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">开始日期</label>
+                        <label className="text-sm text-ark-text">开始日期</label>
                         <input
                           aria-label="开始日期"
                           type="date"
                           value={createForm.startDate}
                           onChange={(event) => setCreateForm((state) => ({ ...state, startDate: event.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/70">到期时间</label>
+                        <label className="text-sm text-ark-text">到期时间</label>
                         <input
                           aria-label="到期时间"
                           type="datetime-local"
                           value={createForm.dueAt}
                           onChange={(event) => setCreateForm((state) => ({ ...state, dueAt: event.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full px-3 py-2 rounded-lg bg-ark-surface-subtle border border-ark-border text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </div>
-                      <label className="flex items-center gap-2 text-sm text-white/70 pb-2">
+                      <label className="flex items-center gap-2 text-sm text-ark-text pb-2">
                         <input
                           type="checkbox"
                           checked={createForm.isPrimary}
                           onChange={(event) => setCreateForm((state) => ({ ...state, isPrimary: event.target.checked }))}
-                          className="h-4 w-4 rounded border-white/20 bg-white/5"
+                          className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle"
                         />
                         设为主事件
                       </label>
                     </div>
 
                     {/* 应用 */}
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
                       <div>
-                        <h4 className="text-base font-semibold text-white">应用</h4>
-                        <p className="mt-1 text-sm text-white/45">配置子应用托管的每日任务</p>
+                        <h4 className="text-base font-semibold text-ark-text">应用</h4>
+                        <p className="mt-1 text-sm text-ark-text-faint">配置子应用托管的每日任务</p>
                       </div>
                       <div className="mt-4">
                         {renderCreateAppsColumn()}
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
                       <div>
-                        <h4 className="text-base font-semibold text-white">安排</h4>
-                        <p className="mt-1 text-sm text-white/45">安排内容</p>
+                        <h4 className="text-base font-semibold text-ark-text">安排</h4>
+                        <p className="mt-1 text-sm text-ark-text-faint">安排内容</p>
                       </div>
                       <div className="mt-4 grid gap-3 md:grid-cols-2">
                         {renderCreateArrangementColumn('task')}
@@ -1891,9 +1891,9 @@ const EventCountdownCard: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-4">
                   {loading ? (
-                    <div className="h-full min-h-[160px] flex items-center justify-center text-white/35">加载中...</div>
+                    <div className="h-full min-h-[160px] flex items-center justify-center text-ark-text-faint">加载中...</div>
                   ) : events.length === 0 ? (
-                    <div className="h-full min-h-[160px] flex items-center justify-center text-white/35">暂无事件</div>
+                    <div className="h-full min-h-[160px] flex items-center justify-center text-ark-text-faint">暂无事件</div>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {[...events].sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0)).map((event) => (
@@ -1901,24 +1901,24 @@ const EventCountdownCard: React.FC = () => {
                           key={event.id}
                           type="button"
                           onClick={() => openWorkbench(event)}
-                          className="rounded-xl border border-white/10 bg-white/5 p-4 flex items-start justify-between gap-4 text-left hover:bg-white/10 transition-colors"
+                          className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4 flex items-start justify-between gap-4 text-left hover:bg-ark-surface-subtle transition-colors"
                         >
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-lg font-semibold text-white">{event.name}</span>
+                              <span className="text-lg font-semibold text-ark-text">{event.name}</span>
                               {event.is_primary ? (
                                 <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20">
                                   主事件
                                 </span>
                               ) : null}
                             </div>
-                            <div className="mt-2 text-sm text-white/55">
+                            <div className="mt-2 text-sm text-ark-text-muted">
                               创建于 {formatEventDateTime(event.created_at)}
                             </div>
-                            <div className="mt-1 text-sm text-white/65">
+                            <div className="mt-1 text-sm text-ark-text-muted">
                               开始于 {event.start_date}
                             </div>
-                            <div className="mt-1 text-sm text-white/75">
+                            <div className="mt-1 text-sm text-ark-text">
                               到期于 {formatEventDateTime(event.due_at)}
                             </div>
                           </div>
@@ -1937,7 +1937,7 @@ const EventCountdownCard: React.FC = () => {
                     onClick={beginCreate}
                     disabled={submitting}
                     data-onboarding-anchor="event-add-button"
-                    className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-5 text-left text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-xl border border-dashed border-ark-border bg-ark-surface-subtle px-4 py-5 text-left text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     添加事件
                   </button>
@@ -1955,7 +1955,7 @@ const EventCountdownCard: React.FC = () => {
                     type="button"
                     onClick={cancelCreate}
                     disabled={submitting || savingTemplate}
-                    className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+                    className="px-3 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text hover:text-ark-text transition-colors"
                   >
                     取消
                   </button>
@@ -1963,7 +1963,7 @@ const EventCountdownCard: React.FC = () => {
                     type="button"
                     onClick={() => void handleSaveTemplate()}
                     disabled={submitting || savingTemplate}
-                    className="px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    className="px-3 py-2 rounded-lg border border-ark-border bg-ark-surface-subtle text-ark-text hover:bg-ark-surface-subtle transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {savingTemplate ? '保存中...' : '保存为模板'}
                   </button>
@@ -2021,7 +2021,7 @@ const EventCountdownCard: React.FC = () => {
 
       {showTemplateStore ? (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
           onClick={() => {
             setShowTemplateStore(false);
             setPreviewStoreTemplate(null);
@@ -2031,13 +2031,13 @@ const EventCountdownCard: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-label="事件商店"
-            className="w-[760px] max-w-[94vw] max-h-[82vh] overflow-hidden rounded-2xl border border-white/10 bg-[#151923] text-white shadow-2xl"
+            className="w-[760px] max-w-[94vw] max-h-[82vh] overflow-hidden rounded-2xl border border-ark-border bg-ark-panel text-ark-text shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold">事件商店</h3>
-                <p className="mt-1 text-sm text-white/45">保存项目内置模板到我的事件模板</p>
+                <p className="mt-1 text-sm text-ark-text-faint">保存项目内置模板到我的事件模板</p>
               </div>
               <button
                 type="button"
@@ -2046,7 +2046,7 @@ const EventCountdownCard: React.FC = () => {
                   setShowTemplateStore(false);
                   setPreviewStoreTemplate(null);
                 }}
-                className="rounded-full p-2 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-full p-2 text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
               >
                 <X size={18} aria-hidden="true" />
               </button>
@@ -2054,16 +2054,16 @@ const EventCountdownCard: React.FC = () => {
 
             <div className="max-h-[calc(82vh-76px)] overflow-y-auto px-5 py-4">
               {loadingTemplateStore ? (
-                <div className="flex min-h-[180px] items-center justify-center text-sm text-white/45">加载中...</div>
+                <div className="flex min-h-[180px] items-center justify-center text-sm text-ark-text-faint">加载中...</div>
               ) : storeTemplates.length === 0 ? (
-                <div className="flex min-h-[180px] items-center justify-center text-sm text-white/45">
+                <div className="flex min-h-[180px] items-center justify-center text-sm text-ark-text-faint">
                   暂无内置模板
                 </div>
               ) : (
                 <div className="space-y-5">
                   {templateStoreCategories.map(([category, categoryTemplates]) => (
                     <section key={category}>
-                      <h4 className="text-sm font-medium text-white/70">{category}</h4>
+                      <h4 className="text-sm font-medium text-ark-text">{category}</h4>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {categoryTemplates.map((template) => (
                           /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */
@@ -2081,14 +2081,14 @@ const EventCountdownCard: React.FC = () => {
                             className={`rounded-xl border p-4 transition-colors ${
                               selectedStoreTemplateId === template.id
                                 ? 'border-cyan-300/60 bg-cyan-300/10'
-                                : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'
+                                : 'border-ark-border bg-ark-surface-subtle hover:bg-ark-surface-subtle'
                             }`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <h5 className="text-base font-semibold text-white">{template.name}</h5>
+                                <h5 className="text-base font-semibold text-ark-text">{template.name}</h5>
                                 {template.description ? (
-                                  <p className="mt-2 text-sm leading-5 text-white/55">{template.description}</p>
+                                  <p className="mt-2 text-sm leading-5 text-ark-text-muted">{template.description}</p>
                                 ) : null}
                               </div>
                               <button
@@ -2110,16 +2110,16 @@ const EventCountdownCard: React.FC = () => {
                                 {savingStoreTemplateId === template.id ? '保存中...' : '保存'}
                               </button>
                             </div>
-                            <div className="mt-4 flex flex-wrap gap-2 text-xs text-white/55">
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+                            <div className="mt-4 flex flex-wrap gap-2 text-xs text-ark-text-muted">
+                              <span className="rounded-full border border-ark-border bg-ark-surface-subtle px-2 py-1">
                                 {template.schedule_mode === 'before_due' ? '按截止倒推' : '按开始顺推'}
                               </span>
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+                              <span className="rounded-full border border-ark-border bg-ark-surface-subtle px-2 py-1">
                                 {template.items.length} 个工作台内容
                               </span>
                             </div>
                             {template.items.length > 0 ? (
-                              <ul className="mt-3 space-y-1 text-sm text-white/60">
+                              <ul className="mt-3 space-y-1 text-sm text-ark-text-muted">
                                 {template.items.slice(0, 3).map((item) => (
                                   <li key={item.id} className="truncate">
                                     {item.kind === 'task' ? '任务' : '日程'} · {item.title}
@@ -2141,29 +2141,29 @@ const EventCountdownCard: React.FC = () => {
 
       {showTemplateStore && previewStoreTemplate ? (
         <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
           onClick={() => setPreviewStoreTemplate(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label={`${previewStoreTemplate.name} 模板内容`}
-            className="flex max-h-[84vh] w-[720px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#151923] text-white shadow-2xl"
+            className="flex max-h-[84vh] w-[720px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-ark-panel text-ark-text shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-ark-border px-5 py-4">
               <div className="min-w-0">
                 <div className="text-xs font-medium text-cyan-200/80">{previewStoreTemplate.category || '通用'}</div>
                 <h3 className="mt-1 truncate text-lg font-semibold">{previewStoreTemplate.name}</h3>
                 {previewStoreTemplate.description ? (
-                  <p className="mt-2 text-sm leading-5 text-white/55">{previewStoreTemplate.description}</p>
+                  <p className="mt-2 text-sm leading-5 text-ark-text-muted">{previewStoreTemplate.description}</p>
                 ) : null}
               </div>
               <button
                 type="button"
                 aria-label="关闭模板内容"
                 onClick={() => setPreviewStoreTemplate(null)}
-                className="rounded-full p-2 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-full p-2 text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
               >
                 <X size={18} aria-hidden="true" />
               </button>
@@ -2171,80 +2171,80 @@ const EventCountdownCard: React.FC = () => {
 
             <div className="grid gap-4 overflow-y-auto px-5 py-4">
               <section>
-                <h4 className="text-sm font-medium text-white/75">事件信息</h4>
-                <div className="mt-3 grid gap-2 text-sm text-white/60 sm:grid-cols-2">
-                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                <h4 className="text-sm font-medium text-ark-text">事件信息</h4>
+                <div className="mt-3 grid gap-2 text-sm text-ark-text-muted sm:grid-cols-2">
+                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2">
                     名称：{previewStoreTemplate.default_event_name || previewStoreTemplate.name}
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2">
                     模式：{previewStoreTemplate.schedule_mode === 'before_due' ? '按截止倒推' : '按开始顺推'}
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2">
                     开始：{previewStoreTemplate.default_start_date || '未设置'}
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2">
                     到期：{previewStoreTemplate.default_due_at ? formatEventDateTime(previewStoreTemplate.default_due_at) : '未设置'}
                   </div>
                 </div>
               </section>
 
               <section>
-                <h4 className="text-sm font-medium text-white/75">应用配置</h4>
+                <h4 className="text-sm font-medium text-ark-text">应用配置</h4>
                 {previewStoreTemplate.app_configs?.length ? (
                   <div className="mt-3 grid gap-2">
                     {previewStoreTemplate.app_configs.map((app) => (
                       <div
                         key={app.client_id}
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2"
+                        className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2"
                       >
-                        <div className="text-sm font-medium text-white">{getStoreAppName(app.app_type)}</div>
-                        <div className="mt-1 text-xs text-white/50">{getStoreAppSummary(app)}</div>
+                        <div className="text-sm font-medium text-ark-text">{getStoreAppName(app.app_type)}</div>
+                        <div className="mt-1 text-xs text-ark-text-muted">{getStoreAppSummary(app)}</div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+                  <div className="mt-3 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint">
                     暂无应用配置
                   </div>
                 )}
               </section>
 
               <section>
-                <h4 className="text-sm font-medium text-white/75">工作台内容</h4>
+                <h4 className="text-sm font-medium text-ark-text">工作台内容</h4>
                 {previewStoreTemplate.items.length ? (
                   <div className="mt-3 grid gap-2">
                     {previewStoreTemplate.items.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2"
+                        className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2"
                       >
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-ark-text">
                           {item.kind === 'task' ? '任务' : '日程'} · {item.title}
                         </div>
-                        {item.content ? <div className="mt-1 text-xs text-white/50">{item.content}</div> : null}
-                        <div className="mt-1 text-xs text-white/40">相对天数 {item.offset_days}</div>
+                        {item.content ? <div className="mt-1 text-xs text-ark-text-muted">{item.content}</div> : null}
+                        <div className="mt-1 text-xs text-ark-text-faint">相对天数 {item.offset_days}</div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+                  <div className="mt-3 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint">
                     暂无工作台内容
                   </div>
                 )}
               </section>
 
               <section>
-                <h4 className="text-sm font-medium text-white/75">工作流</h4>
+                <h4 className="text-sm font-medium text-ark-text">工作流</h4>
                 {previewStoreTemplate.workflows?.length ? (
                   <div className="mt-3 grid gap-3">
                     {previewStoreTemplate.workflows.map((workflow) => (
                       <div
                         key={workflow.client_id}
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-3"
+                        className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-medium text-white">{workflow.name}</div>
-                          <div className="text-xs text-white/45">
+                          <div className="text-sm font-medium text-ark-text">{workflow.name}</div>
+                          <div className="text-xs text-ark-text-faint">
                             {workflow.default_focus_timer_mode === 'countdown' ? '倒计时' : '正计时'}
                           </div>
                         </div>
@@ -2254,7 +2254,7 @@ const EventCountdownCard: React.FC = () => {
                             return (
                               <div
                                 key={`${workflow.client_id}-${index}`}
-                                className="rounded-md bg-black/20 px-3 py-2 text-xs text-white/55"
+                                className="rounded-md bg-ark-surface-subtle px-3 py-2 text-xs text-ark-text-muted"
                               >
                                 {index + 1}. {phase.phase_type === 'focus' ? '专注' : '休息'}
                                 {' '}
@@ -2268,18 +2268,18 @@ const EventCountdownCard: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+                  <div className="mt-3 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint">
                     暂无工作流
                   </div>
                 )}
               </section>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
+            <div className="flex justify-end gap-2 border-t border-ark-border px-5 py-4">
               <button
                 type="button"
                 onClick={() => setPreviewStoreTemplate(null)}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white"
+                className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text"
               >
                 关闭
               </button>
@@ -2300,19 +2300,19 @@ const EventCountdownCard: React.FC = () => {
 
       {templateConflict ? (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
           onClick={() => setTemplateConflict(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="同名模板已存在"
-            className="w-[420px] max-w-[94vw] rounded-2xl border border-white/10 bg-[#151923] p-5 text-white shadow-2xl"
+            className="w-[420px] max-w-[94vw] rounded-2xl border border-ark-border bg-ark-panel p-5 text-ark-text shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className="text-lg font-semibold">同名模板已存在</h3>
-            <p className="mt-3 text-sm leading-6 text-white/65">
-              已经有名为 <span className="font-medium text-white">{templateConflict.template.name}</span> 的事件模板。
+            <p className="mt-3 text-sm leading-6 text-ark-text-muted">
+              已经有名为 <span className="font-medium text-ark-text">{templateConflict.template.name}</span> 的事件模板。
               你可以更新这个模板，或者保留它并保存为新的模板。
             </p>
             <div className="mt-5 flex justify-end gap-2">
@@ -2320,7 +2320,7 @@ const EventCountdownCard: React.FC = () => {
                 type="button"
                 onClick={() => setTemplateConflict(null)}
                 disabled={savingTemplate}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text disabled:cursor-not-allowed disabled:opacity-60"
               >
                 取消
               </button>
@@ -2328,7 +2328,7 @@ const EventCountdownCard: React.FC = () => {
                 type="button"
                 onClick={() => void saveConflictAsNewTemplate()}
                 disabled={savingTemplate}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
               >
                 保存为新模板
               </button>

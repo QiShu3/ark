@@ -34,6 +34,9 @@ Backend commands run from `backend/`:
 - Follow existing file-local style before introducing new patterns.
 - Frontend uses TypeScript, React function components, and PascalCase component filenames such as `AppCenter.tsx`.
 - Hooks should use `useX` naming; helpers in `lib/` should use clear noun/verb names.
+- **Frontend CSS/Theme**: Components must use semantic Tailwind classes from the `@theme` block in `index.css` — never hardcode `text-white`, `border-white/10`, `bg-white/5`, `bg-black/30`, or hex dark colors. Use `text-ark-text`, `text-ark-text-muted`, `text-ark-text-faint`, `bg-ark-surface-subtle`, `border-ark-border`, `bg-ark-overlay`, etc. Exception: CTA buttons with `bg-white` (solid) + `text-slate-950` are intentionally theme-independent.
+- **Focus-work components** (`components/focus-work/`, `ERC/ERC*FocusWork.tsx`, `Vocab/VocabTodayFocusWork.tsx`): Use bracket syntax for component-scoped variables — `text-[var(--focus-work-text)]`, `border-[var(--focus-work-border)]`, `bg-[var(--focus-work-surface-soft)]`, etc.
+- **Adding a new theme**: Add a `:root[data-theme="xxx"]` block in `index.css` with values for all `--ark-*` variables. No component changes needed.
 - Backend uses snake_case for modules, functions, and variables.
 - Python formatting and import sorting are enforced with Ruff; line length is 120.
 - Keep route modules focused by domain rather than adding large mixed-purpose files.

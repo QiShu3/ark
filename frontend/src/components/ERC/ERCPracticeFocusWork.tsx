@@ -134,8 +134,8 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
     return (
       <div className="flex h-full w-full items-center justify-center p-8">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-white" />
-          <p className="mt-4 text-sm text-white/55">正在为您加载今日推荐真题与单词预热…</p>
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--focus-work-border)] border-t-white" />
+          <p className="mt-4 text-sm text-[var(--focus-work-text-muted)]">正在为您加载今日推荐真题与单词预热…</p>
         </div>
       </div>
     );
@@ -145,9 +145,9 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
     return (
       <div className="h-full w-full overflow-y-auto px-4 pb-8">
         <div className="mx-auto max-w-2xl pt-12">
-          <section className="rounded-3xl border border-white/10 bg-black/20 p-8 backdrop-blur-md">
-            <h2 className="text-2xl font-semibold text-white">今日真题练习已完成</h2>
-            <p className="mt-4 text-sm leading-6 text-white/60">
+          <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-8 backdrop-blur-md">
+            <h2 className="text-2xl font-semibold text-[var(--focus-work-text)]">今日真题练习已完成</h2>
+            <p className="mt-4 text-sm leading-6 text-[var(--focus-work-text-muted)]">
               太棒了！您今日推荐的真题阅读已经全部完成了。您可以前往题库自行挑选其他的阅读文章，或者完成任务进入专注时间。
             </p>
             <div className="mt-8 flex gap-3">
@@ -156,14 +156,14 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                   type="button"
                   onClick={onCompleteTaskAndFinish}
                   disabled={isPaused}
-                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:opacity-50"
+                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
                 >
                   结束并完成今日任务
                 </button>
               ) : null}
               <Link
                 to="/erc"
-                className="rounded-full border border-white/15 bg-white/6 px-6 py-3 text-sm text-white/80 transition hover:bg-white/12"
+                className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:bg-[var(--focus-work-surface-soft)]"
               >
                 返回阅读主页
               </Link>
@@ -180,22 +180,22 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
       <div className="h-full w-full overflow-y-auto px-4 pb-8">
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
           <header className="pt-2">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/40">Vocabulary Preheat</div>
-            <h1 className="mt-2 text-2xl font-semibold text-white">真题词汇预热</h1>
-            <div className="mt-2 text-sm text-white/60">
+            <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Vocabulary Preheat</div>
+            <h1 className="mt-2 text-2xl font-semibold text-[var(--focus-work-text)]">真题词汇预热</h1>
+            <div className="mt-2 text-sm text-[var(--focus-work-text-muted)]">
               第 {preheatIndex + 1} 个 / 共 {preheatWords.length} 个单词（来自本篇真题）
             </div>
           </header>
 
-          <p className="text-sm leading-6 text-white/55">
+          <p className="text-sm leading-6 text-[var(--focus-work-text-muted)]">
             在阅读文章之前，先熟悉文章里的核心陌生词汇，这能显著提升您的阅读顺畅度。
           </p>
 
-          <section className="rounded-3xl border border-white/10 bg-[#0c1015]/60 p-6 shadow-2xl backdrop-blur-md">
+          <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 shadow-2xl backdrop-blur-md">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-4xl font-semibold tracking-tight text-white">{currentWord.word}</div>
-                <div className="mt-3 flex gap-4 text-sm text-white/50">
+                <div className="text-4xl font-semibold tracking-tight text-[var(--focus-work-text)]">{currentWord.word}</div>
+                <div className="mt-3 flex gap-4 text-sm text-[var(--focus-work-text-muted)]">
                   {currentWord.us_pronunciation ? <span>US /{currentWord.us_pronunciation}/</span> : null}
                   {currentWord.uk_pronunciation ? <span>UK /{currentWord.uk_pronunciation}/</span> : null}
                 </div>
@@ -203,14 +203,14 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
               <button
                 type="button"
                 onClick={() => setRevealed((prev) => !prev)}
-                className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:border-white/30"
+                className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)]"
               >
                 {revealed ? '收起释义' : '显示释义'}
               </button>
             </div>
 
             {revealed ? (
-              <div className="mt-8 border-t border-white/8 pt-6">
+              <div className="mt-8 border-t border-[var(--focus-work-border)] pt-6">
                 <WordMetaPanel detail={currentWord} />
               </div>
             ) : null}
@@ -223,10 +223,10 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                 type="button"
                 disabled={isPaused}
                 onClick={() => void handlePreheatSubmit(action.value)}
-                className="rounded-2xl border border-white/10 bg-white/6 px-5 py-4 text-left transition hover:border-white/20 hover:bg-white/10 disabled:opacity-50"
+                className="rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-4 text-left transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
               >
-                <div className="text-base font-semibold text-white">{action.label}</div>
-                <div className="mt-1 text-xs text-white/45">{action.hint}</div>
+                <div className="text-base font-semibold text-[var(--focus-work-text)]">{action.label}</div>
+                <div className="mt-1 text-xs text-[var(--focus-work-text-faint)]">{action.hint}</div>
               </button>
             ))}
           </div>
@@ -235,7 +235,7 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
             <button
               type="button"
               onClick={() => setPhase('reading')}
-              className="text-sm text-white/40 transition hover:text-white/60"
+              className="text-sm text-[var(--focus-work-text-faint)] transition hover:text-[var(--focus-work-text-muted)]"
             >
               跳过词汇预热，直接阅读原文
             </button>
@@ -249,17 +249,17 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
   return (
     <div className="h-full w-full overflow-y-auto px-1 pb-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--focus-work-border)] pb-5">
           <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-white/45">ERC Practice</div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">今日推荐真题</h1>
+            <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">ERC Practice</div>
+            <h1 className="mt-3 text-3xl font-semibold text-[var(--focus-work-text)]">今日推荐真题</h1>
             {article ? (
-              <p className="mt-2 text-sm text-white/50">
+              <p className="mt-2 text-sm text-[var(--focus-work-text-muted)]">
                 {article.year} 年 Text {article.text_no} · {article.title || 'Untitled Article'}
               </p>
             ) : null}
           </div>
-          <Link to="/erc" className="text-sm text-white/60 hover:text-white">
+          <Link to="/erc" className="text-sm text-[var(--focus-work-text-muted)] hover:text-[var(--focus-work-text)]">
             返回阅读主页
           </Link>
         </div>
@@ -271,18 +271,18 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
             {/* Left side: Article Text */}
             <article
               aria-label="阅读原文"
-              className="space-y-6 rounded-3xl border border-white/10 bg-slate-950/60 p-6 shadow-2xl backdrop-blur-2xl lg:p-8"
+              className="space-y-6 rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 shadow-2xl backdrop-blur-2xl lg:p-8"
             >
-              <h2 className="text-xl font-bold tracking-tight text-white pb-3 border-b border-white/6">
+              <h2 className="text-xl font-bold tracking-tight text-[var(--focus-work-text)] pb-3 border-b border-[var(--focus-work-border)]">
                 Reading Passage
               </h2>
               <div className="space-y-6 mt-4">
                 {article.paragraphs.map((paragraph) => (
                   <p
                     key={paragraph.paragraph_no}
-                    className="grid grid-cols-[2rem_minmax(0,72ch)] gap-3 text-[1.02rem] leading-9 text-white/85"
+                    className="grid grid-cols-[2rem_minmax(0,72ch)] gap-3 text-[1.02rem] leading-9 text-[var(--focus-work-text)]"
                   >
-                    <span className="text-right text-xs leading-9 font-medium text-white/25 select-none">
+                    <span className="text-right text-xs leading-9 font-medium text-[var(--focus-work-text-faint)] select-none">
                       {paragraph.paragraph_no}
                     </span>
                     <span className="text-justify font-normal tracking-normal">{paragraph.text}</span>
@@ -294,12 +294,12 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
             {/* Right side: Questions or Results */}
             <div className="space-y-6">
               {phase === 'reading' ? (
-                <section className="rounded-3xl border border-white/10 bg-[#0d1015]/40 p-5 lg:p-6 backdrop-blur-md">
-                  <h2 className="text-lg font-bold text-white mb-5 border-b border-white/6 pb-3">Comprehension Questions</h2>
+                <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5 lg:p-6 backdrop-blur-md">
+                  <h2 className="text-lg font-bold text-[var(--focus-work-text)] mb-5 border-b border-[var(--focus-work-border)] pb-3">Comprehension Questions</h2>
                   <div className="space-y-6">
                     {article.questions.map((q, idx) => (
-                      <div key={q.question_id} className="border-b border-white/6 pb-5 last:border-b-0 last:pb-0">
-                        <h3 className="text-base font-semibold text-white/90">
+                      <div key={q.question_id} className="border-b border-[var(--focus-work-border)] pb-5 last:border-b-0 last:pb-0">
+                        <h3 className="text-base font-semibold text-[var(--focus-work-text)]">
                           {idx + 1}. {q.stem}
                         </h3>
                         <div className="mt-4 space-y-2">
@@ -314,14 +314,14 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                                 className={`w-full flex items-start gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
                                   isSelected
                                     ? 'border-indigo-500/80 bg-indigo-500/10 text-indigo-200'
-                                    : 'border-white/6 bg-white/4 text-white/70 hover:border-white/15 hover:bg-white/6'
+                                    : 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text)] hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]'
                                 }`}
                               >
                                 <span
                                   className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                                     isSelected
-                                      ? 'bg-indigo-500 text-white'
-                                      : 'bg-white/8 text-white/60'
+                                      ? 'bg-indigo-500 text-[var(--focus-work-text)]'
+                                      : 'bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text-muted)]'
                                   }`}
                                 >
                                   {key}
@@ -335,23 +335,23 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                     ))}
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-white/6">
+                  <div className="mt-6 pt-4 border-t border-[var(--focus-work-border)]">
                     <button
                       type="button"
                       disabled={isPaused || submitting}
                       onClick={handlePracticeSubmit}
-                      className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 shadow-lg shadow-white/5 transition hover:bg-white/90 disabled:opacity-60"
+                      className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 shadow-lg shadow-white/5 transition hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
                     >
                       {submitting ? '提交中…' : '提交今日真题解答'}
                     </button>
                   </div>
                 </section>
               ) : (
-                <section className="rounded-3xl border border-white/10 bg-[#0d1015]/60 p-5 lg:p-6 shadow-2xl backdrop-blur-md">
-                  <div className="text-center pb-5 border-b border-white/8">
-                    <div className="text-xs uppercase tracking-widest text-white/40">Attempt Summary</div>
-                    <div className="mt-2 text-4xl font-extrabold text-white">
-                      {submitResult?.correct_count} <span className="text-lg font-normal text-white/50">/ {submitResult?.question_count} 正确</span>
+                <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5 lg:p-6 shadow-2xl backdrop-blur-md">
+                  <div className="text-center pb-5 border-b border-[var(--focus-work-border)]">
+                    <div className="text-xs uppercase tracking-widest text-[var(--focus-work-text-faint)]">Attempt Summary</div>
+                    <div className="mt-2 text-4xl font-extrabold text-[var(--focus-work-text)]">
+                      {submitResult?.correct_count} <span className="text-lg font-normal text-[var(--focus-work-text-muted)]">/ {submitResult?.question_count} 正确</span>
                     </div>
                   </div>
 
@@ -360,19 +360,19 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                       const question = article.questions.find((q) => q.question_id === item.question_id);
                       if (!question) return null;
                       return (
-                        <div key={item.question_id} className="border-b border-white/6 pb-5 last:border-b-0 last:pb-0">
-                          <h3 className="text-sm font-medium text-white/90">
+                        <div key={item.question_id} className="border-b border-[var(--focus-work-border)] pb-5 last:border-b-0 last:pb-0">
+                          <h3 className="text-sm font-medium text-[var(--focus-work-text)]">
                             {idx + 1}. {question.stem}
                           </h3>
                           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                            <div className="rounded-xl border border-white/6 bg-white/4 p-3">
-                              <span className="text-white/40 block mb-1">您的选择</span>
+                            <div className="rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] p-3">
+                              <span className="text-[var(--focus-work-text-faint)] block mb-1">您的选择</span>
                               <span className={`font-semibold ${item.is_correct ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 {item.chosen_option}: {question.options[item.chosen_option as OptionKey]}
                               </span>
                             </div>
-                            <div className="rounded-xl border border-white/6 bg-white/4 p-3">
-                              <span className="text-white/40 block mb-1">正确答案</span>
+                            <div className="rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] p-3">
+                              <span className="text-[var(--focus-work-text-faint)] block mb-1">正确答案</span>
                               <span className="font-semibold text-emerald-400">
                                 {item.correct_option}: {question.options[item.correct_option as OptionKey]}
                               </span>
@@ -383,20 +383,20 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                     })}
                   </div>
 
-                  <div className="mt-6 pt-5 border-t border-white/8 flex flex-col gap-3">
+                  <div className="mt-6 pt-5 border-t border-[var(--focus-work-border)] flex flex-col gap-3">
                     {onCompleteTaskAndFinish ? (
                       <button
                         type="button"
                         onClick={onCompleteTaskAndFinish}
                         disabled={isPaused}
-                        className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:bg-white/90 disabled:opacity-50"
+                        className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
                       >
                         标记今日真题任务为已完成
                       </button>
                     ) : null}
                     <Link
                       to="/erc"
-                      className="w-full rounded-full border border-white/14 bg-white/6 py-4 text-center text-sm font-semibold text-white/90 transition hover:bg-white/10"
+                      className="w-full rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] py-4 text-center text-sm font-semibold text-[var(--focus-work-text)] transition hover:bg-[var(--focus-work-surface-soft)]"
                     >
                       返回阅读主页
                     </Link>

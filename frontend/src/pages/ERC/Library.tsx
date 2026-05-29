@@ -54,12 +54,12 @@ export default function ERCLibrary() {
   return (
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
       <div className="mx-auto max-w-6xl">
-        <div className="flex items-end justify-between gap-4 border-b border-white/10 pb-6">
+        <div className="flex items-end justify-between gap-4 border-b border-ark-border pb-6">
           <div>
-            <div className="text-sm uppercase tracking-[0.28em] text-white/45">Library</div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">阅读题库</h1>
+            <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Library</div>
+            <h1 className="mt-3 text-3xl font-semibold text-ark-text">阅读题库</h1>
           </div>
-          <Link to="/erc" className="text-sm text-white/65 hover:text-white">
+          <Link to="/erc" className="text-sm text-ark-text-muted hover:text-ark-text">
             返回首页
           </Link>
         </div>
@@ -77,8 +77,8 @@ export default function ERCLibrary() {
                 onClick={() => setActiveExam(exam)}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
                   isActive
-                    ? 'border-white bg-white text-slate-950'
-                    : 'border-white/12 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
+                    ? 'border-ark-border bg-white text-slate-950'
+                    : 'border-ark-border bg-ark-surface-subtle text-ark-text hover:border-ark-border hover:text-ark-text'
                 }`}
               >
                 {label}
@@ -92,17 +92,17 @@ export default function ERCLibrary() {
             <Link
               key={article.article_id}
               to={`/erc/articles/${article.article_id}/practice`}
-              className="rounded-2xl border border-white/10 bg-black/22 p-5 transition hover:border-white/25 hover:bg-black/30"
+              className="rounded-2xl border border-ark-border bg-ark-surface-subtle p-5 transition hover:border-ark-border hover:bg-ark-surface-subtle"
             >
               <div className="flex items-center justify-between gap-4">
-                <div className="text-lg font-semibold text-white">
+                <div className="text-lg font-semibold text-ark-text">
                   {article.year} Text {article.text_no}
                 </div>
-                <span className="rounded-full border border-white/12 px-3 py-1 text-xs text-white/70">
+                <span className="rounded-full border border-ark-border px-3 py-1 text-xs text-ark-text">
                   {statusLabel[article.status]}
                 </span>
               </div>
-              <div className="mt-3 text-sm text-white/55">
+              <div className="mt-3 text-sm text-ark-text-muted">
                 {article.question_count} 题 · 错题 {article.mistake_count}
               </div>
             </Link>

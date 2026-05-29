@@ -140,38 +140,38 @@ export default function TaskFocusWork({
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_40%)]" aria-hidden="true" />
 
       <main className="relative mx-auto flex h-full w-full max-w-5xl flex-1 flex-col items-center justify-center px-6 text-center">
-        <div className="text-xs uppercase tracking-[0.24em] text-white/35">Task Focus</div>
-        <h1 className="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-tight text-white md:text-5xl">
+        <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Task Focus</div>
+        <h1 className="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-tight text-[var(--focus-work-text)] md:text-5xl">
           {title}
         </h1>
-        <p className="mt-8 font-mono text-6xl font-semibold tracking-tight text-white md:text-7xl">{timerText}</p>
-        <div className="mt-4 text-sm text-white/52">{workflow?.is_paused ? '当前专注已暂停' : '专注中'}</div>
+        <p className="mt-8 font-mono text-6xl font-semibold tracking-tight text-[var(--focus-work-text)] md:text-7xl">{timerText}</p>
+        <div className="mt-4 text-sm text-[var(--focus-work-text-muted)]">{workflow?.is_paused ? '当前专注已暂停' : '专注中'}</div>
 
         <button
           type="button"
           onClick={() => setDetailsOpen((open) => !open)}
-          className="mt-10 rounded-full border border-white/14 bg-white/8 px-4 py-2 text-sm text-white/80 transition hover:border-white/24 hover:bg-white/12"
+          className="mt-10 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]"
         >
           {detailsOpen ? '收起任务细节' : '查看任务细节'}
         </button>
 
         {detailsOpen ? (
-          <section className="mt-6 w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-black/24 p-5 text-left shadow-xl">
+          <section className="mt-6 w-full max-w-2xl rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5 text-left shadow-xl">
             {error ? <p className="text-sm text-rose-200">{error}</p> : null}
             {content ? (
               <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-white/35">内容</div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-white/78">{content}</p>
+                <div className="text-xs uppercase tracking-[0.18em] text-[var(--focus-work-text-faint)]">内容</div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[var(--focus-work-text)]">{content}</p>
               </div>
             ) : (
-              <p className="text-sm text-white/48">这个任务还没有补充说明。</p>
+              <p className="text-sm text-[var(--focus-work-text-faint)]">这个任务还没有补充说明。</p>
             )}
-            {cycleText ? <div className="mt-4 text-xs text-white/45">周期进度：{cycleText}</div> : null}
+            {cycleText ? <div className="mt-4 text-xs text-[var(--focus-work-text-faint)]">周期进度：{cycleText}</div> : null}
           </section>
         ) : null}
       </main>
 
-      <footer className="relative flex flex-wrap items-center justify-center gap-3 border-t border-white/10 bg-black/18 px-6 py-5">
+      <footer className="relative flex flex-wrap items-center justify-center gap-3 border-t border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] px-6 py-5">
         <button
           type="button"
           onClick={onCompleteTaskAndFinish}

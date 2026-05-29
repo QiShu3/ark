@@ -47,29 +47,29 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
     <div className="h-full w-full overflow-y-auto px-4 pb-8">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <header className="pt-2">
-          <div className="text-sm text-white/70">
+          <div className="text-sm text-[var(--focus-work-text)]">
             {session.loading
               ? '批次加载中…'
               : `第 ${session.currentBatchNumber} 批 / 共 ${session.totalBatchCount} 批`}
           </div>
         </header>
 
-        <p className="text-sm leading-6 text-white/52">
+        <p className="text-sm leading-6 text-[var(--focus-work-text-muted)]">
           {session.isBatchReview ? '上一批先简单回顾一下，再继续今天的词。' : '先完成今天这一个词，再进入下一步。'}
         </p>
 
-        {session.loading ? <p className="text-sm text-white/55">今日单词加载中…</p> : null}
+        {session.loading ? <p className="text-sm text-[var(--focus-work-text-muted)]">今日单词加载中…</p> : null}
         {session.error ? <p className="text-sm text-rose-200">{session.error}</p> : null}
 
         {session.isBatchReview ? (
-          <section className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
-            <div className="text-sm text-white/60">{`上一批已完成 ${session.batchReviewCount} 个单词。`}</div>
+          <section className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5">
+            <div className="text-sm text-[var(--focus-work-text-muted)]">{`上一批已完成 ${session.batchReviewCount} 个单词。`}</div>
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
                 disabled={isPaused || session.loading || session.submitting}
                 onClick={session.continueBatchReview}
-                className="rounded-full border border-white/15 bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full border border-[var(--focus-work-border)] bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {session.batchReviewActionLabel}
               </button>
@@ -85,28 +85,28 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
                   type="button"
                   disabled={isPaused || session.submitting}
                   onClick={() => void session.submit(action.value)}
-                  className="rounded-[1.5rem] border border-white/15 bg-white/8 px-5 py-4 text-left transition hover:border-white/30 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-[1.5rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-4 text-left transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <div className="text-base font-medium text-white">{action.label}</div>
-                  <div className="mt-1 text-sm text-white/55">{action.hint}</div>
+                  <div className="text-base font-medium text-[var(--focus-work-text)]">{action.label}</div>
+                  <div className="mt-1 text-sm text-[var(--focus-work-text-muted)]">{action.hint}</div>
                 </button>
               ))}
             </div>
-            <a href={`#/vocab/words/${session.currentItem.id}`} className="inline-block text-sm text-white/58 transition hover:text-white">
+            <a href={`#/vocab/words/${session.currentItem.id}`} className="inline-block text-sm text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)]">
               查看完整词条
             </a>
           </div>
         ) : null}
 
         {!session.isBatchReview && !session.loading && !session.error && !session.currentItem ? (
-          <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-6 text-white/65">
+          <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
             <div>今天这本词书的单词已经完成了。</div>
             {onCompleteTaskAndFinish ? (
               <button
                 type="button"
                 disabled={isPaused}
                 onClick={onCompleteTaskAndFinish}
-                className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 完成今日单词
               </button>

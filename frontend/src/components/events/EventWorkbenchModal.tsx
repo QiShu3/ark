@@ -967,17 +967,17 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
         {kind === 'task' ? (
           <>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               标题
               <input
                 aria-label="标题"
                 value={taskArrangementForm.title}
                 onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, title: changeEvent.target.value }))}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 任务类型
                 <select
                   aria-label="任务类型"
@@ -985,24 +985,24 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setTaskArrangementForm((state) => ({ ...state, taskType: changeEvent.target.value as 'focus' | 'checkin' }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 >
                   <option value="focus">专注任务</option>
                   <option value="checkin">快速打卡</option>
                 </select>
               </label>
             </div>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               备注
               <textarea
                 aria-label="备注"
                 value={taskArrangementForm.content}
                 onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, content: changeEvent.target.value }))}
-                className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="min-h-16 rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 开始日期
                 <input
                   aria-label="开始日期"
@@ -1011,10 +1011,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setTaskArrangementForm((state) => ({ ...state, startDate: changeEvent.target.value }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 截止日期
                 <input
                   aria-label="截止日期"
@@ -1033,11 +1033,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                       };
                     });
                   }}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
             </div>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               关联事件
               <select
                 aria-label="关联事件"
@@ -1045,7 +1045,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 onChange={(changeEvent) => (
                   setTaskArrangementForm((state) => syncTaskEventSelection(state, changeEvent.target.value))
                 )}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               >
                 <option value="">不绑定事件</option>
                 {eventOptions.map((option) => (
@@ -1056,7 +1056,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
               </select>
             </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 完成周期
                 <select
                   aria-label="完成周期"
@@ -1064,7 +1064,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setTaskArrangementForm((state) => ({ ...state, periodType: changeEvent.target.value as CompletionPeriodType }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 >
                   <option value="once">一次性</option>
                   <option value="daily">每天</option>
@@ -1073,7 +1073,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   <option value="custom_days">自定义天数</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 单周期最多完成次数
                 <input
                   aria-label="单周期最多完成次数"
@@ -1083,12 +1083,12 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setTaskArrangementForm((state) => ({ ...state, maxCompletionsPerPeriod: Number(changeEvent.target.value) }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
             </div>
             {taskArrangementForm.periodType === 'custom_days' ? (
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 自定义完成周期（天）
                 <input
                   aria-label="自定义完成周期（天）"
@@ -1098,11 +1098,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setTaskArrangementForm((state) => ({ ...state, customPeriodDays: Number(changeEvent.target.value) }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
             ) : null}
-            <label className="flex items-center gap-2 text-xs text-white/70">
+            <label className="flex items-center gap-2 text-xs text-ark-text">
               <input
                 aria-label="仅工作日可完成"
                 type="checkbox"
@@ -1110,14 +1110,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 onChange={(changeEvent) => (
                   setTaskArrangementForm((state) => ({ ...state, weekdayOnly: changeEvent.target.checked }))
                 )}
-                className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+                className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
               />
               仅工作日可完成
             </label>
           </>
         ) : (
           <>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               标题
               <input
                 aria-label="标题"
@@ -1125,10 +1125,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 onChange={(changeEvent) => (
                   setAppointmentArrangementForm((state) => ({ ...state, title: changeEvent.target.value }))
                 )}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               />
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               状态
               <select
                 aria-label="状态"
@@ -1139,7 +1139,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                     status: changeEvent.target.value as AppointmentStoredStatus,
                   }))
                 )}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               >
                 <option value="pending">待出席</option>
                 <option value="attended">已出席</option>
@@ -1147,7 +1147,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 <option value="cancelled">已取消</option>
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               备注
               <textarea
                 aria-label="备注"
@@ -1155,11 +1155,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 onChange={(changeEvent) => (
                   setAppointmentArrangementForm((state) => ({ ...state, content: changeEvent.target.value }))
                 )}
-                className="min-h-16 rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="min-h-16 rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 开始时间
                 <input
                   aria-label="开始时间"
@@ -1168,10 +1168,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setAppointmentArrangementForm((state) => ({ ...state, startsAt: changeEvent.target.value }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 结束时间
                 <input
                   aria-label="结束时间"
@@ -1190,11 +1190,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                       };
                     });
                   }}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
             </div>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               关联事件
               <select
                 aria-label="关联事件"
@@ -1202,7 +1202,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 onChange={(changeEvent) => (
                   setAppointmentArrangementForm((state) => syncAppointmentEventSelection(state, changeEvent.target.value))
                 )}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               >
                 <option value="">不绑定事件</option>
                 {eventOptions.map((option) => (
@@ -1212,7 +1212,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               重复规则
               <input
                 aria-label="重复规则"
@@ -1221,11 +1221,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   setAppointmentArrangementForm((state) => ({ ...state, repeatRule: changeEvent.target.value }))
                 )}
                 placeholder="例如：weekly"
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white placeholder:text-white/30"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text placeholder:text-ark-text-faint"
               />
             </label>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 完成周期
                 <select
                   aria-label="完成周期"
@@ -1236,7 +1236,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                       periodType: changeEvent.target.value as CompletionPeriodType,
                     }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 >
                   <option value="once">一次性</option>
                   <option value="daily">每天</option>
@@ -1245,7 +1245,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   <option value="custom_days">自定义天数</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 单周期最多完成次数
                 <input
                   aria-label="单周期最多完成次数"
@@ -1258,12 +1258,12 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                       maxCompletionsPerPeriod: Number(changeEvent.target.value),
                     }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
             </div>
             {appointmentArrangementForm.periodType === 'custom_days' ? (
-              <label className="grid gap-1 text-xs text-white/60">
+              <label className="grid gap-1 text-xs text-ark-text-muted">
                 自定义完成周期（天）
                 <input
                   aria-label="自定义完成周期（天）"
@@ -1273,11 +1273,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   onChange={(changeEvent) => (
                     setAppointmentArrangementForm((state) => ({ ...state, customPeriodDays: Number(changeEvent.target.value) }))
                   )}
-                  className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                 />
               </label>
             ) : null}
-            <label className="flex items-center gap-2 text-xs text-white/70">
+            <label className="flex items-center gap-2 text-xs text-ark-text">
               <input
                 aria-label="仅工作日可完成"
                 type="checkbox"
@@ -1285,13 +1285,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 onChange={(changeEvent) => (
                   setAppointmentArrangementForm((state) => ({ ...state, weekdayOnly: changeEvent.target.checked }))
                 )}
-                className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500 focus:ring-blue-500/50"
+                className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
               />
               仅工作日可完成
             </label>
           </>
         )}
-        {previewTime ? <div className="text-xs text-white/45">时间预览 {formatEventDateTime(previewTime)}</div> : null}
+        {previewTime ? <div className="text-xs text-ark-text-faint">时间预览 {formatEventDateTime(previewTime)}</div> : null}
         <div className="flex flex-wrap justify-end gap-2">
           {editingArrangement ? (
             <button
@@ -1305,7 +1305,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           <button
             type="button"
             onClick={cancelArrangementEditor}
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+            className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
           >
             取消
           </button>
@@ -1334,10 +1334,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         aria-label={target.item.title}
         aria-describedby={timeId}
         onClick={() => beginEditArrangement(target)}
-        className="flex min-h-10 items-center justify-between gap-3 rounded-lg bg-white/[0.05] px-3 py-2 text-left text-sm font-medium text-white hover:bg-white/10"
+        className="flex min-h-10 items-center justify-between gap-3 rounded-lg bg-ark-surface-subtle px-3 py-2 text-left text-sm font-medium text-ark-text hover:bg-ark-surface-subtle"
       >
         <span className="min-w-0 truncate">{target.item.title}</span>
-        <span id={timeId} className="shrink-0 text-xs font-normal text-white/45">
+        <span id={timeId} className="shrink-0 text-xs font-normal text-ark-text-faint">
           {timeLabel}
         </span>
       </button>
@@ -1347,8 +1347,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   function renderArrangementColumn(kind: ArrangementKind, items: Task[] | Appointment[]) {
     const label = kind === 'appointment' ? '日程' : '任务';
     return (
-      <div className="flex min-h-[180px] flex-col rounded-lg border border-white/10 bg-white/[0.03] p-3">
-        <div className="text-sm font-medium text-white/80">{label}</div>
+      <div className="flex min-h-[180px] flex-col rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
+        <div className="text-sm font-medium text-ark-text">{label}</div>
         <div className="mt-3 grid flex-1 content-start gap-2">
           {items.map((item) => {
             const target = kind === 'task'
@@ -1362,7 +1362,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           <button
             type="button"
             onClick={() => beginAddArrangement(kind)}
-            className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-left text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+            className="min-h-10 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-2 text-left text-sm text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
           >
             添加{label}
           </button>
@@ -1373,13 +1373,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   function renderWorkflowSection() {
     return (
-      <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+      <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-base font-semibold">工作流</h3>
           <button
             type="button"
             onClick={openNewEventWorkflow}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+            className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text"
           >
             新建工作流
           </button>
@@ -1389,9 +1389,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             {eventWorkflowError}
           </div>
         ) : null}
-        {loadingEventWorkflows ? <p className="mt-3 text-sm text-white/50">工作流加载中...</p> : null}
+        {loadingEventWorkflows ? <p className="mt-3 text-sm text-ark-text-muted">工作流加载中...</p> : null}
         {!loadingEventWorkflows && eventWorkflows.length === 0 ? (
-          <div className="mt-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-4 text-sm text-white/45">
+          <div className="mt-3 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint">
             暂无工作流
           </div>
         ) : null}
@@ -1400,14 +1400,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             {eventWorkflows.map((workflow) => (
               <div
                 key={workflow.id}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 px-4 py-3.5 transition-all duration-300 shadow-sm hover:shadow-md"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface-subtle hover:border-ark-border px-4 py-3.5 transition-all duration-300 shadow-sm hover:shadow-md"
               >
                 <button
                   type="button"
                   onClick={() => editEventWorkflow(workflow)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <div className="truncate text-sm font-semibold text-white tracking-wide">{workflow.name}</div>
+                  <div className="truncate text-sm font-semibold text-ark-text tracking-wide">{workflow.name}</div>
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {workflow.phases.map((phase, idx) => {
                       const minutes = Math.round(phase.duration / 60);
@@ -1417,7 +1417,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
                       return (
                         <React.Fragment key={idx}>
-                          {idx > 0 && <span className="text-white/15 text-[10px]">→</span>}
+                          {idx > 0 && <span className="text-ark-text-faint text-[10px]">→</span>}
                           <div className="inline-flex items-center">
                             {isFocus ? (
                               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 border border-blue-500/25 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.06)]">
@@ -1444,7 +1444,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   <button
                     type="button"
                     onClick={() => copyEventWorkflow(workflow)}
-                    className="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors duration-200"
+                    className="rounded-lg border border-ark-border px-2.5 py-1 text-xs font-medium text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-200"
                   >
                     复制
                   </button>
@@ -1475,12 +1475,12 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
         <div className="text-sm font-medium text-blue-100">{isNew ? '添加应用' : '编辑应用'}</div>
         {isNew ? (
-          <label className="grid gap-1 text-xs text-white/60">
+          <label className="grid gap-1 text-xs text-ark-text-muted">
             选择应用
             <select
               value={appConfigEditor.appType}
               onChange={(e) => setAppConfigEditor((s) => s ? { ...s, appType: e.target.value as AppTaskType, deckId: e.target.value === 'vocab_today' ? (appConfigDecks[0]?.id ?? '') : '' } : s)}
-              className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
             >
               {available.map((t) => (
                 <option key={t} value={t}>
@@ -1490,19 +1490,19 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             </select>
           </label>
         ) : (
-          <div className="text-sm text-white/70">
+          <div className="text-sm text-ark-text">
             {appConfigEditor.appType === 'vocab_today' ? '今日单词' : appConfigEditor.appType === 'erc_practice' ? '真题练习' : '错题复习'}
           </div>
         )}
 
         {appConfigEditor.appType === 'vocab_today' ? (
           <>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               选择词书
               <select
                 value={appConfigEditor.deckId}
                 onChange={(e) => setAppConfigEditor((s) => s ? { ...s, deckId: e.target.value } : s)}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               >
                 <option value="">选择词书</option>
                 {appConfigDecks.map((deck) => (
@@ -1510,7 +1510,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               每日目标词数
               <input
                 type="number"
@@ -1518,14 +1518,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 max={500}
                 value={appConfigEditor.dailyTargetCount}
                 onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyTargetCount: Math.max(1, Math.min(500, Number(e.target.value) || 20)) } : s)}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               />
             </label>
           </>
         ) : null}
 
         {appConfigEditor.appType === 'erc_practice' ? (
-          <label className="grid gap-1 text-xs text-white/60">
+          <label className="grid gap-1 text-xs text-ark-text-muted">
             每日目标文章数
             <input
               type="number"
@@ -1533,26 +1533,26 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
               max={50}
               value={appConfigEditor.dailyArticleTarget}
               onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyArticleTarget: Math.max(1, Math.min(50, Number(e.target.value) || 1)) } : s)}
-              className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
             />
           </label>
         ) : null}
 
         {appConfigEditor.appType === 'erc_review' ? (
           <>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               复习范围
               <select
                 value={appConfigEditor.reviewScope}
                 onChange={(e) => setAppConfigEditor((s) => s ? { ...s, reviewScope: e.target.value as AppConfigEditorState['reviewScope'] } : s)}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               >
                 <option value="due">到期复习</option>
                 <option value="mistakes">全部错题</option>
                 <option value="all">全部题目</option>
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-white/60">
+            <label className="grid gap-1 text-xs text-ark-text-muted">
               每日目标题数
               <input
                 type="number"
@@ -1560,29 +1560,29 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 max={200}
                 value={appConfigEditor.dailyQuestionTarget}
                 onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyQuestionTarget: Math.max(1, Math.min(200, Number(e.target.value) || 10)) } : s)}
-                className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               />
             </label>
           </>
         ) : null}
 
-        <label className="grid gap-1 text-xs text-white/60">
+        <label className="grid gap-1 text-xs text-ark-text-muted">
           默认专注时长 (分钟)
           <input
             type="number"
             min={1}
             value={appConfigEditor.focusDurationMin}
             onChange={(e) => setAppConfigEditor((s) => s ? { ...s, focusDurationMin: Math.max(1, Number(e.target.value) || 25) } : s)}
-            className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
           />
         </label>
 
-        <label className="flex items-center gap-2 text-xs text-white/70">
+        <label className="flex items-center gap-2 text-xs text-ark-text">
           <input
             type="checkbox"
             checked={appConfigEditor.addToTodayPlan}
             onChange={(e) => setAppConfigEditor((s) => s ? { ...s, addToTodayPlan: e.target.checked } : s)}
-            className="h-4 w-4 rounded border-white/20 bg-white/5 text-blue-500"
+            className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500"
           />
           同步到今日计划
         </label>
@@ -1601,7 +1601,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           <button
             type="button"
             onClick={() => { setAppConfigEditor(null); setAppConfigError(null); }}
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+            className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
           >
             取消
           </button>
@@ -1621,24 +1621,24 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   return (
     <>
       <div
-        className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 px-5 py-20 backdrop-blur-sm"
+        className="fixed inset-0 z-[80] flex items-center justify-center bg-ark-overlay px-5 py-20 backdrop-blur-sm"
         role="dialog"
         aria-modal="true"
         aria-label="安排"
         onClick={onClose}
       >
         <div
-          className="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f16] text-white shadow-2xl"
+          className="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-[#0d0f16] text-ark-text shadow-2xl"
           onClick={(clickEvent) => clickEvent.stopPropagation()}
         >
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-white/[0.04] px-5">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-white/45">事件总览</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-ark-text-faint">事件总览</div>
             <h2 className="mt-1 text-xl font-semibold">{currentEvent.name}</h2>
           </div>
           <button
             type="button"
-            className="rounded-full px-3 py-2 text-white/60 hover:bg-white/10 hover:text-white"
+            className="rounded-full px-3 py-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
             onClick={onClose}
             aria-label="关闭安排"
           >
@@ -1647,14 +1647,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-          {loading ? <div className="text-white/50">加载中...</div> : null}
+          {loading ? <div className="text-ark-text-muted">加载中...</div> : null}
           {error ? <div className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</div> : null}
 
-          <section className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <section className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-base font-semibold">基本信息</h3>
-                <div className="mt-3 grid gap-2 text-sm text-white/70 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 text-sm text-ark-text sm:grid-cols-2">
                   <div>开始日期 {currentEvent.start_date}</div>
                   <div>截止时间 {formatEventDateTime(currentEvent.due_at)}</div>
                   <div>{currentEvent.is_primary ? '主事件' : '非主事件'}</div>
@@ -1676,7 +1676,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   type="button"
                   onClick={beginEditEventDetails}
                   disabled={submitting}
-                  className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   编辑事件
                 </button>
@@ -1694,40 +1694,40 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
               <div className="mt-4 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
                 <div className="text-sm font-medium text-blue-100">编辑事件信息</div>
                 <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr]">
-                  <label className="grid gap-1 text-xs text-white/60">
+                  <label className="grid gap-1 text-xs text-ark-text-muted">
                     事件名称
                     <input
                       value={eventEditForm.name}
                       onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, name: changeEvent.target.value }))}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                      className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                     />
                   </label>
-                  <label className="grid gap-1 text-xs text-white/60">
+                  <label className="grid gap-1 text-xs text-ark-text-muted">
                     开始日期
                     <input
                       type="date"
                       value={eventEditForm.startDate}
                       onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, startDate: changeEvent.target.value }))}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                      className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                     />
                   </label>
-                  <label className="grid gap-1 text-xs text-white/60">
+                  <label className="grid gap-1 text-xs text-ark-text-muted">
                     截止时间
                     <input
                       type="datetime-local"
                       value={eventEditForm.dueAt}
                       onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, dueAt: changeEvent.target.value }))}
-                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-2 text-sm text-white"
+                      className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
                     />
                   </label>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 text-sm text-white/70">
+                  <label className="flex items-center gap-2 text-sm text-ark-text">
                     <input
                       type="checkbox"
                       checked={eventEditForm.isPrimary}
                       onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, isPrimary: changeEvent.target.checked }))}
-                      className="h-4 w-4 rounded border-white/20 bg-white/5"
+                      className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle"
                     />
                     主事件
                   </label>
@@ -1735,7 +1735,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                     <button
                       type="button"
                       onClick={cancelEditEventDetails}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+                      className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
                     >
                       取消
                     </button>
@@ -1755,16 +1755,16 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
           {renderWorkflowSection()}
 
-          <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">安排内容</h3>
-                <p className="mt-1 text-sm text-white/50">直接管理当前事件下的任务和日程</p>
+                <p className="mt-1 text-sm text-ark-text-muted">直接管理当前事件下的任务和日程</p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowAppConfigModal(true)}
-                className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+                className="shrink-0 rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text"
               >
                 应用配置
               </button>
@@ -1775,17 +1775,17 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             </div>
           </section>
 
-          <section className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] p-4">
+          <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
             <h3 className="text-base font-semibold">成就摘要</h3>
             {loadingAchievement ? (
-              <p className="mt-2 text-sm text-white/50">成就加载中...</p>
+              <p className="mt-2 text-sm text-ark-text-muted">成就加载中...</p>
             ) : eventAchievements ? (
               <div className="mt-3 grid gap-3 text-sm">
-                <div className="rounded-lg bg-white/[0.05] px-3 py-2">
-                  <div className="font-medium text-white">
+                <div className="rounded-lg bg-ark-surface-subtle px-3 py-2">
+                  <div className="font-medium text-ark-text">
                     {eventAchievements.summary_text ?? `${currentEvent.name} 的当前进展`}
                   </div>
-                  <div className="mt-1 text-white/50">
+                  <div className="mt-1 text-ark-text-muted">
                     已解锁 {eventAchievements.stats.unlocked_count} 个 · 进行中 {eventAchievements.stats.in_progress_count} 个
                   </div>
                 </div>
@@ -1802,7 +1802,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 ) : null}
               </div>
             ) : (
-              <p className="mt-2 text-sm text-white/50">暂无事件成就进度，完成相关任务或专注后会自动更新。</p>
+              <p className="mt-2 text-sm text-ark-text-muted">暂无事件成就进度，完成相关任务或专注后会自动更新。</p>
             )}
           </section>
         </div>
@@ -1810,25 +1810,25 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       </div>
       {showAppConfigModal ? (
         <div
-          className="fixed inset-0 z-[85] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[85] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
           onClick={() => { setShowAppConfigModal(false); setAppConfigEditor(null); setAppConfigError(null); }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="应用配置"
-            className="w-[560px] max-w-[94vw] max-h-[80vh] flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f16] text-white shadow-2xl"
+            className="w-[560px] max-w-[94vw] max-h-[80vh] flex flex-col overflow-hidden rounded-2xl border border-ark-border bg-[#0d0f16] text-ark-text shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold">应用配置</h3>
-                <p className="mt-1 text-sm text-white/45">{currentEvent.name}</p>
+                <p className="mt-1 text-sm text-ark-text-faint">{currentEvent.name}</p>
               </div>
               <button
                 type="button"
                 onClick={() => { setShowAppConfigModal(false); setAppConfigEditor(null); setAppConfigError(null); }}
-                className="rounded-full p-2 text-white/55 hover:bg-white/10 hover:text-white"
+                className="rounded-full p-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
               >
                 &times;
               </button>
@@ -1865,13 +1865,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                       key={task.id}
                       type="button"
                       onClick={() => beginEditAppConfig(task)}
-                      className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.05] px-3 py-2.5 text-left hover:bg-white/10"
+                      className="flex items-center justify-between gap-3 rounded-lg bg-ark-surface-subtle px-3 py-2.5 text-left hover:bg-ark-surface-subtle"
                     >
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-white">{typeLabel}</div>
-                        <div className="mt-0.5 text-xs text-white/50 truncate">{summaryParts.join(' · ') || '未配置'}</div>
+                        <div className="text-sm font-medium text-ark-text">{typeLabel}</div>
+                        <div className="mt-0.5 text-xs text-ark-text-muted truncate">{summaryParts.join(' · ') || '未配置'}</div>
                       </div>
-                      <span className="shrink-0 text-xs text-white/40 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300">托管</span>
+                      <span className="shrink-0 text-xs text-ark-text-faint px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300">托管</span>
                     </button>
                   );
                 })}
@@ -1884,7 +1884,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                       <button
                         type="button"
                         onClick={beginAddAppConfig}
-                        className="min-h-10 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 py-2 text-sm text-white/55 hover:bg-white/[0.07] hover:text-white"
+                        className="min-h-10 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
                       >
                         添加应用
                       </button>

@@ -43,7 +43,7 @@ export default function VocabMistakes() {
     <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
       <div className="mx-auto max-w-5xl">
         <h1 className="text-3xl font-semibold tracking-tight">错题池</h1>
-        <p className="mt-3 text-white/65">这里保留最近答错的词，适合做快速回捞和集中补洞。</p>
+        <p className="mt-3 text-ark-text-muted">这里保留最近答错的词，适合做快速回捞和集中补洞。</p>
 
         <div className="mt-8">
           <DeckSwitcher
@@ -57,19 +57,19 @@ export default function VocabMistakes() {
         </div>
 
         <div className="mt-8 space-y-4">
-          {loading ? <p className="text-sm text-white/55">错题加载中…</p> : null}
+          {loading ? <p className="text-sm text-ark-text-muted">错题加载中…</p> : null}
           {error ? <p className="text-sm text-rose-200">{error}</p> : null}
 
           {items.map((item) => (
             <a
               key={item.id}
               href={`#/vocab/words/${item.id}`}
-              className="block rounded-3xl border border-white/10 bg-black/20 p-5 transition hover:bg-black/28"
+              className="block rounded-3xl border border-ark-border bg-ark-surface-subtle p-5 transition hover:bg-ark-surface-subtle"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-xl font-medium">{item.word}</div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-sm text-white/65">
+                  <div className="mt-2 flex flex-wrap gap-2 text-sm text-ark-text-muted">
                     {item.translations.slice(0, 3).map((translation, index) => (
                       <span key={`${translation.translation}-${index}`}>{translation.translation}</span>
                     ))}
@@ -83,7 +83,7 @@ export default function VocabMistakes() {
           ))}
 
           {!loading && !error && !items.length ? (
-            <div className="rounded-[2rem] border border-white/10 bg-black/20 p-8 text-white/65">当前没有错题。</div>
+            <div className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-8 text-ark-text-muted">当前没有错题。</div>
           ) : null}
         </div>
       </div>

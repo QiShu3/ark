@@ -55,7 +55,7 @@ const FocusStats: React.FC<FocusStatsProps> = ({ onTaskClick }) => {
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex-1 flex items-center justify-center text-white/30 animate-pulse">
+        <div className="flex-1 flex items-center justify-center text-ark-text-faint animate-pulse">
           加载中...
         </div>
       );
@@ -63,7 +63,7 @@ const FocusStats: React.FC<FocusStatsProps> = ({ onTaskClick }) => {
 
     if (!data || data.tasks.length === 0) {
       return (
-        <div className="flex-1 flex items-center justify-center text-white/30">
+        <div className="flex-1 flex items-center justify-center text-ark-text-faint">
           暂无数据
         </div>
       );
@@ -75,10 +75,10 @@ const FocusStats: React.FC<FocusStatsProps> = ({ onTaskClick }) => {
       <div className="flex flex-col h-full gap-6 overflow-hidden">
         {/* Top: Total Duration (flex ratio 1) */}
         <div className="flex flex-col items-center justify-center py-4 flex-[1]">
-          <span className="text-sm text-white/50 uppercase tracking-wider mb-1">
+          <span className="text-sm text-ark-text-muted uppercase tracking-wider mb-1">
             总专注时长
           </span>
-          <span className="text-4xl font-bold text-white">
+          <span className="text-4xl font-bold text-ark-text">
             {formatDuration(data.total_duration)}
           </span>
         </div>
@@ -92,15 +92,15 @@ const FocusStats: React.FC<FocusStatsProps> = ({ onTaskClick }) => {
                 onClick={() => onTaskClick(task.id)}
                 className="group cursor-pointer"
               >
-                <div className="flex justify-between text-xs text-white/70 mb-1 px-1">
+                <div className="flex justify-between text-xs text-ark-text mb-1 px-1">
                   <span className="truncate max-w-[70%] font-medium group-hover:text-blue-400 transition-colors">
                     {task.title}
                   </span>
-                  <span className="font-mono text-white/50">
+                  <span className="font-mono text-ark-text-muted">
                     {formatDuration(task.duration)}
                   </span>
                 </div>
-                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-ark-surface-subtle rounded-full overflow-hidden">
                   <div
                     className="h-full bg-blue-500/60 group-hover:bg-blue-500 transition-colors rounded-full"
                     style={{
@@ -120,15 +120,15 @@ const FocusStats: React.FC<FocusStatsProps> = ({ onTaskClick }) => {
   return (
     <div className="flex flex-col h-full w-full p-4">
       {/* Navigation Bar */}
-      <div className="flex p-1 bg-white/5 rounded-lg mb-4">
+      <div className="flex p-1 bg-ark-surface-subtle rounded-lg mb-4">
         {(['today', 'week', 'month'] as TimeRange[]).map((r) => (
           <button
             key={r}
             onClick={() => setRange(r)}
             className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
               range === r
-                ? 'bg-white/10 text-white shadow-sm'
-                : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                ? 'bg-ark-surface-subtle text-ark-text shadow-sm'
+                : 'text-ark-text-faint hover:text-ark-text-muted hover:bg-ark-surface-subtle'
             }`}
           >
             {r === 'today' ? '今日' : r === 'week' ? '本周' : '本月'}

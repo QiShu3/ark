@@ -287,7 +287,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       role="button"
       tabIndex={0}
       data-layout={layoutMode}
-      className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-[width,padding,background-color] duration-300 cursor-pointer overflow-hidden ${widthClass}`}
+      className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-full bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border transition-[width,padding,background-color] duration-300 cursor-pointer overflow-hidden ${widthClass}`}
       onClick={() => window.dispatchEvent(new Event('ark:open-workflow-modal'))}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -302,19 +302,19 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       <span className={`h-2.5 w-2.5 rounded-full ${activeColorBg} shadow-[0_0_12px_currentColor] ${activeColorText}`} />
 
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Current</p>
+        <p className="text-[10px] uppercase tracking-[0.16em] text-ark-text-faint">Current</p>
         <div className="flex items-baseline gap-2 min-w-0">
           <span className={`text-sm font-semibold whitespace-nowrap ${activeColorText}`}>
             {titleText}
           </span>
           {showHoverTask ? (
-            <span className="min-w-0 truncate text-xs text-white/55">
+            <span className="min-w-0 truncate text-xs text-ark-text-muted">
               {workflowForMetrics.task_title}
             </span>
           ) : null}
-          {targetHint ? <span className="text-[10px] text-white/45 whitespace-nowrap">{targetHint}</span> : null}
+          {targetHint ? <span className="text-[10px] text-ark-text-faint whitespace-nowrap">{targetHint}</span> : null}
           {focusWorkHint ? (
-            <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-white/55 whitespace-nowrap">
+            <span className="rounded-full bg-ark-surface-subtle px-2 py-0.5 text-[10px] text-ark-text-muted whitespace-nowrap">
               {workflowForMetrics.state === 'break' ? `下个 ${focusWorkHint}` : focusWorkHint}
             </span>
           ) : null}
@@ -344,7 +344,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           type="button"
           onClick={handleConfirm}
           disabled={confirming}
-          className={`text-[11px] font-bold whitespace-nowrap px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 transition-colors ${activeColorText}`}
+          className={`text-[11px] font-bold whitespace-nowrap px-2 py-0.5 rounded bg-ark-surface-subtle hover:bg-ark-surface-subtle transition-colors ${activeColorText}`}
         >
           {confirming ? '确认中...' : '▶ 继续'}
         </button>

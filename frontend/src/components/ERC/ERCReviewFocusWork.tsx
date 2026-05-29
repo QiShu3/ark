@@ -45,12 +45,12 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
   return (
     <div className="h-full w-full overflow-y-auto px-1 pb-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--focus-work-border)] pb-5">
           <div>
-            <div className="text-sm uppercase tracking-[0.28em] text-white/45">Review</div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">复习池</h1>
+            <div className="text-sm uppercase tracking-[0.28em] text-[var(--focus-work-text-faint)]">Review</div>
+            <h1 className="mt-3 text-3xl font-semibold text-[var(--focus-work-text)]">复习池</h1>
           </div>
-          <Link to="/erc" className="text-sm text-white/65 hover:text-white">
+          <Link to="/erc" className="text-sm text-[var(--focus-work-text-muted)] hover:text-[var(--focus-work-text)]">
             返回首页
           </Link>
         </div>
@@ -58,9 +58,9 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
         {error ? <p className="mb-4 text-sm text-rose-200">{error}</p> : null}
 
         {item && !item.has_item ? (
-          <section className="rounded-2xl border border-white/10 bg-black/22 p-8">
-            <h2 className="text-2xl font-semibold text-white">暂无到期复习</h2>
-            <p className="mt-3 text-sm text-white/62">今天没有需要复习的阅读题，可以去题库练一篇新的文章。</p>
+          <section className="rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-8">
+            <h2 className="text-2xl font-semibold text-[var(--focus-work-text)]">暂无到期复习</h2>
+            <p className="mt-3 text-sm text-[var(--focus-work-text-muted)]">今天没有需要复习的阅读题，可以去题库练一篇新的文章。</p>
             <div className="mt-6 flex flex-wrap gap-3">
               {onCompleteTaskAndFinish ? (
                 <button
@@ -72,7 +72,7 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                   完成今日 ERC 复习
                 </button>
               ) : null}
-              <Link to="/erc/library" className="inline-flex rounded-full border border-white/15 px-5 py-3 text-sm text-white/82">
+              <Link to="/erc/library" className="inline-flex rounded-full border border-[var(--focus-work-border)] px-5 py-3 text-sm text-[var(--focus-work-text)]">
                 进入题库
               </Link>
             </div>
@@ -83,26 +83,26 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
           <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
             <article
               aria-label="阅读原文"
-              className="space-y-7 rounded-2xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/20 backdrop-blur-2xl backdrop-saturate-125 lg:p-8"
+              className="space-y-7 rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 shadow-2xl shadow-black/20 backdrop-blur-2xl backdrop-saturate-125 lg:p-8"
             >
               {item.paragraphs.map((paragraph) => (
-                <p key={paragraph.paragraph_no} className="grid grid-cols-[2rem_minmax(0,76ch)] gap-4 text-[1.02rem] leading-9 text-white/86">
-                  <span className="text-right text-sm leading-9 text-white/28">{paragraph.paragraph_no}</span>
+                <p key={paragraph.paragraph_no} className="grid grid-cols-[2rem_minmax(0,76ch)] gap-4 text-[1.02rem] leading-9 text-[var(--focus-work-text)]">
+                  <span className="text-right text-sm leading-9 text-[var(--focus-work-text-faint)]">{paragraph.paragraph_no}</span>
                   <span>{paragraph.text}</span>
                 </p>
               ))}
             </article>
 
-            <section className="rounded-2xl border border-white/10 bg-black/22 p-5">
-              <div className="text-sm text-white/50">
+            <section className="rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5">
+              <div className="text-sm text-[var(--focus-work-text-muted)]">
                 {item.article?.year} Text {item.article?.text_no}
               </div>
-              <h2 className="mt-3 text-lg font-semibold text-white">
+              <h2 className="mt-3 text-lg font-semibold text-[var(--focus-work-text)]">
                 {item.question.question_no}. {item.question.stem}
               </h2>
               <div className="mt-5 space-y-2">
                 {(Object.keys(item.question.options) as OptionKey[]).map((key) => (
-                  <label key={key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/8 px-3 py-2 text-sm text-white/75">
+                  <label key={key} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--focus-work-border)] px-3 py-2 text-sm text-[var(--focus-work-text)]">
                     <input
                       type="radio"
                       name={item.question?.question_id}
@@ -114,14 +114,14 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                       className="mt-1"
                     />
                     <span>
-                      <span className="mr-2 font-semibold text-white">{key}</span>
+                      <span className="mr-2 font-semibold text-[var(--focus-work-text)]">{key}</span>
                       {item.question?.options[key]}
                     </span>
                   </label>
                 ))}
               </div>
               {result ? (
-                <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
+                <div className="mt-5 rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] p-4 text-sm text-[var(--focus-work-text)]">
                   {result.is_correct ? '回答正确' : `回答错误，正确答案是 ${result.correct_option}`}
                 </div>
               ) : null}
@@ -139,7 +139,7 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                     type="button"
                     disabled={isPaused}
                     onClick={loadNext}
-                    className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/82 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-full border border-[var(--focus-work-border)] px-5 py-3 text-sm text-[var(--focus-work-text)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     下一题
                   </button>
@@ -149,7 +149,7 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
           </div>
         ) : null}
 
-        {!item ? <p className="text-sm text-white/55">复习题加载中...</p> : null}
+        {!item ? <p className="text-sm text-[var(--focus-work-text-muted)]">复习题加载中...</p> : null}
       </div>
     </div>
   );
