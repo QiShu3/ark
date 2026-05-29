@@ -226,11 +226,13 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const currentPhase = getActiveWorkflowPhase(workflowForMetrics);
   const phaseType = currentPhase?.phase_type ?? 'focus';
   const isFocus = phaseType === 'focus';
-  const activeColorText = isFocus ? 'text-blue-300' : 'text-orange-300';
-  const activeColorBg = isFocus ? 'bg-blue-400' : 'bg-orange-400';
-  const pulseBgStrong = isFocus ? 'bg-blue-300/85' : 'bg-orange-300/85';
-  const pulseBgMid = isFocus ? 'bg-blue-300/25' : 'bg-orange-300/25';
-  const pulseBgWeak = isFocus ? 'bg-blue-300/12' : 'bg-orange-300/12';
+  const activeColorText = isFocus
+    ? 'text-[var(--focus-work-blue-text)]'
+    : 'text-[var(--focus-work-amber-text)]';
+  const activeColorBg = 'bg-current';
+  const pulseBgStrong = 'bg-current/85';
+  const pulseBgMid = 'bg-current/25';
+  const pulseBgWeak = 'bg-current/12';
 
   const currentDuration = Math.max(0, Math.round(currentPhase?.duration ?? workflowForMetrics.phase_planned_duration ?? 0));
   const remaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
@@ -331,7 +333,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           data-testid="workflow-nav-pulse"
           data-phase={phaseType}
           aria-hidden="true"
-          className={`flex items-center gap-1.5 transition-transform duration-300 ${layoutMode === 'feedback' ? 'scale-110' : ''}`}
+          className={`flex items-center gap-1.5 transition-transform duration-300 ${layoutMode === 'feedback' ? 'scale-110' : ''} ${activeColorText}`}
         >
           <span className={`h-2 w-4 rounded-full ${pulseBgStrong} animate-[workflow-pulse_1.4s_ease-in-out_infinite]`} />
           <span className={`h-1.5 w-2.5 rounded-full ${pulseBgMid}`} />

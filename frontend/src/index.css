@@ -56,6 +56,12 @@
   --ark-danger: #f87171;
   --ark-input: #121826;
   --ark-panel: #151923;
+
+  /* Global status work colors */
+  --focus-work-blue-text: rgba(147, 197, 253, 0.95);
+  --focus-work-amber-text: rgba(252, 211, 77, 0.9);
+  --focus-work-amber-bg: rgba(252, 211, 77, 0.1);
+  --focus-work-amber-border: rgba(252, 211, 77, 0.2);
 }
 
 :root[data-theme="light"] {
@@ -78,6 +84,12 @@
   --ark-danger: #dc2626;
   --ark-input: rgba(226, 236, 248, 0.82);
   --ark-panel: rgba(239, 246, 255, 0.96);
+
+  /* Global status work colors - Light mode (high contrast) */
+  --focus-work-blue-text: #1d4ed8;
+  --focus-work-amber-text: #b45309;
+  --focus-work-amber-bg: rgba(180, 83, 9, 0.08);
+  --focus-work-amber-border: rgba(180, 83, 9, 0.24);
 }
 
 .ark-shell {
