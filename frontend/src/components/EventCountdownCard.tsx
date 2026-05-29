@@ -1743,7 +1743,7 @@ const EventCountdownCard: React.FC = () => {
             className="ark-modal flex h-[76vh] w-[760px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 bg-white/5">
+            <div className="h-14 border-b ark-border flex items-center justify-between px-5 bg-[var(--ark-surface-subtle)]">
               <h3 className="text-base font-semibold text-white">
                 {showCreateEditor ? '添加事件' : '事件总览'}
               </h3>
@@ -1813,7 +1813,7 @@ const EventCountdownCard: React.FC = () => {
                           type="button"
                           onClick={() => void handleDeleteSelectedTemplate()}
                           disabled={loadingTemplates || savingTemplate || deletingTemplate || !selectedTemplateId}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-400/20 bg-red-500/10 text-sm text-red-200 hover:bg-red-500/20 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          className="event-danger-button inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-400/20 bg-red-500/10 text-sm text-red-200 hover:bg-red-500/20 transition-colors disabled:cursor-not-allowed disabled:border-red-500/25 disabled:bg-red-500/10 disabled:text-slate-950"
                         >
                           <Trash2 size={16} aria-hidden="true" />
                           {deletingTemplate ? '删除中...' : '删除模板'}
@@ -1948,7 +1948,7 @@ const EventCountdownCard: React.FC = () => {
               <div
                 role="group"
                 aria-label="添加事件操作"
-                className="shrink-0 border-t border-white/10 bg-[#1a1a1a]/95 px-5 py-4"
+                className="shrink-0 border-t ark-border bg-[var(--ark-surface-strong)] px-5 py-4"
               >
                 <div className="flex justify-end gap-2">
                   <button

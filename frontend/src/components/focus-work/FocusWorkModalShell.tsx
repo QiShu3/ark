@@ -26,15 +26,15 @@ export default function FocusWorkModalShell({
   children,
 }: FocusWorkModalShellProps) {
   return (
-    <div className="fixed inset-x-0 bottom-0 top-16 z-40" aria-live="polite">
-      <div className="absolute inset-0 bg-black/58 backdrop-blur-[2px]" aria-hidden="true" />
+    <div className="ark-focus-work-shell fixed inset-x-0 bottom-0 top-16 z-[90]" aria-live="polite">
+      <div className="ark-focus-work-backdrop absolute inset-0 backdrop-blur-[2px]" aria-hidden="true" />
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="focus-work-modal-title"
-        className="absolute left-1/2 top-1/2 flex h-[calc((100vh-4rem)*0.9)] w-[90vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[2.25rem] border border-white/14 bg-[#080b10]/95 shadow-[0_28px_100px_rgba(0,0,0,0.55)]"
+        className="ark-focus-work-dialog absolute left-1/2 top-1/2 flex h-[calc((100vh-4rem)*0.9)] w-[90vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[2.25rem] border shadow-[0_28px_100px_rgba(0,0,0,0.55)]"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-white/10 bg-white/[0.04] px-6 py-4">
+        <header className="ark-focus-work-header flex items-center justify-between gap-4 border-b px-6 py-4">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.24em] text-white/38">{subtitle}</div>
             <h2 id="focus-work-modal-title" className="mt-1 truncate text-xl font-semibold text-white">
@@ -87,8 +87,8 @@ export default function FocusWorkModalShell({
             {children}
           </div>
           {isPaused ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 backdrop-blur-sm">
-              <div className="w-[min(28rem,92vw)] rounded-[2rem] border border-white/12 bg-[#0c1016]/92 p-8 text-center shadow-2xl">
+            <div className="ark-focus-work-pause-backdrop absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm">
+              <div className="ark-focus-work-pause-card w-[min(28rem,92vw)] rounded-[2rem] border p-8 text-center shadow-2xl">
                 <div className="text-xs uppercase tracking-[0.24em] text-white/35">Paused</div>
                 <h3 className="mt-4 text-3xl font-semibold text-white">专注已暂停</h3>
                 <p className="mt-3 text-sm leading-6 text-white/60">继续后会从当前阶段接着计时，暂停期间不会提交业务动作。</p>
