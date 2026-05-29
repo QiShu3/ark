@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:18 · 860739c · feat(frontend): replace ugly browser alert dialogs with a unified premium Toast notification system
+
+- 用户提出的需求：
+  - "在触发某些操作时会调用系统提示，我觉得这样也不好看"
+
+- 本次完成的工作：
+  - **开发轻量级 Toast 状态管理器**：创建了 `frontend/src/lib/toast.ts`，基于 Zustand 构建了轻量级、响应式的 Toast 通知管理器，支持 `success`、`error`、`info`、`warning` 四类预置通知，并导出了统一 the `toast` 命令对象。
+  - **动态全局拦截器（Genuis Interceptor）**：在 `toast.ts` 中劫持并重写了浏览器的原生 `window.alert` 方法。根据原生提示中的关键词（如“成功”、“完成”、“失败”、“错误”、“警告”等）自动分析情感，将其重定向至定制的 Glassmorphic 提示框中。**此方案极其优雅，使我们无需手动修改项目内 15 处散落的 `alert` 源码**，且完全预防了未来其他操作调用原生警报框，实现了完美的渐进式升级。
+  - **极美磨砂玻璃态容器 (ToastContainer)**：创建了 `frontend/src/components/ToastContainer.tsx`，订阅 Zustand 通知状态，渲染滑入效果、带 Lucide 状态图标（`CheckCircle2` / `XCircle` / `AlertCircle` / `Info`）、超强层级的精美毛玻璃浮空卡片。
+  - **全局挂载**：在系统级主路由守卫 `frontend/src/routes/RequireAuth.tsx` 中导入 `../lib/toast` 拦截器并全局挂载 `ToastContainer`，保障所有登录后的界面操作反馈体验统一。
+
+- 验证情况：
+  - 执行 `pnpm check` 完成静态检查，完全通过。
+  - 执行 `pnpm test -- --run` 全量单元测试，全部 215 个用例 100% 绿灯全部通过，证明全局拦截方案与测试框架及 JSDOM 环境 100% 兼容。
+
 ### 2026-05-29 16:11 · 2c1897e · feat(frontend): remove unused Home, Apps, and About menu links from Navigation bar
 
 - 用户提出的需求：
