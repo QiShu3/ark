@@ -1790,12 +1790,12 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   </div>
                 </div>
                 {eventAchievements.latest_unlocked[0] ? (
-                  <div className="rounded-lg border border-emerald-300/15 bg-emerald-400/10 px-3 py-2 text-emerald-100">
+                  <div className="rounded-lg border border-emerald-300/15 bg-emerald-400/10 px-3 py-2 text-emerald-300">
                     最近解锁：{eventAchievements.latest_unlocked[0].title}
                   </div>
                 ) : null}
                 {eventAchievements.upcoming[0] ? (
-                  <div className="rounded-lg border border-blue-300/15 bg-blue-400/10 px-3 py-2 text-blue-100">
+                  <div className="rounded-lg border border-blue-300/15 bg-blue-400/10 px-3 py-2 text-blue-300">
                     下一步：{eventAchievements.upcoming[0].title}
                     {eventAchievements.upcoming[0].progress_text ? ` · ${eventAchievements.upcoming[0].progress_text}` : ''}
                   </div>
