@@ -162,9 +162,14 @@ const Navigation: React.FC = () => {
           <BookOpen size={18} aria-hidden="true" />
         </button>
       </div>
-      <div className="flex-1 flex justify-center px-6">
-        {workflowSnapshot ? <WorkflowNavProgress workflow={workflowSnapshot} /> : null}
-      </div>
+      <div className="flex-1" />
+      {workflowSnapshot ? (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none hidden md:block">
+          <div className="pointer-events-auto">
+            <WorkflowNavProgress workflow={workflowSnapshot} />
+          </div>
+        </div>
+      ) : null}
       <div className="ml-auto flex items-center gap-6">
         <div className="flex gap-4">
           <button
