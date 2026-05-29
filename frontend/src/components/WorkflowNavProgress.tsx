@@ -7,6 +7,7 @@ import {
   WorkflowSnapshot,
 } from './workflowProgress';
 import { apiJson } from '../lib/api';
+import { Coffee, Flame, Sparkles } from 'lucide-react';
 
 type WorkflowNavProgressProps = {
   workflow: WorkflowSnapshot;
@@ -229,20 +230,20 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const activeColorText = isFocus
     ? 'text-[var(--focus-work-blue-text)]'
     : 'text-[var(--focus-work-amber-text)]';
-  const activeBgClass = isFocus
-    ? 'bg-[var(--focus-work-blue-bg)]'
-    : 'bg-[var(--focus-work-amber-bg)]';
-  const activeBorderClass = isFocus
-    ? 'border-[var(--focus-work-blue-border)]'
-    : 'border-[var(--focus-work-amber-border)]';
-  const activeShadowClass = isFocus
-    ? 'shadow-[0_0_20px_rgba(147,197,253,0.15)] dark:shadow-[0_0_20px_rgba(147,197,253,0.06)]'
-    : 'shadow-[0_0_20px_rgba(245,158,11,0.15)] dark:shadow-[0_0_20px_rgba(245,158,11,0.06)]';
+  const activeBgClass = 'bg-white/95 dark:bg-[var(--ark-surface-strong)]';
+  const activeBorderClass = 'border border-slate-900/10 dark:border-ark-border/60 ring-1 ring-slate-900/5 dark:ring-white/5';
+  const activeShadowClass = 'shadow-[0_12px_30px_-4px_rgba(15,23,42,0.12)] dark:shadow-[0_12px_30px_-4px_rgba(0,0,0,0.5)]';
 
   const activeColorBg = 'bg-current';
   const pulseBgStrong = 'bg-current/85';
   const pulseBgMid = 'bg-current/25';
   const pulseBgWeak = 'bg-current/12';
+
+  const IconComponent = workflowForMetrics.pending_confirmation || workflowForMetrics.pending_task_selection
+    ? Sparkles
+    : isFocus
+      ? Flame
+      : Coffee;
 
   const currentDuration = Math.max(0, Math.round(currentPhase?.duration ?? workflowForMetrics.phase_planned_duration ?? 0));
   const remaining = workflowForMetrics.pending_confirmation ? 0 : Math.max(0, Math.round(workflowForMetrics.remaining_seconds ?? 0));
@@ -311,7 +312,10 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       }}
       aria-label={`工作流进度：${titleText}，${ariaText}`}
     >
-      <span className={`h-2.5 w-2.5 rounded-full ${activeColorBg} shadow-[0_0_12px_currentColor] ${activeColorText}`} />
+      <IconComponent
+        size={15}
+        className={`shrink-0 ${activeColorText} drop-shadow-[0_0_3px_currentColor] animate-[workflow-pulse_2s_ease-in-out_infinite]`}
+      />
 
       <div className="min-w-0 flex-1">
         <p className="ark-font-display text-[9px] font-bold uppercase tracking-[0.2em] text-ark-text-faint">Current</p>
@@ -343,7 +347,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           data-testid="workflow-nav-pulse"
           data-phase={phaseType}
           aria-hidden="true"
-          className={`flex items-center gap-1.5 transition-transform duration-300 ${layoutMode === 'feedback' ? 'scale-110' : ''} ${activeColorText}`}
+          className="sr-only"
         >
           <span className={`h-2 w-4 rounded-full ${pulseBgStrong} animate-[workflow-pulse_1.4s_ease-in-out_infinite]`} />
           <span className={`h-1.5 w-2.5 rounded-full ${pulseBgMid}`} />
