@@ -1628,7 +1628,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         onClick={onClose}
       >
         <div
-          className="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-[#0d0f16] text-ark-text shadow-2xl"
+          className="ark-modal flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
           onClick={(clickEvent) => clickEvent.stopPropagation()}
         >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
@@ -1817,7 +1817,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             role="dialog"
             aria-modal="true"
             aria-label="应用配置"
-            className="w-[560px] max-w-[94vw] max-h-[80vh] flex flex-col overflow-hidden rounded-2xl border border-ark-border bg-[#0d0f16] text-ark-text shadow-2xl"
+            className="ark-modal w-[560px] max-w-[94vw] max-h-[80vh] flex flex-col overflow-hidden rounded-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
