@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:57 · 1c6d962 · feat(workflow): implement manual skip direct phase routing and add End Break button in navbar capsule
+
+- 用户提出的需求：
+  - "我希望在 工作流状态进度条 的休息阶段时，有一个 结束休息 的button，功能和已有的结束本轮阶段的功能一致，可以直接调用这个功能，作用是结束休息阶段并跳到下一个专注阶段。"
+  - "我想更改之前的逻辑，如果用户点击了 结束本轮阶段 button ，它是直接终结计时并跳入到下一阶段，如果没有点击就照旧"
+
+- 本次完成的工作：
+  - **后端：实现手动跳过一键流转**：在 `backend/routes/todo/routes.py` 中重构了 `skip_focus_workflow_phase` API，当用户主动点击“结束本轮阶段”或“结束休息”触发 skip_phase 时，后端直接调用 `_advance_focus_workflow_to_next_phase` 核心方法推进至下一阶段，完美跳过缓冲期；而自然到期由 `_sync_active_focus_workflow` 同调控制，依然维持待确认（pending_confirmation）状态（照旧）。
+  - **前端：太空舱新增“结束休息”按钮**：在 `frontend/src/components/WorkflowNavProgress.tsx` 中，引入了 `skipping` 状态与跳过逻辑。当太空舱进度条处于“休息阶段”时，在剩余时间右侧优雅渲染一个高颜值、半透明毛玻璃微渐变色「结束休息」按钮。点击它后直接发送 skip_phase 请求，并触发 `ark:reload-focus` 全局重载。
+  - **测试与验证**：在 `WorkflowNavProgress.test.tsx` 中追加了专门针对“结束休息”按钮渲染、可点击性及 POST skip_phase 的高保真单元测试用例。全量 pytest 后端测试及 vitest 前端测试 100% 顺利全部绿灯通过。
+
+- 验证情况：
+  - 执行 `pnpm test` 和 `uv run pytest`，全量单元测试 100% 成功通过，没有任何功能阻碍。
+
 ### 2026-05-25 10:33 · 9bad384 · fix(backend): initialize events table before tasks table references it
 
 - 用户提出的需求：
