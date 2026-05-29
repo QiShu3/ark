@@ -46,6 +46,7 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const [endTime, setEndTime] = React.useState<number | null>(null);
   const [phaseStartTime, setPhaseStartTime] = React.useState<number | null>(null);
   const [confirming, setConfirming] = React.useState(false);
+  const [skipping, setSkipping] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
   const [feedbackText, setFeedbackText] = React.useState<string | null>(null);
   const previousPhaseRef = React.useRef<{ state: WorkflowSnapshot['state']; index: number | null } | null>(null);
@@ -69,6 +70,21 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
       alert('阶段确认失败');
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleSkipPhase = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (skipping) return;
+    setSkipping(true);
+    try {
+      await apiJson('/todo/focus/workflow/skip_phase', { method: 'POST' });
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to skip focus workflow phase', err);
+      alert('结束休息失败');
+    } finally {
+      setSkipping(false);
     }
   };
 
@@ -356,9 +372,21 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           {confirming ? '确认中...' : '▶ 继续'}
         </button>
       ) : (
-        <span className="ark-font-mono text-sm font-bold whitespace-nowrap text-ark-text">
-          {timerText}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="ark-font-mono text-sm font-bold whitespace-nowrap text-ark-text">
+            {timerText}
+          </span>
+          {workflowForMetrics.state === 'break' && (
+            <button
+              type="button"
+              onClick={handleSkipPhase}
+              disabled={skipping}
+              className="text-[10px] font-bold whitespace-nowrap px-2.5 py-1 rounded-full bg-current/10 border border-current/25 text-current hover:bg-current/20 active:scale-95 hover:scale-105 transition-all duration-200 shadow-sm ml-2"
+            >
+              {skipping ? '请稍候...' : '结束休息'}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

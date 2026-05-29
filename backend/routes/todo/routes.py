@@ -3058,7 +3058,7 @@ async def skip_focus_workflow_phase(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
-    """跳过当前阶段的剩余时间，直接将其置为待确认状态。"""
+    """跳过当前阶段的剩余时间，直接推进到下一阶段。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -3081,15 +3081,6 @@ async def skip_focus_workflow_phase(
             if bool(row["pending_confirmation"]):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段已结束，请确认流转")
 
-            # 将其强制置为待确认
-            await conn.execute(
-                """
-                UPDATE focus_workflows
-                SET pending_confirmation = TRUE, updated_at = NOW()
-                WHERE id = $1
-                """,
-                row["id"],
-            )
             current_phase_type = str(row["current_phase"])
             if current_phase_type == "focus":
                 await _close_open_focus_log(conn, int(user.id))
@@ -3100,25 +3091,8 @@ async def skip_focus_workflow_phase(
                     progress_snapshot={},
                 )
 
-            # 重新获取以返回最新状态
-            updated_row = await conn.fetchrow(
-                """
-                SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
-                       focus_duration, break_duration, current_phase, phase_started_at,
-                       phase_planned_duration, pending_confirmation, pending_task_selection,
-                       active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
-                FROM focus_workflows
-                WHERE id = $1
-                """,
-                row["id"],
-            )
-            task_row = await conn.fetchrow(
-                "SELECT title FROM tasks WHERE id = $1 AND user_id = $2",
-                updated_row["task_id"],
-                int(user.id),
-            )
-    return _row_to_focus_workflow(updated_row, task_title=str(task_row["title"]) if task_row else None)
+            # 直接推进到下一阶段，跳过手动待确认状态
+            return await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
 
 
 @router.post("/focus/workflow/confirm", response_model=FocusWorkflowOut)

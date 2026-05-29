@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 
 import WorkflowNavProgress from '../WorkflowNavProgress';
 import type { WorkflowSnapshot } from '../workflowProgress';
+import { apiJson } from '../../lib/api';
 
 vi.mock('../../lib/api', () => ({
   apiJson: vi.fn(),
@@ -259,6 +260,35 @@ describe('WorkflowNavProgress', () => {
     });
 
     expect(reloadSpy).toHaveBeenCalledTimes(1);
+    window.removeEventListener('ark:reload-focus', reloadSpy);
+  });
+
+  it('renders End Break button during break phase and calls skip_phase endpoint when clicked', async () => {
+    const user = userEvent.setup();
+    const reloadSpy = vi.fn();
+    window.addEventListener('ark:reload-focus', reloadSpy);
+
+    const mockApiJson = vi.mocked(apiJson);
+    mockApiJson.mockResolvedValueOnce({ ok: true });
+
+    render(
+      <WorkflowNavProgress
+        workflow={makeWorkflow({
+          state: 'break',
+          current_phase_index: 1,
+          remaining_seconds: 300,
+        })}
+      />,
+    );
+
+    const endBreakBtn = screen.getByRole('button', { name: '结束休息' });
+    expect(endBreakBtn).toBeInTheDocument();
+
+    await user.click(endBreakBtn);
+
+    expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflow/skip_phase', { method: 'POST' });
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+
     window.removeEventListener('ark:reload-focus', reloadSpy);
   });
 });
