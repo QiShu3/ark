@@ -171,25 +171,7 @@ const Navigation: React.FC = () => {
         </div>
       ) : null}
       <div className="ml-auto flex items-center gap-6">
-        <div className="flex gap-4">
-          <button
-            type="button"
-            disabled={focusNavigationLocked}
-            className="text-sm transition-colors hover:text-[var(--ark-accent)] disabled:cursor-not-allowed disabled:text-[var(--ark-text-faint)] disabled:hover:text-[var(--ark-text-faint)]"
-            onClick={() => navigateUnlessLocked('/')}
-          >
-            首页
-          </button>
-          <button
-            type="button"
-            disabled={focusNavigationLocked}
-            className="text-sm transition-colors hover:text-[var(--ark-accent)] disabled:cursor-not-allowed disabled:text-[var(--ark-text-faint)] disabled:hover:text-[var(--ark-text-faint)]"
-            onClick={() => navigateUnlessLocked('/apps')}
-          >
-            应用
-          </button>
-          <button type="button" disabled className="text-sm hover:text-gray-300 cursor-not-allowed opacity-70">关于</button>
-        </div>
+
 
         {/* Check-in Icon */}
         {user && checkInState && (

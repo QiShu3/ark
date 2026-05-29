@@ -77,15 +77,9 @@ describe('Navigation', () => {
 
     renderNavigation();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '首页' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: '应用' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '关于' })).toBeDisabled();
-    expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled());
     expect(screen.getByLabelText('重新进入首次体验引导')).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: '首页' }));
-    await user.click(screen.getByRole('button', { name: '应用' }));
-    await user.click(screen.getByRole('button', { name: '关于' }));
     await user.click(screen.getByLabelText('打开导航栏日历'));
     await user.click(screen.getByLabelText('重新进入首次体验引导'));
 
@@ -111,9 +105,7 @@ describe('Navigation', () => {
 
     renderNavigation();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '首页' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: '应用' })).toBeDisabled();
-    expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('打开导航栏日历')).toBeDisabled());
   });
 
   it('clears the current session and redirects to login when logging out', async () => {
