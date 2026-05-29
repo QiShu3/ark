@@ -348,6 +348,25 @@
   --focus-work-text-muted: rgba(255, 255, 255, 0.68);
   --focus-work-text-faint: rgba(255, 255, 255, 0.42);
   --focus-work-shadow: 0 28px 100px rgba(0, 0, 0, 0.55);
+
+  /* Component specific variables for status badges and buttons - Dark Mode */
+  --focus-work-amber-bg: rgba(252, 211, 77, 0.1);
+  --focus-work-amber-border: rgba(252, 211, 77, 0.2);
+  --focus-work-amber-text: rgba(252, 211, 77, 0.9);
+
+  --focus-work-sky-bg: rgba(125, 211, 252, 0.1);
+  --focus-work-sky-border: rgba(125, 211, 252, 0.2);
+  --focus-work-sky-text: rgba(125, 211, 252, 0.9);
+
+  --focus-work-emerald-bg: rgba(110, 231, 183, 0.1);
+  --focus-work-emerald-border: rgba(110, 231, 183, 0.2);
+  --focus-work-emerald-text: rgba(110, 231, 183, 0.9);
+
+  --focus-work-blue-bg: rgba(147, 197, 253, 0.1);
+  --focus-work-blue-bg-hover: rgba(147, 197, 253, 0.16);
+  --focus-work-blue-border: rgba(147, 197, 253, 0.2);
+  --focus-work-blue-border-hover: rgba(147, 197, 253, 0.32);
+  --focus-work-blue-text: rgba(147, 197, 253, 0.95);
 }
 
 :root[data-theme="light"] .ark-focus-work-shell {
@@ -360,10 +379,30 @@
   --focus-work-border: rgba(51, 65, 85, 0.16);
   --focus-work-border-strong: rgba(37, 99, 235, 0.28);
   --focus-work-text: rgba(15, 23, 42, 0.94);
-  --focus-work-text-muted: rgba(51, 65, 85, 0.74);
-  --focus-work-text-faint: rgba(71, 85, 105, 0.56);
+  --focus-work-text-muted: rgba(30, 41, 59, 0.82);
+  --focus-work-text-faint: rgba(47, 55, 70, 0.76);
   --focus-work-shadow: 0 28px 100px rgba(51, 65, 85, 0.22);
+
+  /* Component specific variables for status badges and buttons - Light Mode (High Contrast, Rich Tones) */
+  --focus-work-amber-bg: rgba(180, 83, 9, 0.08);
+  --focus-work-amber-border: rgba(180, 83, 9, 0.24);
+  --focus-work-amber-text: #b45309;
+
+  --focus-work-sky-bg: rgba(3, 105, 161, 0.08);
+  --focus-work-sky-border: rgba(3, 105, 161, 0.24);
+  --focus-work-sky-text: #0369a1;
+
+  --focus-work-emerald-bg: rgba(4, 120, 87, 0.08);
+  --focus-work-emerald-border: rgba(4, 120, 87, 0.24);
+  --focus-work-emerald-text: #047857;
+
+  --focus-work-blue-bg: rgba(29, 78, 216, 0.08);
+  --focus-work-blue-bg-hover: rgba(29, 78, 216, 0.14);
+  --focus-work-blue-border: rgba(29, 78, 216, 0.24);
+  --focus-work-blue-border-hover: rgba(29, 78, 216, 0.38);
+  --focus-work-blue-text: #1d4ed8;
 }
+
 
 .ark-focus-work-backdrop {
   background: var(--focus-work-backdrop);

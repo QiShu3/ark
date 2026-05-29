@@ -43,15 +43,15 @@ export default function FocusWorkModalShell({
           </div>
           <div className="flex items-center gap-3">
             {!recordFocus ? (
-              <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs text-amber-100">
+              <span className="rounded-full border border-[var(--focus-work-amber-border)] bg-[var(--focus-work-amber-bg)] px-3 py-1 text-xs text-[var(--focus-work-amber-text)]">
                 本次工作将不记录在专注时间中
               </span>
             ) : isPaused ? (
-              <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs text-sky-100">
+              <span className="rounded-full border border-[var(--focus-work-sky-border)] bg-[var(--focus-work-sky-bg)] px-3 py-1 text-xs text-[var(--focus-work-sky-text)]">
                 已暂停
               </span>
             ) : (
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
+              <span className="rounded-full border border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] px-3 py-1 text-xs text-[var(--focus-work-emerald-text)]">
                 正在记录专注
               </span>
             )}
@@ -76,7 +76,7 @@ export default function FocusWorkModalShell({
               onClick={onCompleteRound}
               disabled={busy}
               data-onboarding-anchor="focus-work-complete-round"
-              className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm text-blue-100 transition hover:border-blue-300/32 hover:bg-blue-300/16 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-4 py-2 text-sm text-[var(--focus-work-blue-text)] transition hover:border-[var(--focus-work-blue-border-hover)] hover:bg-[var(--focus-work-blue-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               结束本轮专注
             </button>
