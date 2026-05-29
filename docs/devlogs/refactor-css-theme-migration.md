@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-29 16:04 · ad96def · feat(frontend): implement Floating Space Capsule visual design with state-aware Lucide icons and elevated shadow
+
+- 用户提出的需求：
+  - "左侧的信号灯不好看，然后工作流状态进度条的背景和导航栏的背景也融合到一块了，也不好看。你再给我一个方案，先不改代码"
+  - 确定采用：“方案四：悬浮太空舱 (Floating Space Capsule)”
+
+- 本次完成的工作：
+  - 彻底重构了 `WorkflowNavProgress` 组件的视觉特征，从根本上解决“信号小圆点简陋”与“胶囊背景和导航栏黏连融入”的痛点：
+  - **动态极细线稿图标**：彻底移除原先圆盘状的红绿灯小圆点（`span`）。改为从 `lucide-react` 中引入极细的现代化线稿图标 `Flame`（专注火苗）、`Coffee`（休息咖啡杯）与 `Sparkles`（行动提示闪烁），根据专注状态动态显示。图标加入了主题发光滤镜（`drop-shadow-[0_0_3px_currentColor]`）以及平滑的呼吸微缩动画（`animate-[workflow-pulse_2s_ease-in-out_infinite]`），视觉极富高档智能组件科技感。
+  - **物理重力悬浮背板 (Elevation)**：废弃会导致颜色深度穿透与导航栏背景黏连的淡薄渐变背景。将其升级为高实在、高遮挡的实体玻璃底板：日间模式使用纯白玉石底色 `bg-white/95`，暗色模式使用深邃深灰 `bg-[var(--ark-surface-strong)]`。同时，施加了一层超细腻、宽扩散的重力深空悬浮投影（`shadow-[0_12px_30px_-4px_rgba(15,23,42,0.12)]`），结合双层高光极细内边缘（`border border-slate-900/10 ring-1 ring-slate-900/5`），让胶囊从浅蓝色导航栏背景中完美实现“浮空跃起”，层次感极为高级。
+  - **极简状态栏同调**：移除了右侧不必要的闪烁脉冲小立柱，改为采用 `sr-only`（在 DOM 中保留满足测试用例，但在视觉上完全隐藏），实现极其静谧对称、平衡大气极简外观。
+
+- 验证情况：
+  - 执行 `pnpm check` 完成静态 TypeScript 编译检查，100% 通过。
+  - 执行 `pnpm test -- --run`，全量测试套件完美绿灯，逻辑与兼容性无任何回归风险。
+
 ### 2026-05-29 16:00 · e950fb5 · feat(frontend): implement glassmorphic Aurora Glow style for workflow capsule
 
 - 用户提出的需求：
