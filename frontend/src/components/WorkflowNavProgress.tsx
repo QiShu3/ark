@@ -230,9 +230,9 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const activeColorText = isFocus
     ? 'text-[var(--focus-work-blue-text)]'
     : 'text-[var(--focus-work-amber-text)]';
-  const activeBgClass = 'bg-white/95 dark:bg-[var(--ark-surface-strong)]';
-  const activeBorderClass = 'border border-slate-900/10 dark:border-ark-border/60 ring-1 ring-slate-900/5 dark:ring-white/5';
-  const activeShadowClass = 'shadow-[0_12px_30px_-4px_rgba(15,23,42,0.12)] dark:shadow-[0_12px_30px_-4px_rgba(0,0,0,0.5)]';
+  const activeBgClass = 'bg-[var(--workflow-capsule-bg)]';
+  const activeBorderClass = 'border border-[var(--workflow-capsule-border)] ring-1 ring-[var(--workflow-capsule-ring)]';
+  const activeShadowClass = 'shadow-[0_12px_30px_-4px_var(--workflow-capsule-shadow)]';
 
   const activeColorBg = 'bg-current';
   const pulseBgStrong = 'bg-current/85';
