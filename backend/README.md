@@ -1,6 +1,6 @@
 # Ark Backend
 
-FastAPI 后端，用于把前端聊天请求转发到 DeepSeek（OpenAI 兼容）接口。
+FastAPI 后端，提供用户注册/登录、邮箱验证码验证、重置密码、任务与个性化配置接口。
 
 ## 启动
 
@@ -15,10 +15,23 @@ uv run uvicorn main:app --reload --port 8000
 - `DATABASE_URL`：PostgreSQL 连接串
 - `AUTH_TOKEN_TTL_SECONDS`（可选）：访问令牌有效期，默认 86400
 - `AUTH_PASSWORD_ITERATIONS`（可选）：PBKDF2 迭代次数，默认 210000
+- `AUTH_EMAIL_TOKEN_TTL_SECONDS`（可选）：邮箱验证码/重置密码链接有效期，默认 1800
+- `AUTH_EMAIL_DELIVERY_MODE`（可选）：`log` / `tencent` / `disabled`，未配置腾讯云密钥时默认 `log`
+- `TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY`：腾讯云 CAM 密钥
+- `TENCENT_SES_REGION`：邮件推送地域，默认 `ap-guangzhou`
+- `TENCENT_SES_FROM_EMAIL`：发信地址，例如 `ark@strangetalking.xin`
+- `TENCENT_SES_VERIFY_TEMPLATE_ID`：邮箱验证模板 ID
+- `TENCENT_SES_RESET_TEMPLATE_ID`：重置密码模板 ID
+
+邮箱验证模板变量使用 `{{verify_code}}`，重置密码模板变量使用 `{{reset_token}}`。
 
 接口：
 - `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/verify-email`
+- `POST /auth/verification/resend`
+- `POST /auth/password/forgot`
+- `POST /auth/password/reset`
 - `GET /auth/me`（Bearer token）
 - `GET /auth/users`（管理员返回全部；非管理员仅返回自己）
 - `POST /auth/logout`（Bearer token，可选）

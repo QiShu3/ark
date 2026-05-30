@@ -4,6 +4,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 
 import App from './App';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import AppCenter from './pages/AppCenter';
 import ERCHome from './pages/ERC/Home';
 import ERCLibrary from './pages/ERC/Library';
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
     <HashRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<RequireAuth />}>
           <Route path="/" element={<App />} />
           <Route path="/apps" element={<AppCenter />} />

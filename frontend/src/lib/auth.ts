@@ -5,6 +5,7 @@ export type User = {
   id: number;
   username: string;
   email: string | null;
+  email_verified_at?: string | null;
   is_active: boolean;
   is_admin: boolean;
   created_at: string;
