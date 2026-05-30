@@ -31,7 +31,7 @@ import {
   type EventArrangementAppointmentInput,
 } from '../lib/events/arrangementApi';
 import { fetchVocabDecks, initializeVocabAppTask } from '../lib/vocab/api';
-import { initializeERCAppTask, initializeERCPracticeAppTask } from '../lib/erc/api';
+import { saveEventERCConfig, type ERCPracticeConfigInput, type ERCReviewConfigInput } from '../lib/erc/configSync';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import type { VocabDeck } from '../lib/vocab/types';
@@ -1038,6 +1038,12 @@ const EventCountdownCard: React.FC = () => {
       const shouldPromoteToPrimary = workflowDrafts.length > 0 && !payload.is_primary && primaryEvent === null;
       const createdEvent = await createEvent(payload);
       const workflowTaskIdMap = new Map<string, string>();
+      const ercApps: {
+        practice?: ERCPracticeConfigInput;
+        practiceClientId?: string;
+        review?: ERCReviewConfigInput;
+        reviewClientId?: string;
+      } = {};
 
       for (const app of configuredApps) {
         if (app.appType === 'vocab_today') {
@@ -1050,22 +1056,34 @@ const EventCountdownCard: React.FC = () => {
           });
           if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
         } else if (app.appType === 'erc_practice') {
-          const appTaskStatus = await initializeERCPracticeAppTask({
+          ercApps.practice = {
             daily_article_target: app.config.dailyArticleTarget!,
             default_focus_duration: app.config.defaultFocusDuration,
             add_to_today_plan: app.config.addToTodayPlan,
-            event_id: createdEvent.id,
-          });
-          if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
+          };
+          ercApps.practiceClientId = app.clientId;
         } else if (app.appType === 'erc_review') {
-          const appTaskStatus = await initializeERCAppTask({
+          ercApps.review = {
             review_scope: app.config.reviewScope!,
             daily_question_target: app.config.dailyQuestionTarget!,
             default_focus_duration: app.config.defaultFocusDuration,
             add_to_today_plan: app.config.addToTodayPlan,
-            event_id: createdEvent.id,
-          });
-          if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
+          };
+          ercApps.reviewClientId = app.clientId;
+        }
+      }
+
+      if (ercApps.practice || ercApps.review) {
+        const ercStatus = await saveEventERCConfig({
+          eventId: createdEvent.id,
+          practice: ercApps.practice,
+          review: ercApps.review,
+        });
+        if (ercApps.practiceClientId && ercStatus.practice.task_id) {
+          workflowTaskIdMap.set(ercApps.practiceClientId, ercStatus.practice.task_id);
+        }
+        if (ercApps.reviewClientId && ercStatus.review.task_id) {
+          workflowTaskIdMap.set(ercApps.reviewClientId, ercStatus.review.task_id);
         }
       }
 
@@ -2066,7 +2084,6 @@ const EventCountdownCard: React.FC = () => {
                       <h4 className="text-sm font-medium text-ark-text">{category}</h4>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {categoryTemplates.map((template) => (
-                          /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */
                           <article
                             key={template.id}
                             role="button"

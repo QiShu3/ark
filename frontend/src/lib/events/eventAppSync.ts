@@ -1,7 +1,7 @@
 import { getEventWorkbench } from './api';
 import { deleteEventArrangementTask } from './arrangementApi';
 import { initializeVocabAppTask } from '../vocab/api';
-import { initializeERCAppTask, initializeERCPracticeAppTask } from '../erc/api';
+import { saveEventERCConfig, type ERCPracticeConfigInput, type ERCReviewConfigInput } from '../erc/configSync';
 
 /**
  * Activates passive sub-app configuration tasks saved under a non-primary event
@@ -13,6 +13,11 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
     const tempAppTasks = workbench.created_tasks.filter(
       (task) => task.app_task_type
     );
+    const ercConfigs: {
+      practice?: ERCPracticeConfigInput;
+      review?: ERCReviewConfigInput;
+      taskIds: string[];
+    } = { taskIds: [] };
 
     for (const task of tempAppTasks) {
       if (!task.content) continue;
@@ -29,26 +34,43 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
             event_id: eventId,
           });
         } else if (appType === 'erc_practice') {
-          await initializeERCPracticeAppTask({
+          ercConfigs.practice = {
             daily_article_target: config.dailyArticleTarget,
             default_focus_duration: config.defaultFocusDuration,
             add_to_today_plan: config.addToTodayPlan,
-            event_id: eventId,
-          });
+          };
+          ercConfigs.taskIds.push(task.id);
+          continue;
         } else if (appType === 'erc_review') {
-          await initializeERCAppTask({
+          ercConfigs.review = {
             review_scope: config.reviewScope,
             daily_question_target: config.dailyQuestionTarget,
             default_focus_duration: config.defaultFocusDuration,
             add_to_today_plan: config.addToTodayPlan,
-            event_id: eventId,
-          });
+          };
+          ercConfigs.taskIds.push(task.id);
+          continue;
         }
 
         // Clean up the temporary passive task from the database
         await deleteEventArrangementTask(task.id);
       } catch (err) {
         console.error('Failed to activate sub-app task', task.title, err);
+      }
+    }
+
+    if (ercConfigs.practice || ercConfigs.review) {
+      try {
+        await saveEventERCConfig({
+          eventId,
+          practice: ercConfigs.practice,
+          review: ercConfigs.review,
+        });
+        for (const taskId of ercConfigs.taskIds) {
+          await deleteEventArrangementTask(taskId);
+        }
+      } catch (err) {
+        console.error('Failed to activate ERC app config', err);
       }
     }
   } catch (err) {

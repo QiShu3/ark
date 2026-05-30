@@ -102,23 +102,29 @@ async def _get_active_app_task_config(
     app_id: str,
     app_task_type: str,
     event_id: UUID | None,
+    include_disabled: bool = False,
 ) -> asyncpg.Record | dict[str, Any] | None:
+    status_filter = "status IN ('active', 'disabled')" if include_disabled else "status = 'active'"
     if event_id is None:
         return await conn.fetchrow(
-            """
+            f"""
             SELECT id, user_id, event_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
             FROM app_task_configs
-            WHERE user_id = $1 AND app_id = $2 AND app_task_type = $3 AND status = 'active' AND event_id IS NULL
+            WHERE user_id = $1 AND app_id = $2 AND app_task_type = $3 AND {status_filter} AND event_id IS NULL
+            ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, updated_at DESC
+            LIMIT 1
             """,
             user_id,
             app_id,
             app_task_type,
         )
     return await conn.fetchrow(
-        """
+        f"""
         SELECT id, user_id, event_id, app_id, app_task_type, config, status, created_task_id, created_at, updated_at
         FROM app_task_configs
-        WHERE user_id = $1 AND event_id = $2 AND app_id = $3 AND app_task_type = $4 AND status = 'active'
+        WHERE user_id = $1 AND event_id = $2 AND app_id = $3 AND app_task_type = $4 AND {status_filter}
+        ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, updated_at DESC
+        LIMIT 1
         """,
         user_id,
         event_id,
@@ -231,7 +237,7 @@ async def _create_or_update_managed_app_task(
             weekday_only = EXCLUDED.weekday_only,
             time_inherits_from_event = EXCLUDED.time_inherits_from_event,
             time_overridden = EXCLUDED.time_overridden,
-            manually_scheduled_for_today = EXCLUDED.manually_scheduled_for_today,
+            manually_scheduled_for_today = CASE WHEN tasks.manually_scheduled_for_today THEN TRUE ELSE EXCLUDED.manually_scheduled_for_today END,
             task_type = EXCLUDED.task_type,
             start_date = EXCLUDED.start_date,
             due_date = EXCLUDED.due_date,

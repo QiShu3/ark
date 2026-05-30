@@ -6,6 +6,8 @@ import type {
   ERCArticleDetail,
   ERCArticleListItem,
   ERCArticleSubmitResult,
+  ERCConfigSavePayload,
+  ERCConfigStatus,
   ERCMistakeItem,
   ERCOverview,
   ERCPracticeAnswer,
@@ -16,6 +18,19 @@ import type {
 
 export function fetchERCOverview() {
   return apiJson<ERCOverview>('/api/erc/overview');
+}
+
+export function fetchERCConfigStatus(eventId?: string | null) {
+  const query = eventId ? `?event_id=${encodeURIComponent(eventId)}` : '';
+  return apiJson<ERCConfigStatus>(`/todo/app-tasks/erc-config${query}`);
+}
+
+export function saveERCConfig(payload: ERCConfigSavePayload) {
+  return apiJson<ERCConfigStatus>('/todo/app-tasks/erc-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchERCAppTaskStatus() {

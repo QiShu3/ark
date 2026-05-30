@@ -94,6 +94,7 @@ class TaskUpdateRequest(BaseModel):
     weekday_only: bool | None = None
     time_inherits_from_event: bool | None = None
     time_overridden: bool | None = None
+    manually_scheduled_for_today: bool | None = None
     task_type: TaskType | None = None
     start_date: datetime | None = None
     due_date: datetime | None = None
@@ -444,6 +445,45 @@ class ERCAppTaskInitRequest(AppTaskInitRequest):
 
 class ERCPracticeAppTaskInitRequest(AppTaskInitRequest):
     daily_article_target: int = Field(default=1, ge=1, le=50)
+
+
+class ERCModuleStatusOut(BaseModel):
+    enabled: bool
+    state: AppTaskRuntimeState
+    task_id: UUID | None = None
+    config_id: UUID | None = None
+    completion_state: CompletionStateOut | None = None
+    blocked_reason: str | None = None
+    config: dict[str, object] = Field(default_factory=dict)
+    confirmation_needed: bool = False
+
+
+class ERCConfigStatusOut(BaseModel):
+    event_id: UUID | None = None
+    event_name: str | None = None
+    practice: ERCModuleStatusOut
+    review: ERCModuleStatusOut
+
+
+class ERCPracticeModuleConfig(BaseModel):
+    daily_article_target: int = Field(default=1, ge=1, le=50)
+    default_focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
+    add_to_today_plan: bool = True
+
+
+class ERCReviewModuleConfig(BaseModel):
+    review_scope: Literal["due", "mistakes", "all"] = "due"
+    daily_question_target: int = Field(default=10, ge=1, le=200)
+    default_focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
+    add_to_today_plan: bool = True
+
+
+class ERCConfigSaveRequest(BaseModel):
+    event_id: UUID | None = None
+    practice_enabled: bool = True
+    review_enabled: bool = True
+    practice: ERCPracticeModuleConfig = Field(default_factory=ERCPracticeModuleConfig)
+    review: ERCReviewModuleConfig = Field(default_factory=ERCReviewModuleConfig)
 
 
 class AppTaskStatusOut(BaseModel):

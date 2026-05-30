@@ -674,22 +674,66 @@ describe('EventCountdownCard', () => {
         createdEvents[0] = { ...createdEvents[0], is_primary: true };
         return createdEvents[0];
       }
-      if (url === '/todo/app-tasks/erc-practice/init' && options?.method === 'POST') {
-        expect(JSON.parse(options.body || '{}')).toMatchObject({
-          daily_article_target: 1,
-          default_focus_duration: 1500,
-          add_to_today_plan: true,
-          event_id: 'event-app-workflow',
-        });
+      if (url === '/todo/app-tasks/erc-config?event_id=event-app-workflow') {
         return {
-          state: 'ready',
-          task_id: 'app-task-created',
-          config_id: 'app-config-created',
           event_id: 'event-app-workflow',
           event_name: '应用事件',
-          config: {},
-          completion_state: null,
-          blocked_reason: null,
+          practice: {
+            enabled: false,
+            state: 'event_not_configured',
+            task_id: null,
+            config_id: null,
+            completion_state: null,
+            blocked_reason: null,
+            confirmation_needed: false,
+            config: {},
+          },
+          review: {
+            enabled: false,
+            state: 'event_not_configured',
+            task_id: null,
+            config_id: null,
+            completion_state: null,
+            blocked_reason: null,
+            confirmation_needed: false,
+            config: {},
+          },
+        };
+      }
+      if (url === '/todo/app-tasks/erc-config' && options?.method === 'POST') {
+        expect(JSON.parse(options.body || '{}')).toMatchObject({
+          event_id: 'event-app-workflow',
+          practice_enabled: true,
+          review_enabled: false,
+          practice: {
+            daily_article_target: 1,
+            default_focus_duration: 1500,
+            add_to_today_plan: true,
+          },
+        });
+        return {
+          event_id: 'event-app-workflow',
+          event_name: '应用事件',
+          practice: {
+            enabled: true,
+            state: 'ready',
+            task_id: 'app-task-created',
+            config_id: 'app-config-created',
+            completion_state: null,
+            blocked_reason: null,
+            confirmation_needed: false,
+            config: {},
+          },
+          review: {
+            enabled: false,
+            state: 'event_not_configured',
+            task_id: null,
+            config_id: null,
+            completion_state: null,
+            blocked_reason: null,
+            confirmation_needed: false,
+            config: {},
+          },
         };
       }
       if (url === '/todo/tasks' && options?.method === 'POST') {

@@ -85,6 +85,9 @@ from .schemas import (
     AppointmentUpdateRequest,
     AppTaskStatusOut,
     ERCAppTaskInitRequest,
+    ERCConfigSaveRequest,
+    ERCConfigStatusOut,
+    ERCModuleStatusOut,
     ERCPracticeAppTaskInitRequest,
     EventCreateRequest,
     EventDeletePreviewOut,
@@ -618,6 +621,260 @@ async def init_erc_practice_app_task(
             )
 
 
+async def _erc_module_status(
+    conn: Any,
+    *,
+    user_id: int,
+    app_task_type: str,
+    event_id: UUID,
+    event_name: str,
+) -> ERCModuleStatusOut:
+    config = await _get_active_app_task_config(
+        conn,
+        user_id=user_id,
+        app_id="erc",
+        app_task_type=app_task_type,
+        event_id=event_id,
+        include_disabled=True,
+    )
+    if config is None or config["status"] == "disabled":
+        return ERCModuleStatusOut(
+            enabled=False,
+            state="event_not_configured",
+            config={},
+        )
+
+    config_dict = _config_payload(config["config"])
+    if config["created_task_id"] is None:
+        return ERCModuleStatusOut(
+            enabled=True,
+            state="uninitialized",
+            config_id=config["id"],
+            config=config_dict,
+        )
+
+    task_row = await conn.fetchrow(
+        """
+        -- app task status task lookup
+        SELECT id, user_id, title, content, status,
+               current_cycle_count, target_cycle_count, cycle_period, cycle_every_days, event, event_ids,
+               event_id, is_recurring, period_type, custom_period_days, max_completions_per_period,
+               weekday_only, time_inherits_from_event, time_overridden, manually_scheduled_for_today, task_type,
+               actual_duration, start_date, due_date, is_deleted, created_at, updated_at,
+               source_type, app_id, app_task_type, app_config_id, app_instance_key, managed_by_app
+        FROM tasks
+        WHERE id = $1
+          AND user_id = $2
+          AND event_id = $6
+          AND source_type = 'app'
+          AND managed_by_app = TRUE
+          AND app_id = $3
+          AND app_task_type = $4
+          AND app_config_id = $5
+          AND is_deleted = FALSE
+        """,
+        config["created_task_id"],
+        user_id,
+        "erc",
+        app_task_type,
+        config["id"],
+        event_id,
+    )
+    if task_row is None:
+        return ERCModuleStatusOut(
+            enabled=True,
+            state="config_invalid",
+            config_id=config["id"],
+            blocked_reason="应用托管任务不存在",
+            config=config_dict,
+        )
+
+    task = await _task_with_completion(conn, task_row)
+    completion_state = task.completion_state
+    if completion_state is not None and completion_state.completion_state == "period_complete":
+        state = "completed_today"
+    elif completion_state is not None and completion_state.is_completable_now:
+        state = "ready"
+    else:
+        state = "blocked"
+
+    return ERCModuleStatusOut(
+        enabled=True,
+        state=state,
+        task_id=task.id,
+        config_id=config["id"],
+        completion_state=completion_state,
+        blocked_reason=completion_state.blocked_reason if completion_state is not None else None,
+        config=config_dict,
+    )
+
+
+@router.get("/app-tasks/erc-config", response_model=ERCConfigStatusOut)
+async def get_erc_config_status(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    event_id: UUID | None = Query(default=None),
+) -> ERCConfigStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=event_id)
+        if event_row is None:
+            return ERCConfigStatusOut(
+                practice=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
+                review=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
+            )
+        practice = await _erc_module_status(
+            conn,
+            user_id=int(user.id),
+            app_task_type="erc_practice",
+            event_id=event_row["id"],
+            event_name=str(event_row["name"]),
+        )
+        review = await _erc_module_status(
+            conn,
+            user_id=int(user.id),
+            app_task_type="erc_review",
+            event_id=event_row["id"],
+            event_name=str(event_row["name"]),
+        )
+        return ERCConfigStatusOut(
+            event_id=event_row["id"],
+            event_name=str(event_row["name"]),
+            practice=practice,
+            review=review,
+        )
+
+
+async def _save_erc_module(
+    conn: Any,
+    *,
+    user_id: int,
+    app_task_type: str,
+    config: dict[str, Any],
+    enabled: bool,
+    add_to_today_plan: bool,
+    event_id: UUID,
+) -> ERCModuleStatusOut:
+    existing_config = await _get_active_app_task_config(
+        conn,
+        user_id=user_id,
+        app_id="erc",
+        app_task_type=app_task_type,
+        event_id=event_id,
+        include_disabled=True,
+    )
+
+    if not enabled:
+        if existing_config is not None and existing_config["status"] == "active":
+            await conn.execute(
+                """
+                UPDATE app_task_configs
+                SET status = 'disabled', updated_at = NOW()
+                WHERE id = $1 AND user_id = $2 AND app_id = $3 AND app_task_type = $4
+                """,
+                existing_config["id"],
+                user_id,
+                "erc",
+                app_task_type,
+            )
+        return ERCModuleStatusOut(enabled=False, state="event_not_configured", config={})
+
+    confirmation_needed = False
+    if existing_config is not None and existing_config["status"] == "disabled" and existing_config["created_task_id"] is not None:
+        task_row = await conn.fetchrow(
+            "SELECT manually_scheduled_for_today FROM tasks WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+            existing_config["created_task_id"],
+            user_id,
+        )
+        if task_row is not None and bool(task_row["manually_scheduled_for_today"]):
+            confirmation_needed = True
+        await conn.execute(
+            """
+            UPDATE app_task_configs
+            SET status = 'active', updated_at = NOW()
+            WHERE id = $1 AND user_id = $2 AND app_id = $3 AND app_task_type = $4
+            """,
+            existing_config["id"],
+            user_id,
+            "erc",
+            app_task_type,
+        )
+
+    await _create_or_update_managed_app_task(
+        conn,
+        user_id=user_id,
+        app_id="erc",
+        app_task_type=app_task_type,
+        config=config,
+        add_to_today_plan=add_to_today_plan,
+        event_id=event_id,
+    )
+
+    status_out = await _erc_module_status(
+        conn,
+        user_id=user_id,
+        app_task_type=app_task_type,
+        event_id=event_id,
+        event_name="",
+    )
+    status_out.confirmation_needed = confirmation_needed
+    return status_out
+
+
+@router.post("/app-tasks/erc-config", response_model=ERCConfigStatusOut)
+async def save_erc_config(
+    request: Request,
+    body: ERCConfigSaveRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> ERCConfigStatusOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=body.event_id)
+            if event_row is None:
+                return ERCConfigStatusOut(
+                    practice=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
+                    review=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
+                )
+            practice_config = {
+                "daily_article_target": body.practice.daily_article_target,
+                "default_focus_duration": body.practice.default_focus_duration,
+                "add_to_today_plan": body.practice.add_to_today_plan,
+                "event_id": str(event_row["id"]),
+            }
+            review_config = {
+                "review_scope": body.review.review_scope,
+                "daily_question_target": body.review.daily_question_target,
+                "default_focus_duration": body.review.default_focus_duration,
+                "add_to_today_plan": body.review.add_to_today_plan,
+                "event_id": str(event_row["id"]),
+            }
+            practice = await _save_erc_module(
+                conn,
+                user_id=int(user.id),
+                app_task_type="erc_practice",
+                config=practice_config,
+                enabled=body.practice_enabled,
+                add_to_today_plan=body.practice.add_to_today_plan,
+                event_id=event_row["id"],
+            )
+            review = await _save_erc_module(
+                conn,
+                user_id=int(user.id),
+                app_task_type="erc_review",
+                config=review_config,
+                enabled=body.review_enabled,
+                add_to_today_plan=body.review.add_to_today_plan,
+                event_id=event_row["id"],
+            )
+            return ERCConfigStatusOut(
+                event_id=event_row["id"],
+                event_name=str(event_row["name"]),
+                practice=practice,
+                review=review,
+            )
+
+
 @router.post("/tasks", response_model=TaskOut)
 async def create_task(
     request: Request,
@@ -866,6 +1123,7 @@ async def update_task(
             "time_overridden",
             "start_date",
             "due_date",
+            "manually_scheduled_for_today",
         }
         if not set(patch).issubset(app_outer_fields):
             raise HTTPException(
@@ -894,6 +1152,7 @@ async def update_task(
         "task_type": "task_type",
         "start_date": "start_date",
         "due_date": "due_date",
+        "manually_scheduled_for_today": "manually_scheduled_for_today",
     }
 
     async with pool.acquire() as conn:

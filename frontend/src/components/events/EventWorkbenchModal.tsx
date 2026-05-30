@@ -20,7 +20,7 @@ import {
 } from '../../lib/events/arrangementApi';
 import { activateEventSubApps } from '../../lib/events/eventAppSync';
 import { fetchVocabDecks, initializeVocabAppTask } from '../../lib/vocab/api';
-import { initializeERCAppTask, initializeERCPracticeAppTask } from '../../lib/erc/api';
+import { saveEventERCConfig } from '../../lib/erc/configSync';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import {
   cloneWorkflowForm,
@@ -833,12 +833,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
-  function workflowSummary(workflow: WorkflowPreset): string {
-    return workflow.phases
-      .map((phase, index) => `${index + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`)
-      .join(' · ');
-  }
-
   function parseAppTaskConfig(task: Task): Record<string, unknown> {
     if (!task.content) return {};
     try { return JSON.parse(task.content); } catch { return {}; }
@@ -905,13 +899,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setAppConfigSubmitting(true);
     setAppConfigError(null);
     try {
-      if (appConfigEditor.editingTaskId) {
+      const isERCApp = appConfigEditor.appType === 'erc_practice' || appConfigEditor.appType === 'erc_review';
+      if (appConfigEditor.editingTaskId && !isERCApp) {
         await deleteEventArrangementTask(appConfigEditor.editingTaskId);
         removeTask(appConfigEditor.editingTaskId);
       }
       const focusDuration = appConfigEditor.focusDurationMin * 60;
       if (appConfigEditor.appType === 'vocab_today') {
-        const deckName = appConfigDecks.find((d) => d.id === appConfigEditor.deckId)?.name ?? '';
         const result = await initializeVocabAppTask({
           deck_id: appConfigEditor.deckId,
           daily_target_count: appConfigEditor.dailyTargetCount,
@@ -924,28 +918,28 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           setWorkbench(refreshed);
         }
       } else if (appConfigEditor.appType === 'erc_practice') {
-        const result = await initializeERCPracticeAppTask({
-          daily_article_target: appConfigEditor.dailyArticleTarget,
-          default_focus_duration: focusDuration,
-          add_to_today_plan: appConfigEditor.addToTodayPlan,
-          event_id: currentEvent.id,
+        await saveEventERCConfig({
+          eventId: currentEvent.id,
+          practice: {
+            daily_article_target: appConfigEditor.dailyArticleTarget,
+            default_focus_duration: focusDuration,
+            add_to_today_plan: appConfigEditor.addToTodayPlan,
+          },
         });
-        if (result.task_id) {
-          const refreshed = await getEventWorkbench(currentEvent.id);
-          setWorkbench(refreshed);
-        }
+        const refreshed = await getEventWorkbench(currentEvent.id);
+        setWorkbench(refreshed);
       } else {
-        const result = await initializeERCAppTask({
-          review_scope: appConfigEditor.reviewScope,
-          daily_question_target: appConfigEditor.dailyQuestionTarget,
-          default_focus_duration: focusDuration,
-          add_to_today_plan: appConfigEditor.addToTodayPlan,
-          event_id: currentEvent.id,
+        await saveEventERCConfig({
+          eventId: currentEvent.id,
+          review: {
+            review_scope: appConfigEditor.reviewScope,
+            daily_question_target: appConfigEditor.dailyQuestionTarget,
+            default_focus_duration: focusDuration,
+            add_to_today_plan: appConfigEditor.addToTodayPlan,
+          },
         });
-        if (result.task_id) {
-          const refreshed = await getEventWorkbench(currentEvent.id);
-          setWorkbench(refreshed);
-        }
+        const refreshed = await getEventWorkbench(currentEvent.id);
+        setWorkbench(refreshed);
       }
       setAppConfigEditor(null);
       await Promise.resolve(onChanged?.());

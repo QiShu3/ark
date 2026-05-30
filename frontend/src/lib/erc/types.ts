@@ -118,6 +118,41 @@ export interface ERCAppTaskInitPayload {
   event_id?: string | null;
 }
 
+export interface ERCModuleStatus {
+  enabled: boolean;
+  state: 'uninitialized' | 'ready' | 'completed_today' | 'blocked' | 'config_invalid' | 'no_primary_event' | 'event_not_configured';
+  task_id: string | null;
+  config_id: string | null;
+  completion_state: import('../../components/taskTypes').CompletionState | null;
+  blocked_reason: string | null;
+  config: Record<string, unknown>;
+  confirmation_needed: boolean;
+}
+
+export interface ERCConfigStatus {
+  event_id: string | null;
+  event_name: string | null;
+  practice: ERCModuleStatus;
+  review: ERCModuleStatus;
+}
+
+export interface ERCConfigSavePayload {
+  event_id?: string | null;
+  practice_enabled: boolean;
+  review_enabled: boolean;
+  practice: {
+    daily_article_target: number;
+    default_focus_duration: number;
+    add_to_today_plan: boolean;
+  };
+  review: {
+    review_scope: 'due' | 'mistakes' | 'all';
+    daily_question_target: number;
+    default_focus_duration: number;
+    add_to_today_plan: boolean;
+  };
+}
+
 export interface ERCMistakeItem {
   article_id: string;
   year: number;
