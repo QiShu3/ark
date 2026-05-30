@@ -77,7 +77,7 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
           </section>
         ) : session.currentItem ? (
           <div className="space-y-6">
-            {session.currentMode === 'review' ? <QuizRenderer item={session.currentItem} /> : <StudyCard item={session.currentItem} />}
+            {session.currentMode === 'review' ? <QuizRenderer item={session.currentItem} /> : <StudyCard key={session.currentItem.id} item={session.currentItem} />}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {actions.map((action) => (
                 <button

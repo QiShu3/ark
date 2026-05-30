@@ -1,14 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import type { VocabReviewItem } from '../../lib/vocab/types';
 import WordMetaPanel from './WordMetaPanel';
 
 export default function StudyCard({ item }: { item: VocabReviewItem }) {
   const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    setRevealed(false);
-  }, [item.id]);
 
   return (
     <section className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-6 backdrop-blur-md">

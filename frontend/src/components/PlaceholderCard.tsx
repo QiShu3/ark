@@ -303,14 +303,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     ));
   }, [workflowPresets, primaryEvent]);
 
-  const visibleEventWorkflowPresetIds = React.useMemo(() => {
-    const primaryEventId = primaryEvent?.id ?? null;
-    if (!primaryEventId) return [];
-    return visibleWorkflowPresets
-      .filter((preset) => preset.event_id === primaryEventId)
-      .map((preset) => preset.id);
-  }, [primaryEvent, visibleWorkflowPresets]);
-
   const arrangementTasks = React.useMemo(() => {
     return primaryEvent ? tasks.filter((t) => t.event_id === primaryEvent.id) : tasks;
   }, [tasks, primaryEvent]);
@@ -1301,10 +1293,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     return task.completion_state?.hidden_from_action_list === true;
   }
 
-  function _isAppManagedTask(task: Task): boolean {
-    return task.source_type === 'app' || task.managed_by_app === true;
-  }
-
   function _isAppointmentHiddenFromActionList(appointment: Appointment): boolean {
     return appointment.completion_state?.hidden_from_action_list === true;
   }
@@ -1628,8 +1616,6 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     }
 
     const activeTasks = filtered.filter((task) => !_isTaskCompletedForArrangementView(task) && !_isTaskHiddenFromActionList(task));
-    const activeUserTasks = activeTasks.filter((task) => !_isAppManagedTask(task));
-    const activeAppTasks = activeTasks.filter((task) => _isAppManagedTask(task));
     const completedTasks = filtered.filter((task) => _isTaskCompletedForArrangementView(task));
 
     if (activeTasks.length === 0 && completedTasks.length === 0) {

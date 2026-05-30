@@ -93,7 +93,7 @@ export function useVocabDeck() {
         inheritableWordCount: preview.inheritable_word_count,
         submitting: false,
       });
-    } catch (_err) {
+    } catch {
       if (requestId !== switchRequestRef.current) return;
       setInheritancePrompt(null);
     }

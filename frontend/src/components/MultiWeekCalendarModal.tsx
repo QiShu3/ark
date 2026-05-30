@@ -34,7 +34,6 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   const [weekCount, setWeekCount] = useState<WeekCount>(() => getStoredWeekCount());
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
-  const [primaryEventId, setPrimaryEventId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -80,7 +79,6 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
       .then(([nextTasks, nextAppointments, primaryEvent]) => {
         if (cancelled) return;
         const eventId = primaryEvent?.id ?? null;
-        setPrimaryEventId(eventId);
         const filteredTasks = eventId ? nextTasks.filter((t) => t.event_id === eventId) : nextTasks;
         const filteredAppointments = eventId
           ? nextAppointments.filter((a) => a.event_id === eventId)
@@ -97,7 +95,6 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
         setError(err instanceof Error ? err.message : '加载安排日历失败');
         setTasks([]);
         setAppointments([]);
-        setPrimaryEventId(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

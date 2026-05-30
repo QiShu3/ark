@@ -8,26 +8,27 @@ import type { VocabWordDetail as VocabWordDetailType } from '../../lib/vocab/typ
 export default function VocabWordDetail() {
   const { wordId } = useParams();
   const [detail, setDetail] = useState<VocabWordDetailType | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadedWordId, setLoadedWordId] = useState<string | null>(null);
+  const [error, setError] = useState<{ wordId: string; message: string } | null>(null);
+  const isLoading = Boolean(wordId) && loadedWordId !== wordId && error?.wordId !== wordId;
 
   useEffect(() => {
     let cancelled = false;
 
     if (!wordId) return;
-    setLoading(true);
     fetchVocabWordDetail(wordId)
       .then((payload) => {
         if (cancelled) return;
         setDetail(payload);
+        setLoadedWordId(wordId);
         setError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : '单词详情加载失败');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        setError({
+          wordId,
+          message: err instanceof Error ? err.message : '单词详情加载失败',
+        });
       });
 
     return () => {
@@ -42,8 +43,8 @@ export default function VocabWordDetail() {
           返回词书首页
         </a>
 
-        {loading ? <p className="mt-8 text-sm text-ark-text-muted">详情加载中…</p> : null}
-        {error ? <p className="mt-8 text-sm text-rose-200">{error}</p> : null}
+        {isLoading ? <p className="mt-8 text-sm text-ark-text-muted">详情加载中…</p> : null}
+        {error?.wordId === wordId ? <p className="mt-8 text-sm text-rose-200">{error.message}</p> : null}
 
         {detail ? (
           <div className="mt-6 rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-8 backdrop-blur-md">

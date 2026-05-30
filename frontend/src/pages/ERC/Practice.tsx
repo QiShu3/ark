@@ -223,7 +223,7 @@ export default function ERCPractice() {
                           收起
                         </button>
                       </div>
-                      <StudyCard item={currentPreheatItem} />
+                      <StudyCard key={currentPreheatItem.id} item={currentPreheatItem} />
                       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         {preheatActions.map((action) => (
                           <button

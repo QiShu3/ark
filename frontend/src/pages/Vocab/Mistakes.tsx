@@ -8,30 +8,31 @@ import type { VocabMistakeItem } from '../../lib/vocab/types';
 export default function VocabMistakes() {
   const { decks, activeDeck, activeDeckVersion, inheritancePrompt, setActiveDeck, confirmInheritance, dismissInheritance } = useVocabDeck();
   const [items, setItems] = useState<VocabMistakeItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadedDeckId, setLoadedDeckId] = useState<string | null>(null);
+  const [error, setError] = useState<{ deckId: string; message: string } | null>(null);
+  const displayedItems = activeDeck && loadedDeckId === activeDeck.id ? items : [];
+  const isLoading = Boolean(activeDeck) && loadedDeckId !== activeDeck?.id && error?.deckId !== activeDeck?.id;
 
   useEffect(() => {
     let cancelled = false;
 
     if (!activeDeck) {
-      setItems([]);
       return;
     }
 
-    setLoading(true);
     fetchVocabMistakes(activeDeck.id)
       .then((payload) => {
         if (cancelled) return;
         setItems(payload);
+        setLoadedDeckId(activeDeck.id);
         setError(null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : '错题加载失败');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        setError({
+          deckId: activeDeck.id,
+          message: err instanceof Error ? err.message : '错题加载失败',
+        });
       });
 
     return () => {
@@ -57,10 +58,10 @@ export default function VocabMistakes() {
         </div>
 
         <div className="mt-8 space-y-4">
-          {loading ? <p className="text-sm text-ark-text-muted">错题加载中…</p> : null}
-          {error ? <p className="text-sm text-rose-200">{error}</p> : null}
+          {isLoading ? <p className="text-sm text-ark-text-muted">错题加载中…</p> : null}
+          {error?.deckId === activeDeck?.id ? <p className="text-sm text-rose-200">{error.message}</p> : null}
 
-          {items.map((item) => (
+          {displayedItems.map((item) => (
             <a
               key={item.id}
               href={`#/vocab/words/${item.id}`}
@@ -82,7 +83,7 @@ export default function VocabMistakes() {
             </a>
           ))}
 
-          {!loading && !error && !items.length ? (
+          {!isLoading && error?.deckId !== activeDeck?.id && !displayedItems.length ? (
             <div className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-8 text-ark-text-muted">当前没有错题。</div>
           ) : null}
         </div>

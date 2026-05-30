@@ -38,7 +38,7 @@ export default function VocabStudy() {
 
           {session.currentItem ? (
             <div className="space-y-6">
-              <StudyCard item={session.currentItem} />
+              <StudyCard key={session.currentItem.id} item={session.currentItem} />
 
               <div className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-5 text-sm text-ark-text-muted">
                 看完释义后，直接给这张卡一个结果，系统会自动推进到下一词并安排后续复习。

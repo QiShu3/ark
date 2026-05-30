@@ -116,18 +116,13 @@ export default function TaskFocusWork({
     workflow?.task_id,
   ]);
 
-  const timerText = React.useMemo(() => {
-    if (typeof liveRemaining === 'number') {
-      return formatClockTime(liveRemaining);
-    }
-    if (typeof workflow?.remaining_seconds === 'number') {
-      return formatClockTime(workflow.remaining_seconds);
-    }
-    if (typeof workflow?.elapsed_seconds === 'number') {
-      return formatClockTime(workflow.elapsed_seconds);
-    }
-    return '00:00';
-  }, [liveRemaining, workflow?.elapsed_seconds, workflow?.remaining_seconds]);
+  const timerText = typeof liveRemaining === 'number'
+    ? formatClockTime(liveRemaining)
+    : typeof workflow?.remaining_seconds === 'number'
+      ? formatClockTime(workflow.remaining_seconds)
+      : typeof workflow?.elapsed_seconds === 'number'
+        ? formatClockTime(workflow.elapsed_seconds)
+        : '00:00';
 
   const title = workflow?.task_title ?? task?.title ?? '未命名任务';
   const content = task?.content?.trim() ?? '';

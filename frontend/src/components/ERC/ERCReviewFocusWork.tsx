@@ -15,6 +15,25 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
   const [error, setError] = useState<string | null>(null);
   const isPaused = workflow?.is_paused === true;
 
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchERCReviewNext()
+      .then((payload) => {
+        if (cancelled) return;
+        setItem(payload);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : '复习题加载失败');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const loadNext = () => {
     setSelected(null);
     setResult(null);
@@ -25,10 +44,6 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : '复习题加载失败'));
   };
-
-  useEffect(() => {
-    loadNext();
-  }, []);
 
   const handleSubmit = async () => {
     if (isPaused) return;

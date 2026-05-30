@@ -250,7 +250,6 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const activeBorderClass = 'border border-[var(--workflow-capsule-border)] ring-1 ring-[var(--workflow-capsule-ring)]';
   const activeShadowClass = 'shadow-[0_12px_30px_-4px_var(--workflow-capsule-shadow)]';
 
-  const activeColorBg = 'bg-current';
   const pulseBgStrong = 'bg-current/85';
   const pulseBgMid = 'bg-current/25';
   const pulseBgWeak = 'bg-current/12';
