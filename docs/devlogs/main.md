@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-30 17:20 · a16093c · feat(auth): add email verification codes
+
+- 用户提出的需求：
+  - “好，提交代码吧”
+
+- 本次完成的工作：
+  - 将注册流程改为邮箱验证码验证：注册时填写邮箱，后端生成 6 位验证码并通过腾讯云 SES 模板发送；前端注册成功后直接展示验证码输入区，不再依赖旧的 token 链接。
+  - 恢复并对齐邮箱找回密码流程：保留 `reset-password` 页面与后端重置接口，确保邮箱找回与验证码验证并存。
+  - 同步补齐后端邮件模板配置、自检脚本、前端路由与登录页测试，保证本地注册、重发验证码、邮箱验证、密码重置链路可用。
+  - 顺手优化了登录页邮箱提示条的可读性，把提示样式调得更稳、更清楚。
+
+- 验证情况：
+  - `cd backend && uv run ruff check routes/auth_routes.py scripts/auth_selftest.py scripts/todo_selftest.py tests/test_auth_email.py`
+  - `cd backend && uv run pytest tests/test_auth_email.py -q`
+  - `cd frontend && pnpm check`
+  - `cd frontend && pnpm test -- Login.test.tsx --run`
+
 ### 2026-05-29 16:57 · 1c6d962 · feat(workflow): implement manual skip direct phase routing and add End Break button in navbar capsule
 
 - 用户提出的需求：
