@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from routes.admin_routes import router as admin_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
@@ -15,7 +16,6 @@ from routes.erc import init_erc
 from routes.erc import router as erc_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
-from routes.admin_routes import router as admin_router
 from routes.vocab import init_vocab
 from routes.vocab import router as vocab_router
 
@@ -42,6 +42,11 @@ app = FastAPI(lifespan=_lifespan, title="Ark Backend", version="0.1.0")
 uploads_dir = Path(__file__).resolve().parent / "uploads"
 uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
+# Admin panel static files
+admin_dir = Path(__file__).resolve().parent / "web" / "admin"
+if admin_dir.is_dir():
+    app.mount("/admin", StaticFiles(directory=str(admin_dir), html=True), name="admin")
 
 app.add_middleware(
     CORSMiddleware,
