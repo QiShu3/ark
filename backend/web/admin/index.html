@@ -74,22 +74,22 @@
   <div class="stat-grid">
     <div class="stat-card">
       <div class="label">总用户数</div>
-      <div class="val">12,840</div>
+      <div class="val">—</div>
       <div class="trend up">↑ 较上月增长 12%</div>
     </div>
     <div class="stat-card">
       <div class="label">今日新增</div>
-      <div class="val">142</div>
+      <div class="val">—</div>
       <div class="trend up">↑ 较昨日增长 8%</div>
     </div>
     <div class="stat-card">
       <div class="label">邮箱验证率</div>
-      <div class="val">94.2%</div>
+      <div class="val">—</div>
       <div class="trend">保持稳定</div>
     </div>
     <div class="stat-card">
       <div class="label">7日活跃用户</div>
-      <div class="val">4,210</div>
+      <div class="val">—</div>
       <div class="trend up">↑ 增长 3.4%</div>
     </div>
   </div>
@@ -101,21 +101,21 @@
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border-soft);">
         <div>
           <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">今日签到率</div>
-          <div style="font-size: 24px; font-weight: 600; color: var(--accent);">68%</div>
+          <div style="font-size: 24px; font-weight: 600; color: var(--accent);" data-checkin-rate>—</div>
         </div>
         <div>
           <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">今日总专注时长</div>
-          <div style="font-size: 24px; font-weight: 600; color: var(--accent);">1,420h</div>
+          <div style="font-size: 24px; font-weight: 600; color: var(--accent);" data-focus-total>—</div>
         </div>
         <div>
           <div style="font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">人均专注时长</div>
-          <div style="font-size: 24px; font-weight: 600; color: var(--accent);">42m</div>
+          <div style="font-size: 24px; font-weight: 600; color: var(--accent);" data-focus-avg>—</div>
         </div>
       </div>
 
       <div style="margin-top: 24px;">
         <h4 style="font-size: 14px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px;">近7天趋势</h4>
-        <div style="height: 120px; display: flex; align-items: flex-end; gap: 8px;">
+        <div style="height: 120px; display: flex; align-items: flex-end; gap: 8px;" data-focus-chart>
           <div style="flex: 1; background: var(--accent-soft); height: 40%; border-radius: 4px 4px 0 0;"></div>
           <div style="flex: 1; background: var(--accent-soft); height: 65%; border-radius: 4px 4px 0 0;"></div>
           <div style="flex: 1; background: var(--accent-soft); height: 50%; border-radius: 4px 4px 0 0;"></div>
@@ -124,7 +124,7 @@
           <div style="flex: 1; background: var(--accent-soft); height: 95%; border-radius: 4px 4px 0 0;"></div>
           <div style="flex: 1; background: var(--accent); height: 100%; border-radius: 4px 4px 0 0;"></div>
         </div>
-        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: var(--muted); font-family: var(--font-mono);">
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: var(--muted); font-family: var(--font-mono);" data-focus-labels>
           <span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span>
         </div>
       </div>
@@ -132,7 +132,7 @@
 
     <div class="admin-card">
       <h3 style="margin-top: 0; margin-bottom: 24px;">连续签到 Top 5</h3>
-      <div class="stack" style="gap: 12px; display: flex; flex-direction: column;">
+      <div class="stack" style="gap: 12px; display: flex; flex-direction: column;" data-checkin-top5>
         <div class="list-item">
           <div class="row">
             <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--surface-warm); display: grid; place-items: center; font-size: 12px; font-weight: 600;">1</div>
@@ -173,5 +173,8 @@
   </div>
 </main>
 
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/dashboard.js"></script>
 </body>
 </html>
