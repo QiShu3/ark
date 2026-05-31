@@ -2,6 +2,28 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-05-31 19:47 · b847185 · refactor(frontend): align erc page with subapp template
+
+- 用户提出的需求：
+  - “下一步将 ERC 首页重构为统一子应用模板”
+  - “把子应用的统一模板记录在文档中，方便未来对新子应用的页面指导”
+  - “提交代码吧”
+
+- 本次完成的工作：
+  - 将 ERC 首页重构为统一子应用模板顺序：顶部配置入口、总览、业务数据、托管安排。
+  - 移除旧首页顶部业务快捷按钮、独立任务详情卡和页面级开始/继续入口，将专注启动收敛到托管安排任务行。
+  - 将题库进度、错题资产和今日推荐练习放入“业务数据”区域。
+  - 托管安排固定展示真题练习与错题复习两类任务，并补齐未启用、未初始化、ready、completed 等状态下的主操作语义。
+  - 将 ERC 配置弹窗统一为“配置阅读训练”，保存按钮统一为“保存配置”，提示信息使用 annotation 样式。
+  - 在子应用共性设计和接入指南中记录统一首页模板、配置弹窗、托管安排状态语义和页面反模式。
+
+- 验证情况：
+  - `cd frontend && pnpm test -- ERC/__tests__/Home.test.tsx`
+  - `cd frontend && pnpm test -- Home.test.tsx`
+  - `cd frontend && pnpm check`
+  - 使用浏览器核验 `http://localhost:5175/#/erc`，确认统一模板可见且配置弹窗可打开。
+  - 当前环境提示 Node v22.18.0 与项目期望 Node 20.x 不一致，但前端测试和类型检查通过。
+
 ### 2026-05-31 19:04 · 9aaf9a7 · refactor(frontend): align vocab page with subapp template
 
 - 用户提出的需求：
