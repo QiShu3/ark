@@ -51,11 +51,28 @@
   --ark-background-overlay: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.62));
   --ark-focus-ring: rgba(96, 165, 250, 0.68);
   --ark-accent: #60a5fa;
+  --ark-on-accent: #fff;
   --ark-accent-soft: rgba(96, 165, 250, 0.16);
   --ark-countdown-text: #7dd3fc;
   --ark-danger: #f87171;
   --ark-input: #121826;
   --ark-panel: #151923;
+  --ark-glass-surface-strong: rgba(15, 23, 42, 0.58);
+  --ark-glass-surface: rgba(15, 23, 42, 0.42);
+  --ark-glass-surface-soft: rgba(15, 23, 42, 0.34);
+  --ark-glass-border-strong: rgba(255, 255, 255, 0.2);
+  --ark-glass-border: rgba(255, 255, 255, 0.14);
+  --ark-glass-border-soft: rgba(255, 255, 255, 0.1);
+  --ark-glass-highlight: rgba(255, 255, 255, 0.22);
+  --ark-glass-shadow-strong: 0 28px 76px rgba(0, 0, 0, 0.28);
+  --ark-glass-shadow-medium: 0 18px 48px rgba(0, 0, 0, 0.18);
+  --ark-glass-shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.12);
+  --ark-glass-filter-strong: drop-shadow(0 22px 38px rgba(0, 0, 0, 0.22)) drop-shadow(0 6px 16px rgba(0, 0, 0, 0.14));
+  --ark-glass-filter-medium: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.15)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+  --ark-glass-filter-soft: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.1)) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.07));
+  --ark-glass-filter-soft-hover: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.12)) drop-shadow(0 3px 10px rgba(0, 0, 0, 0.08));
+  --ark-shell-frame-border: rgba(255, 255, 255, 0.28);
+  --ark-shell-frame-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
 
   /* Global status work colors */
   --focus-work-blue-text: rgba(147, 197, 253, 0.95);
@@ -85,11 +102,28 @@
   --ark-background-overlay: linear-gradient(to bottom, rgba(241, 245, 249, 0.46), rgba(226, 232, 240, 0.2), rgba(15, 23, 42, 0.34));
   --ark-focus-ring: rgba(37, 99, 235, 0.5);
   --ark-accent: #2563eb;
+  --ark-on-accent: #fff;
   --ark-accent-soft: rgba(37, 99, 235, 0.14);
   --ark-countdown-text: #0369a1;
   --ark-danger: #dc2626;
   --ark-input: rgba(226, 236, 248, 0.82);
   --ark-panel: rgba(239, 246, 255, 0.96);
+  --ark-glass-surface-strong: rgba(248, 252, 255, 0.58);
+  --ark-glass-surface: rgba(248, 252, 255, 0.48);
+  --ark-glass-surface-soft: rgba(248, 252, 255, 0.38);
+  --ark-glass-border-strong: rgba(255, 255, 255, 0.76);
+  --ark-glass-border: rgba(255, 255, 255, 0.6);
+  --ark-glass-border-soft: rgba(255, 255, 255, 0.46);
+  --ark-glass-highlight: rgba(255, 255, 255, 0.72);
+  --ark-glass-shadow-strong: 0 30px 82px rgba(73, 97, 122, 0.24);
+  --ark-glass-shadow-medium: 0 18px 48px rgba(73, 97, 122, 0.16);
+  --ark-glass-shadow-soft: 0 10px 28px rgba(73, 97, 122, 0.11);
+  --ark-glass-filter-strong: drop-shadow(0 22px 34px rgba(73, 97, 122, 0.18)) drop-shadow(0 6px 14px rgba(73, 97, 122, 0.1));
+  --ark-glass-filter-medium: drop-shadow(0 13px 22px rgba(73, 97, 122, 0.13)) drop-shadow(0 4px 10px rgba(73, 97, 122, 0.08));
+  --ark-glass-filter-soft: drop-shadow(0 8px 15px rgba(73, 97, 122, 0.09)) drop-shadow(0 2px 7px rgba(73, 97, 122, 0.06));
+  --ark-glass-filter-soft-hover: drop-shadow(0 12px 20px rgba(73, 97, 122, 0.12)) drop-shadow(0 3px 9px rgba(73, 97, 122, 0.07));
+  --ark-shell-frame-border: rgba(255, 255, 255, 0.9);
+  --ark-shell-frame-shadow: 0 18px 46px rgba(73, 97, 122, 0.12);
 
   /* Global status work colors - Light mode (high contrast) */
   --focus-work-blue-text: #1d4ed8;
@@ -107,6 +141,18 @@
 .ark-shell {
   background: var(--ark-page-bg);
   color: var(--ark-text);
+}
+
+.ark-shell-frame {
+  border: 3px solid var(--ark-shell-frame-border);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    var(--ark-shell-frame-shadow);
+}
+
+.ark-shell-backdrop {
+  background: var(--ark-page-bg);
 }
 
 .ark-background-overlay {
@@ -162,10 +208,217 @@
 }
 
 .ark-panel-card {
-  border: 1px solid var(--ark-border);
-  background: var(--ark-surface);
+  border: 1px solid var(--ark-glass-border-soft);
+  background: var(--ark-glass-surface-soft);
+  background-clip: padding-box;
   color: var(--ark-text);
-  backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.ark-left-glass-panel {
+  border: 1px solid var(--ark-glass-border-strong);
+  background: var(--ark-glass-surface-strong);
+  background-clip: padding-box;
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 70%, transparent);
+  filter: var(--ark-glass-filter-strong);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+.ark-home-card {
+  border: 1px solid var(--ark-glass-border);
+  background: var(--ark-glass-surface);
+  background-clip: padding-box;
+  color: var(--ark-text);
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 72%, transparent);
+  filter: var(--ark-glass-filter-medium);
+  backdrop-filter: blur(24px) saturate(135%);
+}
+
+.ark-nav-icon-button {
+  border: 1px solid color-mix(in srgb, var(--ark-border) 46%, transparent);
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.9), transparent 42%),
+    color-mix(in srgb, var(--ark-surface-strong) 82%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    0 10px 24px rgba(51, 65, 85, 0.1);
+}
+
+.ark-nav-icon-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--ark-border-strong) 56%, transparent);
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.96), transparent 44%),
+    color-mix(in srgb, var(--ark-surface-strong) 72%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 14px 30px rgba(51, 65, 85, 0.14);
+}
+
+.ark-nav-icon-button:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 8px rgba(51, 65, 85, 0.08),
+    0 8px 18px rgba(51, 65, 85, 0.1);
+}
+
+.ark-home-dashboard-shell {
+  border: 1px solid var(--ark-border);
+  background: color-mix(in srgb, var(--ark-surface) 78%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.ark-home-grid-card {
+  box-shadow: none;
+}
+
+.ark-home-side-action {
+  border-left: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-surface-subtle) 72%, transparent);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.ark-home-side-action:hover,
+.ark-home-icon-button:hover {
+  color: var(--ark-text);
+  background: var(--ark-surface-subtle);
+}
+
+.ark-home-icon-button {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: var(--ark-glass-surface-soft);
+  color: var(--ark-text-muted);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ark-home-icon-button:active {
+  transform: scale(0.96);
+}
+
+.ark-home-icon-tile {
+  background: var(--ark-accent-soft);
+}
+
+.ark-home-mini-action {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-glass-surface-soft) 72%, transparent);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ark-home-mini-action:hover {
+  color: var(--ark-text);
+  background: var(--ark-surface-subtle);
+}
+
+.ark-home-empty-task {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-glass-surface-soft) 78%, transparent);
+}
+
+.ark-home-shortcut-card {
+  border-color: var(--ark-glass-border-soft);
+  background: var(--ark-glass-surface-soft);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft);
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, filter 180ms ease;
+}
+
+.ark-home-shortcut-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ark-glass-border);
+  background: color-mix(in srgb, var(--ark-glass-surface) 88%, var(--ark-accent-soft));
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft-hover);
+}
+
+.ark-home-shortcut-icon {
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--ark-on-accent) 70%, transparent), transparent 42%),
+    var(--ark-accent-soft);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ark-on-accent) 48%, transparent);
+}
+
+.ark-home-play-dot {
+  background: color-mix(in srgb, var(--ark-on-accent) 24%, transparent);
+}
+
+.ark-home-progress-fill {
+  background: linear-gradient(90deg, var(--ark-accent), color-mix(in srgb, var(--ark-accent) 48%, #67e8f9));
+}
+
+.ark-home-progress-fill-idle {
+  opacity: 0.42;
+}
+
+.ark-home-primary-button {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: var(--ark-on-accent);
+  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.26);
+}
+
+.ark-calendar-widget {
+  overflow: hidden;
+}
+
+.ark-calendar-nav-button {
+  color: var(--ark-text-muted);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.9), transparent 44%),
+    color-mix(in srgb, var(--ark-surface-strong) 72%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    0 8px 20px rgba(51, 65, 85, 0.08);
+}
+
+.ark-calendar-day {
+  position: relative;
+  display: flex;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ark-calendar-day-current {
+  color: var(--ark-text);
+  background: transparent;
+}
+
+.ark-calendar-day-muted {
+  color: var(--ark-text-faint);
+}
+
+.ark-calendar-day-today {
+  color: var(--ark-accent);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--ark-accent-soft) 82%, rgba(255, 255, 255, 0.72));
+}
+
+.ark-calendar-day-checked {
+  color: var(--ark-accent);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--ark-accent-soft) 82%, rgba(255, 255, 255, 0.72));
+}
+
+.ark-calendar-check {
+  background: var(--ark-accent);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--ark-accent) 22%, transparent);
+}
+
+:root[data-theme="light"] .ark-home-dashboard-shell {
+  background: rgba(210, 226, 244, 0.54);
+  border-color: rgba(148, 163, 184, 0.24);
 }
 
 .ark-annotation {
@@ -276,56 +529,70 @@
 }
 
 .ark-dialogue {
-  --dialogue-shade: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.8), transparent);
-  --dialogue-option-bg: rgba(0, 0, 0, 0.4);
-  --dialogue-option-border: rgba(255, 255, 255, 0.1);
-  --dialogue-option-text: rgba(255, 255, 255, 0.9);
-  --dialogue-index: #60a5fa;
-  --dialogue-input-placeholder: rgba(255, 255, 255, 0.3);
-  --dialogue-speaker-bg: linear-gradient(to right, rgba(100, 116, 139, 0.9), rgba(51, 65, 85, 0.9));
-  --dialogue-speaker-text: #fff;
-  --dialogue-box-bg: rgba(0, 0, 0, 0.5);
-  --dialogue-box-border: transparent;
+  --dialogue-card-bg: var(--ark-glass-surface-strong);
+  --dialogue-card-border: var(--ark-glass-border-strong);
+  --dialogue-card-shadow: var(--ark-glass-shadow-strong);
+  --dialogue-option-bg: rgba(255, 255, 255, 0.08);
+  --dialogue-option-border: rgba(255, 255, 255, 0.16);
+  --dialogue-option-text: rgba(255, 255, 255, 0.88);
+  --dialogue-input-bg: rgba(255, 255, 255, 0.08);
+  --dialogue-input-border: rgba(255, 255, 255, 0.14);
+  --dialogue-input-placeholder: rgba(255, 255, 255, 0.44);
+  --dialogue-speaker-bg: rgba(255, 255, 255, 0.1);
+  --dialogue-speaker-text: rgba(255, 255, 255, 0.92);
   --dialogue-message: rgba(255, 255, 255, 0.95);
-  --dialogue-volume-bg: rgba(255, 255, 255, 0.05);
-  --dialogue-volume-text: rgba(255, 255, 255, 0.4);
-  --dialogue-glow: rgba(59, 130, 246, 0.1);
+  --dialogue-send-bg: linear-gradient(135deg, rgba(96, 165, 250, 0.98), rgba(59, 130, 246, 0.92));
+  --dialogue-send-text: #fff;
 }
 
 :root[data-theme="light"] .ark-dialogue {
-  --dialogue-shade: linear-gradient(to top, rgba(226, 232, 240, 0.92), rgba(226, 232, 240, 0.5), transparent);
-  --dialogue-option-bg: rgba(226, 236, 248, 0.68);
-  --dialogue-option-border: rgba(51, 65, 85, 0.18);
-  --dialogue-option-text: rgba(15, 23, 42, 0.88);
-  --dialogue-index: #2563eb;
+  --dialogue-card-bg: var(--ark-glass-surface-strong);
+  --dialogue-card-border: var(--ark-glass-border-strong);
+  --dialogue-card-shadow: var(--ark-glass-shadow-strong);
+  --dialogue-option-bg: rgba(255, 255, 255, 0.6);
+  --dialogue-option-border: rgba(51, 65, 85, 0.13);
+  --dialogue-option-text: rgba(15, 23, 42, 0.84);
+  --dialogue-input-bg: rgba(248, 250, 252, 0.78);
+  --dialogue-input-border: rgba(51, 65, 85, 0.12);
   --dialogue-input-placeholder: rgba(71, 85, 105, 0.62);
-  --dialogue-speaker-bg: rgba(203, 218, 238, 0.92);
+  --dialogue-speaker-bg: rgba(248, 250, 252, 0.78);
   --dialogue-speaker-text: rgba(15, 23, 42, 0.95);
-  --dialogue-box-bg: rgba(241, 245, 249, 0.82);
-  --dialogue-box-border: rgba(51, 65, 85, 0.16);
   --dialogue-message: rgba(15, 23, 42, 0.95);
-  --dialogue-volume-bg: rgba(51, 65, 85, 0.08);
-  --dialogue-volume-text: rgba(30, 41, 59, 0.72);
-  --dialogue-glow: rgba(37, 99, 235, 0.08);
 }
 
-.ark-dialogue-shade {
-  background: var(--dialogue-shade);
+.ark-dialogue-card {
+  border: 1px solid var(--dialogue-card-border);
+  background: var(--dialogue-card-bg);
+  box-shadow: var(--dialogue-card-shadow);
+  backdrop-filter: blur(28px) saturate(145%);
 }
 
-.ark-dialogue-option,
-.ark-dialogue-input {
+.ark-dialogue-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46), inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.ark-dialogue-option {
   border: 1px solid var(--dialogue-option-border);
   background: var(--dialogue-option-bg);
   color: var(--dialogue-option-text);
 }
 
-.ark-dialogue-index {
-  color: var(--dialogue-index);
-  opacity: 0.86;
+.ark-dialogue-speaker {
+  border: 1px solid var(--dialogue-option-border);
+  background: var(--dialogue-speaker-bg);
+  color: var(--dialogue-speaker-text);
 }
 
-.ark-dialogue-option-text,
+.ark-dialogue-input-wrap {
+  border: 1px solid var(--dialogue-input-border);
+  background: var(--dialogue-input-bg);
+}
+
 .ark-dialogue-input {
   color: var(--dialogue-option-text);
 }
@@ -335,28 +602,9 @@
 }
 
 .ark-dialogue-send {
-  color: var(--dialogue-input-placeholder);
-}
-
-.ark-dialogue-speaker {
-  border: 1px solid var(--dialogue-option-border);
-  background: var(--dialogue-speaker-bg);
-  color: var(--dialogue-speaker-text);
-  box-shadow: 0 10px 28px rgba(51, 65, 85, 0.18);
-}
-
-.ark-dialogue-box {
-  border: 1px solid var(--dialogue-box-border);
-  background: var(--dialogue-box-bg);
-}
-
-.ark-dialogue-glow {
-  background: var(--dialogue-glow);
-}
-
-.ark-dialogue-volume {
-  background: var(--dialogue-volume-bg);
-  color: var(--dialogue-volume-text);
+  background: var(--dialogue-send-bg);
+  color: var(--dialogue-send-text);
+  box-shadow: 0 14px 32px rgba(59, 130, 246, 0.32);
 }
 
 .ark-dialogue-message {

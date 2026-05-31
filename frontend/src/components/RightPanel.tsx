@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import PlaceholderCard from './PlaceholderCard';
+import HomeRightDashboard from './HomeRightDashboard';
 import { cn } from '../lib/utils';
 
 interface RightPanelProps {
@@ -15,23 +15,11 @@ interface RightPanelProps {
 const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // 配置每个占位卡片的拆分数量
-  // Index 0: 不拆分
-  // Index 1: 拆分为 2 部分
-  // Index 2: 拆分为 2 部分
-  // Index 3: 拆分为 2 部分
-  const configs = [
-    { split: 1 },
-    { split: 2 },
-    { split: 2 },
-    { split: 2 },
-  ];
-
   return (
     <aside
       className={cn(
-        'relative mt-16 h-[calc(100%-4rem)] overflow-visible transition-[width,padding] duration-300 ease-out',
-        collapsed ? 'w-[35%] p-4 lg:w-4 lg:px-0 lg:py-4' : 'w-[35%] p-4 lg:w-[35%]',
+        'relative min-h-[430px] min-w-0 overflow-visible transition-[flex,width] duration-300 ease-out lg:h-full lg:min-h-0',
+        collapsed ? 'lg:w-4 lg:flex-none lg:px-0' : 'lg:flex-[1.07_1_0%]',
       )}
     >
       <button
@@ -39,8 +27,8 @@ const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
         aria-label={collapsed ? 'Expand right panel' : 'Collapse right panel'}
         onClick={onToggle}
         className={cn(
-          'ark-surface ark-focus-ring absolute top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center rounded-full text-[var(--ark-text-muted)] backdrop-blur-md transition-all duration-200 hover:text-[var(--ark-text)] lg:flex',
-          collapsed ? 'right-0 h-24 w-4' : 'right-1 h-16 w-6',
+          'ark-surface ark-focus-ring absolute top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center rounded-full text-[var(--ark-text-muted)] opacity-0 backdrop-blur-md transition-all duration-200 hover:text-[var(--ark-text)] hover:opacity-100 focus-visible:opacity-100 lg:flex',
+          collapsed ? 'right-0 h-24 w-4' : '-right-3 h-16 w-6',
         )}
       >
         {collapsed ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-4 w-4" />}
@@ -51,17 +39,11 @@ const RightPanel: React.FC<RightPanelProps> = ({ collapsed, onToggle }) => {
         data-testid="right-panel-content"
         aria-hidden={collapsed}
         className={cn(
-          'flex h-full flex-col gap-4 overflow-hidden transition-opacity duration-200',
+          'h-full overflow-hidden rounded-[28px] transition-opacity duration-200',
           collapsed ? 'pointer-events-none opacity-0' : 'opacity-100',
         )}
       >
-        {configs.map((config, i) => (
-          <PlaceholderCard
-            key={i}
-            index={i}
-            split={config.split}
-          />
-        ))}
+        <HomeRightDashboard />
       </div>
     </aside>
   );

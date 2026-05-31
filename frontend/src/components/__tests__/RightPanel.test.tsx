@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import RightPanel from '../RightPanel';
 
-vi.mock('../PlaceholderCard', () => ({
-  default: ({ index }: { index: number }) => <div data-testid={`placeholder-card-${index}`}>Card {index}</div>,
+vi.mock('../HomeRightDashboard', () => ({
+  default: () => <div data-testid="home-right-dashboard">Dashboard</div>,
 }));
 
 describe('RightPanel', () => {
@@ -33,7 +33,6 @@ describe('RightPanel', () => {
 
     expect(screen.getByRole('button', { name: 'Expand right panel' })).toBeInTheDocument();
     expect(screen.getByTestId('right-panel-content')).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.getByTestId('placeholder-card-0')).toBeInTheDocument();
-    expect(screen.getByTestId('placeholder-card-3')).toBeInTheDocument();
+    expect(screen.getByTestId('home-right-dashboard')).toBeInTheDocument();
   });
 });

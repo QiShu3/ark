@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCheckInStatus } from '../lib/api';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 
@@ -60,47 +61,50 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
         type="button"
         aria-label="打开多周任务日历"
         onClick={() => setShowMultiWeekCalendar(true)}
-        className={`ark-panel-card rounded-lg p-3 flex flex-col text-left transition-colors hover:bg-[var(--ark-surface-subtle)] ${className}`}
+        className={`ark-panel-card ark-calendar-widget flex flex-col p-4 text-left transition-colors hover:bg-[var(--ark-surface-subtle)] ${className || 'rounded-[24px]'}`}
       >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[var(--ark-text)] text-sm font-semibold">日历</span>
-          <span className="text-[var(--ark-text-muted)] text-xs">{monthLabel}</span>
+        <div className="relative mb-3 flex items-center justify-center">
+          <span className="absolute left-0 text-base font-semibold text-[var(--ark-text)]">日历</span>
+          <span className="text-base font-semibold text-[var(--ark-text)]">{monthLabel}</span>
+          <span className="absolute right-0 flex items-center gap-2">
+            <span className="ark-calendar-nav-button flex h-8 w-8 items-center justify-center rounded-full">
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="ark-calendar-nav-button flex h-8 w-8 items-center justify-center rounded-full">
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </span>
         </div>
-        <div className="grid grid-cols-7 gap-1 text-[10px] text-[var(--ark-text-faint)] mb-1">
+        <div className="mb-1 grid grid-cols-7 gap-x-3 text-sm text-[var(--ark-text-faint)]">
           {weekdays.map((day) => (
-            <div key={day} className="h-5 flex items-center justify-center">
+            <div key={day} className="flex h-6 items-center justify-center">
               {day}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1 flex-1">
+        <div className="grid flex-1 grid-cols-7 content-start gap-x-3 gap-y-0">
           {cells.map((cell, idx) => {
             let dateStr = '';
             if (cell.inCurrentMonth) {
               dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
             }
             const isChecked = cell.inCurrentMonth && checkedDates.has(dateStr);
+            const dayClass = cell.isToday
+              ? 'ark-calendar-day-today'
+              : isChecked
+                ? 'ark-calendar-day-checked'
+                : cell.inCurrentMonth
+                  ? 'ark-calendar-day-current'
+                  : 'ark-calendar-day-muted';
             
             return (
               <div
                 key={`${cell.day}-${idx}`}
-                className={`h-6 rounded flex items-center justify-center text-[11px] relative ${
-                  cell.isToday
-                    ? 'bg-[#B5D2E8]/90 text-black/80 font-bold shadow-sm'
-                    : cell.inCurrentMonth
-                      ? isChecked 
-                        ? 'bg-[#E5989B]/90 text-white font-bold shadow-sm' 
-                        : 'text-[var(--ark-text-muted)] bg-[var(--ark-surface-subtle)]'
-                      : 'text-[var(--ark-text-faint)]'
-                }`}
+                className={`ark-calendar-day ${dayClass}`}
               >
                 {cell.day}
                 {isChecked && (
-                  <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${cell.isToday ? 'bg-blue-500 shadow-sm border border-[#1a1a1a]' : 'bg-transparent'}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke={cell.isToday ? 'white' : '#3b82f6'} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
-                      <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                  </div>
+                  <div className="ark-calendar-check absolute right-[-7px] top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" />
                 )}
               </div>
             );

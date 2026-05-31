@@ -1,12 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { BookOpen, Calendar, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
+import { BookOpen, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
-import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 import { restartFirstGuide } from '../lib/onboardingEvents';
 import SettingsModal from './SettingsModal';
 import { useCustomizationStore } from '../lib/customization';
@@ -28,11 +27,12 @@ const Navigation: React.FC = () => {
   const clearSession = useAuthStore((s) => s.clear);
   const avatarUrl = useCustomizationStore((s) => s.avatarUrl);
   const { themePreference, resolvedTheme, toggleResolvedTheme } = useTheme();
+  const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
-  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const focusNavigationLocked = isFocusWorkNavigationLocked(workflowSnapshot);
   const ThemeIcon = themePreference === 'system' ? Monitor : resolvedTheme === 'dark' ? Moon : Sun;
@@ -52,7 +52,7 @@ const Navigation: React.FC = () => {
         return;
       }
       setWorkflowSnapshot(snapshot);
-      if (isFocusWorkNavigationLocked(snapshot)) setShowCalendarModal(false);
+      if (isFocusWorkNavigationLocked(snapshot)) setAvatarMenuOpen(false);
     } catch {
       setWorkflowSnapshot(null);
     }
@@ -69,6 +69,24 @@ const Navigation: React.FC = () => {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!avatarMenuRef.current?.contains(event.target as Node)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAvatarMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [avatarMenuOpen]);
 
   useEffect(() => {
     if (token && !user) {
@@ -140,10 +158,10 @@ const Navigation: React.FC = () => {
 
   return (
     <>
-      <nav className="fixed left-0 top-0 z-50 flex h-16 w-full items-center border-b ark-border bg-[var(--ark-surface)] px-6 text-[var(--ark-text)] backdrop-blur-md">
-      <div className="flex items-center gap-3">
+      <nav className="fixed left-3 right-3 top-3 z-50 flex h-24 items-center rounded-[48px] bg-[var(--ark-surface)] px-[30px] text-[var(--ark-text)] backdrop-blur-md">
+      <div className="flex items-center gap-[18px]">
         <div
-          className={`text-lg font-semibold ark-font-display transition-colors ${
+          className={`text-[27px] font-semibold ark-font-display transition-colors ${
             focusNavigationLocked ? 'cursor-not-allowed text-[var(--ark-text-faint)]' : 'cursor-pointer hover:text-[var(--ark-accent)]'
           }`}
           aria-disabled={focusNavigationLocked}
@@ -156,97 +174,83 @@ const Navigation: React.FC = () => {
           aria-label="重新进入首次体验引导"
           title="重新进入首次体验引导"
           disabled={focusNavigationLocked}
-          className="ark-focus-ring flex h-9 w-9 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="ark-focus-ring flex h-[54px] w-[54px] items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
           onClick={handleRestartOnboarding}
         >
-          <BookOpen size={18} aria-hidden="true" />
+          <BookOpen size={27} aria-hidden="true" />
         </button>
       </div>
       <div className="flex-1" />
       {workflowSnapshot ? (
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none hidden md:block">
+        <div className="absolute left-1/2 top-1/2 z-10 hidden origin-center -translate-x-1/2 -translate-y-1/2 scale-150 pointer-events-none md:block">
           <div className="pointer-events-auto">
             <WorkflowNavProgress workflow={workflowSnapshot} />
           </div>
         </div>
       ) : null}
-      <div className="ml-auto flex items-center gap-6">
-
-
-        {/* Check-in Icon */}
-        {user && checkInState && (
-          <button
-            type="button"
-            aria-label="打开导航栏日历"
-            disabled={focusNavigationLocked}
-            className="relative flex items-center justify-center text-[var(--ark-text-muted)] transition-colors hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:text-[var(--ark-text-faint)] disabled:hover:text-[var(--ark-text-faint)]"
-            title={checkInState.is_checked_in_today ? `已打卡 / 连续 ${checkInState.current_streak} 天` : "今日未打卡"}
-            onClick={() => {
-              if (focusNavigationLocked) return;
-              setShowCalendarModal(true);
-            }}
-          >
-            <Calendar size={28} />
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold mt-[6px]">
-              {checkInState.current_streak}
-            </span>
-          </button>
-        )}
-
+      <div className="ml-auto flex items-center gap-9">
         {/* 用户头像区域 */}
         {user ? (
-          <div className="flex items-center gap-3">
-            <div className="relative group cursor-pointer">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={user.username} className="w-8 h-8 rounded-full object-cover border border-ark-border" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-lg border border-ark-border">
-                  {user.username.charAt(0).toUpperCase()}
-                </div>
-              )}
-
-              {/* 悬停显示的用户名 */}
-              <div className="absolute right-0 top-full mt-2 px-3 py-1.5 bg-ark-overlay backdrop-blur-md border border-ark-border rounded-lg text-sm text-ark-text opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-                {user.username}
-              </div>
-            </div>
+          <div className="flex items-center gap-[18px]">
             <button
               type="button"
               aria-label={focusNavigationLocked ? '切换外观模式' : nextThemeLabel}
               title={themeButtonTitle}
               disabled={focusNavigationLocked}
-              className="ark-focus-ring flex h-8 w-8 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ark-nav-icon-button ark-focus-ring flex h-12 w-12 items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={toggleResolvedTheme}
             >
-              <ThemeIcon size={16} aria-hidden="true" />
+              <ThemeIcon size={24} aria-hidden="true" />
             </button>
             <button
               type="button"
               aria-label="打开界面设置"
               title="界面设置"
               disabled={focusNavigationLocked}
-              className="ark-focus-ring flex h-8 w-8 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ark-nav-icon-button ark-focus-ring flex h-12 w-12 items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 if (focusNavigationLocked) return;
                 setShowSettingsModal(true);
               }}
             >
-              <Settings size={16} aria-hidden="true" />
+              <Settings size={24} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              aria-label="退出登录"
-              title="退出登录"
-              className="ark-focus-ring flex h-8 w-8 items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)]"
-              onClick={handleLogout}
-            >
-              <LogOut size={16} aria-hidden="true" />
-            </button>
+            <div className="mx-1 h-12 w-px bg-[var(--ark-border)] opacity-55" aria-hidden="true" />
+            <div ref={avatarMenuRef} className="relative ml-1">
+              <button
+                type="button"
+                aria-label="打开用户菜单"
+                aria-expanded={avatarMenuOpen}
+                className="ark-nav-icon-button ark-focus-ring flex h-12 w-12 items-center justify-center rounded-full transition-all"
+                onClick={() => setAvatarMenuOpen((prev) => !prev)}
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={user.username} className="h-full w-full rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xl font-bold text-white">
+                    {user.username.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </button>
+              {avatarMenuOpen ? (
+                <div className="absolute right-0 top-full z-50 mt-3 w-48 overflow-hidden rounded-2xl border border-ark-border bg-ark-overlay p-2 text-ark-text shadow-xl backdrop-blur-xl">
+                  <div className="px-3 py-2 text-sm font-medium text-ark-text">{user.username}</div>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    退出登录
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : (
           <button 
             onClick={() => navigate('/login')}
-            className="ark-button-secondary text-sm px-4 py-1.5 rounded-full transition-colors"
+            className="ark-button-secondary rounded-full px-6 py-2.5 text-[21px] transition-colors"
           >
             Login
           </button>
@@ -265,7 +269,6 @@ const Navigation: React.FC = () => {
       </div>
     )}
 
-    <MultiWeekCalendarModal open={showCalendarModal} onClose={() => setShowCalendarModal(false)} />
     <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </>
   );

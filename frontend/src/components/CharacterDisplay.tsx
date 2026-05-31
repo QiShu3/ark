@@ -18,7 +18,7 @@ const CharacterDisplay: React.FC = () => {
         src={characterUrl} 
         alt="Character" 
         style={{
-          transform: `scale(${characterScale})`,
+          transform: `translateY(-7%) scale(${characterScale})`,
         }}
         className="max-h-[90%] max-w-[90%] object-contain drop-shadow-2xl transition-all duration-300"
       />

@@ -1,12 +1,16 @@
 import React from 'react';
-import { Send, VolumeX } from 'lucide-react';
+import { HelpCircle, MessageCircleQuestion, Send, Sparkles, SquarePen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import MarkdownContent from './MarkdownContent';
 
 const DEFAULT_DIALOGUE =
   '你好！我是莫宁。你可以从右侧的快捷选项中选择回复，或者直接在下方输入你的问题。';
 
-const DEFAULT_SUGGESTIONS = ['给我介绍一下这个系统', '你是谁？', '如何开始使用？'];
+const DEFAULT_SUGGESTIONS = [
+  { label: '给我介绍一下这个系统', Icon: MessageCircleQuestion },
+  { label: '你是谁？', Icon: HelpCircle },
+  { label: '如何开始使用？', Icon: SquarePen },
+];
 
 /**
  * 对话框与交互框合并组件
@@ -14,91 +18,58 @@ const DEFAULT_SUGGESTIONS = ['给我介绍一下这个系统', '你是谁？', '
  */
 const DialogueInteraction: React.FC = () => {
   return (
-    <div className="ark-dialogue absolute bottom-0 left-0 w-full z-10 flex flex-col justify-end pointer-events-none">
-      <div className="ark-dialogue-shade absolute inset-0 pointer-events-none -z-10" />
+    <div className="ark-dialogue pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-3 md:px-4 md:pb-4">
+      <section className="ark-dialogue-card pointer-events-auto relative overflow-hidden rounded-[28px] px-5 pb-5 pt-6 backdrop-blur-2xl md:px-7 md:pb-7 md:pt-7">
+        <div className="ark-dialogue-speaker mb-4 flex w-fit items-center gap-2 rounded-2xl px-4 py-2 backdrop-blur-md">
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          <span className="text-sm font-semibold md:text-base">莫宁</span>
+        </div>
 
-      <div className="w-full px-6 md:px-10 pb-6 md:pb-10 pointer-events-auto flex flex-col gap-6">
-        <div className="self-end w-full max-w-[280px] flex flex-col gap-2">
-          {DEFAULT_SUGGESTIONS.map((suggestion, idx) => (
+        <div className="relative z-10 max-h-[92px] overflow-y-auto pr-2">
+          <MarkdownContent
+            content={DEFAULT_DIALOGUE}
+            className="ark-dialogue-message text-sm font-medium leading-7 md:text-base"
+          />
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          {DEFAULT_SUGGESTIONS.map(({ label, Icon }) => (
             <button
-              key={suggestion}
+              key={label}
               type="button"
-              disabled
               className={cn(
-                'group relative flex items-center justify-between w-full px-4 py-2.5',
-                'ark-dialogue-option backdrop-blur-md rounded-lg text-left',
-                'transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0',
+                'ark-dialogue-option ark-focus-ring flex h-11 min-w-0 items-center justify-center gap-2 rounded-full px-5 text-sm',
+                'backdrop-blur-md transition-colors hover:border-[var(--ark-border-strong)]',
               )}
             >
-              <div className="flex items-center gap-2 overflow-hidden">
-                <span className="ark-dialogue-index ark-font-mono text-xs">
-                  0{idx + 1}
-                </span>
-                <span className="ark-dialogue-option-text truncate text-sm">{suggestion}</span>
-              </div>
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-2/3 bg-gradient-to-b from-blue-400 to-purple-600 rounded-l-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="whitespace-nowrap">{label}</span>
             </button>
           ))}
+        </div>
 
-          <div className="relative w-full group">
-            <div className="ark-dialogue-index absolute left-4 top-1/2 -translate-y-1/2 ark-font-mono text-xs z-10">
-              0{DEFAULT_SUGGESTIONS.length + 1}
-            </div>
+        <div className="ark-dialogue-input-wrap mt-7 flex h-16 items-center gap-3 rounded-full px-5 backdrop-blur-md">
             <input
               type="text"
               value=""
-              disabled
-              placeholder="Enter your message..."
+              readOnly
+              placeholder="输入你的问题..."
               className={cn(
-                'ark-dialogue-input w-full pl-10 pr-10 py-2.5 backdrop-blur-md rounded-lg text-sm',
-                'focus:outline-none focus:border-blue-500/50',
-                'focus:ring-1 focus:ring-blue-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed',
+                'ark-dialogue-input min-w-0 flex-1 bg-transparent text-sm',
+                'focus:outline-none',
               )}
             />
             <button
               type="button"
-              disabled
               className={cn(
-                'absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md',
-                'ark-dialogue-send transition-colors',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
+                'ark-dialogue-send ark-focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95',
               )}
+              aria-label="发送消息"
             >
-              <Send className="w-4 h-4" />
+              <Send className="h-5 w-5" aria-hidden="true" />
             </button>
-          </div>
         </div>
-
-        <div className="relative w-full">
-          <div className="ark-dialogue-speaker absolute top-0 -translate-y-1/2 left-4 px-6 py-2 rounded-xl backdrop-blur-md z-10">
-            <span className="font-semibold text-sm md:text-base">
-              莫宁
-            </span>
-          </div>
-
-          <div className="ark-dialogue-box backdrop-blur-xl rounded-2xl p-5 md:p-6 h-[160px] md:h-[190px] shadow-2xl relative overflow-hidden">
-            <div className="ark-dialogue-glow absolute top-0 left-0 w-32 h-32 blur-3xl rounded-full -translate-x-1/2 -translate-y-1/2" />
-
-            <button
-              type="button"
-              disabled
-              className={cn(
-                'ark-dialogue-volume absolute top-4 right-4 z-20 p-2 rounded-full transition-colors pointer-events-auto',
-                'opacity-70 cursor-not-allowed',
-              )}
-            >
-              <VolumeX className="w-4 h-4" />
-            </button>
-
-            <div className="relative z-10 h-full overflow-y-auto pr-2">
-              <MarkdownContent
-                content={DEFAULT_DIALOGUE}
-                className="ark-dialogue-message text-sm md:text-base font-medium leading-relaxed"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
   );
 };
