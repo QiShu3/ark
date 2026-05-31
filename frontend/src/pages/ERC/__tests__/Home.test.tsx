@@ -229,7 +229,7 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText('子应用安排');
+    await screen.findByText('托管安排');
     const switches = screen.getAllByRole('switch');
     await user.click(switches[0]);
 

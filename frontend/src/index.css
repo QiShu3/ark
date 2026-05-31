@@ -168,8 +168,12 @@
   backdrop-filter: blur(12px);
 }
 
-.ark-panel-card:hover {
+.ark-annotation {
+  border: 1px solid var(--ark-border);
   background: var(--ark-surface-subtle);
+  color: var(--ark-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
 }
 
 .ark-modal-backdrop {

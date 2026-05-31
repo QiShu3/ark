@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { ClipboardList, Calendar, AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle2, ClipboardList, Loader2, Play, Settings } from 'lucide-react';
+
+export type SubAppTaskItemState =
+  | 'ready'
+  | 'completed'
+  | 'blocked'
+  | 'unconfigured'
+  | 'uninitialized'
+  | 'config_invalid';
 
 export interface SubAppTaskItem {
   id: string;
@@ -7,7 +15,14 @@ export interface SubAppTaskItem {
   focusWorkName: string;
   isInitialized: boolean;
   isSynced: boolean;
-  onSyncToggle: (nextSynced: boolean) => Promise<void>;
+  onSyncToggle?: (nextSynced: boolean) => Promise<void>;
+  state?: SubAppTaskItemState;
+  statusLabel?: string;
+  primaryActionLabel?: string;
+  primaryActionDisabled?: boolean;
+  onPrimaryAction?: () => Promise<void> | void;
+  disabledReason?: string | null;
+  showSyncToggle?: boolean;
 }
 
 export interface SubAppArrangementsProps {
@@ -16,11 +31,11 @@ export interface SubAppArrangementsProps {
 }
 
 export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArrangementsProps) {
-  // Store loading state per task ID during sync toggles
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
+  const [actingTaskId, setActingTaskId] = useState<string | null>(null);
 
   const handleToggle = async (task: SubAppTaskItem) => {
-    if (isBusy || togglingTaskId || !task.isInitialized) return;
+    if (isBusy || togglingTaskId || !task.isInitialized || !task.onSyncToggle) return;
     setTogglingTaskId(task.id);
     try {
       await task.onSyncToggle(!task.isSynced);
@@ -31,16 +46,61 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
     }
   };
 
-  return (
-    <div className="ark-panel-card rounded-[2rem] p-8">
-      <div className="mb-6 text-sm uppercase tracking-[0.32em] text-[var(--ark-text-faint)]">Arrangements & Settings</div>
-      <h2 className="mb-6 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">子应用安排</h2>
+  const handlePrimaryAction = async (task: SubAppTaskItem) => {
+    if (isBusy || actingTaskId || task.primaryActionDisabled || !task.onPrimaryAction) return;
+    setActingTaskId(task.id);
+    try {
+      await task.onPrimaryAction();
+    } catch (err) {
+      console.error(`Failed to run primary action for task ${task.id}:`, err);
+    } finally {
+      setActingTaskId(null);
+    }
+  };
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Left Column: 任务 (Tasks) */}
-        <div className="ark-surface-subtle flex flex-col justify-between rounded-2xl border p-6">
+  const taskState = (task: SubAppTaskItem): SubAppTaskItemState => {
+    if (task.state) return task.state;
+    return task.isInitialized ? 'ready' : 'unconfigured';
+  };
+
+  const statusLabel = (task: SubAppTaskItem) => {
+    if (task.statusLabel) return task.statusLabel;
+    const state = taskState(task);
+    if (state === 'completed') return 'completed';
+    if (state === 'ready') return 'ready';
+    if (state === 'uninitialized') return '未初始化';
+    if (state === 'config_invalid') return '配置异常';
+    if (state === 'blocked') return 'blocked';
+    return '未配置';
+  };
+
+  const statusClassName = (state: SubAppTaskItemState) => {
+    if (state === 'ready') return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200';
+    if (state === 'completed') return 'border-sky-400/30 bg-sky-400/10 text-sky-200';
+    if (state === 'blocked' || state === 'config_invalid') return 'border-rose-400/30 bg-rose-400/10 text-rose-200';
+    return 'border-amber-400/30 bg-amber-400/10 text-amber-200';
+  };
+
+  const actionIcon = (label: string | undefined) => {
+    if (!label) return null;
+    if (label.includes('配置')) return <Settings className="h-4 w-4" />;
+    if (label.includes('初始化')) return <CheckCircle2 className="h-4 w-4" />;
+    return <Play className="h-4 w-4" />;
+  };
+
+  return (
+    <section className="ark-panel-card rounded-lg p-6">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Managed Arrangements</div>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">托管安排</h2>
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
           <div>
-            <div className="flex items-center gap-2 text-indigo-400 mb-4">
+            <div className="mb-4 flex items-center gap-2 text-[var(--ark-accent)]">
               <ClipboardList className="h-5 w-5" />
               <span className="text-base font-medium text-[var(--ark-text)]">任务</span>
             </div>
@@ -51,46 +111,68 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
               <div className="space-y-4">
                 {tasks.map((task) => {
                   const isTaskBusy = togglingTaskId === task.id || isBusy;
+                  const isActing = actingTaskId === task.id || isBusy;
+                  const state = taskState(task);
+                  const label = statusLabel(task);
+                  const actionLabel = task.primaryActionLabel;
+                  const canAct = !!task.onPrimaryAction && !task.primaryActionDisabled && !isActing;
+                  const showSyncToggle = task.showSyncToggle !== false;
                   return (
                     <div
                       key={task.id}
-                      className="ark-surface-subtle flex flex-col gap-4 rounded-xl border p-4 transition hover:border-[var(--ark-border-strong)] sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-4 border-t border-ark-border py-4 first:border-t-0 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="space-y-1.5">
+                      <div className="min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2.5">
                           <span className="text-base font-semibold text-[var(--ark-text)]">{task.name}</span>
-                          {!task.isInitialized && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-300 border border-amber-500/20">
-                              <AlertCircle className="h-3.5 w-3.5" />
-                              未配置
-                            </span>
-                          )}
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusClassName(state)}`}>
+                            {state === 'ready' || state === 'completed' ? null : <AlertCircle className="h-3.5 w-3.5" />}
+                            {label}
+                          </span>
                         </div>
                         <div className="text-xs text-[var(--ark-text-faint)]">
-                          绑定专注工作：<span className="text-indigo-300">{task.focusWorkName}</span>
+                          绑定专注工作：<span className="text-[var(--ark-accent)]">{task.focusWorkName}</span>
                         </div>
+                        {task.disabledReason ? <div className="text-xs text-rose-200">{task.disabledReason}</div> : null}
                       </div>
 
-                      <div className="flex items-center gap-3 self-end sm:self-center">
-                        {isTaskBusy && <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />}
-                        <span className="text-xs text-[var(--ark-text-muted)]">同步到今日安排</span>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={task.isSynced}
-                          disabled={!task.isInitialized || isTaskBusy}
-                          onClick={() => handleToggle(task)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed ${
-                            task.isSynced ? 'bg-indigo-500' : 'bg-ark-surface-subtle'
-                          } ${!task.isInitialized ? 'opacity-40' : ''}`}
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              task.isSynced ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                      <div className="flex flex-wrap items-center justify-end gap-3 self-end sm:self-center">
+                        {showSyncToggle ? (
+                          <div className="flex items-center gap-3">
+                            {isTaskBusy && <Loader2 className="h-4 w-4 animate-spin text-[var(--ark-accent)]" />}
+                            <span className="text-xs text-[var(--ark-text-muted)]">同步到今日安排</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-label={`同步到今日安排：${task.name}`}
+                              aria-checked={task.isSynced}
+                              disabled={!task.isInitialized || isTaskBusy}
+                              onClick={() => handleToggle(task)}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ark-focus-ring focus:ring-offset-2 focus:ring-offset-ark-panel disabled:cursor-not-allowed ${
+                                task.isSynced ? 'bg-ark-accent' : 'bg-ark-surface-subtle'
+                              } ${!task.isInitialized ? 'opacity-40' : ''}`}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  task.isSynced ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {actionLabel ? (
+                          <button
+                            type="button"
+                            disabled={!canAct}
+                            onClick={() => void handlePrimaryAction(task)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-ark-border bg-white px-3.5 py-2 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : actionIcon(actionLabel)}
+                            {actionLabel}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -100,33 +182,28 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
           </div>
 
           {tasks.some((t) => !t.isInitialized) && (
-            <div className="mt-4 flex items-start gap-1.5 rounded-xl border border-amber-500/10 bg-amber-500/5 p-3 text-xs leading-relaxed text-[var(--ark-text-faint)]">
-              <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-              <span>提示：部分任务处于“未配置”状态，无法开启同步。请使用页面上方的配置按钮先初始化任务。</span>
+            <div className="ark-annotation mt-4 flex items-start gap-1.5 rounded-lg px-3 py-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-[var(--ark-text-muted)]" />
+              <span>部分任务需要先配置或初始化，完成后即可使用。</span>
             </div>
           )}
         </div>
 
-        {/* Right Column: 日程 (Schedules) */}
-        <div className="ark-surface-subtle flex flex-col justify-between rounded-2xl border p-6">
+        <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
           <div>
-            <div className="flex items-center gap-2 text-sky-400 mb-4">
+            <div className="mb-4 flex items-center gap-2 text-[var(--ark-accent)]">
               <Calendar className="h-5 w-5" />
               <span className="text-base font-medium text-[var(--ark-text)]">日程</span>
             </div>
             
-            <div className="ark-surface-subtle flex h-[120px] flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center transition hover:border-[var(--ark-border-strong)]">
+            <div className="flex h-[132px] flex-col items-center justify-center rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-6 text-center">
               <Calendar className="mb-2 h-8 w-8 text-[var(--ark-text-faint)]" />
               <div className="text-sm font-medium text-[var(--ark-text-muted)]">暂无日程安排</div>
-              <div className="mt-1 text-xs text-[var(--ark-text-faint)]">本子应用日程配置功能正在规划中，敬请期待</div>
+              <div className="mt-1 text-xs text-[var(--ark-text-faint)]">当前子应用尚未生成托管日程</div>
             </div>
-          </div>
-          
-          <div className="mt-4 text-center text-xs leading-relaxed text-[var(--ark-text-faint)]">
-            日程功能将在下个版本上线，届时可直接同步子应用周期性日程。
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
