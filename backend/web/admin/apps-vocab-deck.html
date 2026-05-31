@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ark Admin · 词书详情</title>
+  <link rel="stylesheet" href="css/common.css" />
+  <style>
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    .deck-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .deck-header h2 { margin: 0; font-size: 28px; }
+    .deck-meta { display: flex; gap: 16px; font-size: 14px; color: var(--muted); }
+    .deck-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+    .search-bar { margin-bottom: 16px; }
+    .search-bar input {
+      width: 100%; max-width: 400px; padding: 8px 12px;
+      border: 1px solid var(--border-soft); border-radius: 8px;
+      font-size: 14px; background: var(--surface); color: var(--text);
+      outline: none; transition: border-color 0.2s;
+    }
+    .search-bar input:focus { border-color: var(--accent); }
+
+    .word-row-detail { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .pronunciation { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+    .translation-tag {
+      display: inline-block; padding: 1px 8px; margin: 2px 4px 2px 0;
+      background: var(--surface); border: 1px solid var(--border-soft);
+      border-radius: 4px; font-size: 12px;
+    }
+    .pos-tag {
+      display: inline-block; padding: 0 6px; margin-right: 4px;
+      background: var(--accent-bg, #e8f0fe); color: var(--accent);
+      border-radius: 3px; font-size: 11px; font-weight: 500;
+    }
+
+    .word-count-badge {
+      display: inline-block; padding: 2px 10px;
+      background: var(--surface); border: 1px solid var(--border-soft);
+      border-radius: 12px; font-size: 13px; color: var(--muted);
+      font-family: var(--font-mono);
+    }
+
+    .empty-state { text-align: center; padding: 40px; color: var(--muted); }
+
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .toolbar .spacer { flex: 1; }
+
+    .btn-danger { background: #dc2626; color: #fff; border: none; }
+    .btn-danger:hover { background: #b91c1c; }
+
+    .confirm-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      justify-content: center; align-items: center;
+    }
+    .confirm-overlay.active { display: flex; }
+    .confirm-box {
+      background: var(--surface); border: 1px solid var(--border-soft);
+      border-radius: 12px; padding: 24px; max-width: 420px; width: 90%;
+    }
+    .confirm-box h3 { margin: 0 0 12px; font-size: 18px; }
+    .confirm-box p { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+    .confirm-box .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .file-input-wrap { position: relative; display: inline-block; }
+    .file-input-wrap input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div style="margin-bottom: 40px;">
+    <h1 style="font-size: 24px; color: var(--accent); margin: 0;">Ark Admin</h1>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">主看板</span>
+    <a href="index.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+      用户概览
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">子应用</span>
+    <a href="apps.html" class="nav-item active">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      子应用
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">功能</span>
+    <a href="users.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      用户管理
+    </a>
+    <a href="templates.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+      模板商店
+    </a>
+  </div>
+
+  <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-soft);">
+    <a href="/" class="nav-item" style="font-size: 13px;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      返回主应用
+    </a>
+  </div>
+</aside>
+
+<main class="main-content">
+  <nav class="breadcrumb">
+    <a href="apps.html">子应用</a>
+    <span>/</span>
+    <a href="apps-vocab.html">词汇管理</a>
+    <span>/</span>
+    <span id="deck-breadcrumb">词书详情</span>
+  </nav>
+
+  <div class="deck-header">
+    <h2 id="deck-name">加载中...</h2>
+    <span class="word-count-badge" id="deck-word-count">—</span>
+  </div>
+  <p id="deck-description" style="color: var(--muted); margin: 0 0 24px;"></p>
+
+  <div class="toolbar">
+    <div class="file-input-wrap">
+      <button class="btn btn-secondary" id="btn-update" type="button">更新词书</button>
+      <input type="file" id="file-update" accept=".json" />
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-danger" id="btn-delete" type="button">删除词书</button>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="word-search" placeholder="搜索单词..." />
+  </div>
+
+  <!-- Delete Confirmation -->
+  <div class="confirm-overlay" id="confirm-delete">
+    <div class="confirm-box">
+      <h3>确认删除</h3>
+      <p>确定要删除词书 <strong id="confirm-deck-name"></strong> 吗？此操作不可撤销，所有单词数据将被永久删除。</p>
+      <div class="confirm-actions">
+        <button class="btn btn-secondary" id="confirm-cancel" type="button">取消</button>
+        <button class="btn btn-danger" id="confirm-ok" type="button">确认删除</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-card" style="padding: 0; overflow: hidden;">
+    <table class="admin-table" style="border: 0; border-radius: 0;">
+      <thead>
+        <tr>
+          <th style="width: 40px;">#</th>
+          <th>单词</th>
+          <th>音标</th>
+          <th>释义</th>
+        </tr>
+      </thead>
+      <tbody id="words-tbody"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/apps.js"></script>
+</body>
+</html>

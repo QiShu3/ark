@@ -33,6 +33,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             """
         )
         await conn.execute(
+            "ALTER TABLE vocab_decks ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false"
+        )
+        await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS vocab_words (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -329,14 +332,16 @@ async def sync_vocab_deck_word_counts(conn: asyncpg.Connection) -> None:
     )
 
 
-async def list_vocab_decks(conn: asyncpg.Connection) -> list[asyncpg.Record]:
+async def list_vocab_decks(conn: asyncpg.Connection, *, published_only: bool = False) -> list[asyncpg.Record]:
+    where = "WHERE d.is_published = true" if published_only else ""
     return await conn.fetch(
-        """
+        f"""
         SELECT
           d.id::text AS id,
           d.key,
           d.name,
           d.description,
+          d.is_published,
           COALESCE(stats.actual_word_count, 0) AS word_count,
           d.created_at,
           d.updated_at
@@ -346,9 +351,36 @@ async def list_vocab_decks(conn: asyncpg.Connection) -> list[asyncpg.Record]:
           FROM vocab_words
           GROUP BY deck_id
         ) stats ON stats.deck_id = d.id
+        {where}
         ORDER BY d.name ASC
         """
     )
+
+
+async def toggle_deck_published(conn: asyncpg.Connection, *, deck_id: str) -> bool:
+    row = await conn.fetchrow(
+        """
+        UPDATE vocab_decks
+        SET is_published = NOT is_published, updated_at = NOW()
+        WHERE id = $1::uuid
+        RETURNING is_published
+        """,
+        deck_id,
+    )
+    if row is None:
+        raise ValueError(f"词书 {deck_id} 不存在")
+    return bool(row["is_published"])
+
+
+async def delete_deck(conn: asyncpg.Connection, *, deck_id: str) -> str:
+    """Hard-delete a deck and all its words. Returns the deck name."""
+    row = await conn.fetchrow(
+        "DELETE FROM vocab_decks WHERE id = $1::uuid RETURNING name",
+        deck_id,
+    )
+    if row is None:
+        raise ValueError(f"词书 {deck_id} 不存在")
+    return str(row["name"])
 
 
 async def get_daily_new_limit(conn: asyncpg.Connection, *, user_id: int, deck_ids: list[str]) -> int:
@@ -940,6 +972,31 @@ async def list_mastered_word_rows(
         ORDER BY LOWER(BTRIM(w.word)) ASC, d.name ASC, w.sort_order ASC, COALESCE(t.sort_order, 999999) ASC
         """,
         user_id,
+    )
+
+
+async def list_admin_deck_words(
+    conn: asyncpg.Connection,
+    *,
+    deck_id: str,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          w.id::text AS id,
+          w.word,
+          w.us_pronunciation,
+          w.uk_pronunciation,
+          w.sort_order,
+          t.pos,
+          t.translation,
+          COALESCE(t.sort_order, 999999) AS translation_sort_order
+        FROM vocab_words w
+        LEFT JOIN vocab_word_translations t ON t.word_id = w.id
+        WHERE w.deck_id = $1::uuid
+        ORDER BY w.sort_order ASC, COALESCE(t.sort_order, 999999) ASC
+        """,
+        deck_id,
     )
 
 

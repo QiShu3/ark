@@ -12,6 +12,7 @@ class VocabDeckOut(BaseModel):
     name: str
     description: str
     word_count: int
+    is_published: bool = False
     created_at: datetime
     updated_at: datetime
 

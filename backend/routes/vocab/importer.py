@@ -83,6 +83,70 @@ def load_sentence_json(path: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def parse_full_entry(payload: dict, sort_order: int) -> WordSeed:
+    """Parse a word entry in the 'json-full' format."""
+    inner = payload.get("content", {}).get("word", {})
+    word_text = inner.get("wordHead", "") or payload.get("headWord", "")
+    content = inner.get("content", {})
+
+    us = content.get("usphone") or None
+    uk = content.get("ukphone") or None
+
+    translations = [
+        TranslationSeed(
+            translation=str(t.get("tranCn", "")).strip(),
+            pos=(str(t.get("pos", "")).strip() or None),
+        )
+        for t in content.get("trans", [])
+        if str(t.get("tranCn", "")).strip()
+    ]
+
+    phrases = [
+        PhraseSeed(
+            phrase=str(p.get("pContent", "")).strip(),
+            translation=str(p.get("pCn", "")).strip(),
+        )
+        for p in content.get("phrase", {}).get("phrases", [])
+        if str(p.get("pContent", "")).strip() and str(p.get("pCn", "")).strip()
+    ]
+
+    sentences = [
+        SentenceSeed(
+            sentence=str(s.get("sContent", "")).strip(),
+            translation=str(s.get("sCn", "")).strip(),
+        )
+        for s in content.get("sentence", {}).get("sentences", [])
+        if str(s.get("sContent", "")).strip() and str(s.get("sCn", "")).strip()
+    ]
+
+    return WordSeed(
+        word=word_text.strip(),
+        us_pronunciation=us,
+        uk_pronunciation=uk,
+        sort_order=sort_order,
+        translations=translations,
+        phrases=phrases,
+        sentences=sentences,
+    )
+
+
+def detect_format(payloads: list[dict]) -> str:
+    """Detect whether the JSON is 'sentence' or 'full' format."""
+    if not payloads:
+        return "sentence"
+    first = payloads[0]
+    if "content" in first and "word" in first.get("content", {}):
+        return "full"
+    return "sentence"
+
+
+def parse_word_entry(payload: dict, sort_order: int, fmt: str) -> WordSeed:
+    """Parse a word entry using the detected format."""
+    if fmt == "full":
+        return parse_full_entry(payload, sort_order)
+    return parse_sentence_entry(payload, sort_order)
+
+
 def _deck_meta_from_filename(path: Path) -> tuple[str, str]:
     stem = path.stem
     if "-" not in stem:

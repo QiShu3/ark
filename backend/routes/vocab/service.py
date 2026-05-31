@@ -432,9 +432,9 @@ async def _ensure_today_plan(conn: asyncpg.Connection, *, user_id: int, deck_gro
     return dict(plan_row)
 
 
-async def list_decks(pool: asyncpg.Pool) -> list[dict]:
+async def list_decks(pool: asyncpg.Pool, *, published_only: bool = False) -> list[dict]:
     async with pool.acquire() as conn:
-        rows = await list_vocab_decks(conn)
+        rows = await list_vocab_decks(conn, published_only=published_only)
     return _group_deck_rows(rows)
 
 

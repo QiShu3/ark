@@ -4,6 +4,7 @@ export type VocabDeck = {
   name: string;
   description: string;
   word_count: number;
+  is_published: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import os
 import secrets
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Annotated, Any
+
+# --- Import logger setup ---
+_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+_LOG_DIR.mkdir(exist_ok=True)
+_import_logger = logging.getLogger("admin.import")
+_import_logger.setLevel(logging.DEBUG)
+if not _import_logger.handlers:
+    _fh = logging.FileHandler(_LOG_DIR / "admin_import.log", encoding="utf-8")
+    _fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+    _import_logger.addHandler(_fh)
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -441,9 +454,11 @@ async def vocab_stats(
 
 
 class VocabDeckItem(BaseModel):
+    id: str
     name: str
     word_count: int
     learner_count: int
+    is_published: bool
 
 
 @router.get("/apps/vocab/decks", response_model=list[VocabDeckItem])
@@ -455,13 +470,336 @@ async def vocab_decks(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT d.name, d.word_count,
+            SELECT d.id::text AS id, d.name, d.word_count, d.is_published,
                    (SELECT COUNT(DISTINCT user_id) FROM vocab_user_word_progress WHERE deck_id = d.id) AS learner_count
             FROM vocab_decks d
             ORDER BY d.name
             """
         )
-    return [VocabDeckItem(name=r["name"], word_count=r["word_count"], learner_count=r["learner_count"]) for r in rows]
+    return [VocabDeckItem(id=r["id"], name=r["name"], word_count=r["word_count"], learner_count=r["learner_count"], is_published=r["is_published"]) for r in rows]
+
+
+class VocabDeckPublishOut(BaseModel):
+    is_published: bool
+
+
+@router.patch("/apps/vocab/decks/{deck_id}/publish", response_model=VocabDeckPublishOut)
+async def toggle_deck_publish(
+    deck_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabDeckPublishOut:
+    from routes.vocab.repository import toggle_deck_published
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        try:
+            new_status = await toggle_deck_published(conn, deck_id=deck_id)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    return VocabDeckPublishOut(is_published=new_status)
+
+
+class VocabDeckDeleteOut(BaseModel):
+    name: str
+
+
+@router.delete("/apps/vocab/decks/{deck_id}", response_model=VocabDeckDeleteOut)
+async def delete_vocab_deck(
+    deck_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabDeckDeleteOut:
+    from routes.vocab.repository import delete_deck
+
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                name = await delete_deck(conn, deck_id=deck_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    _import_logger.info("删除词书: deck_id=%s, name=%s", deck_id, name)
+    return VocabDeckDeleteOut(name=name)
+
+
+class VocabDeckUpdateOut(BaseModel):
+    deck_id: str
+    name: str
+    word_count: int
+
+
+@router.put("/apps/vocab/decks/{deck_id}", response_model=VocabDeckUpdateOut)
+async def update_vocab_deck(
+    deck_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabDeckUpdateOut:
+    from routes.vocab.importer import DeckSeed, detect_format, parse_word_entry
+    from routes.vocab.repository import replace_deck_words, sync_vocab_deck_word_counts
+
+    # Verify deck exists
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        deck = await conn.fetchrow(
+            "SELECT id::text, key, name FROM vocab_decks WHERE id = $1::uuid", deck_id
+        )
+    if deck is None:
+        raise HTTPException(status_code=404, detail="词书不存在")
+
+    # Read multipart form
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        raise HTTPException(status_code=400, detail="请上传 JSON 文件")
+
+    filename = getattr(upload, "filename", "unknown.json")
+    content = await upload.read()
+
+    _import_logger.info("开始更新词书: deck_id=%s, name=%s, filename=%s, size=%d bytes", deck_id, deck["name"], filename, len(content))
+
+    # Parse JSON
+    import json
+
+    try:
+        raw = json.loads(content)
+    except json.JSONDecodeError as e:
+        _import_logger.error("更新失败 JSON 解析: deck_id=%s, error=%s", deck_id, e)
+        raise HTTPException(status_code=400, detail=f"JSON 格式错误: {e}")
+
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=400, detail="JSON 必须是单词数组")
+    if len(raw) == 0:
+        raise HTTPException(status_code=400, detail="词书内容不能为空")
+
+    fmt = detect_format(raw)
+    _import_logger.info("更新检测到格式: %s, deck_id=%s", fmt, deck_id)
+
+    # Parse and deduplicate
+    words = []
+    seen_words: set[str] = set()
+    skipped_dupes = 0
+    for i, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail=f"第 {i} 条必须是对象")
+        try:
+            word_seed = parse_word_entry(item, sort_order=i, fmt=fmt)
+        except (KeyError, TypeError, ValueError) as e:
+            _import_logger.error("更新第 %d 条解析失败: deck_id=%s, error=%s", i, deck_id, e)
+            raise HTTPException(status_code=400, detail=f"第 {i} 条解析失败: {e}")
+        if not word_seed.word:
+            raise HTTPException(status_code=400, detail=f"第 {i} 条缺少 word 字段")
+        word_key = word_seed.word.strip().lower()
+        if word_key in seen_words:
+            skipped_dupes += 1
+            continue
+        seen_words.add(word_key)
+        words.append(word_seed)
+
+    if skipped_dupes:
+        _import_logger.info("更新跳过重复单词: %d 个", skipped_dupes)
+
+    # Replace words
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await replace_deck_words(conn, deck_id=deck_id, words=words)
+                await sync_vocab_deck_word_counts(conn)
+    except Exception as e:
+        _import_logger.exception("更新数据库失败: deck_id=%s, error=%s", deck_id, e)
+        raise HTTPException(status_code=500, detail=f"更新失败: {e}")
+
+    _import_logger.info("更新成功: deck_id=%s, name=%s, words=%d", deck_id, deck["name"], len(words))
+    return VocabDeckUpdateOut(deck_id=deck_id, name=deck["name"], word_count=len(words))
+
+
+class VocabWordTranslationItem(BaseModel):
+    pos: str | None = None
+    translation: str
+
+
+class VocabWordItem(BaseModel):
+    id: str
+    word: str
+    us_pronunciation: str | None = None
+    uk_pronunciation: str | None = None
+    translations: list[VocabWordTranslationItem] = []
+
+
+class VocabDeckDetailOut(BaseModel):
+    id: str
+    name: str
+    description: str
+    word_count: int
+    is_published: bool
+    words: list[VocabWordItem] = []
+
+
+@router.get("/apps/vocab/decks/{deck_id}", response_model=VocabDeckDetailOut)
+async def vocab_deck_detail(
+    deck_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabDeckDetailOut:
+    from routes.vocab.repository import list_admin_deck_words
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        deck = await conn.fetchrow(
+            "SELECT id::text, name, description, word_count, is_published FROM vocab_decks WHERE id = $1::uuid",
+            deck_id,
+        )
+        if deck is None:
+            raise HTTPException(status_code=404, detail="词书不存在")
+
+        rows = await list_admin_deck_words(conn, deck_id=deck_id)
+
+    # Group translations by word
+    words_map: dict[str, dict] = {}
+    for r in rows:
+        wid = r["id"]
+        if wid not in words_map:
+            words_map[wid] = {
+                "id": wid,
+                "word": r["word"],
+                "us_pronunciation": r["us_pronunciation"],
+                "uk_pronunciation": r["uk_pronunciation"],
+                "translations": [],
+            }
+        if r["translation"]:
+            words_map[wid]["translations"].append(
+                VocabWordTranslationItem(pos=r["pos"], translation=r["translation"])
+            )
+
+    return VocabDeckDetailOut(
+        id=deck["id"],
+        name=deck["name"],
+        description=deck["description"],
+        word_count=deck["word_count"],
+        is_published=deck["is_published"],
+        words=[VocabWordItem(**w) for w in words_map.values()],
+    )
+
+
+class VocabDeckImportOut(BaseModel):
+    deck_id: str
+    name: str
+    word_count: int
+
+
+@router.post("/apps/vocab/decks/import", response_model=VocabDeckImportOut)
+async def import_vocab_deck(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabDeckImportOut:
+    from routes.vocab.importer import DeckSeed, WordSeed, TranslationSeed, PhraseSeed, SentenceSeed, _deck_meta_from_filename, detect_format, parse_word_entry
+    from routes.vocab.repository import import_deck, sync_vocab_deck_word_counts
+
+    # Read multipart form
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        raise HTTPException(status_code=400, detail="请上传 JSON 文件")
+
+    filename = getattr(upload, "filename", "unknown.json")
+    content = await upload.read()
+
+    _import_logger.info("开始导入: filename=%s, size=%d bytes", filename, len(content))
+
+    # Parse JSON
+    import json
+
+    try:
+        raw = json.loads(content)
+    except json.JSONDecodeError as e:
+        _import_logger.error("JSON 解析失败: filename=%s, error=%s", filename, e)
+        raise HTTPException(status_code=400, detail=f"JSON 格式错误: {e}")
+
+    if not isinstance(raw, list):
+        _import_logger.error("JSON 顶层不是数组: filename=%s, type=%s", filename, type(raw).__name__)
+        raise HTTPException(status_code=400, detail="JSON 必须是单词数组")
+    if len(raw) == 0:
+        _import_logger.error("JSON 数组为空: filename=%s", filename)
+        raise HTTPException(status_code=400, detail="词书内容不能为空")
+
+    # Auto-detect format (sentence vs full)
+    fmt = detect_format(raw)
+    _import_logger.info("检测到格式: %s, filename=%s", fmt, filename)
+
+    # Validate and build seeds (deduplicate by word)
+    words: list[WordSeed] = []
+    seen_words: set[str] = set()
+    skipped_dupes = 0
+    for i, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            _import_logger.error("第 %d 条不是对象: filename=%s, type=%s", i, filename, type(item).__name__)
+            raise HTTPException(status_code=400, detail=f"第 {i} 条必须是对象")
+
+        try:
+            word_seed = parse_word_entry(item, sort_order=i, fmt=fmt)
+        except (KeyError, TypeError, ValueError) as e:
+            _import_logger.error("第 %d 条解析失败: filename=%s, error=%s", i, filename, e)
+            raise HTTPException(status_code=400, detail=f"第 {i} 条解析失败: {e}")
+
+        if not word_seed.word:
+            _import_logger.error("第 %d 条缺少 word: filename=%s", i, filename)
+            raise HTTPException(status_code=400, detail=f"第 {i} 条缺少 word 字段")
+
+        # Skip duplicate words (keep first occurrence)
+        word_key = word_seed.word.strip().lower()
+        if word_key in seen_words:
+            skipped_dupes += 1
+            continue
+        seen_words.add(word_key)
+
+        words.append(word_seed)
+
+    if skipped_dupes:
+        _import_logger.info("跳过重复单词: %d 个", skipped_dupes)
+
+    # Derive deck meta from filename
+    key, name = _deck_meta_from_filename(Path(filename))
+    description = f"{name} 词书"
+
+    deck_seed = DeckSeed(
+        key=key,
+        name=name,
+        description=description,
+        source_version="json-sentence",
+        words=words,
+    )
+
+    # Import
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                deck_id = await import_deck(conn, deck_seed)
+                await sync_vocab_deck_word_counts(conn)
+    except Exception as e:
+        _import_logger.exception("数据库导入失败: filename=%s, key=%s, name=%s, error=%s", filename, key, name, e)
+        raise HTTPException(status_code=500, detail=f"导入失败: {e}")
+
+    _import_logger.info("导入成功: filename=%s, key=%s, name=%s, deck_id=%s, words=%d", filename, key, name, deck_id, len(words))
+    return VocabDeckImportOut(deck_id=deck_id, name=name, word_count=len(words))
+
+
+class VocabImportLogOut(BaseModel):
+    lines: list[str]
+
+
+@router.get("/apps/vocab/logs", response_model=VocabImportLogOut)
+async def vocab_import_logs(
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabImportLogOut:
+    log_path = _LOG_DIR / "admin_import.log"
+    if not log_path.exists():
+        return VocabImportLogOut(lines=[])
+    text = log_path.read_text(encoding="utf-8")
+    # Return lines in reverse order (newest first), max 500
+    lines = text.strip().splitlines()
+    return VocabImportLogOut(lines=lines[-500:][::-1])
 
 
 class ErcStats(BaseModel):

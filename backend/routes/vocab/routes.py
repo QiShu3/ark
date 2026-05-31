@@ -62,7 +62,7 @@ async def route_list_decks(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> list[VocabDeckOut]:
     _ = user
-    decks = await list_decks(_pool_from_request(request))
+    decks = await list_decks(_pool_from_request(request), published_only=True)
     return [VocabDeckOut(**deck) for deck in decks]
 
 
