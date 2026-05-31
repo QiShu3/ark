@@ -15,6 +15,7 @@ from routes.erc import init_erc
 from routes.erc import router as erc_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
+from routes.admin_routes import router as admin_router
 from routes.vocab import init_vocab
 from routes.vocab import router as vocab_router
 
@@ -56,6 +57,7 @@ app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(vocab_router)
 app.include_router(erc_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
