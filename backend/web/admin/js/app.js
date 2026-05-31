@@ -7,7 +7,13 @@
  */
 function requireAdmin() {
   const user = getCurrentUser();
-  if (!user || !user.is_admin) {
+  if (!user) {
+    // Not logged in — redirect to main app login
+    window.location.href = '/#/';
+    return false;
+  }
+  if (!user.is_admin) {
+    // Logged in but not admin — redirect to main app home
     window.location.href = '/#/';
     return false;
   }

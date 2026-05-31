@@ -1,5 +1,6 @@
 // backend/web/admin/js/users.js
 // User management page logic
+/* global api, formatDate, getCurrentUser, initPage, renderPagination, showConfirm, showResult, showToast */
 
 let currentPage = 1;
 let currentSearch = '';
@@ -45,31 +46,51 @@ async function loadUsers() {
   }
 }
 
+/**
+ * Render an action button for permission-related operations.
+ */
+function renderPermissionButton(label, onClick, disabled) {
+  const disabledAttrs = disabled
+    ? 'disabled title="不能管理自己的权限" style="font-size:12px;padding:4px 8px;opacity:0.45;cursor:not-allowed;"'
+    : 'style="font-size:12px;padding:4px 8px;"';
+  const clickHandler = disabled ? '' : ` onclick="${onClick}"`;
+  return `<button class="btn btn-ghost"${clickHandler} ${disabledAttrs}>${label}</button>`;
+}
+
+/**
+ * Render the user table rows.
+ */
 function renderUserTable(users) {
   const tbody = document.getElementById('user-table-body');
   if (!tbody) return;
+  const currentUserGetter = globalThis['getCurrentUser'];
+  const currentUser = typeof currentUserGetter === 'function' ? currentUserGetter() : null;
+  const currentUserId = Number(currentUser?.id);
 
-  tbody.innerHTML = users.map(u => `
-    <tr>
-      <td>${u.id}</td>
-      <td>
-        <div style="font-weight:500;">${u.username}</div>
-        <div style="font-size:12px;color:var(--muted);">${u.email || '-'}</div>
-      </td>
-      <td><span class="pill" style="background:${u.email_verified ? 'color-mix(in oklch, var(--success) 14%, transparent)' : 'var(--accent-soft)'};color:${u.email_verified ? 'var(--success)' : 'var(--muted)'};">${u.email_verified ? '已验证' : '未验证'}</span></td>
-      <td>${u.is_admin ? '<span class="pill">管理员</span>' : '-'}</td>
-      <td><span class="pill" style="background:${u.is_active ? 'color-mix(in oklch, var(--success) 14%, transparent)' : 'color-mix(in oklch, var(--danger) 14%, transparent)'};color:${u.is_active ? 'var(--success)' : 'var(--danger)'};">${u.is_active ? '启用' : '禁用'}</span></td>
-      <td style="font-family:var(--font-mono);font-size:13px;">${formatDate(u.created_at)}</td>
-      <td>
-        <div style="display:flex;gap:4px;">
-          <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="toggleAdmin(${u.id}, ${u.is_admin})">${u.is_admin ? '取消管理员' : '设为管理员'}</button>
-          <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="toggleActive(${u.id}, ${u.is_active})">${u.is_active ? '禁用' : '启用'}</button>
-          <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="resetPassword(${u.id}, '${u.username}')">重置密码</button>
-          <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;color:var(--danger);" onclick="deleteUser(${u.id}, '${u.username}')">删除</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = users.map((u) => {
+    const isSelf = currentUserId === Number(u.id);
+    return `
+      <tr>
+        <td>${u.id}</td>
+        <td>
+          <div style="font-weight:500;">${u.username}</div>
+          <div style="font-size:12px;color:var(--muted);">${u.email || '-'}</div>
+        </td>
+        <td><span class="pill" style="background:${u.email_verified ? 'color-mix(in oklch, var(--success) 14%, transparent)' : 'var(--accent-soft)'};color:${u.email_verified ? 'var(--success)' : 'var(--muted)'};">${u.email_verified ? '已验证' : '未验证'}</span></td>
+        <td>${u.is_admin ? '<span class="pill">管理员</span>' : '-'}</td>
+        <td><span class="pill" style="background:${u.is_active ? 'color-mix(in oklch, var(--success) 14%, transparent)' : 'color-mix(in oklch, var(--danger) 14%, transparent)'};color:${u.is_active ? 'var(--success)' : 'var(--danger)'};">${u.is_active ? '启用' : '禁用'}</span></td>
+        <td style="font-family:var(--font-mono);font-size:13px;">${formatDate(u.created_at)}</td>
+        <td>
+          <div style="display:flex;gap:4px;">
+            ${renderPermissionButton(u.is_admin ? '取消管理员' : '设为管理员', `toggleAdmin(${u.id}, ${u.is_admin})`, isSelf)}
+            ${renderPermissionButton(u.is_active ? '禁用' : '启用', `toggleActive(${u.id}, ${u.is_active})`, isSelf)}
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="resetPassword(${u.id}, '${u.username}')">重置密码</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;color:var(--danger);" onclick="deleteUser(${u.id}, '${u.username}')">删除</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function toggleAdmin(userId, isAdmin) {

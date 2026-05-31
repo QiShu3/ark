@@ -290,6 +290,10 @@ async def update_user(
     payload: UserUpdateRequest,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> dict[str, str]:
+    """更新用户管理员和启用状态，并拒绝修改自己的权限状态。"""
+    if user_id == _admin.id and (payload.is_admin is not None or payload.is_active is not None):
+        raise HTTPException(status_code=400, detail="Cannot modify your own admin or active status")
+
     pool = _pool(request)
     updates: list[str] = []
     params: list[Any] = []

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ark Admin · ERC 管理</title>
+  <link rel="stylesheet" href="css/common.css" />
+  <style>
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 40px; }
+    @media (max-width: 920px) { .stats-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div style="margin-bottom: 40px;">
+    <h1 style="font-size: 24px; color: var(--accent); margin: 0;">Ark Admin</h1>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">主看板</span>
+    <a href="index.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+      用户概览
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">子应用</span>
+    <a href="apps.html" class="nav-item active">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      子应用
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">功能</span>
+    <a href="users.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      用户管理
+    </a>
+    <a href="templates.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+      模板商店
+    </a>
+  </div>
+
+  <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-soft);">
+    <a href="/" class="nav-item" style="font-size: 13px;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      返回主应用
+    </a>
+  </div>
+</aside>
+
+<main class="main-content">
+  <nav class="breadcrumb">
+    <a href="apps.html">子应用</a>
+    <span>/</span>
+    <span>ERC 管理</span>
+  </nav>
+
+  <header style="margin-bottom: 40px;">
+    <h2 style="font-size: 32px; margin: 0;">阅读集</h2>
+    <p style="color: var(--muted); margin: 4px 0 0;">管理英语阅读文章与练习集。</p>
+  </header>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="label">总做题数</div>
+      <div class="val">18,240</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">今日做题量</div>
+      <div class="val">1,120</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">平均正确率</div>
+      <div class="val">76.8%</div>
+    </div>
+  </div>
+
+  <div class="admin-card" style="padding: 0; overflow: hidden;">
+    <table class="admin-table" style="border: 0; border-radius: 0;">
+      <thead>
+        <tr>
+          <th>阅读集名称</th>
+          <th>文章数</th>
+          <th>总题数</th>
+          <th>做题人数</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight: 500;">经济学人精选 2026</td>
+          <td>42</td>
+          <td>210</td>
+          <td>840</td>
+          <td><button class="btn-ghost" style="padding: 4px; font-size: 12px; color: var(--accent);">编辑</button></td>
+        </tr>
+        <tr>
+          <td style="font-weight: 500;">科学美国人短篇</td>
+          <td>60</td>
+          <td>300</td>
+          <td>1,120</td>
+          <td><button class="btn-ghost" style="padding: 4px; font-size: 12px; color: var(--accent);">编辑</button></td>
+        </tr>
+        <tr>
+          <td style="font-weight: 500;">经典文学选段</td>
+          <td>24</td>
+          <td>120</td>
+          <td>420</td>
+          <td><button class="btn-ghost" style="padding: 4px; font-size: 12px; color: var(--accent);">编辑</button></td>
+        </tr>
+        <tr>
+          <td style="font-weight: 500;">商业周刊精读</td>
+          <td>12</td>
+          <td>60</td>
+          <td>2,100</td>
+          <td><button class="btn-ghost" style="padding: 4px; font-size: 12px; color: var(--accent);">编辑</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+</body>
+</html>

@@ -56,6 +56,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 240px;
   background: var(--surface-warm);
   border-right: 1px solid var(--border);
+  box-sizing: border-box;
   padding: 32px 24px 32px 32px;
   display: flex;
   flex-direction: column;
@@ -99,7 +100,10 @@ h1, h2, h3, h4, h5, h6 {
 .btn-ghost { background: transparent; border: none; cursor: pointer; color: var(--accent); transition: opacity 0.2s; }
 .btn-ghost:hover { opacity: 0.8; }
 
-.pill { display: inline-flex; padding: 4px 10px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; font-size: 11px; font-family: var(--font-mono); text-transform: uppercase; }
+.pill { display: inline-flex; padding: 4px 10px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; font-size: 11px; font-family: var(--font-mono); }
+
+.list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-warm); }
+.list-item .row { display: flex; align-items: center; gap: 10px; }
 
 /* Reusable Admin Components */
 .admin-card {
