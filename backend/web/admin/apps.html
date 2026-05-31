@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ark Admin · 子应用</title>
+  <link rel="stylesheet" href="css/common.css" />
+  <style>
+    .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+    .app-card { cursor: pointer; text-decoration: none; color: inherit; }
+    .app-card:hover { transform: translateY(-4px); box-shadow: var(--elev-raised); border-color: var(--accent); }
+    .app-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; color: var(--accent); margin-bottom: 16px; }
+    .app-stats { display: flex; gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-soft); font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+  </style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div style="margin-bottom: 40px;">
+    <h1 style="font-size: 24px; color: var(--accent); margin: 0;">Ark Admin</h1>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">主看板</span>
+    <a href="index.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+      用户概览
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">子应用</span>
+    <a href="apps.html" class="nav-item active">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      子应用
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-label">功能</span>
+    <a href="users.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      用户管理
+    </a>
+    <a href="templates.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+      模板商店
+    </a>
+  </div>
+
+  <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-soft);">
+    <a href="/" class="nav-item" style="font-size: 13px;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      返回主应用
+    </a>
+  </div>
+</aside>
+
+<main class="main-content" data-od-id="main">
+  <header style="margin-bottom: 40px;">
+    <h2 style="font-size: 32px; margin: 0;">子应用</h2>
+    <p style="color: var(--muted); margin: 4px 0 0;">管理已集成的工具与服务。</p>
+  </header>
+
+  <div class="app-grid">
+    <a href="apps-vocab.html" class="admin-card app-card">
+      <div class="app-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+      </div>
+      <h3 style="margin: 0;">词汇</h3>
+      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">个性化单词学习与 SRS 追踪。</p>
+      <div class="app-stats">
+        <span>4,820 词库数</span>
+        <span>1.2M 总词数</span>
+      </div>
+    </a>
+
+    <a href="apps-erc.html" class="admin-card app-card">
+      <div class="app-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+      </div>
+      <h3 style="margin: 0;">ERC 阅读</h3>
+      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">英语阅读理解集与文章管理。</p>
+      <div class="app-stats">
+        <span>84 阅读集数</span>
+        <span>2,400 文章数</span>
+      </div>
+    </a>
+
+    <div class="admin-card app-card" style="opacity: 0.6; cursor: default;">
+      <div class="app-icon" style="background: var(--border-soft); color: var(--muted);">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+      </div>
+      <h3 style="margin: 0;">代码导师</h3>
+      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">即将推出。AI 驱动的编程练习。</p>
+      <div class="app-stats">
+        <span>开发中</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>
