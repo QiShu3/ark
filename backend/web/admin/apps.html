@@ -63,16 +63,16 @@
     <p style="color: var(--muted); margin: 4px 0 0;">管理已集成的工具与服务。</p>
   </header>
 
-  <div class="app-grid">
+  <div class="app-grid" data-apps-grid>
+    <!-- JS will populate this grid; static placeholder kept for no-JS fallback -->
     <a href="apps-vocab.html" class="admin-card app-card">
       <div class="app-icon">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
       </div>
       <h3 style="margin: 0;">词汇</h3>
-      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">个性化单词学习与 SRS 追踪。</p>
-      <div class="app-stats">
-        <span>4,820 词库数</span>
-        <span>1.2M 总词数</span>
+      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">词汇库管理</p>
+      <div class="app-stats" style="font-family:var(--font-mono);font-size:13px;color:var(--muted);margin-top:12px;">
+        —
       </div>
     </a>
 
@@ -81,10 +81,9 @@
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
       </div>
       <h3 style="margin: 0;">ERC 阅读</h3>
-      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">英语阅读理解集与文章管理。</p>
-      <div class="app-stats">
-        <span>84 阅读集数</span>
-        <span>2,400 文章数</span>
+      <p style="font-size: 14px; color: var(--muted); margin-top: 8px;">阅读理解管理</p>
+      <div class="app-stats" style="font-family:var(--font-mono);font-size:13px;color:var(--muted);margin-top:12px;">
+        —
       </div>
     </a>
 
@@ -101,5 +100,8 @@
   </div>
 </main>
 
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/apps.js"></script>
 </body>
 </html>

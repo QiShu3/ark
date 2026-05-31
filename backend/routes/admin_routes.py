@@ -52,12 +52,8 @@ async def stats_overview(
     today = date.today()
     async with pool.acquire() as conn:
         total = await conn.fetchval("SELECT COUNT(*) FROM auth_users")
-        today_new = await conn.fetchval(
-            "SELECT COUNT(*) FROM auth_users WHERE created_at::date = $1", today
-        )
-        verified = await conn.fetchval(
-            "SELECT COUNT(*) FROM auth_users WHERE email_verified_at IS NOT NULL"
-        )
+        today_new = await conn.fetchval("SELECT COUNT(*) FROM auth_users WHERE created_at::date = $1", today)
+        verified = await conn.fetchval("SELECT COUNT(*) FROM auth_users WHERE email_verified_at IS NOT NULL")
         active_7d = await conn.fetchval(
             "SELECT COUNT(*) FROM auth_users WHERE created_at >= $1",
             today - timedelta(days=7),
@@ -95,9 +91,7 @@ async def stats_checkin(
     today = date.today()
     async with pool.acquire() as conn:
         total_users = await conn.fetchval("SELECT COUNT(*) FROM auth_users")
-        today_count = await conn.fetchval(
-            "SELECT COUNT(*) FROM user_checkins WHERE checkin_date = $1", today
-        )
+        today_count = await conn.fetchval("SELECT COUNT(*) FROM user_checkins WHERE checkin_date = $1", today)
         # Simple streak calculation: count consecutive days ending today for each user
         top5_rows = await conn.fetch(
             """
@@ -351,9 +345,7 @@ async def reset_user_password(
         if result == "UPDATE 0":
             raise HTTPException(status_code=404, detail="User not found")
         # Invalidate all existing tokens for this user
-        await conn.execute(
-            "DELETE FROM auth_access_tokens WHERE user_id = $1", user_id
-        )
+        await conn.execute("DELETE FROM auth_access_tokens WHERE user_id = $1", user_id)
     return ResetPasswordResponse(temp_password=temp_password)
 
 
@@ -371,3 +363,149 @@ async def delete_user(
         if result == "DELETE 0":
             raise HTTPException(status_code=404, detail="User not found")
     return {"detail": "User deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Sub-applications
+# ---------------------------------------------------------------------------
+
+
+class SubApp(BaseModel):
+    name: str
+    icon: str
+    description: str
+    url: str
+    stats: str
+
+
+class SubAppsResponse(BaseModel):
+    apps: list[SubApp]
+
+
+@router.get("/apps", response_model=SubAppsResponse)
+async def list_apps(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> SubAppsResponse:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        deck_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_decks")
+        word_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_words")
+        set_count = await conn.fetchval("SELECT COUNT(*) FROM erc_sets")
+        article_count = await conn.fetchval("SELECT COUNT(*) FROM erc_articles")
+    return SubAppsResponse(
+        apps=[
+            SubApp(
+                name="词汇",
+                icon="📚",
+                description="词汇库管理",
+                url="apps-vocab.html",
+                stats=f"{deck_count} 词库 / {word_count:,} 词",
+            ),
+            SubApp(
+                name="ERC 阅读",
+                icon="📖",
+                description="阅读理解管理",
+                url="apps-erc.html",
+                stats=f"{set_count} 阅读集 / {article_count} 篇文章",
+            ),
+        ]
+    )
+
+
+class VocabStats(BaseModel):
+    total_words_learned: int
+    today_reviews: int
+    avg_accuracy: float
+
+
+@router.get("/apps/vocab/stats", response_model=VocabStats)
+async def vocab_stats(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> VocabStats:
+    pool = _pool(request)
+    today = date.today()
+    async with pool.acquire() as conn:
+        learned = await conn.fetchval("SELECT COUNT(*) FROM vocab_user_word_progress")
+        reviews = await conn.fetchval("SELECT COUNT(*) FROM vocab_review_logs WHERE created_at::date = $1", today)
+        correct = await conn.fetchval(
+            "SELECT COUNT(*) FROM vocab_review_logs WHERE result = 'correct' AND created_at::date = $1", today
+        )
+    acc = (correct / reviews * 100) if reviews > 0 else 0.0
+    return VocabStats(total_words_learned=learned, today_reviews=reviews, avg_accuracy=round(acc, 1))
+
+
+class VocabDeckItem(BaseModel):
+    name: str
+    word_count: int
+    learner_count: int
+
+
+@router.get("/apps/vocab/decks", response_model=list[VocabDeckItem])
+async def vocab_decks(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> list[VocabDeckItem]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT d.name, d.word_count,
+                   (SELECT COUNT(DISTINCT user_id) FROM vocab_user_word_progress WHERE deck_id = d.id) AS learner_count
+            FROM vocab_decks d
+            ORDER BY d.name
+            """
+        )
+    return [VocabDeckItem(name=r["name"], word_count=r["word_count"], learner_count=r["learner_count"]) for r in rows]
+
+
+class ErcStats(BaseModel):
+    total_questions: int
+    today_questions: int
+    avg_accuracy: float
+
+
+@router.get("/apps/erc/stats", response_model=ErcStats)
+async def erc_stats(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ErcStats:
+    pool = _pool(request)
+    today = date.today()
+    async with pool.acquire() as conn:
+        total = await conn.fetchval("SELECT COUNT(*) FROM erc_questions")
+        today_q = await conn.fetchval("SELECT COUNT(*) FROM erc_review_logs WHERE created_at::date = $1", today)
+        correct = await conn.fetchval(
+            "SELECT COUNT(*) FROM erc_review_logs WHERE is_correct = TRUE AND created_at::date = $1", today
+        )
+    acc = (correct / today_q * 100) if today_q > 0 else 0.0
+    return ErcStats(total_questions=total, today_questions=today_q, avg_accuracy=round(acc, 1))
+
+
+class ErcSetItem(BaseModel):
+    name: str
+    article_count: int
+    attempt_count: int
+
+
+@router.get("/apps/erc/sets", response_model=list[ErcSetItem])
+async def erc_sets(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> list[ErcSetItem]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT s.name, s.article_count,
+                   (SELECT COUNT(*) FROM erc_user_article_attempts a
+                    JOIN erc_articles art ON art.id = a.article_pk
+                    WHERE art.set_id = s.id) AS attempt_count
+            FROM erc_sets s
+            ORDER BY s.name
+            """
+        )
+    return [
+        ErcSetItem(name=r["name"], article_count=r["article_count"], attempt_count=r["attempt_count"]) for r in rows
+    ]
