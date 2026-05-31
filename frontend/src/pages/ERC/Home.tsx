@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings, BookOpen, RefreshCw } from 'lucide-react';
+import { BookOpen, RefreshCw, Settings } from 'lucide-react';
 
-import SubAppArrangements from '../../components/SubAppArrangements';
+import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
 import { apiJson } from '../../lib/api';
 import { fetchERCConfigStatus, fetchERCOverview, saveERCConfig } from '../../lib/erc/api';
 import type { ERCConfigStatus, ERCModuleStatus, ERCOverview } from '../../lib/erc/types';
@@ -50,7 +50,47 @@ function reviewScopeConfig(config: Record<string, unknown> | undefined): ReviewS
 }
 
 function isConfigured(module: ERCModuleStatus): boolean {
-  return module.enabled && module.state !== 'no_primary_event' && module.state !== 'event_not_configured';
+  return module.enabled && !['no_primary_event', 'event_not_configured', 'uninitialized', 'config_invalid'].includes(module.state);
+}
+
+function moduleArrangementState(module: ERCModuleStatus): SubAppTaskItemState {
+  if (!module.enabled) return 'unconfigured';
+  if (module.state === 'completed_today') return 'completed';
+  if (module.state === 'ready') return 'ready';
+  if (module.state === 'uninitialized') return 'uninitialized';
+  if (module.state === 'event_not_configured') return 'unconfigured';
+  if (module.state === 'config_invalid') return 'config_invalid';
+  return 'blocked';
+}
+
+function moduleStatusLabel(module: ERCModuleStatus): string {
+  if (!module.enabled) return '未启用';
+  if (module.state === 'completed_today') return 'completed';
+  if (module.state === 'ready') return 'ready';
+  if (module.state === 'uninitialized') return '未初始化';
+  if (module.state === 'event_not_configured') return '未配置';
+  if (module.state === 'config_invalid') return '配置异常';
+  if (module.state === 'no_primary_event') return '需要主事件';
+  return 'blocked';
+}
+
+function eventStatusLabel(configStatus: ERCConfigStatus): string {
+  const modules = [configStatus.practice, configStatus.review];
+  if (modules.some((module) => module.state === 'no_primary_event')) return '未绑定计划事件';
+  if (modules.every((module) => !module.enabled || module.state === 'event_not_configured')) return '待配置计划事件';
+  if (modules.some(isConfigured)) return '已绑定计划事件';
+  return '待初始化计划事件';
+}
+
+function reviewScopeLabel(scope: ReviewScope): string {
+  if (scope === 'all') return '全部做错题目';
+  if (scope === 'mistakes') return '未掌握错题';
+  return '仅到期错题';
+}
+
+function moduleDisabledReason(module: ERCModuleStatus): string | null {
+  if (module.state === 'no_primary_event') return '请先创建或设置主事件。';
+  return module.blocked_reason;
 }
 
 export default function ERCHome() {
@@ -73,10 +113,20 @@ export default function ERCHome() {
   const [reviewAddToTodayPlan, setReviewAddToTodayPlan] = useState(true);
 
   const practiceTaskStatus = configStatus.practice;
-  const appTaskStatus = configStatus.review;
+  const reviewTaskStatus = configStatus.review;
   const currentEventName = configStatus.event_name;
-  const appConfigNotice = currentEventName ? `这份 ERC 配置会绑定在当前主事件「${currentEventName}」。` : null;
+  const appConfigNotice = currentEventName ? `该配置会同步到当前主事件「${currentEventName}」。` : null;
   const accuracy = overview ? Math.round(overview.accuracy * 100) : 0;
+  const hasNoPrimaryEvent = practiceTaskStatus.state === 'no_primary_event' || reviewTaskStatus.state === 'no_primary_event';
+  const hasNoConfig =
+    (!practiceTaskStatus.enabled || practiceTaskStatus.state === 'event_not_configured') &&
+    (!reviewTaskStatus.enabled || reviewTaskStatus.state === 'event_not_configured');
+  const eventLabel = hasNoPrimaryEvent
+    ? '计划事件：未绑定'
+    : currentEventName ? `计划事件：${currentEventName}` : '计划事件：当前主事件';
+  const noConfigMessage = currentEventName
+    ? `当前主事件「${currentEventName}」尚未配置阅读训练，请通过右上角“配置”完成初始化。`
+    : '当前主事件尚未配置阅读训练，请通过右上角“配置”完成初始化。';
 
   useEffect(() => {
     let cancelled = false;
@@ -114,15 +164,15 @@ export default function ERCHome() {
 
   useEffect(() => {
     setPracticeEnabled(practiceTaskStatus.enabled);
-    setReviewEnabled(appTaskStatus.enabled);
+    setReviewEnabled(reviewTaskStatus.enabled);
     setDailyArticleTarget(numberConfig(practiceTaskStatus.config, 'daily_article_target', 1));
     setPracticeDuration(Math.round(numberConfig(practiceTaskStatus.config, 'default_focus_duration', 1500) / 60));
     setPracticeAddToTodayPlan(booleanConfig(practiceTaskStatus.config, 'add_to_today_plan', true));
-    setDailyQuestionTarget(numberConfig(appTaskStatus.config, 'daily_question_target', 10));
-    setReviewScope(reviewScopeConfig(appTaskStatus.config));
-    setReviewDuration(Math.round(numberConfig(appTaskStatus.config, 'default_focus_duration', 1500) / 60));
-    setReviewAddToTodayPlan(booleanConfig(appTaskStatus.config, 'add_to_today_plan', true));
-  }, [practiceTaskStatus, appTaskStatus]);
+    setDailyQuestionTarget(numberConfig(reviewTaskStatus.config, 'daily_question_target', 10));
+    setReviewScope(reviewScopeConfig(reviewTaskStatus.config));
+    setReviewDuration(Math.round(numberConfig(reviewTaskStatus.config, 'default_focus_duration', 1500) / 60));
+    setReviewAddToTodayPlan(booleanConfig(reviewTaskStatus.config, 'add_to_today_plan', true));
+  }, [practiceTaskStatus, reviewTaskStatus]);
 
   async function persistConfig(next?: {
     practiceEnabled?: boolean;
@@ -167,41 +217,41 @@ export default function ERCHome() {
       const freshOverview = await fetchERCOverview();
       setOverview(freshOverview);
     } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '保存设置失败');
+      setAppTaskError(err instanceof Error ? err.message : '保存配置失败');
     } finally {
       setSettingsSaving(false);
     }
   }
 
-  async function handleEnablePractice() {
+  async function handleInitializePractice() {
     setAppTaskBusy(true);
     try {
       setPracticeEnabled(true);
       await persistConfig({ practiceEnabled: true });
     } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '启用真题练习失败');
+      setAppTaskError(err instanceof Error ? err.message : '初始化真题练习失败');
     } finally {
       setAppTaskBusy(false);
     }
   }
 
-  async function handleEnableReview() {
+  async function handleInitializeReview() {
     setAppTaskBusy(true);
     try {
       setReviewEnabled(true);
       await persistConfig({ reviewEnabled: true });
     } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '启用错题复习失败');
+      setAppTaskError(err instanceof Error ? err.message : '初始化错题复习失败');
     } finally {
       setAppTaskBusy(false);
     }
   }
 
   async function startReviewFocusWork() {
-    if (!appTaskStatus.task_id) return;
+    if (!reviewTaskStatus.task_id) return;
     setAppTaskBusy(true);
     try {
-      await apiJson(`/todo/tasks/${appTaskStatus.task_id}/focus/start`, { method: 'POST' });
+      await apiJson(`/todo/tasks/${reviewTaskStatus.task_id}/focus/start`, { method: 'POST' });
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       setAppTaskError(null);
     } catch (err) {
@@ -225,286 +275,222 @@ export default function ERCHome() {
     }
   }
 
-  const ercTasks = [
-    practiceTaskStatus.enabled
-      ? {
-          id: 'erc_practice',
-          name: '真题练习',
-          focusWorkName: '真题练习',
-          isInitialized: isConfigured(practiceTaskStatus),
-          isSynced: practiceAddToTodayPlan,
-          onSyncToggle: async (nextSynced: boolean) => {
-            setPracticeAddToTodayPlan(nextSynced);
-            await persistConfig({ practiceAddToTodayPlan: nextSynced });
-          },
-        }
-      : null,
-    appTaskStatus.enabled
-      ? {
-          id: 'erc_review',
-          name: '错题复习',
-          focusWorkName: '开始复习',
-          isInitialized: isConfigured(appTaskStatus),
-          isSynced: reviewAddToTodayPlan,
-          onSyncToggle: async (nextSynced: boolean) => {
-            setReviewAddToTodayPlan(nextSynced);
-            await persistConfig({ reviewAddToTodayPlan: nextSynced });
-          },
-        }
-      : null,
-  ].filter((task): task is NonNullable<typeof task> => task !== null);
+  function taskAction(module: ERCModuleStatus, onInitialize: () => Promise<void>, onStart: () => Promise<void>) {
+    if (module.state === 'no_primary_event') {
+      return { label: '不可用', disabled: true, action: undefined };
+    }
+    if (!module.enabled || module.state === 'event_not_configured' || module.state === 'config_invalid' || module.state === 'completed_today' || module.state === 'blocked') {
+      return { label: '配置', disabled: appTaskBusy, action: () => setSettingsOpen(true) };
+    }
+    if (module.state === 'uninitialized') {
+      return { label: '初始化', disabled: appTaskBusy, action: onInitialize };
+    }
+    return {
+      label: module.completion_state?.completed_count_in_period ? '继续' : '开始',
+      disabled: !module.task_id || appTaskBusy,
+      action: onStart,
+    };
+  }
 
-  const hasNoPrimaryEvent = practiceTaskStatus.state === 'no_primary_event' || appTaskStatus.state === 'no_primary_event';
-  const hasNoConfig = practiceTaskStatus.state === 'event_not_configured' && appTaskStatus.state === 'event_not_configured';
+  const practiceAction = taskAction(practiceTaskStatus, handleInitializePractice, startPracticeFocusWork);
+  const reviewAction = taskAction(reviewTaskStatus, handleInitializeReview, startReviewFocusWork);
+  const overviewMetrics = [
+    { label: '今日待复习', value: overview ? overview.due_review_count : '--', detail: 'due' },
+    { label: '已练文章', value: overview ? overview.practiced_article_count : '--', detail: 'articles' },
+    { label: '正确率', value: overview ? `${accuracy}%` : '--', detail: 'accuracy' },
+    { label: '错题', value: overview ? overview.mistake_count : '--', detail: 'mistakes' },
+  ];
+  const ercTasks = [
+    {
+      id: 'erc_practice',
+      name: '真题练习',
+      focusWorkName: '真题练习',
+      isInitialized: isConfigured(practiceTaskStatus),
+      isSynced: practiceTaskStatus.enabled ? practiceAddToTodayPlan : false,
+      onSyncToggle: async (nextSynced: boolean) => {
+        setPracticeAddToTodayPlan(nextSynced);
+        await persistConfig({ practiceAddToTodayPlan: nextSynced });
+      },
+      state: moduleArrangementState(practiceTaskStatus),
+      statusLabel: moduleStatusLabel(practiceTaskStatus),
+      primaryActionLabel: practiceAction.label,
+      primaryActionDisabled: practiceAction.disabled,
+      onPrimaryAction: practiceAction.action,
+      disabledReason: moduleDisabledReason(practiceTaskStatus),
+    },
+    {
+      id: 'erc_review',
+      name: '错题复习',
+      focusWorkName: '错题复习',
+      isInitialized: isConfigured(reviewTaskStatus),
+      isSynced: reviewTaskStatus.enabled ? reviewAddToTodayPlan : false,
+      onSyncToggle: async (nextSynced: boolean) => {
+        setReviewAddToTodayPlan(nextSynced);
+        await persistConfig({ reviewAddToTodayPlan: nextSynced });
+      },
+      state: moduleArrangementState(reviewTaskStatus),
+      statusLabel: moduleStatusLabel(reviewTaskStatus),
+      primaryActionLabel: reviewAction.label,
+      primaryActionDisabled: reviewAction.disabled,
+      onPrimaryAction: reviewAction.action,
+      disabledReason: moduleDisabledReason(reviewTaskStatus),
+    },
+  ];
 
   return (
-    <div className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
-      <div className="mx-auto max-w-6xl">
-        <section className="flex flex-col gap-6 border-b ark-border pb-8 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-sm uppercase tracking-[0.28em] text-indigo-400 font-semibold">ERC</div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">阅读训练</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--ark-text-muted)]">
-              围绕整篇阅读练习和单题复习，将做过的阅读理解沉淀为长期复习资产，通过 FSRS 智能抗忘。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/erc/library" className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 hover:bg-ark-surface-subtle transition shadow-lg shadow-white/5">
-              进入题库
-            </Link>
+    <div className="ark-page relative z-10 h-full w-full overflow-y-auto px-6 pb-10 pt-20 md:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <section className="ark-panel-card rounded-lg p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">ERC</div>
+              <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">阅读训练</h1>
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                <span className="inline-flex rounded-full border border-ark-border bg-ark-surface-subtle px-3 py-1 text-[var(--ark-text-muted)]">
+                  {eventStatusLabel(configStatus)}
+                </span>
+                <span className="text-[var(--ark-text-muted)]">{eventLabel}</span>
+                <span className="text-[var(--ark-text-muted)]">托管任务：真题练习 / 错题复习</span>
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="ark-button-secondary inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg shadow-black/10 backdrop-blur-xl transition"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-ark-border bg-white px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Settings className="h-4 w-4 text-indigo-400" />
-              安排管理与设置
+              <Settings className="h-4 w-4" />
+              配置
             </button>
-            <Link
-              to="/erc/mistakes"
-              className="ark-button-secondary rounded-full px-5 py-3 text-sm shadow-lg shadow-black/10 backdrop-blur-xl transition"
-            >
-              查看错题
-            </Link>
+          </div>
+
+          {error ? <p className="mt-5 text-sm text-rose-200">{error}</p> : null}
+          {appTaskError ? <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{appTaskError}</p> : null}
+          {hasNoPrimaryEvent ? (
+            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">请先创建或设置主事件，再配置阅读训练。</p>
+          ) : hasNoConfig ? (
+            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{noConfigMessage}</p>
+          ) : appConfigNotice ? (
+            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{appConfigNotice}</p>
+          ) : null}
+        </section>
+
+        <section className="ark-panel-card rounded-lg p-6">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Overview</div>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">总览</h2>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {overviewMetrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-4 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]"
+              >
+                <div className="text-sm text-[var(--ark-text-muted)]">{metric.label}</div>
+                <div className="mt-2 text-3xl font-semibold text-[var(--ark-text)]">{metric.value}</div>
+                <div className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--ark-text-faint)]">{metric.detail}</div>
+              </div>
+            ))}
           </div>
         </section>
 
-        {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
-        {appTaskError ? <p className="mt-6 text-sm text-amber-100">{appTaskError}</p> : null}
-        {hasNoPrimaryEvent ? (
-          <p className="mt-6 text-sm text-amber-100">请先创建或设置主事件，再配置阅读训练应用。</p>
-        ) : hasNoConfig ? (
-          <p className="mt-6 text-sm text-amber-100">
-            当前主事件尚未配置阅读训练。保存后，这份 ERC 配置会绑定在当前主事件上。
-          </p>
-        ) : appConfigNotice ? (
-          <p className="mt-6 text-sm text-[var(--ark-text-muted)]">{appConfigNotice}</p>
-        ) : null}
-
-        {overview ? (
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-            <div className="ark-panel-card rounded-2xl p-5">
-              <div className="text-sm text-[var(--ark-text-muted)]">今日待复习</div>
-              <div className="mt-3 text-4xl font-semibold text-[var(--ark-text)]">{overview.due_review_count}</div>
-            </div>
-            <div className="ark-panel-card rounded-2xl p-5">
-              <div className="text-sm text-[var(--ark-text-muted)]">已练文章</div>
-              <div className="mt-3 text-4xl font-semibold text-[var(--ark-text)]">{overview.practiced_article_count}</div>
-            </div>
-            <div className="ark-panel-card rounded-2xl p-5">
-              <div className="text-sm text-[var(--ark-text-muted)]">正确率</div>
-              <div className="mt-3 text-4xl font-semibold text-[var(--ark-text)]">{accuracy}%</div>
-            </div>
-            <div className="ark-panel-card rounded-2xl p-5">
-              <div className="text-sm text-[var(--ark-text-muted)]">错题</div>
-              <div className="mt-3 text-4xl font-semibold text-[var(--ark-text)]">{overview.mistake_count}</div>
+        <section className="ark-panel-card rounded-lg p-6">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Business Data</div>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">业务数据</h2>
             </div>
           </div>
-        ) : (
-          <p className="mt-8 text-sm text-[var(--ark-text-muted)]">阅读训练统计加载中...</p>
-        )}
 
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {practiceTaskStatus.enabled ? (
-            <div className="ark-panel-card flex flex-col justify-between rounded-3xl p-6">
-              <div>
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-300">
-                    <BookOpen className="h-6 w-6" />
+          {overview ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Link
+                  to="/erc/library"
+                  className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm text-[var(--ark-text-muted)]">题库进度</div>
+                      <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.practiced_article_count} 篇文章</div>
+                    </div>
+                    <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
                   </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-[var(--ark-text)]">真题练习</h3>
-                    <p className="text-xs text-[var(--ark-text-faint)]">ERC Practice</p>
+                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">已练 {overview.practiced_question_count} 道题</div>
+                  <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">进入题库</div>
+                </Link>
+
+                <Link
+                  to="/erc/mistakes"
+                  className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm text-[var(--ark-text-muted)]">错题资产</div>
+                      <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mistake_count} 道错题</div>
+                    </div>
+                    <RefreshCw className="h-5 w-5 text-[var(--ark-accent)]" />
                   </div>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-[var(--ark-text-muted)]">
-                  每日进行整篇真题阅读训练，系统会自动带您完成单词预热。熟悉单词后再进入阅读，解答精选真题。
-                </p>
-                <div className="ark-surface-subtle mt-5 space-y-2 rounded-2xl border p-4">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--ark-text-faint)]">主页计划</span>
-                    <span className="font-medium text-[var(--ark-text)]">{practiceAddToTodayPlan ? '已同步' : '未同步'}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--ark-text-faint)]">每日目标</span>
-                    <span className="font-medium text-[var(--ark-text)]">{dailyArticleTarget} 篇文章</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--ark-text-faint)]">专注时长</span>
-                    <span className="font-medium text-[var(--ark-text)]">{practiceDuration} 分钟</span>
-                  </div>
-                </div>
+                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">今日到期 {overview.due_review_count} 道</div>
+                  <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">查看错题</div>
+                </Link>
               </div>
 
-              <div className="mt-6">
-                {practiceTaskStatus.state === 'no_primary_event' ? (
-                  <button type="button" disabled className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 opacity-60">
-                    请先设置主事件
-                  </button>
-                ) : practiceTaskStatus.state === 'uninitialized' || practiceTaskStatus.state === 'event_not_configured' ? (
-                  <button
-                    type="button"
-                    onClick={handleEnablePractice}
-                    disabled={appTaskBusy}
-                    className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
-                  >
-                    启用真题练习
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={startPracticeFocusWork}
-                    disabled={!practiceTaskStatus.task_id || appTaskBusy || practiceTaskStatus.state === 'completed_today'}
-                    className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
-                  >
-                    {practiceTaskStatus.state === 'completed_today' ? '今日练习已完成' : '开始真题练习'}
-                  </button>
-                )}
-              </div>
+              {overview.recommended_article ? (
+                <Link
+                  to={`/erc/articles/${overview.recommended_article.article_id}/practice`}
+                  className="block rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+                >
+                  <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
+                  <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
+                    {overview.recommended_article.year} 年 Text {overview.recommended_article.text_no}
+                  </div>
+                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">
+                    {overview.recommended_article.title || '无标题文章'}
+                  </div>
+                </Link>
+              ) : (
+                <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-5">
+                  <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
+                  <div className="mt-2 text-sm text-[var(--ark-text-faint)]">暂无推荐文章</div>
+                </div>
+              )}
             </div>
-          ) : null}
+          ) : (
+            <p className="text-sm text-[var(--ark-text-muted)]">业务数据加载中…</p>
+          )}
+        </section>
 
-          {appTaskStatus.enabled ? (
-            <div className="ark-panel-card flex flex-col justify-between rounded-3xl p-6">
-              <div>
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-300">
-                    <RefreshCw className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-[var(--ark-text)]">错题复习</h3>
-                    <p className="text-xs text-[var(--ark-text-faint)]">ERC Review</p>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-[var(--ark-text-muted)]">
-                  根据 FSRS 记忆算法，定时带您重温历史做错的阅读真题，提供单词预热并精准突破难关。
-                </p>
-                <div className="ark-surface-subtle mt-5 space-y-2 rounded-2xl border p-4">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--ark-text-faint)]">主页计划</span>
-                    <span className="font-medium text-[var(--ark-text)]">{reviewAddToTodayPlan ? '已同步' : '未同步'}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--ark-text-faint)]">每日目标</span>
-                    <span className="font-medium text-[var(--ark-text)]">{dailyQuestionTarget} 道题目</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-[var(--ark-text-faint)]">复习范围</span>
-                    <span className="font-medium text-[var(--ark-text)]">
-                      {reviewScope === 'due' ? '仅到期错题' : reviewScope === 'all' ? '全部做错题目' : '未掌握错题'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                {appTaskStatus.state === 'no_primary_event' ? (
-                  <button type="button" disabled className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 opacity-60">
-                    请先设置主事件
-                  </button>
-                ) : appTaskStatus.state === 'uninitialized' || appTaskStatus.state === 'event_not_configured' ? (
-                  <button
-                    type="button"
-                    onClick={handleEnableReview}
-                    disabled={appTaskBusy}
-                    className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
-                  >
-                    启用错题复习
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={startReviewFocusWork}
-                    disabled={!appTaskStatus.task_id || appTaskBusy || appTaskStatus.state === 'completed_today'}
-                    className="w-full rounded-full bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
-                  >
-                    {appTaskStatus.state === 'completed_today' ? '今日复习已完成' : '开始复习'}
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : null}
-
-          {!practiceTaskStatus.enabled && !appTaskStatus.enabled ? (
-            <div className="ark-panel-card rounded-3xl p-6 md:col-span-2">
-              <h3 className="text-xl font-semibold text-[var(--ark-text)]">阅读训练尚未启用</h3>
-              <p className="mt-3 text-sm leading-6 text-[var(--ark-text-muted)]">
-                打开安排管理与设置，选择要启用的训练模块。保存后，这份配置会绑定在当前主事件上。
-              </p>
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-ark-surface-subtle"
-              >
-                配置阅读训练
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        {overview?.recommended_article ? (
-          <section className="mt-8 border-t border-ark-border pt-6">
-            <div className="text-sm text-ark-text-muted">今日推荐练习</div>
-            <Link
-              to={`/erc/articles/${overview.recommended_article.article_id}/practice`}
-              className="mt-3 inline-flex rounded-full border border-ark-border px-6 py-3 text-sm text-indigo-200 bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition"
-            >
-              {overview.recommended_article.year} 年 Text {overview.recommended_article.text_no} · {overview.recommended_article.title || '无标题文章'}
-            </Link>
-          </section>
-        ) : null}
-
-        <div className="mt-8">
-          <SubAppArrangements tasks={ercTasks} isBusy={appTaskBusy} />
-        </div>
+        <SubAppArrangements tasks={ercTasks} isBusy={appTaskBusy} />
       </div>
 
       {settingsOpen ? (
-        <div className="ark-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="ERC 安排与设置">
-          <div className="ark-modal max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2.5rem] p-8 shadow-2xl shadow-black/20">
-            <div className="flex items-start justify-between gap-4 border-b ark-border pb-5">
+        <div className="ark-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="ERC 配置">
+          <div className="ark-modal max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg p-6 shadow-2xl shadow-black/20">
+            <div className="flex items-start justify-between gap-4 border-b border-ark-border pb-5">
               <div>
-                <div className="text-sm uppercase tracking-[0.28em] text-indigo-400 font-semibold">Settings</div>
-                <h2 className="mt-2 text-2xl font-bold tracking-tight">ERC 阅读训练配置</h2>
+                <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Configuration</div>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ark-text)]">配置阅读训练</h2>
                 <p className="mt-2 text-xs text-[var(--ark-text-muted)]">
-                  这是一份 ERC 子应用配置。保存后会派生真题练习与错题复习任务，并同步到当前主事件。
+                  保存后会更新真题练习与错题复习的托管任务。
                 </p>
-                {appConfigNotice ? <p className="mt-2 text-xs text-indigo-200">{appConfigNotice}</p> : null}
+                {appConfigNotice ? <p className="ark-annotation mt-3 rounded-lg px-3 py-2">{appConfigNotice}</p> : null}
               </div>
               <button
                 type="button"
                 onClick={() => setSettingsOpen(false)}
-                className="ark-button-secondary rounded-full px-4 py-2 text-sm transition"
+                className="ark-button-secondary rounded-lg px-4 py-2 text-sm transition"
               >
                 关闭
               </button>
             </div>
 
-            <div className="mt-6 space-y-6">
-              <div className="ark-surface-subtle space-y-4 rounded-3xl border p-6">
-                <div className="flex items-center justify-between gap-4 border-b ark-border pb-3">
+            <div className="mt-6 space-y-5">
+              <div className="space-y-4 rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
+                <div className="flex items-center justify-between gap-4 border-b border-ark-border pb-3">
                   <div className="flex items-center gap-2">
-                    <BookOpen className="h-5 w-5 text-indigo-400" />
+                    <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
                     <h3 className="text-base font-semibold text-[var(--ark-text)]">真题练习</h3>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)]">
@@ -528,7 +514,7 @@ export default function ERCHome() {
                       value={dailyArticleTarget}
                       disabled={!practiceEnabled}
                       onChange={(e) => setDailyArticleTarget(Math.max(1, Number(e.target.value)))}
-                      className="w-full rounded-2xl border ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
+                      className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
                     />
                   </div>
                   <div>
@@ -541,7 +527,7 @@ export default function ERCHome() {
                       value={practiceDuration}
                       disabled={!practiceEnabled}
                       onChange={(e) => setPracticeDuration(Math.max(5, Number(e.target.value)))}
-                      className="w-full rounded-2xl border ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
+                      className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
                     />
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)] sm:col-span-2">
@@ -556,10 +542,10 @@ export default function ERCHome() {
                 </div>
               </div>
 
-              <div className="ark-surface-subtle space-y-4 rounded-3xl border p-6">
-                <div className="flex items-center justify-between gap-4 border-b ark-border pb-3">
+              <div className="space-y-4 rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
+                <div className="flex items-center justify-between gap-4 border-b border-ark-border pb-3">
                   <div className="flex items-center gap-2">
-                    <RefreshCw className="h-5 w-5 text-emerald-400" />
+                    <RefreshCw className="h-5 w-5 text-[var(--ark-accent)]" />
                     <h3 className="text-base font-semibold text-[var(--ark-text)]">错题复习</h3>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)]">
@@ -584,7 +570,7 @@ export default function ERCHome() {
                         value={dailyQuestionTarget}
                         disabled={!reviewEnabled}
                         onChange={(e) => setDailyQuestionTarget(Math.max(1, Number(e.target.value)))}
-                        className="w-full rounded-2xl border ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
+                        className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
                       />
                     </div>
                     <div>
@@ -597,7 +583,7 @@ export default function ERCHome() {
                         value={reviewDuration}
                         disabled={!reviewEnabled}
                         onChange={(e) => setReviewDuration(Math.max(5, Number(e.target.value)))}
-                        className="w-full rounded-2xl border ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
+                        className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
                       />
                     </div>
                   </div>
@@ -607,7 +593,7 @@ export default function ERCHome() {
                     <div className="grid gap-3 sm:grid-cols-3">
                       {(['due', 'mistakes', 'all'] as const).map((scope) => {
                         const isSelected = reviewScope === scope;
-                        const label = scope === 'due' ? '仅到期错题' : scope === 'all' ? '全部做错题目' : '未掌握错题';
+                        const label = reviewScopeLabel(scope);
                         const desc = scope === 'due' ? '按记忆遗忘算法智能调度' : scope === 'all' ? '随机挑选所有做错题目' : '过滤已熟练掌握的题目';
                         return (
                           <button
@@ -615,10 +601,10 @@ export default function ERCHome() {
                             type="button"
                             disabled={!reviewEnabled}
                             onClick={() => setReviewScope(scope)}
-                            className={`rounded-2xl border p-4 text-left transition disabled:opacity-60 ${
+                            className={`rounded-lg border p-4 text-left transition disabled:opacity-60 ${
                               isSelected
-                                ? 'border-emerald-500/80 bg-emerald-500/10 text-emerald-200'
-                                : 'ark-border bg-[var(--ark-surface)] text-[var(--ark-text-muted)] hover:border-[var(--ark-border-strong)]'
+                                ? 'border-[var(--ark-accent)] bg-ark-surface-subtle text-[var(--ark-text)]'
+                                : 'border-ark-border bg-[var(--ark-surface)] text-[var(--ark-text-muted)] hover:border-[var(--ark-border-strong)]'
                             }`}
                           >
                             <div className="text-sm font-semibold">{label}</div>
@@ -642,11 +628,11 @@ export default function ERCHome() {
               </div>
             </div>
 
-            <div className="mt-8 flex justify-end gap-3 border-t ark-border pt-5">
+            <div className="mt-8 flex justify-end gap-3 border-t border-ark-border pt-5">
               <button
                 type="button"
                 onClick={() => setSettingsOpen(false)}
-                className="ark-button-secondary rounded-full px-5 py-3 text-sm transition"
+                className="ark-button-secondary rounded-lg px-5 py-3 text-sm transition"
               >
                 取消
               </button>
@@ -654,9 +640,9 @@ export default function ERCHome() {
                 type="button"
                 disabled={settingsSaving}
                 onClick={handleSaveSettings}
-                className="rounded-full border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
+                className="rounded-lg border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
               >
-                {settingsSaving ? '保存中…' : '保存 ERC 配置'}
+                {settingsSaving ? '保存中…' : '保存配置'}
               </button>
             </div>
           </div>
