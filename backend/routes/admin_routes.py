@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import date, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -188,3 +190,184 @@ async def stats_focus(
         today_avg_minutes=avg_minutes,
         trend=trend,
     )
+
+
+# ---------------------------------------------------------------------------
+# User management
+# ---------------------------------------------------------------------------
+
+
+class UserListItem(BaseModel):
+    id: int
+    username: str
+    email: str | None
+    email_verified: bool
+    is_admin: bool
+    is_active: bool
+    created_at: str
+
+
+class UserListResponse(BaseModel):
+    users: list[UserListItem]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/users", response_model=UserListResponse)
+async def list_users_admin(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    page: int = 1,
+    page_size: int = 20,
+    search: str = "",
+    status: str = "all",  # all, admin, normal, disabled
+    sort: str = "created_at",
+    order: str = "desc",
+) -> UserListResponse:
+    pool = _pool(request)
+    offset = (page - 1) * page_size
+
+    # Build WHERE clause
+    conditions: list[str] = []
+    params: list[Any] = []
+    idx = 1
+
+    if search:
+        conditions.append(f"(username ILIKE ${idx} OR email ILIKE ${idx})")
+        params.append(f"%{search}%")
+        idx += 1
+
+    if status == "admin":
+        conditions.append("is_admin = TRUE")
+    elif status == "normal":
+        conditions.append("is_admin = FALSE AND is_active = TRUE")
+    elif status == "disabled":
+        conditions.append("is_active = FALSE")
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    # Validate sort column
+    allowed_sorts = {"created_at", "username", "id"}
+    if sort not in allowed_sorts:
+        sort = "created_at"
+    order_dir = "ASC" if order == "asc" else "DESC"
+
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(f"SELECT COUNT(*) FROM auth_users {where}", *params)
+        rows = await conn.fetch(
+            f"""
+            SELECT id, username, email, email_verified_at, is_admin, is_active, created_at
+            FROM auth_users
+            {where}
+            ORDER BY {sort} {order_dir}
+            LIMIT ${idx} OFFSET ${idx + 1}
+            """,
+            *params,
+            page_size,
+            offset,
+        )
+
+    users = [
+        UserListItem(
+            id=r["id"],
+            username=r["username"],
+            email=r["email"],
+            email_verified=r["email_verified_at"] is not None,
+            is_admin=r["is_admin"],
+            is_active=r["is_active"],
+            created_at=r["created_at"].isoformat() if r["created_at"] else "",
+        )
+        for r in rows
+    ]
+
+    return UserListResponse(users=users, total=total, page=page, page_size=page_size)
+
+
+class UserUpdateRequest(BaseModel):
+    is_admin: bool | None = None
+    is_active: bool | None = None
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    request: Request,
+    user_id: int,
+    payload: UserUpdateRequest,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, str]:
+    pool = _pool(request)
+    updates: list[str] = []
+    params: list[Any] = []
+    idx = 1
+
+    if payload.is_admin is not None:
+        updates.append(f"is_admin = ${idx}")
+        params.append(payload.is_admin)
+        idx += 1
+
+    if payload.is_active is not None:
+        updates.append(f"is_active = ${idx}")
+        params.append(payload.is_active)
+        idx += 1
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    params.append(user_id)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE auth_users SET {', '.join(updates)} WHERE id = ${idx}",
+            *params,
+        )
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="User not found")
+
+    return {"detail": "User updated"}
+
+
+class ResetPasswordResponse(BaseModel):
+    temp_password: str
+
+
+@router.post("/users/{user_id}/reset-password", response_model=ResetPasswordResponse)
+async def reset_user_password(
+    request: Request,
+    user_id: int,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ResetPasswordResponse:
+    pool = _pool(request)
+    temp_password = secrets.token_urlsafe(12)
+    salt = secrets.token_bytes(16)
+    iterations = 210_000
+    dk = hashlib.pbkdf2_hmac("sha256", temp_password.encode(), salt, iterations)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE auth_users SET password_hash = $1, password_salt = $2 WHERE id = $3",
+            dk,
+            salt,
+            user_id,
+        )
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="User not found")
+        # Invalidate all existing tokens for this user
+        await conn.execute(
+            "DELETE FROM auth_access_tokens WHERE user_id = $1", user_id
+        )
+    return ResetPasswordResponse(temp_password=temp_password)
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    request: Request,
+    user_id: int,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, str]:
+    if user_id == _admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute("DELETE FROM auth_users WHERE id = $1", user_id)
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="User not found")
+    return {"detail": "User deleted"}
