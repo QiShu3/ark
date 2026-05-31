@@ -64,15 +64,15 @@
     <p style="color: var(--muted); margin: 4px 0 0;">查看、编辑及审核系统用户。</p>
   </header>
 
-  <div class="filter-bar">
-    <input type="text" class="search-input" placeholder="搜索用户名、邮箱或 ID..." />
-    <select class="btn btn-secondary" style="height: 42px;">
-      <option>所有状态</option>
-      <option>启用</option>
-      <option>禁用</option>
+  <form id="user-search-form" class="filter-bar">
+    <input type="text" id="user-search-input" class="search-input" placeholder="搜索用户名、邮箱或 ID..." />
+    <select id="user-status-filter" class="btn btn-secondary" style="height: 42px;">
+      <option value="all">所有状态</option>
+      <option value="active">启用</option>
+      <option value="disabled">禁用</option>
     </select>
-    <button class="btn btn-primary">搜索</button>
-  </div>
+    <button type="submit" class="btn btn-primary">搜索</button>
+  </form>
 
   <div class="admin-card" style="padding: 0; overflow-x: auto;">
     <table class="admin-table" style="border: 0; border-radius: 0;">
@@ -87,61 +87,15 @@
           <th>操作</th>
         </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td style="font-family: var(--font-mono); font-size: 12px;">#10242</td>
-          <td>
-            <div style="font-weight: 500;">alex_dev</div>
-            <div style="font-size: 12px; color: var(--muted);">alex@example.com</div>
-          </td>
-          <td><span style="color: var(--success);">已验证</span></td>
-          <td><span class="pill admin">是</span></td>
-          <td><span class="pill active">启用</span></td>
-          <td style="font-size: 12px; color: var(--muted);">2026-04-12</td>
-          <td>
-            <button class="btn-ghost" style="font-size: 12px;">编辑</button>
-          </td>
-        </tr>
-        <tr>
-          <td style="font-family: var(--font-mono); font-size: 12px;">#10245</td>
-          <td>
-            <div style="font-weight: 500;">mira_h</div>
-            <div style="font-size: 12px; color: var(--muted);">mira@northwind.io</div>
-          </td>
-          <td><span style="color: var(--success);">已验证</span></td>
-          <td><span style="color: var(--muted);">否</span></td>
-          <td><span class="pill active">启用</span></td>
-          <td style="font-size: 12px; color: var(--muted);">2026-04-15</td>
-          <td>
-            <button class="btn-ghost" style="font-size: 12px;">编辑</button>
-          </td>
-        </tr>
-        <tr>
-          <td style="font-family: var(--font-mono); font-size: 12px;">#10250</td>
-          <td>
-            <div style="font-weight: 500;">spammer_99</div>
-            <div style="font-size: 12px; color: var(--muted);">junk@mail.com</div>
-          </td>
-          <td><span style="color: var(--danger);">未验证</span></td>
-          <td><span style="color: var(--muted);">否</span></td>
-          <td><span class="pill banned">禁用</span></td>
-          <td style="font-size: 12px; color: var(--muted);">2026-05-01</td>
-          <td>
-            <button class="btn-ghost" style="font-size: 12px;">恢复</button>
-          </td>
-        </tr>
-      </tbody>
+      <tbody id="user-table-body"></tbody>
     </table>
   </div>
   
-  <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
-    <p style="font-size: 13px; color: var(--muted);">显示第 1-10 条，共 12,840 名用户</p>
-    <div style="display: flex; gap: 8px;">
-      <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">上一页</button>
-      <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;">下一页</button>
-    </div>
-  </div>
+  <div id="pagination" style="margin-top: 24px; display: flex; justify-content: center; align-items: center; gap: 8px;"></div>
 </main>
 
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/users.js"></script>
 </body>
 </html>
