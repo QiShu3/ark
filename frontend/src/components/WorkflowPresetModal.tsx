@@ -1,4 +1,5 @@
 import React from 'react';
+import AppModalFrame from './AppModalFrame';
 
 import type { Task } from './taskTypes';
 import {
@@ -121,17 +122,13 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
   }
 
   return (
-    <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-ark-overlay backdrop-blur-sm`}
-      onClick={onClose}
+    <AppModalFrame
+      open={true}
+      onClose={onClose}
+      zIndexClassName={zIndexClass}
+      ariaLabelledBy="workflow-preset-modal-title"
+      panelClassName="w-[840px] max-w-[94vw] bg-ark-surface-strong border border-ark-border rounded-2xl shadow-2xl overflow-hidden"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="workflow-preset-modal-title"
-        className="w-[840px] max-w-[94vw] max-h-[82vh] bg-ark-surface-strong border border-ark-border rounded-2xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="border-b border-ark-border px-5 py-4 bg-ark-surface-subtle">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -385,8 +382,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 };
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, Clock } from 'lucide-react';
 
+import AppModalFrame from '../AppModalFrame';
 import DeckSwitcher from './DeckSwitcher';
 import type { VocabDeck } from '../../lib/vocab/types';
 
@@ -63,8 +64,13 @@ export default function TodayPlanModal({
   const canChooseDeck = decks && activeDeck && onDeckChange;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ark-overlay p-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="w-full max-w-2xl rounded-lg border border-ark-border bg-ark-surface-strong p-6 text-ark-text shadow-2xl shadow-black/40 max-h-[90vh] overflow-y-auto">
+    <AppModalFrame
+      open={true}
+      onClose={onClose}
+      zIndexClassName="z-[80]"
+      ariaLabel={title}
+      panelClassName="w-full max-w-2xl rounded-lg border border-ark-border bg-ark-surface-strong p-6 text-ark-text shadow-2xl shadow-black/40 overflow-y-auto"
+    >
         <div className="flex items-start justify-between gap-4 border-b border-ark-border pb-5">
           <div>
             <div className="text-sm uppercase tracking-[0.28em] text-[var(--ark-text-faint)] font-semibold">Configuration</div>
@@ -164,7 +170,6 @@ export default function TodayPlanModal({
             {isCompleted ? '保存并继续' : '保存配置'}
           </button>
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 }

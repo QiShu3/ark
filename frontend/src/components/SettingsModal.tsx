@@ -4,6 +4,7 @@ import { useCustomizationStore, CustomizationSettings, DEFAULT_SETTINGS } from '
 import { useAuthStore } from '../lib/auth';
 import { uploadFile, updateProfile, getUserUploads, deleteUserUpload, UserUpload } from '../lib/api';
 import { useTheme, type ThemePreference } from '../hooks/useTheme';
+import AppModalFrame from './AppModalFrame';
 
 type SettingsModalProps = {
   open: boolean;
@@ -225,16 +226,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   ];
 
   return (
-    <div
-      className="ark-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center animate-in fade-in duration-200"
-      onClick={handleCancel}
-      role="dialog"
-      aria-label="界面设置"
+    <AppModalFrame
+      open={true}
+      onClose={handleCancel}
+      zIndexClassName="z-[80]"
+      ariaLabel="界面设置"
+      panelClassName="relative flex h-[760px] w-[1160px] max-w-[96vw] overflow-hidden rounded-2xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-200"
     >
-      <div
-        className="ark-modal relative flex h-[760px] w-[1160px] max-h-[88vh] max-w-[96vw] overflow-hidden rounded-2xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-200"
-        onClick={(event) => event.stopPropagation()}
-      >
         {/* 左侧侧边栏 */}
         <div className="flex w-[280px] shrink-0 flex-col border-r ark-border bg-[var(--ark-surface-subtle)] p-4">
           <div className="mb-6 px-2">
@@ -712,8 +710,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 };
 

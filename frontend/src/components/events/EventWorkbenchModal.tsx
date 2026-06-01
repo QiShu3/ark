@@ -21,6 +21,7 @@ import {
 import { activateEventSubApps } from '../../lib/events/eventAppSync';
 import { fetchVocabDecks, initializeVocabAppTask } from '../../lib/vocab/api';
 import { saveEventERCConfig } from '../../lib/erc/configSync';
+import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import {
   cloneWorkflowForm,
@@ -1614,17 +1615,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[80] flex items-center justify-center bg-ark-overlay px-5 py-20 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        aria-label="安排"
-        onClick={onClose}
+      <AppModalFrame
+        open={true}
+        onClose={onClose}
+        zIndexClassName="z-[80]"
+        ariaLabel="安排"
+        panelClassName="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
       >
-        <div
-          className="ark-modal flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
-          onClick={(clickEvent) => clickEvent.stopPropagation()}
-        >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-ark-text-faint">事件总览</div>
@@ -1800,20 +1797,15 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             )}
           </section>
         </div>
-        </div>
-      </div>
+      </AppModalFrame>
       {showAppConfigModal ? (
-        <div
-          className="fixed inset-0 z-[85] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
-          onClick={() => { setShowAppConfigModal(false); setAppConfigEditor(null); setAppConfigError(null); }}
+        <AppModalFrame
+          open={true}
+          onClose={() => { setShowAppConfigModal(false); setAppConfigEditor(null); setAppConfigError(null); }}
+          zIndexClassName="z-[85]"
+          ariaLabel="应用配置"
+          panelClassName="w-[560px] max-w-[94vw] flex flex-col overflow-hidden rounded-2xl shadow-2xl"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="应用配置"
-            className="ark-modal w-[560px] max-w-[94vw] max-h-[80vh] flex flex-col overflow-hidden rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
             <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold">应用配置</h3>
@@ -1888,8 +1880,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 })()}
               </div>
             </div>
-          </div>
-        </div>
+        </AppModalFrame>
       ) : null}
       <WorkflowPresetModal
         open={showEventWorkflowModal}

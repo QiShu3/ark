@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiJson } from '../lib/api';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType } from './taskTypes';
+import AppModalFrame from './AppModalFrame';
 
 type EventItem = {
   id: string;
@@ -155,16 +156,13 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-ark-overlay pt-16 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
-      role="dialog"
-      aria-label="编辑日程"
+    <AppModalFrame
+      open={true}
+      onClose={onClose}
+      zIndexClassName="z-[80]"
+      ariaLabel="编辑日程"
+      panelClassName="relative flex w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-ark-surface-strong shadow-2xl animate-in zoom-in-95 duration-200"
     >
-      <div
-        className="relative flex max-h-[calc(100vh-6rem)] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-ark-surface-strong shadow-2xl animate-in zoom-in-95 duration-200"
-        onClick={(event) => event.stopPropagation()}
-      >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <h3 className="text-lg font-bold text-ark-text">编辑日程</h3>
           <button
@@ -351,8 +349,7 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
             保存
           </button>
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 };
 

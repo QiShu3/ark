@@ -36,6 +36,7 @@ import { saveEventERCConfig, type ERCPracticeConfigInput, type ERCReviewConfigIn
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import type { VocabDeck } from '../lib/vocab/types';
+import AppModalFrame from './AppModalFrame';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
 import WorkflowPresetModal from './WorkflowPresetModal';
 import {
@@ -1776,17 +1777,13 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       {typeof document !== 'undefined' ? createPortal(
         <>
       {showModal ? (
-        <div
-          className="ark-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center"
-          onClick={closeModal}
+        <AppModalFrame
+          open={true}
+          onClose={closeModal}
+          zIndexClassName="z-[70]"
+          ariaLabel={showCreateEditor ? '添加事件' : '事件总览'}
+          panelClassName="flex h-[76vh] w-[760px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={showCreateEditor ? '添加事件' : '事件总览'}
-            className="ark-modal flex h-[76vh] w-[760px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
             <div className="h-14 border-b ark-border flex items-center justify-between px-5 bg-[var(--ark-surface-subtle)]">
               <h3 className="text-base font-semibold text-ark-text">
                 {showCreateEditor ? '添加事件' : '事件总览'}
@@ -2023,8 +2020,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 </div>
               </div>
             ) : null}
-          </div>
-        </div>
+        </AppModalFrame>
       ) : null}
 
       {workbenchEvent ? (
@@ -2064,20 +2060,16 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       />
 
       {showTemplateStore ? (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
-          onClick={() => {
+        <AppModalFrame
+          open={true}
+          onClose={() => {
             setShowTemplateStore(false);
             setPreviewStoreTemplate(null);
           }}
+          zIndexClassName="z-[90]"
+          ariaLabel="事件商店"
+          panelClassName="w-[760px] max-w-[94vw] overflow-hidden rounded-2xl border border-ark-border bg-ark-panel text-ark-text shadow-2xl"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="事件商店"
-            className="w-[760px] max-w-[94vw] max-h-[82vh] overflow-hidden rounded-2xl border border-ark-border bg-ark-panel text-ark-text shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
             <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold">事件商店</h3>
@@ -2178,22 +2170,17 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </AppModalFrame>
       ) : null}
 
       {showTemplateStore && previewStoreTemplate ? (
-        <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
-          onClick={() => setPreviewStoreTemplate(null)}
+        <AppModalFrame
+          open={true}
+          onClose={() => setPreviewStoreTemplate(null)}
+          zIndexClassName="z-[95]"
+          ariaLabel={`${previewStoreTemplate.name} 模板内容`}
+          panelClassName="flex w-[720px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-ark-panel text-ark-text shadow-2xl"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${previewStoreTemplate.name} 模板内容`}
-            className="flex max-h-[84vh] w-[720px] max-w-[94vw] flex-col overflow-hidden rounded-2xl border border-ark-border bg-ark-panel text-ark-text shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
             <div className="flex items-start justify-between gap-4 border-b border-ark-border px-5 py-4">
               <div className="min-w-0">
                 <div className="text-xs font-medium text-cyan-200/80">{previewStoreTemplate.category || '通用'}</div>
@@ -2337,22 +2324,17 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 {savingStoreTemplateId === previewStoreTemplate.id ? '保存中...' : '保存'}
               </button>
             </div>
-          </div>
-        </div>
+        </AppModalFrame>
       ) : null}
 
       {templateConflict ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
-          onClick={() => setTemplateConflict(null)}
+        <AppModalFrame
+          open={true}
+          onClose={() => setTemplateConflict(null)}
+          zIndexClassName="z-[100]"
+          ariaLabel="同名模板已存在"
+          panelClassName="w-[420px] max-w-[94vw] rounded-2xl border border-ark-border bg-ark-panel p-5 text-ark-text shadow-2xl"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="同名模板已存在"
-            className="w-[420px] max-w-[94vw] rounded-2xl border border-ark-border bg-ark-panel p-5 text-ark-text shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
             <h3 className="text-lg font-semibold">同名模板已存在</h3>
             <p className="mt-3 text-sm leading-6 text-ark-text-muted">
               已经有名为 <span className="font-medium text-ark-text">{templateConflict.template.name}</span> 的事件模板。
@@ -2385,8 +2367,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 更新模板
               </button>
             </div>
-          </div>
-        </div>
+        </AppModalFrame>
       ) : null}
 
         </>,
