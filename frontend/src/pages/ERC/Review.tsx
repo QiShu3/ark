@@ -2,7 +2,7 @@ import ERCReviewFocusWork from '../../components/ERC/ERCReviewFocusWork';
 
 export default function ERCReview() {
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-6 pb-10 pt-32">
+    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-32">
       <ERCReviewFocusWork />
     </div>
   );

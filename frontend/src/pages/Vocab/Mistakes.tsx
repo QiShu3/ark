@@ -41,7 +41,7 @@ export default function VocabMistakes() {
   }, [activeDeck, activeDeckVersion]);
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-32">
+    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-32">
       <div className="mx-auto max-w-5xl">
         <h1 className="text-3xl font-semibold tracking-tight">错题池</h1>
         <p className="mt-3 text-ark-text-muted">这里保留最近答错的词，适合做快速回捞和集中补洞。</p>
