@@ -1,6 +1,5 @@
 import React from 'react';
 import CharacterDisplay from './CharacterDisplay';
-import EventCountdownCard from './EventCountdownCard';
 import DialogueInteraction from './DialogueInteraction';
 import { cn } from '../lib/utils';
 import { useCustomizationStore } from '../lib/customization';
@@ -35,8 +34,6 @@ const LeftPanel: React.FC<LeftPanelProps> = ({ collapsed }) => {
         className="absolute inset-0 h-full w-full scale-[1.03] object-cover transition-all duration-300"
       />
       <div className="ark-background-overlay absolute inset-0" />
-
-      <EventCountdownCard />
 
       {/* 人物展示区域，占据全屏空间 */}
       <div className="absolute inset-0 z-0 flex items-center justify-center">

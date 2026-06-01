@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Box, Check, Circle, Clock3, Play, Plus, Trophy } from 'lucide-react';
+import { BarChart3, Box, Check, ChevronRight, Circle, Play, Trophy } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
 import type { Task } from './taskTypes';
@@ -74,6 +74,36 @@ function formatTaskWindow(task: Task): string {
   return '未安排';
 }
 
+function DecorativeClock() {
+  const ticks = Array.from({ length: 12 }, (_, index) => index * 30);
+
+  return (
+    <svg
+      className="ark-home-decorative-clock absolute right-8 top-3 z-0 h-[92px] w-[92px]"
+      viewBox="0 0 100 100"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle className="ark-home-clock-halo" cx="50" cy="50" r="48" />
+      <circle className="ark-home-clock-face" cx="50" cy="50" r="39" />
+      {ticks.map((rotation) => (
+        <line
+          key={rotation}
+          className="ark-home-clock-tick"
+          x1="50"
+          y1="14"
+          x2="50"
+          y2={rotation % 90 === 0 ? '20' : '18'}
+          transform={`rotate(${rotation} 50 50)`}
+        />
+      ))}
+      <line className="ark-home-clock-hand" x1="50" y1="50" x2="50" y2="27" transform="rotate(40 50 50)" />
+      <line className="ark-home-clock-hand ark-home-clock-hand-short" x1="50" y1="50" x2="50" y2="33" transform="rotate(230 50 50)" />
+      <circle className="ark-home-clock-center" cx="50" cy="50" r="4" />
+    </svg>
+  );
+}
+
 export default function HomeRightDashboard() {
   const navigate = useNavigate();
   const [workflow, setWorkflow] = useState<FocusWorkflow | null>(null);
@@ -128,7 +158,9 @@ export default function HomeRightDashboard() {
     .sort((a, b) => Number(isToday(b.due_date)) - Number(isToday(a.due_date)))
     .slice(0, 3);
   const phaseLabel = workflow?.state === 'break' ? '休息阶段' : '当前阶段';
-  const actionLabel = !workflow || workflow.state === 'normal'
+  const actionLabel = workflow?.pending_task_selection
+    ? '开始学习'
+    : !workflow || workflow.state === 'normal'
     ? '开始学习'
     : workflow.state === 'break'
       ? '结束休息'
@@ -140,6 +172,10 @@ export default function HomeRightDashboard() {
     if (isSubmittingAction) return;
     setIsSubmittingAction(true);
     try {
+      if (workflow?.pending_task_selection) {
+        window.dispatchEvent(new Event('ark:open-workflow-modal'));
+        return;
+      }
       if (!workflow || workflow.state === 'normal') {
         const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
         const preset = presets.find((item) => item.is_default) ?? presets[0];
@@ -162,41 +198,43 @@ export default function HomeRightDashboard() {
     }
   }
 
+  function openArrangementEntry() {
+    window.dispatchEvent(new Event('ark:open-arrangements-modal'));
+  }
+
   return (
     <>
       <div className="grid h-full grid-rows-[1.25fr_0.85fr_1.15fr_1.7fr_1fr] gap-3">
-        <section className="ark-home-card relative rounded-[24px] px-6 py-5">
-          <div className="flex h-full items-center justify-between gap-5">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-base font-medium text-[var(--ark-text)]">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--ark-accent)] shadow-[0_0_12px_var(--ark-accent)]" />
-                {phaseLabel}
-              </div>
-              <div className="mt-4 text-6xl font-semibold leading-none text-[var(--ark-text)] ark-font-display">
+        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5">
+          <div className="relative z-10 flex h-full min-h-[150px] flex-col justify-between">
+            <div className="flex items-center gap-2 text-base font-medium text-[var(--ark-text)]">
+              <span className="h-2.5 w-2.5 rounded-full bg-[var(--ark-accent)] shadow-[0_0_12px_var(--ark-accent)]" />
+              {phaseLabel}
+            </div>
+
+            <div className="pb-1">
+              <div className="ark-home-timer-digits text-[4.4rem] font-semibold leading-none text-[var(--ark-text)] ark-font-display">
                 {formatTimer(timerSeconds)}
               </div>
-              <div className="mt-4 text-sm text-[var(--ark-text-muted)]">
+              <div className="mt-5 text-sm text-[var(--ark-text-muted)]">
                 今日目标&nbsp;&nbsp;{DAILY_GOAL_MINUTES} 分钟
               </div>
             </div>
-
-            <div className="flex h-full min-w-[158px] flex-col items-end justify-between pr-1">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--ark-border)] bg-[var(--ark-accent-soft)] text-[var(--ark-accent)] opacity-75">
-                <Clock3 className="h-7 w-7" aria-hidden="true" />
-              </div>
-              <button
-                type="button"
-                onClick={handlePrimaryAction}
-                disabled={isSubmittingAction}
-                className="ark-home-primary-button flex h-11 min-w-[150px] items-center justify-center gap-2 rounded-[16px] px-4 text-base font-semibold transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
-              >
-                <span className="ark-home-play-dot flex h-5.5 w-5.5 items-center justify-center rounded-full">
-                  <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                </span>
-                {actionLabel}
-              </button>
-            </div>
           </div>
+
+          <DecorativeClock />
+
+          <button
+            type="button"
+            onClick={handlePrimaryAction}
+            disabled={isSubmittingAction}
+            className="ark-home-primary-button absolute bottom-6 right-6 z-20 flex h-[52px] min-w-[212px] items-center justify-center gap-2 rounded-[20px] px-6 text-lg font-semibold transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
+          >
+            <span className="ark-home-play-dot flex h-6 w-6 items-center justify-center rounded-full">
+              <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+            </span>
+            {actionLabel}
+          </button>
         </section>
 
         <section className="ark-home-card rounded-[24px] px-6 py-3">
@@ -217,35 +255,46 @@ export default function HomeRightDashboard() {
           </div>
         </section>
 
-        <section className="ark-home-card flex min-h-0 flex-col rounded-[24px] px-6 py-4">
-          <div className="mb-3 flex items-center justify-between">
+        <section className="ark-home-card flex min-h-0 flex-col rounded-[24px] px-6 py-5">
+          <div className="mb-4 flex items-center justify-between">
             <span className="text-base font-semibold text-[var(--ark-text)]">今日任务</span>
             <button
               type="button"
-              onClick={() => window.dispatchEvent(new Event('ark:open-workflow-modal'))}
-              className="ark-home-mini-action flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium text-[var(--ark-text-muted)]"
+              onClick={openArrangementEntry}
+              className="ark-home-text-link flex items-center gap-1.5 text-sm font-medium text-[var(--ark-text-muted)]"
             >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              添加计划
+              查看全部
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
-          <div className={`flex min-h-0 flex-1 flex-col gap-2 ${todayTasks.length ? 'justify-start pt-2' : 'justify-center'}`}>
+          <div className={`flex min-h-0 flex-1 flex-col ${todayTasks.length ? 'justify-start gap-2 pt-1' : 'justify-center'}`}>
             {todayTasks.length ? todayTasks.map((task) => {
               const completed = task.status === 'done' || task.completion_state?.completion_state === 'period_complete';
               const active = workflow?.task_id === task.id;
               const statusLabel = completed ? '已完成' : active ? '进行中' : '待开始';
+              const statusClass = completed
+                ? 'text-emerald-500'
+                : active
+                  ? 'text-[var(--ark-accent)]'
+                  : 'text-[var(--ark-text-faint)]';
+              const statusDotClass = completed
+                ? 'bg-emerald-400'
+                : active
+                  ? 'bg-[var(--ark-accent)]'
+                  : 'bg-[var(--ark-text-faint)]';
               return (
-                <div key={task.id} className="grid grid-cols-[minmax(0,1fr)_92px_58px] items-center gap-3">
+                <div key={task.id} className="grid h-[36px] grid-cols-[minmax(0,1fr)_118px_76px] items-center gap-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                      completed ? 'border-[var(--ark-accent)] bg-[var(--ark-accent)] text-[var(--ark-on-accent)]' : 'border-[var(--ark-border-strong)]'
+                    <span className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border ${
+                      completed ? 'ark-home-task-check border-[var(--ark-accent)] bg-[var(--ark-accent)] text-[var(--ark-on-accent)]' : 'border-[var(--ark-border-strong)] bg-[var(--ark-glass-surface-soft)]'
                     }`}>
                       {completed ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
                     </span>
                     <span className="truncate text-sm font-medium text-[var(--ark-text)]">{task.title}</span>
                   </div>
                   <span className="text-right text-sm text-[var(--ark-text-muted)]">{formatTaskWindow(task)}</span>
-                  <span className={completed ? 'text-right text-xs font-medium text-emerald-500' : active ? 'text-right text-xs font-medium text-[var(--ark-accent)]' : 'text-right text-xs font-medium text-[var(--ark-text-faint)]'}>
+                  <span className={`flex items-center justify-end gap-1.5 text-xs font-medium ${statusClass}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass}`} aria-hidden="true" />
                     {statusLabel}
                   </span>
                 </div>

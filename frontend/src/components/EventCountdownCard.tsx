@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Save, ShoppingBag, Trash2, X } from 'lucide-react';
 
 import {
@@ -103,6 +104,10 @@ type TemplateConflictState = {
   source: 'manual' | 'store';
 };
 
+type EventCountdownCardProps = {
+  variant?: 'floating' | 'nav';
+};
+
 const CREATE_EVENT_DEFAULTS: EventFormState = {
   name: '',
   startDate: '',
@@ -110,7 +115,7 @@ const CREATE_EVENT_DEFAULTS: EventFormState = {
   isPrimary: false,
 };
 
-const EventCountdownCard: React.FC = () => {
+const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floating' }) => {
   const [showModal, setShowModal] = useState(false);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [primaryEvent, setPrimaryEvent] = useState<EventItem | null>(null);
@@ -1523,6 +1528,13 @@ const EventCountdownCard: React.FC = () => {
     setWorkbenchEvent(event);
   }
 
+  function openEventOverview(): void {
+    setError(null);
+    setShowCreateEditor(false);
+    setShowModal(true);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
+  }
+
   function renderCreateArrangementEditor(kind: CreateWorkbenchItemState['kind']) {
     if (!createArrangementEditor || createArrangementEditor.kind !== kind) return null;
     const label = kind === 'appointment' ? '日程' : '任务';
@@ -1731,24 +1743,38 @@ const EventCountdownCard: React.FC = () => {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          setError(null);
-          setShowCreateEditor(false);
-          setShowModal(true);
-          dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
-        }}
-        data-onboarding-anchor="primary-event"
-        className="ark-panel-card ark-focus-ring absolute left-12 top-24 z-20 flex h-44 w-44 flex-col items-center justify-center rounded-full border-[6px] text-[var(--ark-text)] shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-colors hover:bg-[var(--ark-surface-subtle)]"
-      >
-        <span className="text-xs font-medium tracking-wide text-[var(--ark-text-muted)]">
-          {primaryEvent ? primaryEvent.name : '未设置主事件'}
-        </span>
-        <span className={`mt-3 text-4xl font-semibold leading-none ark-font-display ${numberClassName}`}>{countdownText}</span>
-        <span className="mt-3 text-[10px] tracking-[0.2em] uppercase text-[var(--ark-text-faint)]">event</span>
-      </button>
+      {variant === 'nav' ? (
+        <button
+          type="button"
+          onClick={openEventOverview}
+          data-onboarding-anchor="primary-event"
+          className="ark-event-nav-trigger ark-focus-ring flex h-[64px] min-w-[172px] max-w-[240px] flex-col justify-center rounded-[24px] px-2 text-left transition-colors"
+          aria-label={`打开主事件：${primaryEvent ? primaryEvent.name : '未设置主事件'}，倒计时 ${countdownText}`}
+        >
+          <span className="max-w-full truncate text-[22px] font-semibold leading-7 text-[var(--ark-text)] ark-font-display">
+            {primaryEvent ? primaryEvent.name : '未设置主事件'}
+          </span>
+          <span className={`mt-0.5 text-[17px] font-semibold leading-5 ark-font-display ${numberClassName}`}>
+            {countdownText}
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={openEventOverview}
+          data-onboarding-anchor="primary-event"
+          className="ark-panel-card ark-focus-ring absolute left-12 top-24 z-20 flex h-44 w-44 flex-col items-center justify-center rounded-full border-[6px] text-[var(--ark-text)] shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-colors hover:bg-[var(--ark-surface-subtle)]"
+        >
+          <span className="text-xs font-medium tracking-wide text-[var(--ark-text-muted)]">
+            {primaryEvent ? primaryEvent.name : '未设置主事件'}
+          </span>
+          <span className={`mt-3 text-4xl font-semibold leading-none ark-font-display ${numberClassName}`}>{countdownText}</span>
+          <span className="mt-3 text-[10px] tracking-[0.2em] uppercase text-[var(--ark-text-faint)]">event</span>
+        </button>
+      )}
 
+      {typeof document !== 'undefined' ? createPortal(
+        <>
       {showModal ? (
         <div
           className="ark-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center"
@@ -2363,6 +2389,9 @@ const EventCountdownCard: React.FC = () => {
         </div>
       ) : null}
 
+        </>,
+        document.body,
+      ) : null}
     </>
   );
 };

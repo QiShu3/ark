@@ -18,7 +18,7 @@ const DEFAULT_SUGGESTIONS = [
  */
 const DialogueInteraction: React.FC = () => {
   return (
-    <div className="ark-dialogue pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-3 md:px-4 md:pb-4">
+    <div className="ark-dialogue pointer-events-none absolute inset-x-0 bottom-0 z-10 px-5 pb-5 md:px-7 md:pb-7">
       <section className="ark-dialogue-card pointer-events-auto relative overflow-hidden rounded-[28px] px-5 pb-5 pt-6 backdrop-blur-2xl md:px-7 md:pb-7 md:pt-7">
         <div className="ark-dialogue-speaker mb-4 flex w-fit items-center gap-2 rounded-2xl px-4 py-2 backdrop-blur-md">
           <Sparkles className="h-4 w-4" aria-hidden="true" />
@@ -32,7 +32,7 @@ const DialogueInteraction: React.FC = () => {
           />
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-4">
           {DEFAULT_SUGGESTIONS.map(({ label, Icon }) => (
             <button
               key={label}
@@ -48,7 +48,7 @@ const DialogueInteraction: React.FC = () => {
           ))}
         </div>
 
-        <div className="ark-dialogue-input-wrap mt-7 flex h-16 items-center gap-3 rounded-full px-5 backdrop-blur-md">
+        <div className="ark-dialogue-input-wrap mt-8 flex h-16 items-center gap-3 rounded-full px-5 backdrop-blur-md">
             <input
               type="text"
               value=""

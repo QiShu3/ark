@@ -279,6 +279,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     return () => window.removeEventListener('ark:open-workflow-modal', handler);
   }, [index, manageableWorkflowPresets.length]);
 
+  useEffect(() => {
+    if (index !== 0) return;
+    const handler = () => {
+      setShowTaskModal(true);
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsOpened);
+      _loadTasks();
+      _loadAppointments();
+      void _loadArrangementEvents();
+    };
+    window.addEventListener('ark:open-arrangements-modal', handler);
+    return () => window.removeEventListener('ark:open-arrangements-modal', handler);
+  }, [index]);
+
   // Sync today focus minutes periodically
   useEffect(() => {
     const timer = setInterval(() => {

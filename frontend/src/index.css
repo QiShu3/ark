@@ -88,18 +88,18 @@
 }
 
 :root[data-theme="light"] {
-  --ark-page-bg: #dbe7f3;
+  --ark-page-bg: #eef6ff;
   --ark-text: rgba(15, 23, 42, 0.96);
   --ark-text-muted: rgba(30, 41, 59, 0.78);
   --ark-text-faint: rgba(51, 65, 85, 0.62);
-  --ark-surface: rgba(226, 236, 248, 0.78);
-  --ark-surface-strong: rgba(241, 245, 249, 0.94);
-  --ark-surface-subtle: rgba(204, 218, 236, 0.66);
-  --ark-border: rgba(30, 41, 59, 0.18);
-  --ark-border-strong: rgba(30, 41, 59, 0.3);
-  --ark-overlay: rgba(226, 232, 240, 0.72);
-  --ark-overlay-strong: rgba(248, 250, 252, 0.9);
-  --ark-background-overlay: linear-gradient(to bottom, rgba(241, 245, 249, 0.46), rgba(226, 232, 240, 0.2), rgba(15, 23, 42, 0.34));
+  --ark-surface: rgba(248, 252, 255, 0.76);
+  --ark-surface-strong: rgba(255, 255, 255, 0.92);
+  --ark-surface-subtle: rgba(229, 241, 255, 0.58);
+  --ark-border: rgba(74, 101, 135, 0.13);
+  --ark-border-strong: rgba(74, 101, 135, 0.24);
+  --ark-overlay: rgba(241, 248, 255, 0.76);
+  --ark-overlay-strong: rgba(255, 255, 255, 0.92);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(248, 252, 255, 0.32), rgba(238, 247, 255, 0.08), rgba(215, 233, 252, 0.18));
   --ark-focus-ring: rgba(37, 99, 235, 0.5);
   --ark-accent: #2563eb;
   --ark-on-accent: #fff;
@@ -108,22 +108,22 @@
   --ark-danger: #dc2626;
   --ark-input: rgba(226, 236, 248, 0.82);
   --ark-panel: rgba(239, 246, 255, 0.96);
-  --ark-glass-surface-strong: rgba(248, 252, 255, 0.58);
-  --ark-glass-surface: rgba(248, 252, 255, 0.48);
-  --ark-glass-surface-soft: rgba(248, 252, 255, 0.38);
-  --ark-glass-border-strong: rgba(255, 255, 255, 0.76);
-  --ark-glass-border: rgba(255, 255, 255, 0.6);
-  --ark-glass-border-soft: rgba(255, 255, 255, 0.46);
-  --ark-glass-highlight: rgba(255, 255, 255, 0.72);
-  --ark-glass-shadow-strong: 0 30px 82px rgba(73, 97, 122, 0.24);
-  --ark-glass-shadow-medium: 0 18px 48px rgba(73, 97, 122, 0.16);
-  --ark-glass-shadow-soft: 0 10px 28px rgba(73, 97, 122, 0.11);
-  --ark-glass-filter-strong: drop-shadow(0 22px 34px rgba(73, 97, 122, 0.18)) drop-shadow(0 6px 14px rgba(73, 97, 122, 0.1));
-  --ark-glass-filter-medium: drop-shadow(0 13px 22px rgba(73, 97, 122, 0.13)) drop-shadow(0 4px 10px rgba(73, 97, 122, 0.08));
-  --ark-glass-filter-soft: drop-shadow(0 8px 15px rgba(73, 97, 122, 0.09)) drop-shadow(0 2px 7px rgba(73, 97, 122, 0.06));
-  --ark-glass-filter-soft-hover: drop-shadow(0 12px 20px rgba(73, 97, 122, 0.12)) drop-shadow(0 3px 9px rgba(73, 97, 122, 0.07));
-  --ark-shell-frame-border: rgba(255, 255, 255, 0.9);
-  --ark-shell-frame-shadow: 0 18px 46px rgba(73, 97, 122, 0.12);
+  --ark-glass-surface-strong: rgba(255, 255, 255, 0.58);
+  --ark-glass-surface: rgba(255, 255, 255, 0.46);
+  --ark-glass-surface-soft: rgba(255, 255, 255, 0.34);
+  --ark-glass-border-strong: rgba(255, 255, 255, 0.82);
+  --ark-glass-border: rgba(255, 255, 255, 0.64);
+  --ark-glass-border-soft: rgba(255, 255, 255, 0.5);
+  --ark-glass-highlight: rgba(255, 255, 255, 0.88);
+  --ark-glass-shadow-strong: 0 26px 72px rgba(83, 119, 154, 0.18);
+  --ark-glass-shadow-medium: 0 16px 42px rgba(83, 119, 154, 0.12);
+  --ark-glass-shadow-soft: 0 9px 24px rgba(83, 119, 154, 0.08);
+  --ark-glass-filter-strong: drop-shadow(0 20px 30px rgba(83, 119, 154, 0.12)) drop-shadow(0 6px 12px rgba(83, 119, 154, 0.07));
+  --ark-glass-filter-medium: drop-shadow(0 12px 20px rgba(83, 119, 154, 0.09)) drop-shadow(0 4px 9px rgba(83, 119, 154, 0.06));
+  --ark-glass-filter-soft: drop-shadow(0 7px 14px rgba(83, 119, 154, 0.07)) drop-shadow(0 2px 6px rgba(83, 119, 154, 0.04));
+  --ark-glass-filter-soft-hover: drop-shadow(0 10px 18px rgba(83, 119, 154, 0.1)) drop-shadow(0 3px 8px rgba(83, 119, 154, 0.05));
+  --ark-shell-frame-border: rgba(255, 255, 255, 0.82);
+  --ark-shell-frame-shadow: 0 18px 42px rgba(83, 119, 154, 0.1);
 
   /* Global status work colors - Light mode (high contrast) */
   --focus-work-blue-text: #1d4ed8;
@@ -217,6 +217,22 @@
   backdrop-filter: blur(18px) saturate(130%);
 }
 
+.ark-top-nav {
+  box-shadow: var(--ark-glass-shadow-soft);
+}
+
+.ark-logo-mark {
+  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--ark-accent) 16%, transparent));
+}
+
+.ark-event-nav-trigger {
+  color: var(--ark-text);
+}
+
+.ark-event-nav-trigger:hover {
+  background: color-mix(in srgb, var(--ark-accent-soft) 58%, transparent);
+}
+
 .ark-left-glass-panel {
   border: 1px solid var(--ark-glass-border-strong);
   background: var(--ark-glass-surface-strong);
@@ -224,8 +240,8 @@
   box-shadow:
     inset 0 1px 0 var(--ark-glass-highlight),
     inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 70%, transparent);
-  filter: var(--ark-glass-filter-strong);
-  backdrop-filter: blur(24px) saturate(140%);
+  filter: var(--ark-glass-filter-medium);
+  backdrop-filter: blur(20px) saturate(142%);
 }
 
 .ark-home-card {
@@ -236,8 +252,8 @@
   box-shadow:
     inset 0 1px 0 var(--ark-glass-highlight),
     inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 72%, transparent);
-  filter: var(--ark-glass-filter-medium);
-  backdrop-filter: blur(24px) saturate(135%);
+  filter: var(--ark-glass-filter-soft);
+  backdrop-filter: blur(22px) saturate(140%);
 }
 
 .ark-nav-icon-button {
@@ -269,9 +285,9 @@
 }
 
 .ark-home-dashboard-shell {
-  border: 1px solid var(--ark-border);
-  background: color-mix(in srgb, var(--ark-surface) 78%, transparent);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-surface) 54%, transparent);
+  backdrop-filter: blur(18px) saturate(130%);
 }
 
 .ark-home-grid-card {
@@ -318,6 +334,19 @@
   background: var(--ark-surface-subtle);
 }
 
+.ark-home-text-link {
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.ark-home-text-link:hover {
+  color: var(--ark-text);
+  transform: translateX(1px);
+}
+
+.ark-home-task-check {
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--ark-accent) 22%, transparent);
+}
+
 .ark-home-empty-task {
   border: 1px solid var(--ark-glass-border-soft);
   background: color-mix(in srgb, var(--ark-glass-surface-soft) 78%, transparent);
@@ -348,6 +377,55 @@
 
 .ark-home-play-dot {
   background: color-mix(in srgb, var(--ark-on-accent) 24%, transparent);
+}
+
+.ark-home-timer-card {
+  background:
+    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--ark-accent-soft) 74%, transparent), transparent 24%),
+    var(--ark-glass-surface);
+}
+
+.ark-home-timer-digits {
+  font-variant-numeric: tabular-nums;
+}
+
+.ark-home-decorative-clock {
+  overflow: visible;
+  color: var(--ark-accent);
+  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--ark-accent) 16%, transparent));
+  opacity: 0.54;
+}
+
+.ark-home-clock-halo {
+  fill: color-mix(in srgb, var(--ark-accent-soft) 34%, transparent);
+  stroke: color-mix(in srgb, var(--ark-accent) 16%, transparent);
+  stroke-width: 1;
+}
+
+.ark-home-clock-face {
+  fill: color-mix(in srgb, var(--ark-accent-soft) 18%, transparent);
+  stroke: color-mix(in srgb, var(--ark-accent) 48%, transparent);
+  stroke-width: 2;
+}
+
+.ark-home-clock-tick {
+  stroke: color-mix(in srgb, var(--ark-accent) 60%, transparent);
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.ark-home-clock-hand {
+  stroke: color-mix(in srgb, var(--ark-accent) 78%, transparent);
+  stroke-linecap: round;
+  stroke-width: 4;
+}
+
+.ark-home-clock-hand-short {
+  stroke-width: 3.2;
+}
+
+.ark-home-clock-center {
+  fill: color-mix(in srgb, var(--ark-accent) 76%, transparent);
 }
 
 .ark-home-progress-fill {
@@ -417,8 +495,8 @@
 }
 
 :root[data-theme="light"] .ark-home-dashboard-shell {
-  background: rgba(210, 226, 244, 0.54);
-  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(236, 247, 255, 0.42);
+  border-color: rgba(255, 255, 255, 0.62);
 }
 
 .ark-annotation {

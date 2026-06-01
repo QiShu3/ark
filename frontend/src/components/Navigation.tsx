@@ -3,16 +3,61 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { BookOpen, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
+import { Bell, BookOpen, CalendarDays, LogOut, Monitor, Moon, Settings, Sun } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import { restartFirstGuide } from '../lib/onboardingEvents';
 import SettingsModal from './SettingsModal';
 import { useCustomizationStore } from '../lib/customization';
 import { useTheme } from '../hooks/useTheme';
+import MultiWeekCalendarModal from './MultiWeekCalendarModal';
+import EventCountdownCard from './EventCountdownCard';
 
 function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean {
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
+}
+
+function ArkLogoMark() {
+  return (
+    <svg
+      className="ark-logo-mark h-[48px] w-[48px]"
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <linearGradient id="ark-logo-gradient" x1="12" x2="52" y1="54" y2="10" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#2563eb" />
+          <stop offset="0.55" stopColor="#38bdf8" />
+          <stop offset="1" stopColor="#7dd3fc" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M31.8 6.5 8.2 49.5l23.6 8 24-8L31.8 6.5Z"
+        fill="none"
+        stroke="url(#ark-logo-gradient)"
+        strokeLinejoin="round"
+        strokeWidth="3.2"
+      />
+      <path
+        d="M31.8 13.5v37.2M31.8 50.7 16.2 46l15.6-32.5L47.8 46 31.8 50.7Z"
+        fill="none"
+        stroke="url(#ark-logo-gradient)"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.6"
+      />
+      <path
+        d="M19.5 46 31.8 30.4 44.4 46"
+        fill="none"
+        stroke="url(#ark-logo-gradient)"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+        opacity="0.78"
+      />
+    </svg>
+  );
 }
 
 /**
@@ -32,6 +77,7 @@ const Navigation: React.FC = () => {
   const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const focusNavigationLocked = isFocusWorkNavigationLocked(workflowSnapshot);
@@ -140,11 +186,6 @@ const Navigation: React.FC = () => {
     }
   }, [user]);
 
-  function navigateUnlessLocked(path: string) {
-    if (focusNavigationLocked) return;
-    navigate(path);
-  }
-
   function handleLogout() {
     clearSession();
     navigate('/login', { replace: true });
@@ -158,17 +199,12 @@ const Navigation: React.FC = () => {
 
   return (
     <>
-      <nav className="fixed left-3 right-3 top-3 z-50 flex h-24 items-center rounded-[48px] bg-[var(--ark-surface)] px-[30px] text-[var(--ark-text)] backdrop-blur-md">
+      <nav className="ark-top-nav fixed left-3 right-3 top-3 z-50 flex h-24 items-center rounded-[48px] border border-[var(--ark-glass-border-soft)] bg-[var(--ark-surface)] px-[30px] text-[var(--ark-text)] backdrop-blur-2xl">
       <div className="flex items-center gap-[18px]">
-        <div
-          className={`text-[27px] font-semibold ark-font-display transition-colors ${
-            focusNavigationLocked ? 'cursor-not-allowed text-[var(--ark-text-faint)]' : 'cursor-pointer hover:text-[var(--ark-accent)]'
-          }`}
-          aria-disabled={focusNavigationLocked}
-          onClick={() => navigateUnlessLocked('/')}
-        >
-          Ark Project
+        <div className="flex h-[54px] w-[54px] items-center justify-center rounded-full">
+          <ArkLogoMark />
         </div>
+        <EventCountdownCard variant="nav" />
         <button
           type="button"
           aria-label="重新进入首次体验引导"
@@ -188,26 +224,48 @@ const Navigation: React.FC = () => {
           </div>
         </div>
       ) : null}
-      <div className="ml-auto flex items-center gap-9">
+      <div className="ml-auto flex items-center gap-6">
         {/* 用户头像区域 */}
         {user ? (
           <div className="flex items-center gap-[18px]">
             <button
               type="button"
+              aria-label="打开导航栏日历"
+              title="日历"
+              disabled={focusNavigationLocked}
+              className="ark-nav-icon-button ark-focus-ring flex h-[60px] w-[60px] items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                if (focusNavigationLocked) return;
+                setShowCalendarModal(true);
+              }}
+            >
+              <CalendarDays size={25} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               aria-label={focusNavigationLocked ? '切换外观模式' : nextThemeLabel}
               title={themeButtonTitle}
               disabled={focusNavigationLocked}
-              className="ark-nav-icon-button ark-focus-ring flex h-12 w-12 items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ark-nav-icon-button ark-focus-ring flex h-[60px] w-[60px] items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={toggleResolvedTheme}
             >
               <ThemeIcon size={24} aria-hidden="true" />
             </button>
             <button
               type="button"
+              aria-label="通知中心"
+              title="通知中心"
+              disabled={focusNavigationLocked}
+              className="ark-nav-icon-button ark-focus-ring flex h-[60px] w-[60px] items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Bell size={24} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               aria-label="打开界面设置"
               title="界面设置"
               disabled={focusNavigationLocked}
-              className="ark-nav-icon-button ark-focus-ring flex h-12 w-12 items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ark-nav-icon-button ark-focus-ring flex h-[60px] w-[60px] items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 if (focusNavigationLocked) return;
                 setShowSettingsModal(true);
@@ -221,7 +279,7 @@ const Navigation: React.FC = () => {
                 type="button"
                 aria-label="打开用户菜单"
                 aria-expanded={avatarMenuOpen}
-                className="ark-nav-icon-button ark-focus-ring flex h-12 w-12 items-center justify-center rounded-full transition-all"
+                className="ark-nav-icon-button ark-focus-ring relative flex h-[60px] w-[60px] items-center justify-center rounded-full transition-all"
                 onClick={() => setAvatarMenuOpen((prev) => !prev)}
               >
                 {avatarUrl ? (
@@ -231,6 +289,7 @@ const Navigation: React.FC = () => {
                     {user.username.charAt(0).toUpperCase()}
                   </span>
                 )}
+                <span className="absolute bottom-1 right-0 h-3.5 w-3.5 rounded-full border-2 border-[var(--ark-surface-strong)] bg-emerald-400" />
               </button>
               {avatarMenuOpen ? (
                 <div className="absolute right-0 top-full z-50 mt-3 w-48 overflow-hidden rounded-2xl border border-ark-border bg-ark-overlay p-2 text-ark-text shadow-xl backdrop-blur-xl">
@@ -270,6 +329,7 @@ const Navigation: React.FC = () => {
     )}
 
     <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
+    <MultiWeekCalendarModal open={showCalendarModal} onClose={() => setShowCalendarModal(false)} />
     </>
   );
 };
