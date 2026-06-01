@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Box, Check, ChevronRight, Circle, Play, Trophy } from 'lucide-react';
+import { BarChart3, Box, Check, Circle, Play, Trophy } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
-import type { Task } from './taskTypes';
+import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
 import type { AchievementSummary } from './achievementTypes';
@@ -74,6 +74,24 @@ function formatTaskWindow(task: Task): string {
   return '未安排';
 }
 
+/** 判断日程是否适合显示在首页日程栏。 */
+function isDashboardAppointment(appointment: Appointment): boolean {
+  if (appointment.completion_state?.hidden_from_action_list) return false;
+  return !['attended', 'missed', 'cancelled'].includes(appointment.status);
+}
+
+/** 计算首页日程排序时间，优先使用开始时间。 */
+function getAppointmentSortTime(appointment: Appointment): number {
+  const value = appointment.starts_at ?? appointment.ends_at;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+}
+
+/** 格式化首页日程时间标签。 */
+function formatAppointmentTime(appointment: Appointment): string {
+  return formatClock(appointment.starts_at ?? appointment.ends_at);
+}
+
 function DecorativeClock() {
   const ticks = Array.from({ length: 12 }, (_, index) => index * 30);
 
@@ -109,6 +127,7 @@ export default function HomeRightDashboard() {
   const [workflow, setWorkflow] = useState<FocusWorkflow | null>(null);
   const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [achievementSummary, setAchievementSummary] = useState<AchievementSummary | null>(null);
@@ -116,16 +135,18 @@ export default function HomeRightDashboard() {
   const achievementButtonRef = useRef<HTMLButtonElement | null>(null);
 
   async function loadDashboard() {
-    const [workflowRes, todayFocusRes, tasksRes, achievementRes] = await Promise.allSettled([
+    const [workflowRes, todayFocusRes, tasksRes, appointmentsRes, achievementRes] = await Promise.allSettled([
       apiJson<FocusWorkflow>('/todo/focus/workflow/current'),
       apiJson<TodayFocusSummary>('/todo/focus/today'),
       apiJson<Task[]>('/todo/tasks?limit=100'),
+      apiJson<Appointment[]>('/todo/appointments'),
       apiJson<AchievementSummary>('/todo/achievements/summary'),
     ]);
 
     if (workflowRes.status === 'fulfilled') setWorkflow(workflowRes.value);
     if (todayFocusRes.status === 'fulfilled') setTodayFocusMinutes(todayFocusRes.value.minutes);
     if (tasksRes.status === 'fulfilled') setTasks(Array.isArray(tasksRes.value) ? tasksRes.value : []);
+    if (appointmentsRes.status === 'fulfilled') setAppointments(Array.isArray(appointmentsRes.value) ? appointmentsRes.value : []);
     if (achievementRes.status === 'fulfilled') setAchievementSummary(achievementRes.value);
   }
 
@@ -156,6 +177,17 @@ export default function HomeRightDashboard() {
   const todayTasks = tasks
     .filter((task) => !task.completion_state?.hidden_from_action_list && taskMatchesToday(task))
     .sort((a, b) => Number(isToday(b.due_date)) - Number(isToday(a.due_date)))
+    .slice(0, 4);
+  const upcomingAppointments = appointments
+    .filter(isDashboardAppointment)
+    .sort((a, b) => {
+      const aTime = getAppointmentSortTime(a);
+      const bTime = getAppointmentSortTime(b);
+      const aPast = aTime < nowMs;
+      const bPast = bTime < nowMs;
+      if (aPast !== bPast) return Number(aPast) - Number(bPast);
+      return aPast ? bTime - aTime : aTime - bTime;
+    })
     .slice(0, 3);
   const phaseLabel = workflow?.state === 'break' ? '休息阶段' : '当前阶段';
   const actionLabel = workflow?.pending_task_selection
@@ -255,61 +287,72 @@ export default function HomeRightDashboard() {
           </div>
         </section>
 
-        <section className="ark-home-card flex min-h-0 flex-col rounded-[24px] px-6 py-5">
-          <div className="mb-4 flex items-center justify-between">
-            <span className="text-base font-semibold text-[var(--ark-text)]">今日任务</span>
-            <button
-              type="button"
-              onClick={openArrangementEntry}
-              className="ark-home-text-link flex items-center gap-1.5 text-sm font-medium text-[var(--ark-text-muted)]"
-            >
-              查看全部
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
-          <div className={`flex min-h-0 flex-1 flex-col ${todayTasks.length ? 'justify-start gap-2 pt-1' : 'justify-center'}`}>
-            {todayTasks.length ? todayTasks.map((task) => {
-              const completed = task.status === 'done' || task.completion_state?.completion_state === 'period_complete';
-              const active = workflow?.task_id === task.id;
-              const statusLabel = completed ? '已完成' : active ? '进行中' : '待开始';
-              const statusClass = completed
-                ? 'text-emerald-500'
-                : active
-                  ? 'text-[var(--ark-accent)]'
-                  : 'text-[var(--ark-text-faint)]';
-              const statusDotClass = completed
-                ? 'bg-emerald-400'
-                : active
-                  ? 'bg-[var(--ark-accent)]'
-                  : 'bg-[var(--ark-text-faint)]';
-              return (
-                <div key={task.id} className="grid h-[36px] grid-cols-[minmax(0,1fr)_118px_76px] items-center gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border ${
-                      completed ? 'ark-home-task-check border-[var(--ark-accent)] bg-[var(--ark-accent)] text-[var(--ark-on-accent)]' : 'border-[var(--ark-border-strong)] bg-[var(--ark-glass-surface-soft)]'
-                    }`}>
-                      {completed ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+        <section className="ark-home-card relative flex min-h-0 flex-col rounded-[24px] px-6 py-4">
+          <button
+            type="button"
+            onClick={openArrangementEntry}
+            className="absolute right-6 top-4 inline-flex items-center rounded-full border border-ark-border bg-ark-surface-subtle px-4 py-1.5 text-sm font-semibold text-[var(--ark-accent)] transition-colors hover:bg-[var(--ark-accent-soft)]"
+          >
+            安排
+          </button>
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 pt-2">
+            <div className="flex min-h-0 flex-col">
+              <div className="mb-3 text-base font-semibold text-[var(--ark-text)]">任务</div>
+              <div className={`flex min-h-0 flex-1 flex-col ${todayTasks.length ? 'justify-start gap-2' : 'justify-center'}`}>
+                {todayTasks.length ? todayTasks.map((task) => {
+                  const completed = task.status === 'done' || task.completion_state?.completion_state === 'period_complete';
+                  const active = workflow?.task_id === task.id;
+                  const statusLabel = completed ? '已完成' : active ? '进行中' : formatTaskWindow(task);
+                  return (
+                    <div key={task.id} className="grid h-[36px] grid-cols-[22px_minmax(0,1fr)_96px] items-center gap-3">
+                      <span className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border ${
+                        completed ? 'ark-home-task-check border-[var(--ark-accent)] bg-[var(--ark-accent)] text-[var(--ark-on-accent)]' : 'border-[var(--ark-border-strong)] bg-[var(--ark-glass-surface-soft)]'
+                      }`}>
+                        {completed ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                      </span>
+                      <span className="truncate text-sm font-medium text-[var(--ark-text)]">{task.title}</span>
+                      <span className={`truncate text-right text-sm ${completed ? 'text-emerald-500' : active ? 'text-[var(--ark-accent)]' : 'text-[var(--ark-text-muted)]'}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                  );
+                }) : (
+                  <div className="ark-home-empty-task flex min-h-0 flex-1 items-center gap-3 rounded-2xl px-4 py-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--ark-border)] text-[var(--ark-accent)]">
+                      <Circle className="h-4.5 w-4.5" aria-hidden="true" />
                     </span>
-                    <span className="truncate text-sm font-medium text-[var(--ark-text)]">{task.title}</span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[var(--ark-text)]">今日暂无任务</div>
+                      <div className="mt-1 text-xs text-[var(--ark-text-faint)]">点击右上角添加今日计划</div>
+                    </div>
                   </div>
-                  <span className="text-right text-sm text-[var(--ark-text-muted)]">{formatTaskWindow(task)}</span>
-                  <span className={`flex items-center justify-end gap-1.5 text-xs font-medium ${statusClass}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass}`} aria-hidden="true" />
-                    {statusLabel}
-                  </span>
-                </div>
-              );
-            }) : (
-              <div className="ark-home-empty-task flex min-h-0 flex-1 items-center gap-3 rounded-2xl px-4 py-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--ark-border)] text-[var(--ark-accent)]">
-                  <Circle className="h-4.5 w-4.5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[var(--ark-text)]">今日暂无任务</div>
-                  <div className="mt-1 text-xs text-[var(--ark-text-faint)]">点击右上角添加今日计划</div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+
+            <div className="w-px bg-ark-border" aria-hidden="true" />
+
+            <div className="flex min-h-0 flex-col">
+              <div className="mb-3 text-base font-semibold text-[var(--ark-text)]">日程</div>
+              <div className={`flex min-h-0 flex-1 flex-col ${upcomingAppointments.length ? 'justify-start gap-3' : 'justify-center'}`}>
+                {upcomingAppointments.length ? upcomingAppointments.map((appointment, index) => (
+                  <div key={appointment.id} className="grid grid-cols-[56px_16px_minmax(0,1fr)] items-center gap-3">
+                    <span className="text-sm font-semibold text-[var(--ark-text)]">{formatAppointmentTime(appointment)}</span>
+                    <span className="relative flex h-8 items-center justify-center" aria-hidden="true">
+                      {index < upcomingAppointments.length - 1 ? (
+                        <span className="absolute left-1/2 top-5 h-9 w-px -translate-x-1/2 bg-ark-border" />
+                      ) : null}
+                      <span className="h-2.5 w-2.5 rounded-full bg-[var(--ark-accent)] shadow-[0_0_8px_var(--ark-accent)]" />
+                    </span>
+                    <span className="truncate text-sm font-medium text-[var(--ark-text-muted)]">{appointment.title}</span>
+                  </div>
+                )) : (
+                  <div className="flex min-h-0 flex-1 items-center rounded-2xl px-4 py-3 text-sm text-[var(--ark-text-faint)]">
+                    暂无近期日程
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 

@@ -2191,7 +2191,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         {/* 专注时长统计悬浮页面 */}
         {showStatsModal && (
           <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-            <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="ark-modal relative flex h-[80%] w-[80%] translate-y-6 flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
                 <h2 className="text-base font-semibold text-ark-text">专注统计</h2>
@@ -2240,8 +2240,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {/* 安排悬浮页面 */}
         {showTaskModal && (
-          <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-            <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 pb-6 pt-[120px] animate-in fade-in duration-200">
+            <div className="ark-modal relative flex h-[80%] max-h-[calc(100vh-144px)] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
                 <h2 className="text-base font-semibold text-ark-text">安排管理</h2>
