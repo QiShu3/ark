@@ -1965,6 +1965,7 @@ async def list_event_template_store(
             SELECT id, slug, category, name, description, schedule_mode, default_event_name, default_start_date,
                    default_due_at, default_is_primary, app_configs, workflows, sort_order, created_at, updated_at
             FROM event_template_store_templates
+            WHERE is_published = TRUE
             ORDER BY sort_order ASC, name ASC
             """
         )

@@ -3,16 +3,123 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ark Admin · 模板商店</title>
+  <title>Ark Admin · 事件模板</title>
   <link rel="stylesheet" href="css/common.css" />
   <style>
-    .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
-    .template-card { display: flex; flex-direction: column; height: 100%; transition: all 0.2s ease; }
-    .template-card:hover { border-color: var(--accent); box-shadow: var(--elev-raised); }
-    .template-card .tag { margin-bottom: 12px; }
-    .template-card .desc { font-size: 14px; color: var(--muted); margin: 12px 0; flex-grow: 1; line-height: 1.6; }
-    .template-card .footer { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-soft); display: flex; justify-content: space-between; align-items: center; }
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .toolbar .spacer { flex: 1; }
+    .search-input { padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; min-width: 240px; }
+    .search-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 
+    .toggle-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border-soft);
+      font-size: 13px; cursor: pointer; transition: all 0.2s;
+      background: var(--surface); color: var(--muted);
+    }
+    .toggle-btn.published { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .toggle-btn.unpublished { background: var(--surface); border-color: var(--border-soft); color: var(--muted); }
+    .toggle-btn:hover { opacity: 0.85; }
+    .toggle-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      justify-content: center; align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border-soft);
+      border-radius: 12px; padding: 24px; width: 90%; max-width: 720px;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-box h3 { margin: 0 0 20px; font-size: 20px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--fg-2); }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); font-size: 14px; font-family: var(--font-body);
+    }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: var(--focus-ring);
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .items-section { margin-top: 16px; }
+    .items-section h4 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; }
+    .item-row {
+      display: grid; grid-template-columns: 90px 1fr 80px 60px 40px; gap: 8px; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid var(--border-soft);
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-row input, .item-row select { padding: 6px 8px; font-size: 13px; }
+    .item-row .remove-item { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px; }
+    .item-row .remove-item:hover { opacity: 0.7; }
+
+    /* Section card inside modal */
+    .section-card {
+      border: 1px solid var(--border-soft); border-radius: 8px; padding: 16px; margin-top: 16px;
+    }
+    .section-card h4 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+    .section-card p { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+    /* App config card */
+    .app-card-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 6px; margin-bottom: 8px;
+    }
+    .app-card-item .app-info { flex: 1; min-width: 0; }
+    .app-card-item .app-name { font-size: 13px; font-weight: 600; }
+    .app-card-item .app-summary { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .app-card-item .app-actions { display: flex; gap: 6px; }
+
+    /* App editor inline form */
+    .app-editor-form {
+      background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; margin-bottom: 8px;
+    }
+    .app-editor-form .editor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .app-editor-form .editor-row:last-child { margin-bottom: 0; }
+    .app-editor-form label { font-size: 12px; color: var(--fg-2); margin-bottom: 4px; display: block; }
+    .app-editor-form select, .app-editor-form input {
+      width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); font-size: 13px;
+    }
+    .app-editor-form .editor-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+
+    /* Workflow card */
+    .wf-card-item {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 6px; margin-bottom: 8px;
+    }
+    .wf-card-item .wf-info { flex: 1; min-width: 0; }
+    .wf-card-item .wf-name { font-size: 13px; font-weight: 600; }
+    .wf-card-item .wf-summary { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .wf-card-item .wf-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* Workflow editor inline form */
+    .wf-editor-form {
+      background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; margin-bottom: 8px;
+    }
+    .wf-editor-form .editor-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .wf-editor-form label { font-size: 12px; color: var(--fg-2); margin-bottom: 4px; display: block; }
+    .wf-editor-form select, .wf-editor-form input {
+      width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); font-size: 13px;
+    }
+    .wf-editor-form .editor-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+
+    /* Phase list */
+    .phase-list { margin-top: 10px; }
+    .phase-row {
+      display: grid; grid-template-columns: 70px 1fr 100px 1fr 40px; gap: 8px; align-items: center;
+      padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 12px;
+    }
+    .phase-row:last-child { border-bottom: none; }
+    .phase-row select, .phase-row input { padding: 5px 8px; font-size: 12px; }
+    .phase-row .remove-phase { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px; }
   </style>
 </head>
 <body>
@@ -46,7 +153,7 @@
     </a>
     <a href="templates.html" class="nav-item active">
       <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-      模板商店
+      事件模板
     </a>
   </div>
 
@@ -58,26 +165,131 @@
   </div>
 </aside>
 
-<main class="main-content" data-od-id="main">
-  <header style="margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
-    <div>
-      <h2 style="font-size: 32px; margin: 0;">模板商店</h2>
-      <p style="color: var(--muted); margin: 4px 0 0;">管理及分发内容模板。</p>
-    </div>
-    <button class="btn btn-primary">+ 新建模板</button>
+<main class="main-content">
+  <header style="margin-bottom: 32px;">
+    <h2 style="font-size: 32px; margin: 0;">事件模板</h2>
+    <p style="color: var(--muted); margin: 4px 0 0;">管理全局事件模板，控制用户事件商店中的可见模板。</p>
   </header>
 
-  <div class="template-grid">
-    <div class="admin-card template-card">
-      <span class="pill" style="align-self: flex-start; background: #e8f5e9; color: #2e7d32;">考研</span>
-      <h3 style="margin: 0; font-size: 20px;">考研英语</h3>
-      <p class="desc">针对研究生入学考试英语科目的专项优化模板，包含阅读理解、长难句翻译及核心词汇自测。</p>
-      <div class="footer">
-        <span style="font-size: 12px; color: var(--muted); font-family: var(--font-mono);">关联项数: 156</span>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn-ghost" style="padding: 4px; font-size: 12px;">编辑</button>
-          <button class="btn-ghost" style="padding: 4px; font-size: 12px; color: var(--danger);">删除</button>
+  <div class="toolbar">
+    <input type="text" id="search-input" class="search-input" placeholder="搜索模板名称或 slug..." />
+    <div class="spacer"></div>
+    <button class="btn btn-primary" id="btn-create" type="button">+ 新建模板</button>
+  </div>
+
+  <div class="admin-card" style="padding: 0; overflow-x: auto;">
+    <table class="admin-table" style="border: 0; border-radius: 0;">
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>分类</th>
+          <th>Slug</th>
+          <th>项目数</th>
+          <th>上架状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="templates-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Create / Edit Modal -->
+  <div class="modal-overlay" id="modal-template">
+    <div class="modal-box">
+      <h3 id="modal-title">新建模板</h3>
+      <form id="template-form">
+        <input type="hidden" id="form-template-id" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="form-name">模板名称 *</label>
+            <input type="text" id="form-name" required maxlength="255" placeholder="如：考研英语" />
+          </div>
+          <div class="form-group">
+            <label for="form-slug">Slug *</label>
+            <input type="text" id="form-slug" required maxlength="120" placeholder="如：kaoyan-english" />
+          </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="form-category">分类 *</label>
+            <input type="text" id="form-category" required maxlength="80" placeholder="如：考研" />
+          </div>
+          <div class="form-group">
+            <label for="form-schedule-mode">排程模式 *</label>
+            <select id="form-schedule-mode" required>
+              <option value="from_start">按开始顺推</option>
+              <option value="before_due">按截止倒推</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="form-description">描述</label>
+          <textarea id="form-description" rows="2" placeholder="模板描述..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="form-event-name">默认事件名称</label>
+            <input type="text" id="form-event-name" maxlength="255" />
+          </div>
+          <div class="form-group">
+            <label for="form-sort-order">排序序号</label>
+            <input type="number" id="form-sort-order" value="0" min="0" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="form-start-date">默认开始日期</label>
+            <input type="date" id="form-start-date" />
+          </div>
+          <div class="form-group">
+            <label for="form-due-at">默认截止时间</label>
+            <input type="datetime-local" id="form-due-at" />
+          </div>
+        </div>
+
+        <!-- Template items -->
+        <div class="items-section">
+          <h4>
+            工作台内容
+            <button type="button" class="btn btn-secondary" id="btn-add-item" style="padding: 4px 10px; font-size: 12px;">+ 添加</button>
+          </h4>
+          <div id="items-container"></div>
+        </div>
+
+        <!-- App configs -->
+        <div class="section-card">
+          <h4>应用配置</h4>
+          <p>配置子应用托管的每日任务</p>
+          <div id="apps-list"></div>
+          <div id="app-editor-container"></div>
+          <button type="button" class="btn btn-secondary" id="btn-add-app" style="padding: 5px 12px; font-size: 12px; margin-top: 4px;">+ 添加应用</button>
+        </div>
+
+        <!-- Workflows -->
+        <div class="section-card">
+          <h4>工作流</h4>
+          <p>配置专注/休息工作流</p>
+          <div id="workflows-list"></div>
+          <div id="wf-editor-container"></div>
+          <button type="button" class="btn btn-secondary" id="btn-add-wf" style="padding: 5px 12px; font-size: 12px; margin-top: 4px;">+ 添加工作流</button>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="modal-cancel">取消</button>
+          <button type="submit" class="btn btn-primary" id="modal-submit">创建</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="modal-confirm-delete">
+    <div class="modal-box" style="max-width: 400px;">
+      <h3>确认删除</h3>
+      <p id="confirm-delete-text" style="color: var(--muted); font-size: 14px;">确定要删除该模板吗？此操作不可撤销。</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="confirm-delete-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="confirm-delete-ok" style="background: var(--danger);">确认删除</button>
       </div>
     </div>
   </div>
@@ -85,5 +297,6 @@
 
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
+<script src="js/templates.js"></script>
 </body>
 </html>

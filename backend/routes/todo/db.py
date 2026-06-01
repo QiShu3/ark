@@ -17,12 +17,15 @@ def _pool_from_request(request: Request) -> asyncpg.Pool:
 
 
 async def _clear_event_template_store(conn: Any) -> None:
-    await conn.execute("DELETE FROM event_template_store_items;")
-    await conn.execute("DELETE FROM event_template_store_templates;")
+    """清除种子模板（通过 slug 前缀 'seed:' 标识），不影响管理员创建的模板。"""
+    await conn.execute(
+        "DELETE FROM event_template_store_items WHERE template_id IN (SELECT id FROM event_template_store_templates WHERE slug LIKE 'seed:%');"
+    )
+    await conn.execute("DELETE FROM event_template_store_templates WHERE slug LIKE 'seed:%';")
 
 
 async def _seed_event_template_store(conn: Any) -> None:
-    """写入项目内置事件模板。"""
+    """写入项目内置事件模板（使用 upsert，不覆盖管理员数据）。"""
     utc_plus_8 = timezone(timedelta(hours=8))
     app_configs = [
         {
@@ -126,11 +129,24 @@ async def _seed_event_template_store(conn: Any) -> None:
         INSERT INTO event_template_store_templates(
             slug, category, name, description, schedule_mode,
             default_event_name, default_start_date, default_due_at, default_is_primary,
-            app_configs, workflows, sort_order
+            app_configs, workflows, sort_order, is_published
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::JSONB, $11::JSONB, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::JSONB, $11::JSONB, $12, TRUE)
+        ON CONFLICT (slug) DO UPDATE SET
+            category = EXCLUDED.category,
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            schedule_mode = EXCLUDED.schedule_mode,
+            default_event_name = EXCLUDED.default_event_name,
+            default_start_date = EXCLUDED.default_start_date,
+            default_due_at = EXCLUDED.default_due_at,
+            default_is_primary = EXCLUDED.default_is_primary,
+            app_configs = EXCLUDED.app_configs,
+            workflows = EXCLUDED.workflows,
+            sort_order = EXCLUDED.sort_order,
+            updated_at = NOW()
         """,
-        "kaoyan-english",
+        "seed:kaoyan-english",
         "考研",
         "考研英语",
         "项目内置模板，包含词书、真题练习和复习工作流。",
@@ -880,6 +896,9 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_event_template_store_items_sort ON event_template_store_items(template_id, sort_order ASC);"
+        )
+        await conn.execute(
+            "ALTER TABLE event_template_store_templates ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false"
         )
         await _clear_event_template_store(conn)
         await _seed_event_template_store(conn)

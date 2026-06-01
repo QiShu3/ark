@@ -76,6 +76,7 @@ async function adminFetch(path, options = {}) {
 const api = {
   get: (path) => adminFetch(path),
   post: (path, data) => adminFetch(path, { method: 'POST', body: JSON.stringify(data) }),
+  put: (path, data) => adminFetch(path, { method: 'PUT', body: JSON.stringify(data) }),
   patch: (path, data) => adminFetch(path, { method: 'PATCH', body: JSON.stringify(data) }),
   delete: (path) => adminFetch(path, { method: 'DELETE' }),
 };

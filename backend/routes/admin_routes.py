@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import secrets
@@ -22,7 +23,7 @@ if not _import_logger.handlers:
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from routes.auth_routes import _AuthUser, get_current_user
 
@@ -851,3 +852,404 @@ async def erc_sets(
     return [
         ErcSetItem(name=r["name"], article_count=r["article_count"], attempt_count=r["attempt_count"]) for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Event template store management
+# ---------------------------------------------------------------------------
+
+
+class TemplateStoreListItem(BaseModel):
+    id: str
+    slug: str
+    category: str
+    name: str
+    description: str | None
+    is_published: bool
+    item_count: int
+    sort_order: int
+    created_at: str
+    updated_at: str
+
+
+class TemplateStoreListResponse(BaseModel):
+    templates: list[TemplateStoreListItem]
+
+
+@router.get("/templates", response_model=TemplateStoreListResponse)
+async def list_templates_admin(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> TemplateStoreListResponse:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT t.id::text, t.slug, t.category, t.name, t.description, t.is_published,
+                   t.sort_order, t.created_at, t.updated_at,
+                   (SELECT COUNT(*) FROM event_template_store_items WHERE template_id = t.id)::int AS item_count
+            FROM event_template_store_templates t
+            ORDER BY t.sort_order ASC, t.name ASC
+            """
+        )
+    return TemplateStoreListResponse(
+        templates=[
+            TemplateStoreListItem(
+                id=r["id"],
+                slug=r["slug"],
+                category=r["category"],
+                name=r["name"],
+                description=r["description"],
+                is_published=r["is_published"],
+                item_count=r["item_count"],
+                sort_order=r["sort_order"],
+                created_at=r["created_at"].isoformat() if r["created_at"] else "",
+                updated_at=r["updated_at"].isoformat() if r["updated_at"] else "",
+            )
+            for r in rows
+        ]
+    )
+
+
+class TemplateStoreItemIn(BaseModel):
+    kind: str
+    title: str = Field(min_length=1, max_length=255)
+    content: str | None = None
+    offset_days: int = Field(ge=0)
+    sort_order: int = Field(default=0, ge=0)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class TemplateStoreCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=120)
+    category: str = Field(min_length=1, max_length=80)
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    schedule_mode: str = Field(pattern=r"^(from_start|before_due)$")
+    default_event_name: str | None = None
+    default_start_date: date | None = None
+    default_due_at: str | None = None
+    default_is_primary: bool | None = None
+    items: list[TemplateStoreItemIn] = Field(default_factory=list)
+    app_configs: list[dict[str, Any]] = Field(default_factory=list)
+    workflows: list[dict[str, Any]] = Field(default_factory=list)
+    sort_order: int = 0
+
+
+class TemplateStoreUpdateRequest(BaseModel):
+    slug: str | None = Field(default=None, min_length=1, max_length=120)
+    category: str | None = Field(default=None, min_length=1, max_length=80)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    schedule_mode: str | None = Field(default=None, pattern=r"^(from_start|before_due)$")
+    default_event_name: str | None = None
+    default_start_date: date | None = None
+    default_due_at: str | None = None
+    default_is_primary: bool | None = None
+    items: list[TemplateStoreItemIn] | None = None
+    app_configs: list[dict[str, Any]] | None = None
+    workflows: list[dict[str, Any]] | None = None
+    sort_order: int | None = None
+
+
+class TemplateStoreDetailOut(BaseModel):
+    id: str
+    slug: str
+    category: str
+    name: str
+    description: str | None
+    schedule_mode: str
+    default_event_name: str | None
+    default_start_date: str | None
+    default_due_at: str | None
+    default_is_primary: bool | None
+    items: list[dict[str, Any]]
+    app_configs: list[dict[str, Any]]
+    workflows: list[dict[str, Any]]
+    is_published: bool
+    sort_order: int
+    created_at: str
+    updated_at: str
+
+
+class TemplateStorePublishOut(BaseModel):
+    is_published: bool
+
+
+async def _template_store_detail(conn: Any, template_id: str) -> TemplateStoreDetailOut:
+    row = await conn.fetchrow(
+        """
+        SELECT id::text, slug, category, name, description, schedule_mode,
+               default_event_name, default_start_date, default_due_at, default_is_primary,
+               app_configs, workflows, is_published, sort_order, created_at, updated_at
+        FROM event_template_store_templates
+        WHERE id = $1::uuid
+        """,
+        template_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="模板不存在")
+
+    items = await conn.fetch(
+        """
+        SELECT id::text, template_id::text, kind, title, content, offset_days, sort_order, details, created_at, updated_at
+        FROM event_template_store_items
+        WHERE template_id = $1::uuid
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        template_id,
+    )
+
+    def _item(r: Any) -> dict[str, Any]:
+        details = r["details"]
+        if isinstance(details, str):
+            import json
+            details = json.loads(details)
+        return {
+            "id": r["id"],
+            "template_id": r["template_id"],
+            "kind": r["kind"],
+            "title": r["title"],
+            "content": r["content"],
+            "offset_days": int(r["offset_days"]),
+            "sort_order": int(r["sort_order"]),
+            "details": details or {},
+        }
+
+    app_configs = row["app_configs"]
+    if isinstance(app_configs, str):
+        import json
+        app_configs = json.loads(app_configs)
+    workflows = row["workflows"]
+    if isinstance(workflows, str):
+        import json
+        workflows = json.loads(workflows)
+
+    return TemplateStoreDetailOut(
+        id=row["id"],
+        slug=row["slug"],
+        category=row["category"],
+        name=row["name"],
+        description=row["description"],
+        schedule_mode=row["schedule_mode"],
+        default_event_name=row["default_event_name"],
+        default_start_date=str(row["default_start_date"]) if row["default_start_date"] else None,
+        default_due_at=row["default_due_at"].isoformat() if row["default_due_at"] else None,
+        default_is_primary=row["default_is_primary"],
+        items=[_item(r) for r in items],
+        app_configs=app_configs or [],
+        workflows=workflows or [],
+        is_published=row["is_published"],
+        sort_order=int(row["sort_order"]),
+        created_at=row["created_at"].isoformat() if row["created_at"] else "",
+        updated_at=row["updated_at"].isoformat() if row["updated_at"] else "",
+    )
+
+
+@router.get("/templates/{template_id}", response_model=TemplateStoreDetailOut)
+async def get_template_admin(
+    template_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> TemplateStoreDetailOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        return await _template_store_detail(conn, template_id)
+
+
+@router.post("/templates", response_model=TemplateStoreDetailOut)
+async def create_template_admin(
+    request: Request,
+    payload: TemplateStoreCreateRequest,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> TemplateStoreDetailOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Check slug uniqueness
+            existing = await conn.fetchval(
+                "SELECT id FROM event_template_store_templates WHERE slug = $1", payload.slug
+            )
+            if existing is not None:
+                raise HTTPException(status_code=400, detail=f"slug '{payload.slug}' 已存在")
+
+            default_due_at = None
+            if payload.default_due_at:
+                from datetime import datetime as dt
+                default_due_at = dt.fromisoformat(payload.default_due_at)
+
+            row = await conn.fetchrow(
+                """
+                INSERT INTO event_template_store_templates(
+                    slug, category, name, description, schedule_mode,
+                    default_event_name, default_start_date, default_due_at, default_is_primary,
+                    app_configs, workflows, sort_order, is_published
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::JSONB, $11::JSONB, $12, FALSE)
+                RETURNING id::text
+                """,
+                payload.slug,
+                payload.category,
+                payload.name,
+                payload.description,
+                payload.schedule_mode,
+                payload.default_event_name,
+                payload.default_start_date,
+                default_due_at,
+                payload.default_is_primary,
+                json.dumps(payload.app_configs, ensure_ascii=False),
+                json.dumps(payload.workflows, ensure_ascii=False),
+                payload.sort_order,
+            )
+            template_id = row["id"]
+
+            for item in payload.items:
+                await conn.execute(
+                    """
+                    INSERT INTO event_template_store_items(template_id, kind, title, content, offset_days, sort_order, details)
+                    VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::JSONB)
+                    """,
+                    template_id,
+                    item.kind,
+                    item.title,
+                    item.content,
+                    item.offset_days,
+                    item.sort_order,
+                    json.dumps(item.details, ensure_ascii=False),
+                )
+
+        return await _template_store_detail(conn, template_id)
+
+
+@router.put("/templates/{template_id}", response_model=TemplateStoreDetailOut)
+async def update_template_admin(
+    template_id: str,
+    request: Request,
+    payload: TemplateStoreUpdateRequest,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> TemplateStoreDetailOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Verify exists
+            exists = await conn.fetchval(
+                "SELECT id FROM event_template_store_templates WHERE id = $1::uuid", template_id
+            )
+            if exists is None:
+                raise HTTPException(status_code=404, detail="模板不存在")
+
+            # Check slug uniqueness if changing
+            if payload.slug is not None:
+                dup = await conn.fetchval(
+                    "SELECT id FROM event_template_store_templates WHERE slug = $1 AND id != $2::uuid",
+                    payload.slug,
+                    template_id,
+                )
+                if dup is not None:
+                    raise HTTPException(status_code=400, detail=f"slug '{payload.slug}' 已存在")
+
+            # Build dynamic UPDATE
+            updates: list[str] = []
+            params: list[Any] = []
+            idx = 1
+
+            field_map = {
+                "slug": payload.slug,
+                "category": payload.category,
+                "name": payload.name,
+                "description": payload.description,
+                "schedule_mode": payload.schedule_mode,
+                "default_event_name": payload.default_event_name,
+                "default_start_date": payload.default_start_date,
+                "default_is_primary": payload.default_is_primary,
+                "sort_order": payload.sort_order,
+            }
+            for col, val in field_map.items():
+                if val is not None:
+                    updates.append(f"{col} = ${idx}")
+                    params.append(val)
+                    idx += 1
+
+            if payload.default_due_at is not None:
+                from datetime import datetime as dt
+                updates.append(f"default_due_at = ${idx}")
+                params.append(dt.fromisoformat(payload.default_due_at))
+                idx += 1
+
+            if payload.app_configs is not None:
+                updates.append(f"app_configs = ${idx}::JSONB")
+                params.append(json.dumps(payload.app_configs, ensure_ascii=False))
+                idx += 1
+
+            if payload.workflows is not None:
+                updates.append(f"workflows = ${idx}::JSONB")
+                params.append(json.dumps(payload.workflows, ensure_ascii=False))
+                idx += 1
+
+            if updates:
+                updates.append("updated_at = NOW()")
+                params.append(template_id)
+                await conn.execute(
+                    f"UPDATE event_template_store_templates SET {', '.join(updates)} WHERE id = ${idx}::uuid",
+                    *params,
+                )
+
+            # Replace items if provided
+            if payload.items is not None:
+                await conn.execute(
+                    "DELETE FROM event_template_store_items WHERE template_id = $1::uuid", template_id
+                )
+                for item in payload.items:
+                    await conn.execute(
+                        """
+                        INSERT INTO event_template_store_items(template_id, kind, title, content, offset_days, sort_order, details)
+                        VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::JSONB)
+                        """,
+                        template_id,
+                        item.kind,
+                        item.title,
+                        item.content,
+                        item.offset_days,
+                        item.sort_order,
+                        json.dumps(item.details, ensure_ascii=False),
+                    )
+
+        return await _template_store_detail(conn, template_id)
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template_admin(
+    template_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, str]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM event_template_store_templates WHERE id = $1::uuid", template_id
+        )
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="模板不存在")
+    return {"detail": "模板已删除"}
+
+
+@router.patch("/templates/{template_id}/publish", response_model=TemplateStorePublishOut)
+async def toggle_template_publish(
+    template_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> TemplateStorePublishOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE event_template_store_templates
+            SET is_published = NOT is_published, updated_at = NOW()
+            WHERE id = $1::uuid
+            RETURNING is_published
+            """,
+            template_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="模板不存在")
+    return TemplateStorePublishOut(is_published=row["is_published"])
