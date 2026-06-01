@@ -1,5 +1,25 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-01 20:38 CST · `78ffa79` · fix(frontend): align erc vocab shell
+
+### 用户提出的需求
+
+- “`div` 这个在往下滑动的时候怎么溢出 `div` 了？”
+- “那怎么办？”
+- “你改了哪些页面？只改ERC和Vocab就可以了，其他地方不要改”
+
+### 本次完成的工作
+
+- 仅调整 ERC 与 Vocab 子应用页面容器，让页面根容器与外层壳体使用同一组可视区域：`inset-x-1 bottom-1 top-[7.5rem]`。
+- 为 12 个 ERC/Vocab 页面根容器补上 `fixed` 定位、内部纵向滚动和 `rounded-[28px]`，避免滚动内容在视觉上溢出背景框。
+- 保持改动范围只在 `frontend/src/pages/ERC/` 与 `frontend/src/pages/Vocab/`，没有把首页、应用中心和认证壳层改动带入本次代码提交。
+
+### 验证情况
+
+- `pnpm check`
+
+---
+
 ## 2026-06-01 · `e47e0de` · fix(frontend): 修复页面内容被导航栏遮挡 + 优化应用中心页面设计
 
 ### 用户提出的需求
