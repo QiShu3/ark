@@ -1,5 +1,24 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-01 · `e47e0de` · fix(frontend): 修复页面内容被导航栏遮挡 + 优化应用中心页面设计
+
+### 用户提出的需求
+
+- "h1 这段文字被导航栏挡住了"
+- "这个应用中心页面很丑，你看看怎么优化一下？"
+
+### 本次完成的工作
+
+- 将所有 13 个页面的 `pt-20`（80px）改为 `pt-32`（128px），解决导航栏遮挡问题。
+- AppCenter 页面重写：使用 `ark-home-shortcut-card` 快捷入口样式，Lucide 图标（BookOpen、ScrollText）替代文字符号，添加副标题和响应式网格。
+
+### 验证情况
+
+- `pnpm check` — 通过
+- `pnpm lint` — 0 错误
+
+---
+
 ## 2026-06-01 03:38 CST · `f9adc69` · feat(frontend): polish home glass dashboard
 
 ### 用户提出的需求
