@@ -126,7 +126,7 @@ export default function ERCPractice() {
   const currentPreheatItem = preheatItems[0] ?? null;
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-6 pb-10 pt-20">
+    <div className="relative z-10 h-full w-full overflow-y-auto px-6 pb-10 pt-32">
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>

@@ -26,7 +26,7 @@ export default function ERCMistakes() {
   }, []);
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
+    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-32">
       <div className="mx-auto max-w-5xl">
         <div className="flex items-end justify-between gap-4 border-b border-ark-border pb-6">
           <div>

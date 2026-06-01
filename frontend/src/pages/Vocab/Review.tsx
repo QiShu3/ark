@@ -16,7 +16,7 @@ export default function VocabReview() {
   const session = useVocabSession(activeDeck?.id ?? null, 'review', activeDeckVersion);
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
+    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-32">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>

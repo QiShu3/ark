@@ -37,7 +37,7 @@ export default function VocabWordDetail() {
   }, [wordId]);
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-20">
+    <div className="relative z-10 h-full w-full overflow-y-auto px-8 pb-10 pt-32">
       <div className="mx-auto max-w-4xl">
         <a href="#/vocab" className="text-sm text-ark-text-muted transition hover:text-ark-text">
           返回词书首页
