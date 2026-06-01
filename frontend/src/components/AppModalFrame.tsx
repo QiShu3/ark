@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from 'react';
+import type { MouseEvent, ReactNode, Ref } from 'react';
 
 type AppModalFrameProps = {
   open: boolean;
@@ -10,9 +10,11 @@ type AppModalFrameProps = {
   backdropClassName?: string;
   contentClassName?: string;
   panelClassName?: string;
+  panelRef?: Ref<HTMLDivElement>;
   role?: 'dialog' | 'alertdialog';
   ariaLabel?: string;
   ariaLabelledBy?: string;
+  disableDefaultAnimation?: boolean;
 };
 
 const NAV_SAFE_TOP = 120;
@@ -29,14 +31,17 @@ export default function AppModalFrame({
   backdropClassName = '',
   contentClassName = '',
   panelClassName = '',
+  panelRef,
   role = 'dialog',
   ariaLabel,
   ariaLabelledBy,
+  disableDefaultAnimation = false,
 }: AppModalFrameProps) {
   if (!open) return null;
 
   const frameClassName = [
-    'ark-modal-backdrop fixed inset-0 flex animate-in fade-in duration-200',
+    'ark-modal-backdrop fixed inset-0 flex',
+    disableDefaultAnimation ? '' : 'animate-in fade-in duration-200',
     zIndexClassName,
     backdropClassName,
   ].join(' ').trim();
@@ -68,6 +73,7 @@ export default function AppModalFrame({
     <div className={frameClassName} onClick={handleBackdropClick}>
       <div className={contentWrapClassName} style={contentWrapStyle}>
         <div
+          ref={panelRef}
           role={role}
           aria-modal="true"
           aria-label={ariaLabel}
