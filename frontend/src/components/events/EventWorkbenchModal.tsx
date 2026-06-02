@@ -33,6 +33,7 @@ import {
   normalizeWorkflowFormPhases,
   type WorkflowFormState,
   type WorkflowPreset,
+  type WorkflowPresetPhase,
 } from '../workflowPresetForm';
 import type { EventItem, EventWorkbench } from '../../lib/events/types';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';
@@ -1373,58 +1374,95 @@ export default function EventWorkbenchModal({
     );
   }
 
+  function renderWorkflowPreviewBar(phases: WorkflowPresetPhase[]) {
+    const validPhases = Array.isArray(phases) ? phases : [];
+    if (validPhases.length === 0) return null;
+    const totalDuration = validPhases.reduce((sum, p) => sum + Math.max(0, p.duration), 0);
+    if (totalDuration === 0) return null;
+
+    return (
+      <div className="relative h-1.5 w-full flex gap-[3px] mt-2 rounded-full overflow-hidden">
+        {validPhases.map((phase, idx) => {
+          const duration = Math.max(0, Math.round(phase.duration || 0));
+          const isFocus = phase.phase_type === 'focus';
+          const fillGradient = isFocus
+            ? 'linear-gradient(90deg, #60a5fa, #3b82f6)'
+            : 'linear-gradient(90deg, #fb923c, #f97316)';
+          
+          return (
+            <div
+              key={idx}
+              className="h-full rounded-full"
+              style={{
+                flexGrow: duration,
+                flexBasis: 0,
+                background: fillGradient,
+                opacity: 0.85,
+              }}
+              title={`${isFocus ? '专注' : '休息'}: ${Math.round(duration / 60)}分钟`}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
   function renderWorkflowColumn() {
     return (
       <div className="flex min-h-[180px] flex-col rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
         <div className="text-sm font-medium text-ark-text">工作流</div>
         <div className="mt-3 grid flex-1 content-start gap-2">
           {eventWorkflowError ? (
-            <div className="rounded-lg border border-red-400/20 bg-red-500/10 p-2 text-xs text-red-200">
+            <div className="rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
               {eventWorkflowError}
             </div>
           ) : null}
-          {loadingEventWorkflows ? (
-            <p className="text-xs text-ark-text-muted">加载中...</p>
-          ) : null}
+          {loadingEventWorkflows ? <p className="text-sm text-ark-text-muted">工作流加载中...</p> : null}
           {!loadingEventWorkflows && eventWorkflows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-xs text-ark-text-faint text-center">
+            <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint text-center">
               暂无工作流
             </div>
           ) : null}
-          {eventWorkflows.map((workflow) => (
-            <div
-              key={workflow.id}
-              className="group flex min-h-10 items-center justify-between gap-3 rounded-lg bg-ark-surface-subtle px-3 py-2 text-left text-sm font-medium text-ark-text hover:bg-ark-surface-subtle"
-            >
-              <button
-                type="button"
-                onClick={() => editEventWorkflow(workflow)}
-                className="min-w-0 flex-1 truncate text-left focus:outline-none"
-                aria-label={`编辑工作流：${workflow.name}`}
-              >
-                {workflow.name}
-              </button>
-              <span className="shrink-0 text-xs font-normal text-ark-text-faint group-hover:hidden transition-all duration-200">
-                {workflow.phases.filter((p) => p.phase_type === 'focus').length}个专注
-              </span>
-              <div className="hidden shrink-0 gap-2 group-hover:flex animate-fadeIn">
-                <button
-                  type="button"
-                  onClick={() => copyEventWorkflow(workflow)}
-                  className="text-xs font-medium text-ark-text-muted hover:text-ark-text transition-colors"
+          {eventWorkflows.length > 0 ? (
+            <div className="grid gap-2">
+              {eventWorkflows.map((workflow) => (
+                <div
+                  key={workflow.id}
+                  className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface-subtle hover:border-ark-border px-4 py-3.5 transition-all duration-300 shadow-sm hover:shadow-md"
                 >
-                  复制
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void deleteEventWorkflow(workflow.id)}
-                  className="text-xs font-medium text-red-400 hover:text-red-300 transition-colors"
-                >
-                  删除
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => editEventWorkflow(workflow)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="truncate text-sm font-semibold text-ark-text tracking-wide">{workflow.name}</div>
+                    <WorkflowPhaseChips
+                      phases={workflow.phases}
+                      className="mt-2.5"
+                      getTaskTitle={(taskId) => taskArrangements.find((task) => task.id === taskId)?.title}
+                    />
+                    {renderWorkflowPreviewBar(workflow.phases)}
+                  </button>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => copyEventWorkflow(workflow)}
+                      className="rounded-lg border border-ark-border px-2.5 py-1 text-xs font-medium text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-200"
+                    >
+                      复制
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteEventWorkflow(workflow.id)}
+                      className="rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-500/20 transition-colors duration-200"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          ) : null}
           <button
             type="button"
             onClick={openNewEventWorkflow}
@@ -1732,6 +1770,7 @@ export default function EventWorkbenchModal({
               </div>
             ) : null}
           </section>
+
           <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1746,10 +1785,12 @@ export default function EventWorkbenchModal({
                 应用配置
               </button>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               {renderArrangementColumn('task', taskArrangements)}
               {renderArrangementColumn('appointment', appointmentArrangements)}
-              {renderWorkflowColumn()}
+              <div className="md:col-span-2">
+                {renderWorkflowColumn()}
+              </div>
             </div>
           </section>
 
