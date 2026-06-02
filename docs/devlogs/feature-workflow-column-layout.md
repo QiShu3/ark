@@ -2,6 +2,46 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 19:18 · 17b9aec · feat(frontend): unify button styles in main dashboard and arrangement management center
+
+- 用户提出的需求：
+  - “同意” (统一项目所有 button 样式，第一期聚焦“主看板与安排管理中心”并保留日历格子等布局容器原生，Focus-Work 页面使用专用变量覆盖，在 `<Button>` 中扩展 `xs` 尺寸)
+
+- 本次完成的工作：
+  - **扩展 `<Button>` 组件微型尺寸**：在 `Button.tsx` 中新增了 `xs`（微型）尺寸（`text-[10px]`，`px-2 py-0.5`，`rounded-md`），使列表项中的微型动作按钮既精美小巧，又完全支持统一的微交互与圆角系统。
+  - **主看板页面标准按钮大一统**：在 `PlaceholderCard.tsx` 中全面重构了各层级的标准操作按钮，包括：
+    - 列表卡片中的“完成任务”（xs次要胶囊型）、“确认日程”（xs次要黄色胶囊型）等动作。
+    - 卡片浮层操作中的“结束工作流”（危险）、工作流切换、任务与日程快捷新建按钮（微型 SVG 图标）。
+    - 各大模态框（选择工作流、专注统计、安排管理、创建安排、安排解析助手、草稿确认）的头部关闭 `X` 按钮全部替换为 ghost-sm 矢量微图标。
+    - 底部或主操作栏的“创建”、“自定义安排”、“快捷生成安排”等动作按钮，且将 uploading/submitting 状态完美接入 `<Button>` 内部的 native loading spinner 旋转微动效。
+  - **安排编辑模态框按钮一统**：在 `TaskEditModal.tsx` 与 `AppointmentEditModal.tsx` 中移除了全部原生的 `<button>` 元素，取而代之的是高度一致的 `<Button>` 实例（“取消”为 secondary、“删除”为 danger、“保存”为 primary），并将 saving 提交状态转换为动感十足的 native loading spinner。
+  - **界面设置模态框按钮一统**：在 `SettingsModal.tsx` 中优雅替换了顶部关闭、底部“恢复默认”（secondary）、“取消”（secondary）和“保存并应用”（primary-loading）的三个核心操作按钮，且将“或上传本地图片”的 dashed 边框按钮采用 React `<Button>` 的 `leftIcon` 和 `loading` 属性优雅融合。
+  - **测试与类型安全校验**：全量运行 `pnpm check && pnpm test -- --run`，所有 224 个 Vitest 测试全绿通过，零报错零缺陷。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过，224/224 tests passed。
+
+### 2026-06-02 19:05 · f81a14c · feat(frontend): create Button component and migrate EventWorkbenchModal to use it
+
+- 用户提出的需求：
+  - “可以，我想把这个项目所有的button都按照你设计的这个button样式来设计，我想统一button的样式，可以实现一个改全都改，你觉得可以吗？肯呢个会出现什么问题呢？我希望可以采用通用 React <Button> 组件”
+
+- 本次完成的工作：
+  - **封装全局通用 `<Button>` 组件**：在 `frontend/src/components/Button.tsx` 中创建了极富弹性、符合全局规范的通用 `<Button>` 组件。该组件高度集成了：
+    - 5 种风格变体 (`primary` / `secondary` / `danger` / `ghost` / `cta`)。
+    - 3 种规范尺寸 (`sm` / `md` / `lg`)。
+    - 丰富的微交互细节（聚焦阴影、按压微缩放 `active:scale-95`、加载自适应 `loading` 动画骨架、左右矢量图标 `leftIcon` / `rightIcon` 接口等）。
+  - **完成第一阶段渐进式重构**：将主事件内容工作台弹窗（`EventWorkbenchModal.tsx`）内的主要核心按钮全部替换为通用 `<Button>` 组件：
+    - 导航栏的“事件总览”与“关闭”按钮（绑定微图标）。
+    - 安排内容的“应用配置”操作按钮。
+    - 工作流卡片列表中的“复制”（次要）与“删除”（危险）操作按钮。
+  - **测试与类型安全校验**：全量 224 个单元测试全绿通过，新组件零类型与校验报错。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过。
+
 ### 2026-06-02 18:54 · 36f41fb · feat(frontend): unify event workbench modal navbar buttons with premium bordered icons
 
 - 用户提出的需求：
