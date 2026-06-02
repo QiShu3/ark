@@ -1,9 +1,11 @@
 import React from 'react';
 import AppModalFrame from './AppModalFrame';
+import WorkflowPhaseChips from './WorkflowPhaseChips';
 
 import type { Task } from './taskTypes';
 import {
   buildWorkflowPreview,
+  getWorkflowPresetPhases,
   getWorkflowTaskOptions,
   type WorkflowFormPhase,
   type WorkflowFormState,
@@ -185,9 +187,11 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="font-medium text-ark-text">{preset.name}</div>
-                        <div className="text-xs text-ark-text-muted mt-1">
-                          {preset.phases.map((phase, index) => `${index + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`).join(' · ')}
-                        </div>
+                        <WorkflowPhaseChips
+                          phases={getWorkflowPresetPhases(preset)}
+                          className="mt-2"
+                          getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
+                        />
                         {preset.event_name ? (
                           <div className="text-xs text-ark-text-faint mt-1">事件：{preset.event_name}</div>
                         ) : null}

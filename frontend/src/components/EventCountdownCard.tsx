@@ -38,9 +38,9 @@ import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEve
 import type { VocabDeck } from '../lib/vocab/types';
 import AppModalFrame from './AppModalFrame';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
+import WorkflowPhaseChips from './WorkflowPhaseChips';
 import WorkflowPresetModal from './WorkflowPresetModal';
 import {
-  buildWorkflowPreview,
   cloneWorkflowForm,
   createDefaultWorkflowForm,
   createWorkflowCopyDraft,
@@ -633,11 +633,6 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     replaceCreateWorkflowDraftForm(createDefaultWorkflowForm(false), null);
     setShowCreateWorkflowModal(false);
     setCreateWorkflowSubmitting(false);
-  }
-
-  function workflowDraftSummary(workflow: WorkflowPreset): string {
-    const preview = buildWorkflowPreview(createWorkflowFormFromPreset(workflow));
-    return preview.summary;
   }
 
   async function createWorkflowDraftsForEvent(
@@ -1716,7 +1711,11 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="truncate text-sm font-medium text-ark-text">{workflow.name}</div>
-                  <div className="mt-1 truncate text-xs text-ark-text-faint">{workflowDraftSummary(workflow)}</div>
+                  <WorkflowPhaseChips
+                    phases={workflow.phases}
+                    className="mt-2"
+                    getTaskTitle={(taskId) => createWorkflowTaskOptions.find((task) => task.id === taskId)?.title}
+                  />
                 </button>
                 <div className="flex shrink-0 gap-2">
                   <button

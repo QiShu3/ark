@@ -701,6 +701,24 @@ describe('PlaceholderCard workflow UI', () => {
     });
   });
 
+  it('opens the task picker from the dashboard pending-selection event', async () => {
+    const todoTask = buildTask({ id: 'task-todo', title: '待办任务' });
+
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/tasks?limit=100') {
+        return Promise.resolve([todoTask]);
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    window.dispatchEvent(new Event('ark:open-focus-task-picker'));
+
+    expect(await screen.findByRole('dialog', { name: '全部任务' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '选择任务 待办任务' })).toBeInTheDocument();
+  });
+
   it('copies an existing preset into a new draft', async () => {
     const user = userEvent.setup();
     const preset = buildWorkflowPreset();

@@ -283,6 +283,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   useEffect(() => {
     if (index !== 0) return;
     const handler = () => {
+      setShowFocusTaskPicker(true);
+      _loadTasks();
+    };
+    window.addEventListener('ark:open-focus-task-picker', handler);
+    return () => window.removeEventListener('ark:open-focus-task-picker', handler);
+  }, [index]);
+
+  useEffect(() => {
+    if (index !== 0) return;
+    const handler = () => {
       setShowTaskModal(true);
       dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsOpened);
       _loadTasks();

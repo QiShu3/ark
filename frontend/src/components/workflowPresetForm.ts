@@ -104,6 +104,15 @@ export function createWorkflowFormFromPreset(preset: WorkflowPreset): WorkflowFo
   };
 }
 
+export function getWorkflowPresetPhases(preset: WorkflowPreset | null | undefined): WorkflowPresetPhase[] {
+  if (!preset) return [];
+  if (Array.isArray(preset.phases) && preset.phases.length > 0) return preset.phases;
+  return [
+    { phase_type: 'focus', duration: preset.focus_duration, timer_mode: preset.default_focus_timer_mode ?? 'countdown' },
+    { phase_type: 'break', duration: preset.break_duration, timer_mode: 'countdown' },
+  ];
+}
+
 export function createWorkflowCopyDraft(preset: WorkflowPreset): WorkflowFormState {
   const next = createWorkflowFormFromPreset(preset);
   return {
