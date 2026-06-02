@@ -120,8 +120,8 @@ describe('ERC home page', () => {
     expect(await screen.findByText('阅读训练')).toBeInTheDocument();
     expect(await screen.findByText('该配置会同步到当前主事件「考研英语」。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '配置' })).toBeInTheDocument();
-    expect(screen.getByText('总览')).toBeInTheDocument();
-    expect(screen.getByText('业务数据')).toBeInTheDocument();
+    expect(screen.getByText('今日优先任务')).toBeInTheDocument();
+    expect(screen.getByText('长期积累')).toBeInTheDocument();
     expect(screen.getByText('托管安排')).toBeInTheDocument();
     expect(screen.getByText('今日待复习')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();

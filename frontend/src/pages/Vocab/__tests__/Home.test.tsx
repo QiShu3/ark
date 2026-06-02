@@ -115,11 +115,11 @@ describe('Vocab home page', () => {
     );
 
     expect(await screen.findByText('当前词书：CET6')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '总览' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '业务数据' })).toBeInTheDocument();
+    expect(screen.getByText('今日单词任务')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '长期积累' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '托管安排' })).toBeInTheDocument();
     expect(screen.getByText('今日进度')).toBeInTheDocument();
-    expect(screen.getByText('7 / 24')).toBeInTheDocument();
+    expect(screen.getAllByText('7 / 24').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('今天这本词书要完成的学习任务，系统会先带你完成复习，再进入新词。')).not.toBeInTheDocument();
     expect(screen.queryByText('快捷入口')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '切换词书' })).not.toBeInTheDocument();
@@ -416,7 +416,7 @@ describe('Vocab home page', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByRole('heading', { name: '总览' });
+    await screen.findByText('今日单词任务');
     await user.click(screen.getByRole('button', { name: '配置' }));
 
     expect(screen.getByRole('dialog', { name: '配置今日单词' })).toBeInTheDocument();

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, RefreshCw, Settings } from 'lucide-react';
+import { BookOpen, RefreshCw } from 'lucide-react';
 
 import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
+import SubAppHomeTemplate from '../../components/SubAppHomeTemplate';
 import { apiJson } from '../../lib/api';
 import { fetchERCConfigStatus, fetchERCOverview, saveERCConfig } from '../../lib/erc/api';
 import type { ERCConfigStatus, ERCModuleStatus, ERCOverview } from '../../lib/erc/types';
@@ -336,136 +337,114 @@ export default function ERCHome() {
       disabledReason: moduleDisabledReason(reviewTaskStatus),
     },
   ];
-
-  return (
-    <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: "inset(10px round 28px)" }}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="ark-panel-card rounded-lg p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">ERC</div>
-              <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">阅读训练</h1>
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-                <span className="inline-flex rounded-full border border-ark-border bg-ark-surface-subtle px-3 py-1 text-[var(--ark-text-muted)]">
-                  {eventStatusLabel(configStatus)}
-                </span>
-                <span className="text-[var(--ark-text-muted)]">{eventLabel}</span>
-                <span className="text-[var(--ark-text-muted)]">托管任务：真题练习 / 错题复习</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-ark-border bg-white px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Settings className="h-4 w-4" />
-              配置
-            </button>
-          </div>
-
-          {error ? <p className="mt-5 text-sm text-rose-200">{error}</p> : null}
-          {appTaskError ? <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{appTaskError}</p> : null}
-          {hasNoPrimaryEvent ? (
-            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">请先创建或设置主事件，再配置阅读训练。</p>
-          ) : hasNoConfig ? (
-            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{noConfigMessage}</p>
-          ) : appConfigNotice ? (
-            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{appConfigNotice}</p>
-          ) : null}
-        </section>
-
-        <section className="ark-panel-card rounded-lg p-6">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+  const primaryAction = reviewTaskStatus.state === 'ready'
+    ? {
+        label: reviewAction.label === '继续' ? '继续错题复习' : '开始错题复习',
+        disabled: reviewAction.disabled,
+        onClick: reviewAction.action,
+      }
+    : practiceTaskStatus.state === 'ready'
+      ? {
+          label: practiceAction.label === '继续' ? '继续真题练习' : '开始真题练习',
+          disabled: practiceAction.disabled,
+          onClick: practiceAction.action,
+        }
+      : {
+          label: '配置阅读训练',
+          disabled: appTaskBusy,
+          onClick: () => setSettingsOpen(true),
+        };
+  const assetContent = overview ? (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Link
+          to="/erc/library"
+          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+        >
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Overview</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">总览</h2>
+              <div className="text-sm text-[var(--ark-text-muted)]">题库进度</div>
+              <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.practiced_article_count} 篇文章</div>
             </div>
+            <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {overviewMetrics.map((metric) => (
-              <div
-                key={metric.label}
-                className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-4 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]"
-              >
-                <div className="text-sm text-[var(--ark-text-muted)]">{metric.label}</div>
-                <div className="mt-2 text-3xl font-semibold text-[var(--ark-text)]">{metric.value}</div>
-                <div className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--ark-text-faint)]">{metric.detail}</div>
-              </div>
-            ))}
-          </div>
-        </section>
+          <div className="mt-2 text-sm text-[var(--ark-text-muted)]">已练 {overview.practiced_question_count} 道题</div>
+          <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">进入题库</div>
+        </Link>
 
-        <section className="ark-panel-card rounded-lg p-6">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <Link
+          to="/erc/mistakes"
+          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+        >
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Business Data</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">业务数据</h2>
+              <div className="text-sm text-[var(--ark-text-muted)]">错题资产</div>
+              <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mistake_count} 道错题</div>
             </div>
+            <RefreshCw className="h-5 w-5 text-[var(--ark-accent)]" />
           </div>
-
-          {overview ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Link
-                  to="/erc/library"
-                  className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm text-[var(--ark-text-muted)]">题库进度</div>
-                      <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.practiced_article_count} 篇文章</div>
-                    </div>
-                    <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
-                  </div>
-                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">已练 {overview.practiced_question_count} 道题</div>
-                  <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">进入题库</div>
-                </Link>
-
-                <Link
-                  to="/erc/mistakes"
-                  className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-sm text-[var(--ark-text-muted)]">错题资产</div>
-                      <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mistake_count} 道错题</div>
-                    </div>
-                    <RefreshCw className="h-5 w-5 text-[var(--ark-accent)]" />
-                  </div>
-                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">今日到期 {overview.due_review_count} 道</div>
-                  <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">查看错题</div>
-                </Link>
-              </div>
-
-              {overview.recommended_article ? (
-                <Link
-                  to={`/erc/articles/${overview.recommended_article.article_id}/practice`}
-                  className="block rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
-                >
-                  <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
-                  <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
-                    {overview.recommended_article.year} 年 Text {overview.recommended_article.text_no}
-                  </div>
-                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">
-                    {overview.recommended_article.title || '无标题文章'}
-                  </div>
-                </Link>
-              ) : (
-                <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-5">
-                  <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
-                  <div className="mt-2 text-sm text-[var(--ark-text-faint)]">暂无推荐文章</div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-[var(--ark-text-muted)]">业务数据加载中…</p>
-          )}
-        </section>
-
-        <SubAppArrangements tasks={ercTasks} isBusy={appTaskBusy} />
+          <div className="mt-2 text-sm text-[var(--ark-text-muted)]">今日到期 {overview.due_review_count} 道</div>
+          <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">查看错题</div>
+        </Link>
       </div>
 
-      {settingsOpen ? (
+      {overview.recommended_article ? (
+        <Link
+          to={`/erc/articles/${overview.recommended_article.article_id}/practice`}
+          className="ark-panel-card block rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+        >
+          <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
+          <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
+            {overview.recommended_article.year} 年 Text {overview.recommended_article.text_no}
+          </div>
+          <div className="mt-2 text-sm text-[var(--ark-text-muted)]">
+            {overview.recommended_article.title || '无标题文章'}
+          </div>
+        </Link>
+      ) : (
+        <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-5">
+          <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
+          <div className="mt-2 text-sm text-[var(--ark-text-faint)]">暂无推荐文章</div>
+        </div>
+      )}
+    </div>
+  ) : (
+    <p className="text-sm text-[var(--ark-text-muted)]">学习资产加载中…</p>
+  );
+
+  return (
+    <SubAppHomeTemplate
+      eyebrow="ERC"
+      title="阅读训练"
+      statusLabel={eventStatusLabel(configStatus)}
+      metaItems={[eventLabel, '托管任务：真题练习 / 错题复习']}
+      configureAction={{ label: '配置', onClick: () => setSettingsOpen(true) }}
+      heroLabel="今日优先任务"
+      heroValue={overview ? `${overview.due_review_count} 道` : '--'}
+      heroDetail="先处理到期错题，再进入真题练习。"
+      heroProgressPercent={accuracy}
+      heroProgressLabel="历史正确率"
+      primaryAction={primaryAction}
+      metrics={overviewMetrics}
+      assetEyebrow="Learning Assets"
+      assetTitle="长期积累"
+      assetDescription="题库进度、错题资产和推荐练习都集中在这里。"
+      assetContent={assetContent}
+      arrangements={<SubAppArrangements tasks={ercTasks} isBusy={appTaskBusy} />}
+      feedback={(
+        <>
+          {error ? <p className="text-sm text-rose-200">{error}</p> : null}
+          {appTaskError ? <p className="ark-annotation rounded-lg px-3 py-2">{appTaskError}</p> : null}
+          {hasNoPrimaryEvent ? (
+            <p className="ark-annotation rounded-lg px-3 py-2">请先创建或设置主事件，再配置阅读训练。</p>
+          ) : hasNoConfig ? (
+            <p className="ark-annotation rounded-lg px-3 py-2">{noConfigMessage}</p>
+          ) : appConfigNotice ? (
+            <p className="ark-annotation rounded-lg px-3 py-2">{appConfigNotice}</p>
+          ) : null}
+        </>
+      )}
+      modals={settingsOpen ? (
         <div className="ark-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-6" role="dialog" aria-modal="true" aria-label="ERC 配置">
           <div className="ark-modal max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg p-6 shadow-2xl shadow-black/20">
             <div className="flex items-start justify-between gap-4 border-b border-ark-border pb-5">
@@ -648,6 +627,6 @@ export default function ERCHome() {
           </div>
         </div>
       ) : null}
-    </div>
+    />
   );
 }

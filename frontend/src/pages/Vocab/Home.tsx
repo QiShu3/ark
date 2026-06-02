@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings } from 'lucide-react';
 
 import OverviewDetailModal, { type OverviewDetailTab } from '../../components/Vocab/OverviewDetailModal';
 import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
 import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
+import SubAppHomeTemplate from '../../components/SubAppHomeTemplate';
 import type { AppTaskRuntimeState, AppTaskStatus } from '../../components/taskTypes';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { apiJson } from '../../lib/api';
@@ -247,147 +247,123 @@ export default function VocabHome() {
     { label: '新词', value: summary ? summary.new_count : '--', detail: 'new' },
     { label: '复习', value: summary ? summary.review_count : '--', detail: 'review' },
   ];
+  const vocabPrimaryActionLabel =
+    appTaskAction.label === '开始'
+      ? '开始今日单词'
+      : appTaskAction.label === '继续'
+        ? '继续今日单词'
+        : appTaskAction.label === '初始化'
+          ? '初始化今日单词'
+          : appTaskAction.label === '配置'
+            ? '调整今日单词'
+            : appTaskAction.label;
+  const vocabAssetContent = overview ? (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => openOverviewDetail('completed')}
+          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+        >
+          <div className="text-sm text-[var(--ark-text-muted)]">已完成词书</div>
+          <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
+          <div className="mt-2 text-sm text-[var(--ark-text-muted)]">全部单词都已进入 Review 状态的词书数量。</div>
+        </button>
+        <button
+          type="button"
+          onClick={() => openOverviewDetail('mastered')}
+          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+        >
+          <div className="text-sm text-[var(--ark-text-muted)]">累计掌握单词</div>
+          <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mastered_word_count}</div>
+          <div className="mt-2 text-sm text-[var(--ark-text-muted)]">按 FSRS Review 口径统计的全局已掌握单词总数。</div>
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => openOverviewDetail('current', activeDeck?.id)}
+        className="ark-panel-card w-full rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-sm text-[var(--ark-text-muted)]">当前词书掌握度</div>
+            <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{overview.current_deck.deck_name}</div>
+          </div>
+          <div className="sm:text-right">
+            <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
+            <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
+              {overview.current_deck.mastered_word_count} / {overview.current_deck.total_word_count}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 h-3 overflow-hidden rounded-full bg-ark-surface-subtle">
+          <div
+            className="h-full rounded-full bg-ark-accent transition-[width] duration-300"
+            style={{ width: `${currentDeckMasteryPercent}%` }}
+          />
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
+            <div className="text-sm text-[var(--ark-text-muted)]">未开始</div>
+            <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.unstarted_word_count}</div>
+          </div>
+          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
+            <div className="text-sm text-[var(--ark-text-muted)]">学习中</div>
+            <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.learning_word_count}</div>
+          </div>
+          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
+            <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
+            <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.mastered_word_count}</div>
+          </div>
+        </div>
+      </button>
+    </div>
+  ) : (
+    <p className="text-sm text-[var(--ark-text-muted)]">学习资产加载中…</p>
+  );
 
   return (
-    <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: "inset(10px round 28px)" }}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="ark-panel-card rounded-lg p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Vocabulary</div>
-              <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">背单词</h1>
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-                <span className="inline-flex rounded-full border border-ark-border bg-ark-surface-subtle px-3 py-1 text-[var(--ark-text-muted)]">
-                  {eventStatusLabel(appTaskStatus, hasEventAppConfig)}
-                </span>
-                <span className="text-[var(--ark-text-muted)]">{eventLabel}</span>
-                <span className="text-[var(--ark-text-muted)]">当前词书：{activeDeck?.name ?? '未选择词书'}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              disabled={!activeDeck}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-ark-border bg-white px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Settings className="h-4 w-4" />
-              配置
-            </button>
-          </div>
-
-          {loading ? <p className="mt-5 text-sm text-[var(--ark-text-muted)]">词书加载中…</p> : null}
-          {error ? <p className="mt-5 text-sm text-rose-200">{error}</p> : null}
-          {appTaskError ? <p className="mt-5 text-sm text-rose-200">{appTaskError}</p> : null}
+    <SubAppHomeTemplate
+      eyebrow="Vocabulary"
+      title="背单词"
+      statusLabel={eventStatusLabel(appTaskStatus, hasEventAppConfig)}
+      metaItems={[eventLabel, `当前词书：${activeDeck?.name ?? '未选择词书'}`]}
+      configureAction={{ label: '配置', onClick: () => setSettingsOpen(true), disabled: !activeDeck }}
+      heroLabel="今日单词任务"
+      heroValue={summary ? `${summary.completed_count} / ${summary.total_count}` : '--'}
+      heroDetail={activeDeck ? '复习与新词会按今日计划自动衔接。' : '请选择词书后开始今日学习'}
+      heroProgressPercent={todayProgressPercent}
+      heroProgressLabel="今日完成度"
+      primaryAction={{
+        label: vocabPrimaryActionLabel,
+        disabled: appTaskAction.disabled,
+        onClick: appTaskAction.action,
+      }}
+      metrics={overviewMetrics}
+      assetEyebrow="Learning Assets"
+      assetTitle="长期积累"
+      assetDescription="词书完成度、全局掌握量与当前词书阶段都收束在这里。"
+      assetContent={vocabAssetContent}
+      arrangements={<SubAppArrangements tasks={vocabTasks} isBusy={appTaskBusy} />}
+      feedback={(
+        <>
+          {loading ? <p className="text-sm text-[var(--ark-text-muted)]">词书加载中…</p> : null}
+          {error ? <p className="text-sm text-rose-200">{error}</p> : null}
+          {appTaskError ? <p className="text-sm text-rose-200">{appTaskError}</p> : null}
           {appTaskStatus?.state === 'event_not_configured' ? (
-            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">{eventNotConfiguredMessage}</p>
+            <p className="ark-annotation rounded-lg px-3 py-2">{eventNotConfiguredMessage}</p>
           ) : appTaskStatus?.state === 'no_primary_event' ? (
-            <p className="ark-annotation mt-5 rounded-lg px-3 py-2">请先创建或设置主事件，再配置今日单词。</p>
+            <p className="ark-annotation rounded-lg px-3 py-2">请先创建或设置主事件，再配置今日单词。</p>
           ) : null}
-        </section>
-
-        <section className="ark-panel-card rounded-lg p-6">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Overview</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">总览</h2>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {overviewMetrics.map((metric) => (
-              <div
-                key={metric.label}
-                className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-4 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]"
-              >
-                <div className="text-sm text-[var(--ark-text-muted)]">{metric.label}</div>
-                <div className="mt-2 text-3xl font-semibold text-[var(--ark-text)]">{metric.value}</div>
-                <div className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--ark-text-faint)]">{metric.detail}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="ark-panel-card rounded-lg p-6">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Business Data</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">业务数据</h2>
-            </div>
-          </div>
-
-          {overview ? (
-            <div className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => openOverviewDetail('completed')}
-                  className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
-                >
-                  <div className="text-sm text-[var(--ark-text-muted)]">已完成词书</div>
-                  <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
-                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">全部单词都已进入 Review 状态的词书数量。</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openOverviewDetail('mastered')}
-                  className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
-                >
-                  <div className="text-sm text-[var(--ark-text-muted)]">累计掌握单词</div>
-                  <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mastered_word_count}</div>
-                  <div className="mt-2 text-sm text-[var(--ark-text-muted)]">按 FSRS Review 口径统计的全局已掌握单词总数。</div>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => openOverviewDetail('current', activeDeck?.id)}
-                className="w-full rounded-lg border border-ark-border bg-ark-surface-subtle p-5 text-left transition hover:border-[var(--ark-border-strong)]"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <div className="text-sm text-[var(--ark-text-muted)]">当前词书掌握度</div>
-                    <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">{overview.current_deck.deck_name}</div>
-                  </div>
-                  <div className="sm:text-right">
-                    <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
-                    <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
-                      {overview.current_deck.mastered_word_count} / {overview.current_deck.total_word_count}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 h-3 overflow-hidden rounded-full bg-ark-surface-subtle">
-                  <div
-                    className="h-full rounded-full bg-ark-accent transition-[width] duration-300"
-                    style={{ width: `${currentDeckMasteryPercent}%` }}
-                  />
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
-                    <div className="text-sm text-[var(--ark-text-muted)]">未开始</div>
-                    <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.unstarted_word_count}</div>
-                  </div>
-                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
-                    <div className="text-sm text-[var(--ark-text-muted)]">学习中</div>
-                    <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.learning_word_count}</div>
-                  </div>
-                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
-                    <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
-                    <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.mastered_word_count}</div>
-                  </div>
-                </div>
-              </button>
-            </div>
-          ) : (
-            <p className="text-sm text-[var(--ark-text-muted)]">业务数据加载中…</p>
-          )}
-        </section>
-
-        <SubAppArrangements tasks={vocabTasks} isBusy={appTaskBusy} />
-
-        {summaryError ? <p className="text-sm text-rose-200">{summaryError}</p> : null}
-      </div>
-      {settingsOpen ? (
+          {summaryError ? <p className="text-sm text-rose-200">{summaryError}</p> : null}
+        </>
+      )}
+      modals={(
+        <>
+          {settingsOpen ? (
         <TodayPlanModal
           initialTargetCount={modalInitialTarget}
           initialFocusDuration={typeof appTaskStatus?.config?.default_focus_duration === 'number' ? appTaskStatus.config.default_focus_duration : 1500}
@@ -403,16 +379,18 @@ export default function VocabHome() {
           onClose={() => setSettingsOpen(false)}
           onSave={handleSaveSettings}
         />
-      ) : null}
-      {activeDeck ? (
-        <OverviewDetailModal
-          isOpen={overviewDetailOpen}
-          baseDeckId={activeDeck.id}
-          initialTab={overviewDetailTab}
-          initialTargetDeckId={overviewDetailDeckId}
-          onClose={() => setOverviewDetailOpen(false)}
-        />
-      ) : null}
-    </div>
+          ) : null}
+          {activeDeck ? (
+            <OverviewDetailModal
+              isOpen={overviewDetailOpen}
+              baseDeckId={activeDeck.id}
+              initialTab={overviewDetailTab}
+              initialTargetDeckId={overviewDetailDeckId}
+              onClose={() => setOverviewDetailOpen(false)}
+            />
+          ) : null}
+        </>
+      )}
+    />
   );
 }
