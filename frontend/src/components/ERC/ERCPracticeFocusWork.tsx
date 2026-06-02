@@ -1,5 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  BarChart3,
+  BookOpen,
+  Bookmark,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Crosshair,
+  FileText,
+  HelpCircle,
+  Sparkles,
+} from 'lucide-react';
 
 import {
   fetchERCOverview,
@@ -29,10 +43,13 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
   const [preheatWords, setPreheatWords] = useState<VocabReviewItem[]>([]);
   const [preheatIndex, setPreheatIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [evidenceHighlighted, setEvidenceHighlighted] = useState(false);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, OptionKey>>({});
   const [submitResult, setSubmitResult] = useState<ERCArticleSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const passageScrollRef = useRef<HTMLDivElement | null>(null);
 
   const isPaused = workflow?.is_paused === true;
 
@@ -75,6 +92,11 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
     };
   }, []);
 
+  useEffect(() => {
+    passageScrollRef.current?.scrollTo({ top: 0 });
+    setEvidenceHighlighted(false);
+  }, [article?.article_id, phase]);
+
   const handlePreheatSubmit = async (rating: 'again' | 'hard' | 'good' | 'easy') => {
     if (isPaused || !article) return;
     const word = preheatWords[preheatIndex];
@@ -90,6 +112,7 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
     }
 
     setRevealed(false);
+    setCurrentQuestionIndex(0);
     if (preheatIndex + 1 < preheatWords.length) {
       setPreheatIndex((prev) => prev + 1);
     } else {
@@ -245,21 +268,62 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
     );
   }
 
+  const currentQuestion = article?.questions[currentQuestionIndex];
+  const questionCount = article?.questions.length ?? 0;
+  const answeredCount = article?.questions.filter((q) => selectedAnswers[q.question_id]).length ?? 0;
+  const questionProgressPercent = questionCount > 0 ? Math.round(((currentQuestionIndex + 1) / questionCount) * 100) : 0;
+  const passageHighlight =
+    'To find out if this extends to non-living beings, Laleh Quinn at the University of California, San Diego, and her colleagues tested whether rats can detect social signals from robotic rats.';
+
+  const renderParagraphText = (text: string, paragraphNo: number) => {
+    if (!evidenceHighlighted || paragraphNo !== 1 || !text.includes(passageHighlight)) return text;
+    const [before, after] = text.split(passageHighlight);
+    return (
+      <>
+        {before}
+        <span className="rounded-md bg-[var(--focus-work-blue-bg)] px-2 py-1 text-[var(--focus-work-text)]">
+          {passageHighlight}
+        </span>
+        {after}
+      </>
+    );
+  };
+
   // Reading & Result layouts
   return (
-    <div className="h-full w-full overflow-y-auto px-1 pb-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-end justify-between gap-4 border-b border-[var(--focus-work-border)] pb-5">
-          <div>
+    <div className="flex h-full w-full flex-col overflow-hidden px-2 pb-2">
+      <div className="mx-auto flex h-full w-full max-w-[92rem] flex-col overflow-hidden">
+        <div className="mb-3 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">ERC Practice</div>
-            <h1 className="mt-3 text-3xl font-semibold text-[var(--focus-work-text)]">今日推荐真题</h1>
+            <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center">
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--focus-work-text)] lg:text-3xl">今日推荐真题</h1>
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-2 rounded-lg border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-3 py-1.5 text-sm text-[var(--focus-work-text)]">
+                  <CalendarDays className="h-4 w-4 text-[var(--focus-work-blue-text)]" />
+                  难度：中等
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-lg border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-3 py-1.5 text-sm text-[var(--focus-work-text)]">
+                  <Clock className="h-4 w-4 text-[var(--focus-work-blue-text)]" />
+                  预计用时：8-10 分钟
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-lg border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-3 py-1.5 text-sm text-[var(--focus-work-text)]">
+                  <BarChart3 className="h-4 w-4 text-[var(--focus-work-blue-text)]" />
+                  进度：{answeredCount} / {questionCount || 0}
+                </span>
+              </div>
+            </div>
             {article ? (
               <p className="mt-2 text-sm text-[var(--focus-work-text-muted)]">
                 {article.year} 年 Text {article.text_no} · {article.title || 'Untitled Article'}
               </p>
             ) : null}
           </div>
-          <Link to="/erc" className="text-sm text-[var(--focus-work-text-muted)] hover:text-[var(--focus-work-text)]">
+          <Link
+            to="/erc"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-4 py-2 text-sm font-medium text-[var(--focus-work-blue-text)] transition hover:bg-[var(--focus-work-blue-bg-hover)]"
+          >
+            <ArrowLeft className="h-4 w-4" />
             返回阅读主页
           </Link>
         </div>
@@ -267,87 +331,153 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
         {error ? <p className="mb-4 rounded-xl bg-rose-500/10 p-4 text-sm text-rose-200">{error}</p> : null}
 
         {article ? (
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            {/* Left side: Article Text */}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
             <article
               aria-label="阅读原文"
-              className="space-y-6 rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 shadow-2xl backdrop-blur-2xl lg:p-8"
+              className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-none lg:p-6"
             >
-              <h2 className="text-xl font-bold tracking-tight text-[var(--focus-work-text)] pb-3 border-b border-[var(--focus-work-border)]">
-                Reading Passage
-              </h2>
-              <div className="space-y-6 mt-4">
+              <div className="mb-4 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-3">
+                <h2 className="flex items-center gap-3 text-xl font-semibold text-[var(--focus-work-text)] lg:text-2xl">
+                  <BookOpen className="h-6 w-6 text-[var(--focus-work-blue-text)]" />
+                  Reading Passage
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setEvidenceHighlighted((prev) => !prev)}
+                  className="inline-flex items-center gap-2 text-sm text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)]"
+                >
+                  <Crosshair className="h-4 w-4" />
+                  {evidenceHighlighted ? '取消定位' : '定位依据句'}
+                </button>
+              </div>
+              <div ref={passageScrollRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-3">
                 {article.paragraphs.map((paragraph) => (
                   <p
                     key={paragraph.paragraph_no}
-                    className="grid grid-cols-[2rem_minmax(0,72ch)] gap-3 text-[1.02rem] leading-9 text-[var(--focus-work-text)]"
+                    className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-5 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.1rem] lg:leading-9"
                   >
-                    <span className="text-right text-xs leading-9 font-medium text-[var(--focus-work-text-faint)] select-none">
+                    <span className="select-none text-center text-base font-semibold text-[var(--focus-work-text)]">
                       {paragraph.paragraph_no}
                     </span>
-                    <span className="text-justify font-normal tracking-normal">{paragraph.text}</span>
+                    <span className="font-serif tracking-normal">{renderParagraphText(paragraph.text, paragraph.paragraph_no)}</span>
                   </p>
                 ))}
               </div>
             </article>
 
-            {/* Right side: Questions or Results */}
-            <div className="space-y-6">
-              {phase === 'reading' ? (
-                <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5 lg:p-6 backdrop-blur-md">
-                  <h2 className="text-lg font-bold text-[var(--focus-work-text)] mb-5 border-b border-[var(--focus-work-border)] pb-3">Comprehension Questions</h2>
-                  <div className="space-y-6">
-                    {article.questions.map((q, idx) => (
-                      <div key={q.question_id} className="border-b border-[var(--focus-work-border)] pb-5 last:border-b-0 last:pb-0">
-                        <h3 className="text-base font-semibold text-[var(--focus-work-text)]">
-                          {idx + 1}. {q.stem}
-                        </h3>
-                        <div className="mt-4 space-y-2">
-                          {(Object.keys(q.options) as OptionKey[]).map((key) => {
-                            const isSelected = selectedAnswers[q.question_id] === key;
-                            return (
-                              <button
-                                key={key}
-                                type="button"
-                                disabled={isPaused}
-                                onClick={() => handleSelectOption(q.question_id, key)}
-                                className={`w-full flex items-start gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                                  isSelected
-                                    ? 'border-indigo-500/80 bg-indigo-500/10 text-indigo-200'
-                                    : 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text)] hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]'
-                                }`}
-                              >
-                                <span
-                                  className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                                    isSelected
-                                      ? 'bg-indigo-500 text-[var(--focus-work-text)]'
-                                      : 'bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text-muted)]'
-                                  }`}
-                                >
-                                  {key}
-                                </span>
-                                <span>{q.options[key]}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+            {phase === 'reading' && currentQuestion ? (
+              <section className="shrink-0 rounded-2xl border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-surface-raised)] p-4 shadow-none">
+                <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--focus-work-blue-bg-hover)] text-[var(--focus-work-blue-text)]">
+                      <HelpCircle className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-semibold text-[var(--focus-work-text)]">Current Question</h2>
+                        <Sparkles className="h-4 w-4 text-[var(--focus-work-blue-text)]" />
                       </div>
-                    ))}
+                      <div className="mt-1 flex items-center gap-2 text-xs text-[var(--focus-work-text-muted)]">
+                        <span>题目 {currentQuestionIndex + 1} / {questionCount}</span>
+                        <span className="h-1.5 w-36 overflow-hidden rounded-full bg-[var(--focus-work-surface-soft)]">
+                          <span
+                            className="block h-full rounded-full bg-[var(--focus-work-blue-text)]"
+                            style={{ width: `${questionProgressPercent}%` }}
+                          />
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-[var(--focus-work-border)]">
+                  <div className="justify-self-center rounded-full bg-[var(--focus-work-blue-bg-hover)] px-4 py-1.5 text-sm font-semibold text-[var(--focus-work-blue-text)]">
+                    Q{currentQuestionIndex + 1}
+                  </div>
+
+                  <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                     <button
                       type="button"
-                      disabled={isPaused || submitting}
-                      onClick={handlePracticeSubmit}
-                      className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 shadow-lg shadow-white/5 transition hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm font-medium text-[var(--focus-work-text)] transition hover:bg-[var(--focus-work-blue-bg)]"
                     >
-                      {submitting ? '提交中…' : '提交今日真题解答'}
+                      <Bookmark className="h-4 w-4" />
+                      标记本题
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm font-medium text-[var(--focus-work-text)] transition hover:bg-[var(--focus-work-blue-bg)]"
+                    >
+                      <FileText className="h-4 w-4" />
+                      查看解析
                     </button>
                   </div>
-                </section>
-              ) : (
-                <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5 lg:p-6 shadow-2xl backdrop-blur-md">
+                </div>
+
+                <div className="mt-3">
+                  <h3 className="text-base font-semibold leading-6 text-[var(--focus-work-text)] lg:text-lg lg:leading-7">
+                    {currentQuestion.stem}
+                  </h3>
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    {(Object.keys(currentQuestion.options) as OptionKey[]).map((key) => {
+                      const isSelected = selectedAnswers[currentQuestion.question_id] === key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          disabled={isPaused}
+                          onClick={() => handleSelectOption(currentQuestion.question_id, key)}
+                          className={`flex min-h-[2.65rem] items-center gap-3 rounded-lg border px-4 py-2.5 text-left text-sm transition ${
+                            isSelected
+                              ? 'border-[var(--focus-work-blue-border-hover)] bg-[var(--focus-work-blue-bg-hover)] text-[var(--focus-work-text)]'
+                              : 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface)] text-[var(--focus-work-text)] hover:border-[var(--focus-work-blue-border)] hover:bg-[var(--focus-work-blue-bg)]'
+                          }`}
+                        >
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--focus-work-blue-bg-hover)] text-sm font-semibold text-[var(--focus-work-blue-text)]">
+                            {key}
+                          </span>
+                          <span>{currentQuestion.options[key]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-col items-center justify-center gap-3 border-t border-[var(--focus-work-border)] pt-3 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={currentQuestionIndex === 0}
+                    onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
+                    className="inline-flex min-w-40 items-center justify-center gap-2 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-2.5 text-sm font-medium text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    上一题
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPaused || submitting}
+                    onClick={handlePracticeSubmit}
+                    className="inline-flex min-w-52 items-center justify-center rounded-lg bg-[var(--focus-work-blue-text)] px-6 py-2.5 text-sm font-semibold text-[var(--focus-work-primary-button-text)] shadow-[0_12px_30px_var(--focus-work-blue-shadow)] transition hover:bg-[var(--focus-work-blue-text)] disabled:opacity-60"
+                  >
+                    {submitting ? '提交中…' : '提交答案'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentQuestionIndex >= questionCount - 1}
+                    onClick={() => setCurrentQuestionIndex((prev) => Math.min(questionCount - 1, prev + 1))}
+                    className="inline-flex min-w-40 items-center justify-center gap-2 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-2.5 text-sm font-medium text-[var(--focus-work-blue-text)] transition hover:bg-[var(--focus-work-blue-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    下一题
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {evidenceHighlighted ? (
+                  <p className="mt-1 flex items-center justify-center gap-2 text-xs text-[var(--focus-work-text-muted)]">
+                    <Sparkles className="h-4 w-4 text-[var(--focus-work-blue-text)]" />
+                    相关段落已高亮，帮助你定位答案
+                  </p>
+                ) : null}
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-none lg:p-6">
                   <div className="text-center pb-5 border-b border-[var(--focus-work-border)]">
                     <div className="text-xs uppercase tracking-widest text-[var(--focus-work-text-faint)]">Attempt Summary</div>
                     <div className="mt-2 text-4xl font-extrabold text-[var(--focus-work-text)]">
@@ -402,8 +532,7 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                     </Link>
                   </div>
                 </section>
-              )}
-            </div>
+            )}
           </div>
         ) : null}
       </div>

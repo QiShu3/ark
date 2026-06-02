@@ -75,10 +75,10 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
   };
 
   const statusClassName = (state: SubAppTaskItemState) => {
-    if (state === 'ready') return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200';
-    if (state === 'completed') return 'border-sky-400/30 bg-sky-400/10 text-sky-200';
-    if (state === 'blocked' || state === 'config_invalid') return 'border-rose-400/30 bg-rose-400/10 text-rose-200';
-    return 'border-amber-400/30 bg-amber-400/10 text-amber-200';
+    if (state === 'ready') return 'ark-subapp-status-ready';
+    if (state === 'completed') return 'ark-subapp-status-completed';
+    if (state === 'blocked' || state === 'config_invalid') return 'ark-subapp-status-blocked';
+    return 'ark-subapp-status-pending';
   };
 
   const actionIcon = (label: string | undefined) => {
@@ -97,7 +97,7 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="ark-subapp-arrangement-card rounded-lg border p-5">
           <div>
             <div className="ark-subapp-arrangement-accent mb-4 flex items-center gap-2">
@@ -108,7 +108,7 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
             {tasks.length === 0 ? (
               <div className="py-4 text-center text-sm text-[var(--ark-text-faint)]">暂无可用任务</div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-1">
                 {tasks.map((task) => {
                   const isTaskBusy = togglingTaskId === task.id || isBusy;
                   const isActing = actingTaskId === task.id || isBusy;
@@ -120,8 +120,9 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
                   return (
                     <div
                       key={task.id}
-                      className="flex flex-col gap-4 border-t border-ark-border py-4 first:border-t-0 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                      className="ark-subapp-timeline-rail relative flex flex-col gap-4 border-l-2 py-4 pl-5 first:pt-1 last:pb-1 sm:flex-row sm:items-center sm:justify-between"
                     >
+                      <span className="ark-subapp-timeline-node absolute -left-[5px] top-6 h-2 w-2 rounded-full" aria-hidden="true" />
                       <div className="min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2.5">
                           <span className="text-base font-semibold text-[var(--ark-text)]">{task.name}</span>

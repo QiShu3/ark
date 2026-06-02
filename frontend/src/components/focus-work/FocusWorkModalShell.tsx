@@ -25,6 +25,8 @@ export default function FocusWorkModalShell({
   onAbandon,
   children,
 }: FocusWorkModalShellProps) {
+  const contentClassName = isPaused ? 'h-full pointer-events-none select-none opacity-35' : 'h-full';
+
   return (
     <div className="ark-focus-work-shell fixed inset-x-1 bottom-1 top-[7.5rem] z-[90] p-4" aria-live="polite">
       <div className="flex h-full w-full">
@@ -83,7 +85,7 @@ export default function FocusWorkModalShell({
           </div>
         </header>
         <div className="relative min-h-0 flex-1 overflow-y-auto p-5">
-          <div className={isPaused ? 'pointer-events-none select-none opacity-35' : undefined} aria-hidden={isPaused ? true : undefined}>
+          <div className={contentClassName} aria-hidden={isPaused ? true : undefined}>
             {children}
           </div>
           {isPaused ? (

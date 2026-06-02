@@ -248,9 +248,23 @@
   background: linear-gradient(90deg, var(--ark-accent), color-mix(in srgb, var(--ark-accent) 52%, var(--ark-learning-accent)));
 }
 
+.ark-subapp-progress-gauge {
+  background:
+    conic-gradient(var(--ark-accent) var(--ark-subapp-progress), color-mix(in srgb, var(--ark-accent-soft) 48%, var(--ark-surface-subtle)) 0),
+    var(--ark-surface-subtle);
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    0 14px 30px color-mix(in srgb, var(--ark-accent) 12%, transparent);
+}
+
 .ark-subapp-metric-strip {
   border-color: color-mix(in srgb, var(--ark-accent) 14%, var(--ark-border));
   background: color-mix(in srgb, var(--ark-accent-soft) 44%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-metric-chip {
+  border: 1px solid color-mix(in srgb, var(--ark-accent) 10%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-surface) 72%, transparent);
 }
 
 .ark-subapp-section-heading {
@@ -283,6 +297,18 @@
   background: linear-gradient(90deg, var(--ark-learning-accent), color-mix(in srgb, var(--ark-learning-accent) 46%, var(--ark-accent)));
 }
 
+.ark-subapp-asset-segment-unstarted {
+  background: color-mix(in srgb, var(--ark-text-faint) 46%, transparent);
+}
+
+.ark-subapp-asset-segment-learning {
+  background: color-mix(in srgb, var(--ark-accent) 64%, var(--ark-learning-accent));
+}
+
+.ark-subapp-asset-segment-mastered {
+  background: var(--ark-learning-accent);
+}
+
 .ark-subapp-arrangements {
   border-color: color-mix(in srgb, var(--ark-arrangement-border) 72%, var(--ark-glass-border-soft));
   background:
@@ -302,6 +328,71 @@
 .ark-subapp-arrangement-empty {
   border-color: color-mix(in srgb, var(--ark-arrangement-border) 70%, var(--ark-border));
   background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 34%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-timeline-rail {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 82%, var(--ark-border));
+}
+
+.ark-subapp-timeline-node {
+  background: var(--ark-arrangement-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ark-arrangement-accent-soft) 72%, transparent);
+}
+
+.ark-subapp-status-ready {
+  border-color: color-mix(in srgb, var(--ark-learning-accent) 44%, transparent);
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 74%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-learning-accent) 92%, var(--ark-text));
+  font-weight: 650;
+}
+
+.ark-subapp-status-completed {
+  border-color: color-mix(in srgb, var(--ark-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--ark-accent-soft) 72%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-accent) 88%, var(--ark-text));
+  font-weight: 650;
+}
+
+.ark-subapp-status-blocked {
+  border-color: color-mix(in srgb, var(--ark-danger) 46%, transparent);
+  background: color-mix(in srgb, var(--ark-danger) 10%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-danger) 92%, var(--ark-text));
+  font-weight: 650;
+}
+
+.ark-subapp-status-pending {
+  border-color: color-mix(in srgb, var(--ark-arrangement-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 74%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-arrangement-accent) 90%, var(--ark-text));
+  font-weight: 650;
+}
+
+:root[data-theme="light"] .ark-subapp-status-ready {
+  border-color: rgba(4, 120, 87, 0.48);
+  background: rgba(16, 185, 129, 0.16);
+  color: #065f46;
+  box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.12);
+}
+
+:root[data-theme="light"] .ark-subapp-status-completed {
+  border-color: rgba(37, 99, 235, 0.46);
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.1);
+}
+
+:root[data-theme="light"] .ark-subapp-status-blocked {
+  border-color: rgba(220, 38, 38, 0.46);
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.1);
+}
+
+:root[data-theme="light"] .ark-subapp-status-pending {
+  border-color: rgba(180, 83, 9, 0.46);
+  background: rgba(180, 83, 9, 0.14);
+  color: #92400e;
+  box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.1);
 }
 
 .ark-top-nav {
@@ -432,6 +523,42 @@
 
 .ark-home-task-check {
   box-shadow: 0 6px 14px color-mix(in srgb, var(--ark-accent) 22%, transparent);
+}
+
+.ark-arrangement-summary-complete {
+  border-color: color-mix(in srgb, var(--ark-learning-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 78%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-learning-accent) 88%, var(--ark-text));
+}
+
+.ark-arrangement-summary-complete:hover {
+  border-color: color-mix(in srgb, var(--ark-learning-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 92%, var(--ark-surface-subtle));
+}
+
+.ark-arrangement-summary-enter {
+  border-color: color-mix(in srgb, var(--ark-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--ark-accent-soft) 72%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-accent) 86%, var(--ark-text));
+}
+
+:root[data-theme="light"] .ark-arrangement-summary-complete {
+  border-color: rgba(4, 120, 87, 0.42);
+  background: rgba(16, 185, 129, 0.16);
+  color: #065f46;
+  box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.1);
+}
+
+:root[data-theme="light"] .ark-arrangement-summary-complete:hover {
+  border-color: rgba(4, 120, 87, 0.56);
+  background: rgba(16, 185, 129, 0.22);
+}
+
+:root[data-theme="light"] .ark-arrangement-summary-enter {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.1);
 }
 
 .ark-home-empty-task {
@@ -789,6 +916,8 @@
   --focus-work-text-muted: rgba(255, 255, 255, 0.68);
   --focus-work-text-faint: rgba(255, 255, 255, 0.42);
   --focus-work-shadow: 0 28px 100px rgba(0, 0, 0, 0.55);
+  --focus-work-card-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --focus-work-primary-button-text: rgba(255, 255, 255, 0.96);
 
   /* Component specific variables for status badges and buttons - Dark Mode */
   --focus-work-amber-bg: rgba(252, 211, 77, 0.1);
@@ -808,6 +937,7 @@
   --focus-work-blue-border: rgba(147, 197, 253, 0.2);
   --focus-work-blue-border-hover: rgba(147, 197, 253, 0.32);
   --focus-work-blue-text: rgba(147, 197, 253, 0.95);
+  --focus-work-blue-shadow: rgba(147, 197, 253, 0.16);
 }
 
 :root[data-theme="light"] .ark-focus-work-shell {
@@ -823,6 +953,8 @@
   --focus-work-text-muted: rgba(30, 41, 59, 0.82);
   --focus-work-text-faint: rgba(47, 55, 70, 0.76);
   --focus-work-shadow: 0 28px 100px rgba(51, 65, 85, 0.22);
+  --focus-work-card-shadow: 0 14px 34px rgba(51, 65, 85, 0.12);
+  --focus-work-primary-button-text: rgba(255, 255, 255, 0.96);
 
   /* Component specific variables for status badges and buttons - Light Mode (High Contrast, Rich Tones) */
   --focus-work-amber-bg: rgba(180, 83, 9, 0.08);
@@ -842,6 +974,7 @@
   --focus-work-blue-border: rgba(29, 78, 216, 0.24);
   --focus-work-blue-border-hover: rgba(29, 78, 216, 0.38);
   --focus-work-blue-text: #1d4ed8;
+  --focus-work-blue-shadow: rgba(29, 78, 216, 0.22);
 }
 
 

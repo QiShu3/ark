@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Settings } from 'lucide-react';
 
 export type SubAppHomeMetric = {
@@ -67,7 +67,7 @@ export default function SubAppHomeTemplate({
     <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="ark-panel-card ark-subapp-hero-card overflow-hidden rounded-lg">
-          <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)] lg:items-stretch">
+          <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-stretch">
             <div className="min-w-0">
               <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">{eyebrow}</div>
               <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">{title}</h1>
@@ -82,31 +82,31 @@ export default function SubAppHomeTemplate({
               {feedback ? <div className="mt-5 space-y-2">{feedback}</div> : null}
             </div>
 
-            <div className="ark-subapp-hero-side flex min-h-[180px] flex-col justify-between border-t pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-              <div>
+            <div className="ark-subapp-hero-side grid min-h-[210px] gap-5 border-t pt-5 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+              <div
+                className="ark-subapp-progress-gauge grid h-32 w-32 shrink-0 place-items-center rounded-full"
+                style={{ '--ark-subapp-progress': `${progressPercent}%` } as CSSProperties}
+                aria-label={`${heroProgressLabel} ${progressPercent}%`}
+              >
+                <div className="grid h-24 w-24 place-items-center rounded-full bg-ark-surface-strong text-center">
+                  <div>
+                    <div className="text-2xl font-semibold leading-none text-[var(--ark-text)]">{progressPercent}%</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[var(--ark-text-faint)]">{heroProgressLabel}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-0">
                 <div className="ark-subapp-hero-eyebrow text-xs uppercase tracking-[0.18em]">Today Workspace</div>
                 <div className="mt-3 text-sm text-[var(--ark-text-muted)]">{heroLabel}</div>
                 <div className="mt-2 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">{heroValue}</div>
                 {heroDetail ? <div className="mt-2 text-sm text-[var(--ark-text-muted)]">{heroDetail}</div> : null}
-              </div>
-
-              <div className="mt-6 space-y-4">
-                <div>
-                  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-[var(--ark-text-faint)]">
-                    <span>{heroProgressLabel}</span>
-                    <span>{progressPercent}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-ark-surface-subtle">
-                    <div className="ark-subapp-hero-progress h-full rounded-full transition-[width] duration-300" style={{ width: `${progressPercent}%` }} />
-                  </div>
-                </div>
-
                 {primaryAction ? (
                   <button
                     type="button"
                     onClick={primaryAction.onClick}
                     disabled={primaryAction.disabled}
-                    className="inline-flex w-full items-center justify-center rounded-lg border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {primaryAction.label}
                   </button>
@@ -116,9 +116,9 @@ export default function SubAppHomeTemplate({
           </div>
 
           <div className="ark-subapp-metric-strip border-t px-6 py-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {metrics.map((metric) => (
-                <div key={metric.label} className="min-w-0">
+                <div key={metric.label} className="ark-subapp-metric-chip min-w-0 rounded-lg px-3 py-3">
                   <div className="text-sm text-[var(--ark-text-muted)]">{metric.label}</div>
                   <div className="mt-1 truncate text-2xl font-semibold text-[var(--ark-text)]">{metric.value}</div>
                   {metric.detail ? <div className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--ark-text-faint)]">{metric.detail}</div> : null}

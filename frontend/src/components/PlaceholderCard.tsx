@@ -1468,14 +1468,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           <div className="flex items-center gap-1 shrink-0">
             {summaryEntry ? (
               !_isTaskCompletable(task) ? (
-                <span className="rounded-full border border-blue-300/15 bg-blue-300/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
+                <span className="ark-arrangement-summary-enter rounded-full border px-2 py-0.5 text-[10px] font-semibold">
                   进入任务
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
-                  className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-300/16"
+                  className="ark-arrangement-summary-complete rounded-full border px-2 py-0.5 text-[10px] font-semibold transition"
                   aria-label={`完成任务：${task.title}`}
                 >
                   完成任务

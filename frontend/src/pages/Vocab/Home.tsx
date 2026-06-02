@@ -75,6 +75,10 @@ export default function VocabHome() {
   const currentDeckMasteryPercent = overview && overview.current_deck.total_word_count > 0
     ? Math.round((overview.current_deck.mastered_word_count / overview.current_deck.total_word_count) * 100)
     : 0;
+  const currentDeckSegmentPercent = (count: number) => {
+    const total = overview?.current_deck.total_word_count ?? 0;
+    return total > 0 ? `${(count / total) * 100}%` : '0%';
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -305,18 +309,35 @@ export default function VocabHome() {
           />
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="ark-subapp-asset-soft rounded-lg border px-4 py-3 transition-colors hover:border-[var(--ark-learning-border)]">
-            <div className="text-sm text-[var(--ark-text-muted)]">未开始</div>
-            <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.unstarted_word_count}</div>
+        <div className="ark-subapp-asset-soft mt-5 rounded-lg border p-4">
+          <div className="flex h-3 overflow-hidden rounded-full bg-ark-surface-subtle" aria-hidden="true">
+            <div className="ark-subapp-asset-segment-unstarted" style={{ width: currentDeckSegmentPercent(overview.current_deck.unstarted_word_count) }} />
+            <div className="ark-subapp-asset-segment-learning" style={{ width: currentDeckSegmentPercent(overview.current_deck.learning_word_count) }} />
+            <div className="ark-subapp-asset-segment-mastered" style={{ width: currentDeckSegmentPercent(overview.current_deck.mastered_word_count) }} />
           </div>
-          <div className="ark-subapp-asset-soft rounded-lg border px-4 py-3 transition-colors hover:border-[var(--ark-learning-border)]">
-            <div className="text-sm text-[var(--ark-text-muted)]">学习中</div>
-            <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.learning_word_count}</div>
-          </div>
-          <div className="ark-subapp-asset-soft rounded-lg border px-4 py-3 transition-colors hover:border-[var(--ark-learning-border)]">
-            <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
-            <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.mastered_word_count}</div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--ark-surface)] px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                <span className="ark-subapp-asset-segment-unstarted h-2.5 w-2.5 rounded-full" />
+                未开始
+              </div>
+              <div className="text-lg font-semibold text-[var(--ark-text)]">{overview.current_deck.unstarted_word_count}</div>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--ark-surface)] px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                <span className="ark-subapp-asset-segment-learning h-2.5 w-2.5 rounded-full" />
+                学习中
+              </div>
+              <div className="text-lg font-semibold text-[var(--ark-text)]">{overview.current_deck.learning_word_count}</div>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--ark-surface)] px-3 py-2">
+              <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                <span className="ark-subapp-asset-segment-mastered h-2.5 w-2.5 rounded-full" />
+                已掌握
+              </div>
+              <div className="text-lg font-semibold text-[var(--ark-text)]">{overview.current_deck.mastered_word_count}</div>
+            </div>
           </div>
         </div>
       </button>

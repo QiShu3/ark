@@ -17,49 +17,6 @@ function isFocusWorkNavigationLocked(workflow: WorkflowSnapshot | null): boolean
   return workflow?.state === 'focus' && workflow.focus_work_display_state === 'fullscreen';
 }
 
-function ArkLogoMark() {
-  return (
-    <svg
-      className="ark-logo-mark h-[48px] w-[48px]"
-      viewBox="0 0 64 64"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient id="ark-logo-gradient" x1="12" x2="52" y1="54" y2="10" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#2563eb" />
-          <stop offset="0.55" stopColor="#38bdf8" />
-          <stop offset="1" stopColor="#7dd3fc" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M31.8 6.5 8.2 49.5l23.6 8 24-8L31.8 6.5Z"
-        fill="none"
-        stroke="url(#ark-logo-gradient)"
-        strokeLinejoin="round"
-        strokeWidth="3.2"
-      />
-      <path
-        d="M31.8 13.5v37.2M31.8 50.7 16.2 46l15.6-32.5L47.8 46 31.8 50.7Z"
-        fill="none"
-        stroke="url(#ark-logo-gradient)"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.6"
-      />
-      <path
-        d="M19.5 46 31.8 30.4 44.4 46"
-        fill="none"
-        stroke="url(#ark-logo-gradient)"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.2"
-        opacity="0.78"
-      />
-    </svg>
-  );
-}
-
 /**
  * 顶部导航栏组件
  * 仅作占位，固定在顶部
@@ -197,13 +154,23 @@ const Navigation: React.FC = () => {
     navigate('/');
   }
 
+  function handleLogoClick() {
+    navigate('/');
+  }
+
   return (
     <>
       <nav className="ark-top-nav fixed left-3 right-3 top-3 z-50 flex h-24 items-center rounded-[48px] border border-[var(--ark-glass-border-soft)] bg-[var(--ark-surface)] px-[30px] text-[var(--ark-text)] backdrop-blur-2xl">
       <div className="flex items-center gap-[18px]">
-        <div className="flex h-[54px] w-[54px] items-center justify-center rounded-full">
-          <ArkLogoMark />
-        </div>
+        <button
+          type="button"
+          aria-label="返回首页"
+          title="返回首页"
+          className="ark-logo-button ark-focus-ring flex h-[54px] w-[54px] items-center justify-center rounded-full transition-transform hover:scale-[1.03] active:scale-95"
+          onClick={handleLogoClick}
+        >
+          <img src="/favicon.png" alt="" className="ark-logo-mark h-[48px] w-[48px] rounded-full object-contain" />
+        </button>
         <EventCountdownCard variant="nav" />
         <button
           type="button"
