@@ -1,5 +1,21 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-02 10:01 CST · `59e94a0` · fix(frontend): prevent home dashboard list overflow
+
+### 用户提出的需求
+
+- "好，先看看当前git工作区，在干活前先提交代码吧"
+
+### 本次完成的工作
+
+- 提交当前工作区中已有的首页右侧仪表盘改动。
+- 将任务行与日程行拆成可复用渲染函数，供实际展示和隐藏测量共用。
+- 为任务列表和日程列表加入 ResizeObserver 高度测量，在空间不足时从 3 条切换到 2 条，避免卡片内容溢出。
+
+### 验证情况
+
+- `pnpm check` 通过（仅有 Node 22 与项目期望 Node 20.x 的 engine warning）
+
 ## 2026-06-02 09:47 CST · `c4be299` · fix(frontend): resize focus-work panel to match ark-page shell frame
 
 ### 用户提出的需求
