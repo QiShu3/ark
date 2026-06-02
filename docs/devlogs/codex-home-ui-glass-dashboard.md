@@ -1,5 +1,36 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-02 16:19 CST · `ff0705f41ed01b81cf7e9d4373eea6a10699310d` · feat(frontend): preview workflow before study start
+
+### 用户提出的需求
+
+- "先不改代码，看看这个开始学习button的功能，我对页面重构了一次，这个功能似乎和之前对不上了"
+- "好，回到之前的功能"
+- "这个原来的功能应该是开始工作流"
+- "我想点击 开始学习 的时候会先弹出一个提示：用于显示本次工作流的内容，以及切换本次工作流。"
+- "你看看有哪些地方有工作流进度组件？"
+- "对，就是我的意思，开干吧"
+- "日间模式下可读性较差，你看看是什么原因？"
+- "OK，你改吧"
+
+### 本次完成的工作
+
+- 将首页右侧“开始学习”恢复为启动工作流语义：普通状态下先展示本次工作流确认提示，确认后才调用工作流启动接口。
+- 在开始学习提示中展示可切换工作流列表、默认工作流标识、本次工作流摘要和阶段内容。
+- 新增统一 `WorkflowPhaseChips` 阶段胶囊组件，复用到事件工作台、开始学习提示、工作流预设弹窗和创建事件工作流草稿列表。
+- 将工作流 preset 的阶段 fallback 逻辑抽到 `workflowPresetForm.ts`，避免各处重复处理空 phases。
+- 为 pending task selection 状态新增专门的任务选择入口事件，避免把“开始学习”和“工作流预设设置”混在一起。
+- 将阶段胶囊颜色从暗色硬编码 Tailwind 色值改为主题化 CSS class，并增强 light theme 下任务名、边框和背景对比度。
+- 新增 `HomeRightDashboard` 回归测试，覆盖开始学习前预览、切换工作流、确认启动所选工作流。
+
+### 验证情况
+
+- `pnpm test src/components/__tests__/PlaceholderCard.workflow.test.tsx src/components/__tests__/HomeRightDashboard.test.tsx` 通过，23 个测试通过
+- `pnpm check` 通过
+- `pnpm lint` 通过，保留仓库既有 7 条 hook dependency warnings
+- in-app Browser 验证开始学习提示会先展示工作流内容，可切换工作流，未点击确认不会启动
+- in-app Browser 验证日间模式下阶段胶囊 computed style：专注文字 `rgb(29, 78, 216)`、任务名同色且 `opacity: 0.92`，较旧的浅蓝半透明文字可读性提升
+
 ## 2026-06-02 11:14 CST · `256bf8436fe71551fc8381ef026ddef70c19bae2` · style(frontend): align erc focus work prototype
 
 ### 用户提出的需求
