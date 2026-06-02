@@ -1,5 +1,26 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-02 10:22 CST · `1f82d9f` · style(frontend): differentiate subapp home sections
+
+### 用户提出的需求
+
+- "先讨论一下，直到我说让你改代码。我觉得不同的板块的颜色太过相近了，不好区分，看上好累"
+- "OK，开干吧"
+
+### 本次完成的工作
+
+- 为子应用首页新增三组语义色层级：今日工作台沿用主蓝色、长期积累使用青绿色、托管安排使用琥珀色。
+- 在 `index.css` 中增加 `--ark-learning-*` 与 `--ark-arrangement-*` theme token，并新增对应的模板/卡片/空状态 CSS 类。
+- 将共享 `SubAppHomeTemplate` 的 Hero、指标条、长期积累标题接入新的语义色样式。
+- 将 Vocab/ERC 长期积累卡片改为青绿色 tint，将 `SubAppArrangements` 改为琥珀 tint，减少板块之间的视觉同质感。
+
+### 验证情况
+
+- `pnpm check` 通过（仅有 Node 22 与项目期望 Node 20.x 的 engine warning）
+- `pnpm test -- src/pages/Vocab/__tests__/Home.test.tsx src/pages/ERC/__tests__/Home.test.tsx --run` 通过
+- `pnpm lint` 通过，保留仓库既有 8 条 hook dependency warnings
+- in-app Browser 通过 DOM/computed style 复查 `#/vocab`：Hero、长期积累、托管安排已分别应用蓝/青绿/琥珀语义样式；当前专注工作弹窗覆盖页面，未强行关闭
+
 ## 2026-06-02 10:12 CST · `429a1ca` · refactor(frontend): refresh subapp home template
 
 ### 用户提出的需求
