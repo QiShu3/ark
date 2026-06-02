@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 18:48 · ea3d5b4 · feat(frontend): place workflows row under arrangement columns and add visual progress bar
+
+- 用户提出的需求：
+  - “不对，不是三栏，而是另起一行，工作流的宽度占任务日常的宽度，其他不变
+工作流也要显示工作流进度条哦”
+
+- 本次完成的工作：
+  - **位置重构与宽度占满**：工作流不作为第三列，而是另起一行。我们调整了网格布局，使工作流容器以全宽（`md:col-span-2`）放置在“任务”和“日程”两列的下方，完美占据两者的总宽度，保持页面其他布局不变。
+  - **横向精美工作流进度条**：为所有工作流卡片添加了视觉呈现度极佳的横向分段胶囊进度条（`renderWorkflowPreviewBar`）。该进度条使用系统级别的动效和渐变色（蓝色表示专注，橙色表示休息），根据各个阶段的相对时长动态渲染其宽度比例，使得每个工作流的阶段分布和比例一目了然，科技感和精致度拉满。
+  - **单元测试补充与断言**：更新了 `EventWorkbenchModal.test.tsx` 中的工作流测试，在其中增加了对于“专注: 25分钟”及“休息: 5分钟”静态进度条片段 `title` 属性的断言校验，确保进度条的准确度，且全量 224 个 Vitest 测试全绿通过。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过。
+
 ### 2026-06-02 18:42 · 34834c6 · feat(frontend): restructure workflows into symmetric 3-column layout under arrangements
 
 - 用户提出的需求：
