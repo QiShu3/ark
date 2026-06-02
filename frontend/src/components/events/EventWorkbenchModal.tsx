@@ -1373,70 +1373,67 @@ export default function EventWorkbenchModal({
     );
   }
 
-  function renderWorkflowSection() {
+  function renderWorkflowColumn() {
     return (
-      <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-semibold">工作流</h3>
+      <div className="flex min-h-[180px] flex-col rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
+        <div className="text-sm font-medium text-ark-text">工作流</div>
+        <div className="mt-3 grid flex-1 content-start gap-2">
+          {eventWorkflowError ? (
+            <div className="rounded-lg border border-red-400/20 bg-red-500/10 p-2 text-xs text-red-200">
+              {eventWorkflowError}
+            </div>
+          ) : null}
+          {loadingEventWorkflows ? (
+            <p className="text-xs text-ark-text-muted">加载中...</p>
+          ) : null}
+          {!loadingEventWorkflows && eventWorkflows.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-xs text-ark-text-faint text-center">
+              暂无工作流
+            </div>
+          ) : null}
+          {eventWorkflows.map((workflow) => (
+            <div
+              key={workflow.id}
+              className="group flex min-h-10 items-center justify-between gap-3 rounded-lg bg-ark-surface-subtle px-3 py-2 text-left text-sm font-medium text-ark-text hover:bg-ark-surface-subtle"
+            >
+              <button
+                type="button"
+                onClick={() => editEventWorkflow(workflow)}
+                className="min-w-0 flex-1 truncate text-left focus:outline-none"
+                aria-label={`编辑工作流：${workflow.name}`}
+              >
+                {workflow.name}
+              </button>
+              <span className="shrink-0 text-xs font-normal text-ark-text-faint group-hover:hidden transition-all duration-200">
+                {workflow.phases.filter((p) => p.phase_type === 'focus').length}个专注
+              </span>
+              <div className="hidden shrink-0 gap-2 group-hover:flex animate-fadeIn">
+                <button
+                  type="button"
+                  onClick={() => copyEventWorkflow(workflow)}
+                  className="text-xs font-medium text-ark-text-muted hover:text-ark-text transition-colors"
+                >
+                  复制
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteEventWorkflow(workflow.id)}
+                  className="text-xs font-medium text-red-400 hover:text-red-300 transition-colors"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          ))}
           <button
             type="button"
             onClick={openNewEventWorkflow}
-            className="rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text"
+            className="min-h-10 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-2 text-left text-sm text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
           >
             新建工作流
           </button>
         </div>
-        {eventWorkflowError ? (
-          <div className="mt-3 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
-            {eventWorkflowError}
-          </div>
-        ) : null}
-        {loadingEventWorkflows ? <p className="mt-3 text-sm text-ark-text-muted">工作流加载中...</p> : null}
-        {!loadingEventWorkflows && eventWorkflows.length === 0 ? (
-          <div className="mt-3 rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-3 py-4 text-sm text-ark-text-faint">
-            暂无工作流
-          </div>
-        ) : null}
-        {eventWorkflows.length > 0 ? (
-          <div className="mt-3 grid gap-2">
-            {eventWorkflows.map((workflow) => (
-              <div
-                key={workflow.id}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface-subtle hover:border-ark-border px-4 py-3.5 transition-all duration-300 shadow-sm hover:shadow-md"
-              >
-                <button
-                  type="button"
-                  onClick={() => editEventWorkflow(workflow)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <div className="truncate text-sm font-semibold text-ark-text tracking-wide">{workflow.name}</div>
-                  <WorkflowPhaseChips
-                    phases={workflow.phases}
-                    className="mt-2.5"
-                    getTaskTitle={(taskId) => taskArrangements.find((task) => task.id === taskId)?.title}
-                  />
-                </button>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => copyEventWorkflow(workflow)}
-                    className="rounded-lg border border-ark-border px-2.5 py-1 text-xs font-medium text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-200"
-                  >
-                    复制
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void deleteEventWorkflow(workflow.id)}
-                    className="rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-500/20 transition-colors duration-200"
-                  >
-                    删除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </section>
+      </div>
     );
   }
 
@@ -1735,9 +1732,6 @@ export default function EventWorkbenchModal({
               </div>
             ) : null}
           </section>
-
-          {renderWorkflowSection()}
-
           <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1752,9 +1746,10 @@ export default function EventWorkbenchModal({
                 应用配置
               </button>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
               {renderArrangementColumn('task', taskArrangements)}
               {renderArrangementColumn('appointment', appointmentArrangements)}
+              {renderWorkflowColumn()}
             </div>
           </section>
 

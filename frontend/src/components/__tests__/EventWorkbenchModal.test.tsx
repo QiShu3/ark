@@ -444,6 +444,93 @@ describe('EventWorkbenchModal', () => {
     }
   });
 
+  it('copies and deletes event workflows from the workflow column', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmSpy);
+
+    const workflows = [
+      {
+        id: 'workflow-1',
+        user_id: 7,
+        event_id: 'event-1',
+        name: '期末冲刺',
+        focus_duration: 1500,
+        break_duration: 300,
+        default_focus_timer_mode: 'countdown',
+        phases: [
+          { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: 'task-1' },
+          { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+        ],
+        is_default: false,
+        created_at: '2026-05-18T00:00:00Z',
+        updated_at: '2026-05-18T00:00:00Z',
+      },
+    ];
+
+    (apiJson as Mock).mockImplementation(async (url: string, options?: { method?: string; body?: string }) => {
+      if (url === '/todo/events/event-1/workbench') {
+        return {
+          event,
+          created_tasks: [eventTask],
+          created_appointments: [],
+        };
+      }
+      if (url === '/todo/events') return [event, secondaryEvent];
+      if (url === '/todo/achievements/summary?event_id=event-1') return emptyAchievementSummary;
+      if (url === '/todo/events/event-1/workflows') {
+        if (options?.method === 'POST') {
+          const payload = JSON.parse(options.body || '{}');
+          const newWorkflow = { ...workflows[0], id: 'workflow-2', name: payload.name };
+          workflows.push(newWorkflow);
+          return newWorkflow;
+        }
+        return workflows;
+      }
+      if (url === '/todo/events/event-1/workflows/workflow-1' && options?.method === 'DELETE') {
+        workflows.splice(0, workflows.length);
+        return { ok: true };
+      }
+      return {};
+    });
+
+    render(<EventWorkbenchModal event={event} onClose={vi.fn()} />);
+
+    // 1. Verify workflow column rendered with original workflow
+    expect(await screen.findByText('工作流')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '编辑工作流：期末冲刺' })).toBeInTheDocument();
+    expect(screen.getByText('1个专注')).toBeInTheDocument();
+
+    // 2. Click Copy (复制) button
+    await user.click(screen.getByRole('button', { name: '复制' }));
+
+    // Verify copy dialog opened with copy draft name
+    expect(await screen.findByRole('dialog', { name: '工作流' })).toBeInTheDocument();
+    const nameInput = screen.getByLabelText('工作流名称');
+    expect(nameInput).toHaveValue('期末冲刺（副本）');
+
+    // Click Create (创建工作流) to save copy
+    await user.click(screen.getByRole('button', { name: '创建工作流' }));
+
+    // Verify copy added to list
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '编辑工作流：期末冲刺（副本）' })).toBeInTheDocument();
+    });
+    expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/workflows', expect.objectContaining({ method: 'POST' }));
+
+    // 3. Click Delete (删除) button on the first workflow
+    await user.click(screen.getAllByRole('button', { name: '删除' })[0]);
+
+    // Verify confirmation and delete API call
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith('确认删除该工作流吗？');
+      expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/workflows/workflow-1', { method: 'DELETE' });
+    });
+
+    // Verify first workflow is removed from view
+    expect(screen.queryByRole('button', { name: '编辑工作流：期末冲刺' })).not.toBeInTheDocument();
+  });
+
   it('edits and deletes real event arrangements', async () => {
     const user = userEvent.setup();
     const tasks: Task[] = [{ ...eventTask }];
