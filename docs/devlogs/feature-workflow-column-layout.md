@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 19:26 · edda600 · feat(frontend): unify event basic info actions with premium Buttons
+
+- 用户提出的需求：
+  - “好” (针对事件基本信息卡片下的“编辑事件”与“删除事件”按钮也进行通用 `<Button>` 组件的重构升级)
+
+- 本次完成的工作：
+  - **重构事件动作按钮**：将主事件内容工作台弹窗（`EventWorkbenchModal.tsx`）中“设为主事件”、“编辑事件”以及“删除事件”的三个原生 `<button>` 元素重构替换为统一的 `<Button>` 实例。
+  - **加载动效与状态绑定**：为“设为主事件”与“删除事件”按钮优雅绑定了 `loading={submitting}` 属性，将提交阻断转换为美观的 native loading spinner 旋转微交互。
+  - **测试与类型安全校验**：全量运行 `pnpm check && pnpm test -- --run`，所有 224 个 Vitest 测试全绿通过，零报错零缺陷。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过，224/224 tests passed。
+
 ### 2026-06-02 19:18 · 17b9aec · feat(frontend): unify button styles in main dashboard and arrangement management center
 
 - 用户提出的需求：
