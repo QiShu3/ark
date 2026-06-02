@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 18:54 · 36f41fb · feat(frontend): unify event workbench modal navbar buttons with premium bordered icons
+
+- 用户提出的需求：
+  - “导航栏的右方两个button 事件总览和安排，看上去没有button的感觉，你有什么想法吗？我希望可以统一 button”
+
+- 本次完成的工作：
+  - **导航栏按钮统一美化**：重构了主事件内容工作台弹窗（`EventWorkbenchModal`）导航栏右侧的“事件总览”与“关闭”按钮。移除了之前扁平、不具备“可点击暗示”的纯文字圆角背景，升级为统一精致的高级微立体玻璃质感边框按钮（Bordered Glass Buttons）。
+  - **融入微图标与交互动效**：
+    - 在两个按钮中注入了轻量级矢量微图标（`ArrowLeft` 和 `X`），直观清晰地传达行为指令。
+    - 样式采用 `rounded-lg border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface shadow-sm active:scale-95 transition-all`，实现完美的悬停高亮、微投影提升以及按压收缩的极致互动手感。
+  - **构建与测试验证**：确保全量 224 个 Vitest 测试全绿运行通过，零语法或类型问题。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过。
+
 ### 2026-06-02 18:50 · cff323e · fix(frontend): remove static preview progress bar from workflows
 
 - 用户提出的需求：
