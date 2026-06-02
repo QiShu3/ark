@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 19:37 · 385dc28 · feat(frontend): convert event basic info card to responsive inline-editable form
+
+- 用户提出的需求：
+  - “/grill-me 我希望基本信息栏是表单的形式，可以随时改，然后把编辑事件改成保存事件，你明白我的意思嘛？” (且保存事件不是指保存基本信息，而是整个板块)
+
+- 本次完成的工作：
+  - **行内表单大重构**：将主事件内容工作台弹窗（`EventWorkbenchModal.tsx`）的 “基本信息” 区域重构为响应式的行内表单，事件名称、事件开始日期、事件截止时间以表单输入框平铺展示，允许随时编辑。
+  - **状态自适应同步**：在组件中新增了在 `currentEvent.id` 加载或变化时自动同步 `eventEditForm` 状态的 `useEffect` 侦听，确保了编辑内容的实时自适应性，且数据更新后即刻回写，彻底消除了异步输入竞态冲突。
+  - **按钮大一统升级**：去除了冗余的 “编辑事件” 状态及相关 Edit Drawer 的显示逻辑，用通用的 `<Button variant="primary">保存事件</Button>` 替换了原有的 “编辑事件” 按钮，并保持 “删除事件” 和 “设为主事件” 等按钮位置完全对称不变。
+  - **测试与命名冲突解决**：修复了在打开任务编辑器时，Testing Library 的 `getByLabelText('开始日期')` 查询与基本信息卡片中 “开始日期” 产生的重名冲突。将事件卡片中的 Label 命名升级为更精准、更具语境的 “事件开始日期” 和 “事件截止时间”，使得 224/224 个 Vitest 测试全绿回归，零报错。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过，224/224 tests passed。
+
 ### 2026-06-02 19:26 · edda600 · feat(frontend): unify event basic info actions with premium Buttons
 
 - 用户提出的需求：
