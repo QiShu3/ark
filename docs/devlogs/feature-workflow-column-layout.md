@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 18:50 · cff323e · fix(frontend): remove static preview progress bar from workflows
+
+- 用户提出的需求：
+  - “去掉工作流下方的蓝橙色进度条”
+
+- 本次完成的工作：
+  - **移除静态预览进度条**：根据用户反馈，从主事件内容工作台（`EventWorkbenchModal`）的工作流列表项中移除了静态的蓝橙色分段胶囊进度条，保持原汁原味的横向 `WorkflowPhaseChips` 展示，保持界面极简干净。
+  - **单元测试同步回滚**：将 `EventWorkbenchModal.test.tsx` 中新增的关于“专注: 25分钟”及“休息: 5分钟”静态进度条 `title` 断言进行了清理，确保单元测试与业务逻辑一致，且测试依然全部通过。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无任何 TypeScript 语法或类型错误。
+  - `pnpm test -- --run` 全量单元测试成功通过。
+
 ### 2026-06-02 18:48 · ea3d5b4 · feat(frontend): place workflows row under arrangement columns and add visual progress bar
 
 - 用户提出的需求：
