@@ -359,39 +359,39 @@ export default function ERCHome() {
       <div className="grid gap-4 md:grid-cols-2">
         <Link
           to="/erc/library"
-          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+          className="ark-subapp-asset-card rounded-lg p-5 text-left transition hover:border-[var(--ark-learning-border)]"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm text-[var(--ark-text-muted)]">题库进度</div>
               <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.practiced_article_count} 篇文章</div>
             </div>
-            <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
+            <BookOpen className="ark-subapp-asset-accent h-5 w-5" />
           </div>
           <div className="mt-2 text-sm text-[var(--ark-text-muted)]">已练 {overview.practiced_question_count} 道题</div>
-          <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">进入题库</div>
+          <div className="ark-subapp-asset-accent mt-4 text-sm font-medium">进入题库</div>
         </Link>
 
         <Link
           to="/erc/mistakes"
-          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+          className="ark-subapp-asset-card rounded-lg p-5 text-left transition hover:border-[var(--ark-learning-border)]"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm text-[var(--ark-text-muted)]">错题资产</div>
               <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mistake_count} 道错题</div>
             </div>
-            <RefreshCw className="h-5 w-5 text-[var(--ark-accent)]" />
+            <RefreshCw className="ark-subapp-asset-accent h-5 w-5" />
           </div>
           <div className="mt-2 text-sm text-[var(--ark-text-muted)]">今日到期 {overview.due_review_count} 道</div>
-          <div className="mt-4 text-sm font-medium text-[var(--ark-accent)]">查看错题</div>
+          <div className="ark-subapp-asset-accent mt-4 text-sm font-medium">查看错题</div>
         </Link>
       </div>
 
       {overview.recommended_article ? (
         <Link
           to={`/erc/articles/${overview.recommended_article.article_id}/practice`}
-          className="ark-panel-card block rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+          className="ark-subapp-asset-card block rounded-lg p-5 text-left transition hover:border-[var(--ark-learning-border)]"
         >
           <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
           <div className="mt-2 text-2xl font-semibold text-[var(--ark-text)]">
@@ -402,7 +402,7 @@ export default function ERCHome() {
           </div>
         </Link>
       ) : (
-        <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-5">
+        <div className="ark-subapp-asset-soft rounded-lg border border-dashed p-5">
           <div className="text-sm text-[var(--ark-text-muted)]">今日推荐练习</div>
           <div className="mt-2 text-sm text-[var(--ark-text-faint)]">暂无推荐文章</div>
         </div>

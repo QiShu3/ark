@@ -66,7 +66,7 @@ export default function SubAppHomeTemplate({
   return (
     <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="ark-panel-card overflow-hidden rounded-lg">
+        <section className="ark-panel-card ark-subapp-hero-card overflow-hidden rounded-lg">
           <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)] lg:items-stretch">
             <div className="min-w-0">
               <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">{eyebrow}</div>
@@ -82,9 +82,9 @@ export default function SubAppHomeTemplate({
               {feedback ? <div className="mt-5 space-y-2">{feedback}</div> : null}
             </div>
 
-            <div className="flex min-h-[180px] flex-col justify-between border-t border-ark-border pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            <div className="ark-subapp-hero-side flex min-h-[180px] flex-col justify-between border-t pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-[var(--ark-text-faint)]">Today Workspace</div>
+                <div className="ark-subapp-hero-eyebrow text-xs uppercase tracking-[0.18em]">Today Workspace</div>
                 <div className="mt-3 text-sm text-[var(--ark-text-muted)]">{heroLabel}</div>
                 <div className="mt-2 text-4xl font-semibold tracking-tight text-[var(--ark-text)]">{heroValue}</div>
                 {heroDetail ? <div className="mt-2 text-sm text-[var(--ark-text-muted)]">{heroDetail}</div> : null}
@@ -97,10 +97,7 @@ export default function SubAppHomeTemplate({
                     <span>{progressPercent}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-ark-surface-subtle">
-                    <div
-                      className="h-full rounded-full bg-ark-accent transition-[width] duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
+                    <div className="ark-subapp-hero-progress h-full rounded-full transition-[width] duration-300" style={{ width: `${progressPercent}%` }} />
                   </div>
                 </div>
 
@@ -118,7 +115,7 @@ export default function SubAppHomeTemplate({
             </div>
           </div>
 
-          <div className="border-t border-ark-border bg-ark-surface-subtle px-6 py-4">
+          <div className="ark-subapp-metric-strip border-t px-6 py-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {metrics.map((metric) => (
                 <div key={metric.label} className="min-w-0">
@@ -133,8 +130,8 @@ export default function SubAppHomeTemplate({
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3 px-1">
-            <div>
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">{assetEyebrow}</div>
+            <div className="ark-subapp-section-heading pl-4">
+              <div className="ark-subapp-asset-eyebrow text-xs uppercase tracking-[0.24em]">{assetEyebrow}</div>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--ark-text)]">{assetTitle}</h2>
               {assetDescription ? <div className="mt-2 text-sm text-[var(--ark-text-muted)]">{assetDescription}</div> : null}
             </div>

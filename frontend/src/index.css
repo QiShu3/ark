@@ -57,6 +57,12 @@
   --ark-danger: #f87171;
   --ark-input: #121826;
   --ark-panel: #151923;
+  --ark-learning-accent: #34d399;
+  --ark-learning-accent-soft: rgba(52, 211, 153, 0.12);
+  --ark-learning-border: rgba(52, 211, 153, 0.2);
+  --ark-arrangement-accent: #fbbf24;
+  --ark-arrangement-accent-soft: rgba(251, 191, 36, 0.12);
+  --ark-arrangement-border: rgba(251, 191, 36, 0.22);
   --ark-glass-surface-strong: rgba(15, 23, 42, 0.58);
   --ark-glass-surface: rgba(15, 23, 42, 0.42);
   --ark-glass-surface-soft: rgba(15, 23, 42, 0.34);
@@ -108,6 +114,12 @@
   --ark-danger: #dc2626;
   --ark-input: rgba(226, 236, 248, 0.82);
   --ark-panel: rgba(239, 246, 255, 0.96);
+  --ark-learning-accent: #059669;
+  --ark-learning-accent-soft: rgba(5, 150, 105, 0.1);
+  --ark-learning-border: rgba(5, 150, 105, 0.2);
+  --ark-arrangement-accent: #b45309;
+  --ark-arrangement-accent-soft: rgba(180, 83, 9, 0.1);
+  --ark-arrangement-border: rgba(180, 83, 9, 0.22);
   --ark-glass-surface-strong: rgba(255, 255, 255, 0.58);
   --ark-glass-surface: rgba(255, 255, 255, 0.46);
   --ark-glass-surface-soft: rgba(255, 255, 255, 0.34);
@@ -215,6 +227,81 @@
   box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
   filter: var(--ark-glass-filter-soft);
   backdrop-filter: blur(18px) saturate(130%);
+}
+
+.ark-subapp-hero-card {
+  border-color: color-mix(in srgb, var(--ark-accent) 20%, var(--ark-glass-border-soft));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ark-accent-soft) 72%, transparent), transparent 54%),
+    var(--ark-glass-surface-soft);
+}
+
+.ark-subapp-hero-side {
+  border-color: color-mix(in srgb, var(--ark-accent) 24%, var(--ark-border));
+}
+
+.ark-subapp-hero-eyebrow {
+  color: var(--ark-accent);
+}
+
+.ark-subapp-hero-progress {
+  background: linear-gradient(90deg, var(--ark-accent), color-mix(in srgb, var(--ark-accent) 52%, var(--ark-learning-accent)));
+}
+
+.ark-subapp-metric-strip {
+  border-color: color-mix(in srgb, var(--ark-accent) 14%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-accent-soft) 44%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-section-heading {
+  border-left: 4px solid var(--ark-learning-accent);
+}
+
+.ark-subapp-asset-eyebrow,
+.ark-subapp-asset-accent {
+  color: var(--ark-learning-accent);
+}
+
+.ark-subapp-asset-card {
+  border: 1px solid color-mix(in srgb, var(--ark-learning-border) 68%, var(--ark-glass-border-soft));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ark-learning-accent-soft) 58%, transparent), transparent 76%),
+    var(--ark-glass-surface-soft);
+  background-clip: padding-box;
+  color: var(--ark-text);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.ark-subapp-asset-soft {
+  border-color: color-mix(in srgb, var(--ark-learning-border) 72%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 42%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-asset-progress {
+  background: linear-gradient(90deg, var(--ark-learning-accent), color-mix(in srgb, var(--ark-learning-accent) 46%, var(--ark-accent)));
+}
+
+.ark-subapp-arrangements {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 72%, var(--ark-glass-border-soft));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ark-arrangement-accent-soft) 58%, transparent), transparent 62%),
+    var(--ark-glass-surface-soft);
+}
+
+.ark-subapp-arrangement-accent {
+  color: var(--ark-arrangement-accent);
+}
+
+.ark-subapp-arrangement-card {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 72%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 38%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-arrangement-empty {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 70%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 34%, var(--ark-surface-subtle));
 }
 
 .ark-top-nav {

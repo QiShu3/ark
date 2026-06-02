@@ -89,7 +89,7 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
   };
 
   return (
-    <section className="ark-panel-card rounded-lg p-6">
+    <section className="ark-panel-card ark-subapp-arrangements rounded-lg p-6">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Managed Arrangements</div>
@@ -98,9 +98,9 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
+        <div className="ark-subapp-arrangement-card rounded-lg border p-5">
           <div>
-            <div className="mb-4 flex items-center gap-2 text-[var(--ark-accent)]">
+            <div className="ark-subapp-arrangement-accent mb-4 flex items-center gap-2">
               <ClipboardList className="h-5 w-5" />
               <span className="text-base font-medium text-[var(--ark-text)]">任务</span>
             </div>
@@ -131,7 +131,7 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
                           </span>
                         </div>
                         <div className="text-xs text-[var(--ark-text-faint)]">
-                          绑定专注工作：<span className="text-[var(--ark-accent)]">{task.focusWorkName}</span>
+                          绑定专注工作：<span className="ark-subapp-arrangement-accent">{task.focusWorkName}</span>
                         </div>
                         {task.disabledReason ? <div className="text-xs text-rose-200">{task.disabledReason}</div> : null}
                       </div>
@@ -189,14 +189,14 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
           )}
         </div>
 
-        <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
+        <div className="ark-subapp-arrangement-card rounded-lg border p-5">
           <div>
-            <div className="mb-4 flex items-center gap-2 text-[var(--ark-accent)]">
+            <div className="ark-subapp-arrangement-accent mb-4 flex items-center gap-2">
               <Calendar className="h-5 w-5" />
               <span className="text-base font-medium text-[var(--ark-text)]">日程</span>
             </div>
             
-            <div className="flex h-[132px] flex-col items-center justify-center rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-6 text-center">
+            <div className="ark-subapp-arrangement-empty flex h-[132px] flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center">
               <Calendar className="mb-2 h-8 w-8 text-[var(--ark-text-faint)]" />
               <div className="text-sm font-medium text-[var(--ark-text-muted)]">暂无日程安排</div>
               <div className="mt-1 text-xs text-[var(--ark-text-faint)]">当前子应用尚未生成托管日程</div>

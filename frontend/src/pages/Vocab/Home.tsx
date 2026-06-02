@@ -263,7 +263,7 @@ export default function VocabHome() {
         <button
           type="button"
           onClick={() => openOverviewDetail('completed')}
-          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+          className="ark-subapp-asset-card rounded-lg p-5 text-left transition hover:border-[var(--ark-learning-border)]"
         >
           <div className="text-sm text-[var(--ark-text-muted)]">已完成词书</div>
           <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.completed_deck_count} / {overview.total_deck_count} 本</div>
@@ -272,7 +272,7 @@ export default function VocabHome() {
         <button
           type="button"
           onClick={() => openOverviewDetail('mastered')}
-          className="ark-panel-card rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+          className="ark-subapp-asset-card rounded-lg p-5 text-left transition hover:border-[var(--ark-learning-border)]"
         >
           <div className="text-sm text-[var(--ark-text-muted)]">累计掌握单词</div>
           <div className="mt-3 text-3xl font-semibold text-[var(--ark-text)]">{overview.mastered_word_count}</div>
@@ -283,7 +283,7 @@ export default function VocabHome() {
       <button
         type="button"
         onClick={() => openOverviewDetail('current', activeDeck?.id)}
-        className="ark-panel-card w-full rounded-lg p-5 text-left transition hover:border-[var(--ark-border-strong)]"
+        className="ark-subapp-asset-card w-full rounded-lg p-5 text-left transition hover:border-[var(--ark-learning-border)]"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -300,21 +300,21 @@ export default function VocabHome() {
 
         <div className="mt-4 h-3 overflow-hidden rounded-full bg-ark-surface-subtle">
           <div
-            className="h-full rounded-full bg-ark-accent transition-[width] duration-300"
+            className="ark-subapp-asset-progress h-full rounded-full transition-[width] duration-300"
             style={{ width: `${currentDeckMasteryPercent}%` }}
           />
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
+          <div className="ark-subapp-asset-soft rounded-lg border px-4 py-3 transition-colors hover:border-[var(--ark-learning-border)]">
             <div className="text-sm text-[var(--ark-text-muted)]">未开始</div>
             <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.unstarted_word_count}</div>
           </div>
-          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
+          <div className="ark-subapp-asset-soft rounded-lg border px-4 py-3 transition-colors hover:border-[var(--ark-learning-border)]">
             <div className="text-sm text-[var(--ark-text-muted)]">学习中</div>
             <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.learning_word_count}</div>
           </div>
-          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition-colors hover:border-[var(--ark-border-strong)] hover:bg-[var(--ark-surface)]">
+          <div className="ark-subapp-asset-soft rounded-lg border px-4 py-3 transition-colors hover:border-[var(--ark-learning-border)]">
             <div className="text-sm text-[var(--ark-text-muted)]">已掌握</div>
             <div className="mt-2 text-xl font-semibold text-[var(--ark-text)]">{overview.current_deck.mastered_word_count}</div>
           </div>
