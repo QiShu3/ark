@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../lib/utils';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'cta';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -54,6 +54,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     // 尺寸定义
     const sizes: Record<ButtonSize, string> = {
+      xs: 'px-2 py-0.5 text-[10px] rounded-md gap-0.5',
       sm: 'px-2.5 py-1 text-xs rounded-md gap-1',
       md: 'px-3.5 py-1.5 text-sm rounded-lg gap-1.5',
       lg: 'px-5 py-2.5 text-base rounded-xl gap-2',
