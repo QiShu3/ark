@@ -24,6 +24,7 @@ import { saveEventERCConfig } from '../../lib/erc/configSync';
 import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import WorkflowPhaseChips from '../WorkflowPhaseChips';
+import { ArrowLeft, X } from 'lucide-react';
 import {
   cloneWorkflowForm,
   createDefaultWorkflowForm,
@@ -1608,23 +1609,25 @@ export default function EventWorkbenchModal({
           <div>
             <h2 className="text-xl font-semibold">{currentEvent.name}</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {onBackToOverview ? (
               <button
                 type="button"
-                className="rounded-full px-3 py-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-200"
+                className="flex items-center gap-1.5 rounded-lg border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface hover:border-ark-border px-3.5 py-1.5 text-sm font-medium text-ark-text-muted hover:text-ark-text transition-all duration-200 shadow-sm hover:shadow active:scale-95 cursor-pointer"
                 onClick={onBackToOverview}
                 aria-label="事件总览"
               >
+                <ArrowLeft size={14} className="shrink-0" />
                 事件总览
               </button>
             ) : null}
             <button
               type="button"
-              className="rounded-full px-3 py-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
+              className="flex items-center gap-1.5 rounded-lg border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface hover:border-ark-border px-3.5 py-1.5 text-sm font-medium text-ark-text-muted hover:text-ark-text transition-all duration-200 shadow-sm hover:shadow active:scale-95 cursor-pointer"
               onClick={onClose}
               aria-label="关闭安排"
             >
+              <X size={14} className="shrink-0" />
               关闭
             </button>
           </div>
