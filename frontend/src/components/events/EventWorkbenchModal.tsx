@@ -1374,39 +1374,6 @@ export default function EventWorkbenchModal({
     );
   }
 
-  function renderWorkflowPreviewBar(phases: WorkflowPresetPhase[]) {
-    const validPhases = Array.isArray(phases) ? phases : [];
-    if (validPhases.length === 0) return null;
-    const totalDuration = validPhases.reduce((sum, p) => sum + Math.max(0, p.duration), 0);
-    if (totalDuration === 0) return null;
-
-    return (
-      <div className="relative h-1.5 w-full flex gap-[3px] mt-2 rounded-full overflow-hidden">
-        {validPhases.map((phase, idx) => {
-          const duration = Math.max(0, Math.round(phase.duration || 0));
-          const isFocus = phase.phase_type === 'focus';
-          const fillGradient = isFocus
-            ? 'linear-gradient(90deg, #60a5fa, #3b82f6)'
-            : 'linear-gradient(90deg, #fb923c, #f97316)';
-          
-          return (
-            <div
-              key={idx}
-              className="h-full rounded-full"
-              style={{
-                flexGrow: duration,
-                flexBasis: 0,
-                background: fillGradient,
-                opacity: 0.85,
-              }}
-              title={`${isFocus ? '专注' : '休息'}: ${Math.round(duration / 60)}分钟`}
-            />
-          );
-        })}
-      </div>
-    );
-  }
-
   function renderWorkflowColumn() {
     return (
       <div className="flex min-h-[180px] flex-col rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
@@ -1441,7 +1408,6 @@ export default function EventWorkbenchModal({
                       className="mt-2.5"
                       getTaskTitle={(taskId) => taskArrangements.find((task) => task.id === taskId)?.title}
                     />
-                    {renderWorkflowPreviewBar(workflow.phases)}
                   </button>
                   <div className="flex shrink-0 gap-2">
                     <button

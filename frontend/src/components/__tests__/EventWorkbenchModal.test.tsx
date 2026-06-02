@@ -435,8 +435,6 @@ describe('EventWorkbenchModal', () => {
     try {
       await waitFor(() => {
         expect(screen.getAllByText('期末冲刺').length).toBeGreaterThan(0);
-        expect(screen.getByTitle('专注: 25分钟')).toBeInTheDocument();
-        expect(screen.getByTitle('休息: 5分钟')).toBeInTheDocument();
       });
       expect(apiJson).toHaveBeenCalledWith('/todo/events/event-1/workflows', expect.objectContaining({ method: 'POST' }));
       expect(apiJson).not.toHaveBeenCalledWith('/todo/focus/workflows', expect.objectContaining({ method: 'POST' }));
