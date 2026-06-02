@@ -1,5 +1,26 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-02 10:12 CST · `429a1ca` · refactor(frontend): refresh subapp home template
+
+### 用户提出的需求
+
+- "那把范围放大到更改这个子应用首页模板的美学设计上吧，你觉得要怎么改比较好呢？"
+- "好，先看看当前git工作区，在干活前先提交代码吧"
+
+### 本次完成的工作
+
+- 新增共享 `SubAppHomeTemplate`，统一 ERC/Vocab 子应用首页的页面外壳、今日工作台 Hero、指标条、长期积累区和配置入口。
+- 将 Vocab 首页从“总览 / 业务数据”面板重构为“今日单词任务 + 长期积累”，保留词书进度明细弹窗和托管安排行为。
+- 将 ERC 首页接入同一模板，突出“今日优先任务”、历史正确率、题库进度、错题资产和推荐练习。
+- 更新 Vocab/ERC 首页测试断言，使测试覆盖新模板语义和原有配置、初始化、启动专注工作行为。
+
+### 验证情况
+
+- `pnpm check` 通过（仅有 Node 22 与项目期望 Node 20.x 的 engine warning）
+- `pnpm test -- src/pages/Vocab/__tests__/Home.test.tsx src/pages/ERC/__tests__/Home.test.tsx --run` 通过
+- `pnpm lint` 通过，保留仓库既有 8 条 hook dependency warnings
+- in-app Browser DOM 复查 `#/vocab` 新模板已渲染；当前有专注工作弹窗覆盖，未强行关闭以免影响用户状态
+
 ## 2026-06-02 10:01 CST · `59e94a0` · fix(frontend): prevent home dashboard list overflow
 
 ### 用户提出的需求
