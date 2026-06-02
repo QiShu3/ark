@@ -43,6 +43,7 @@ type EventWorkbenchModalProps = {
   event: EventItem;
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
+  onBackToOverview?: () => void;
 };
 
 type EventEditFormState = {
@@ -143,7 +144,12 @@ const EMPTY_APPOINTMENT_ARRANGEMENT_FORM: AppointmentArrangementFormState = {
 
 const EMPTY_EVENT_WORKFLOW_FORM = createDefaultWorkflowForm(false);
 
-export default function EventWorkbenchModal({ event, onClose, onChanged }: EventWorkbenchModalProps) {
+export default function EventWorkbenchModal({
+  event,
+  onClose,
+  onChanged,
+  onBackToOverview,
+}: EventWorkbenchModalProps) {
   const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1599,17 +1605,28 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-ark-text-faint">事件总览</div>
-            <h2 className="mt-1 text-xl font-semibold">{currentEvent.name}</h2>
+            <h2 className="text-xl font-semibold">{currentEvent.name}</h2>
           </div>
-          <button
-            type="button"
-            className="rounded-full px-3 py-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
-            onClick={onClose}
-            aria-label="关闭安排"
-          >
-            关闭
-          </button>
+          <div className="flex items-center gap-2">
+            {onBackToOverview ? (
+              <button
+                type="button"
+                className="rounded-full px-3 py-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-200"
+                onClick={onBackToOverview}
+                aria-label="事件总览"
+              >
+                事件总览
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="rounded-full px-3 py-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
+              onClick={onClose}
+              aria-label="关闭安排"
+            >
+              关闭
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">

@@ -2,6 +2,28 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 18:30 · cc45109 · feat(frontend): clicking main event countdown directly opens primary event workbench and adds back navigation
+
+- 用户提出的需求：
+  - “我想点击触发的弹窗是 主事件 的内容，就是这个”
+  - “这个 返回列表 button 改名为 事件总览，并移动到右侧 关闭的左边”
+  - “去掉 主事件内容工作台 左上角的“事件总览””
+
+- 本次完成的工作：
+  - **点击主事件直接直达工作台**：重构了导航栏与首页主事件倒计时入口的 `openEventOverview` 调度逻辑。现在若用户设置了主事件，点击主事件后会跳过中间事件列表，直接唤起该主事件的工作台模态框（`EventWorkbenchModal`），缩短了交互路径；若未设置主事件，则依然自动降级打开“事件总览”列表弹窗。
+  - **模态框新增回退导航**：在主事件工作台弹窗（`EventWorkbenchModal`）的右侧关闭按钮左边新增了一个“事件总览”文本按钮。点击此按钮将无缝关闭当前工作台，并重新拉起全部事件的“事件总览”多事件列表弹窗，保证了多事件切换的闭环路径，也符合右侧统一放置控制流按钮的交互设计。
+  - **精简头部左上角布局**：移除了工作台弹窗左上角多余的 `事件总览` 文本副标题，并精简了主标题 `h2` 的外边距属性，使界面视觉上更纯粹对称。
+  - **修复相关单元测试**：
+    - 为 `HomeLayout.test.tsx` 挂载测试补充 `MemoryRouter` 包裹，解决 `useNavigate` 路由环境缺失报错。
+    - 修正 `AchievementModal.test.tsx` 中的弹窗 backdrop 点击与动画类断言。
+    - 更新 `EventCountdownCard.test.tsx` 中返回按钮更名断言，并编写专门的 workbench 直达与回退单元测试。
+    - 同步更新 `EventWorkbenchModal.test.tsx`，下线已去除的 `事件总览` 副标题断言。
+  - **测试与验证**：全量 224 项 Vitest 单元测试已 100% 顺利绿灯通过。
+
+- 验证情况：
+  - `cd frontend && pnpm check` 通过。
+  - `cd frontend && pnpm test -- --run` 全量测试通过，224 passed。
+
 ### 2026-06-02 16:57 · 47bd75d · merge: home ui glass dashboard into main
 
 - 用户提出的需求：

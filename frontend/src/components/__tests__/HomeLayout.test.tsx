@@ -40,7 +40,11 @@ describe('App home layout', () => {
   it('defaults to expanded and persists collapsed state after toggle', async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    );
 
     expect(screen.getByTestId('left-panel')).toHaveAttribute('data-collapsed', 'false');
     expect(screen.getByTestId('right-panel-toggle')).toHaveAttribute('data-collapsed', 'false');
@@ -55,7 +59,11 @@ describe('App home layout', () => {
   it('restores a previously collapsed state from localStorage', () => {
     window.localStorage.setItem('ark-home-right-panel-collapsed', 'true');
 
-    render(<App />);
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    );
 
     expect(screen.getByTestId('left-panel')).toHaveAttribute('data-collapsed', 'true');
     expect(screen.getByTestId('right-panel-toggle')).toHaveAttribute('data-collapsed', 'true');

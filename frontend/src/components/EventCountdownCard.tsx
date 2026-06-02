@@ -1524,11 +1524,22 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     setWorkbenchEvent(event);
   }
 
-  function openEventOverview(): void {
+  function openOverviewFromWorkbench(): void {
+    setWorkbenchEvent(null);
     setError(null);
     setShowCreateEditor(false);
     setShowModal(true);
-    dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
+  }
+
+  function openEventOverview(): void {
+    if (primaryEvent) {
+      openWorkbench(primaryEvent);
+    } else {
+      setError(null);
+      setShowCreateEditor(false);
+      setShowModal(true);
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
+    }
   }
 
   function renderCreateArrangementEditor(kind: CreateWorkbenchItemState['kind']) {
@@ -2027,6 +2038,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           event={workbenchEvent}
           onClose={() => setWorkbenchEvent(null)}
           onChanged={refreshAll}
+          onBackToOverview={openOverviewFromWorkbench}
         />
       ) : null}
 
