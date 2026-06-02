@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-02 16:57 · 47bd75d · merge: home ui glass dashboard into main
+
+- 用户提出的需求：
+  - “那就合并 home-ui-glass-dashboard 分支吧”
+
+- 本次完成的工作：
+  - 将 `codex/home-ui-glass-dashboard` 合并到本地 `main` 分支。
+  - 解决合并过程中仅出现在开发日志里的冲突，保留 `codex/home-ui-glass-dashboard` 分支完整日志，并补回 `8748641` 的首页仪表盘布局记录。
+  - 更新开发日志总览的最近记录与历史分片索引，保留 `detached-head/worktree-a901` 分片入口。
+
+- 验证情况：
+  - `pnpm check` 通过
+  - `pnpm test src/components/__tests__/PlaceholderCard.workflow.test.tsx src/components/__tests__/HomeRightDashboard.test.tsx` 通过，23 个测试通过
+
 ### 2026-05-30 17:20 · a16093c · feat(auth): add email verification codes
 
 - 用户提出的需求：
