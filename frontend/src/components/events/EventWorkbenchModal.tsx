@@ -165,7 +165,6 @@ export default function EventWorkbenchModal({
   const [arrangementEvents, setArrangementEvents] = useState<EventItem[]>([]);
   const [achievementSummary, setAchievementSummary] = useState<AchievementSummary | null>(null);
   const [loadingAchievement, setLoadingAchievement] = useState(false);
-  const [editingEventDetails, setEditingEventDetails] = useState(false);
   const [eventEditForm, setEventEditForm] = useState<EventEditFormState>(EMPTY_EVENT_EDIT_FORM);
   const [eventWorkflows, setEventWorkflows] = useState<WorkflowPreset[]>([]);
   const [loadingEventWorkflows, setLoadingEventWorkflows] = useState(false);
@@ -262,6 +261,18 @@ export default function EventWorkbenchModal({
   }, [loadEventWorkflows]);
 
   const currentEvent = workbench?.event ?? event;
+
+  useEffect(() => {
+    if (currentEvent) {
+      setEventEditForm({
+        name: currentEvent.name || '',
+        startDate: currentEvent.start_date || '',
+        dueAt: toDateTimeLocalValue(currentEvent.due_at) || '',
+        isPrimary: currentEvent.is_primary || false,
+      });
+    }
+  }, [currentEvent.id]);
+
   const eventOptions = arrangementEvents.some((item) => item.id === currentEvent.id)
     ? arrangementEvents
     : [currentEvent, ...arrangementEvents];
@@ -570,23 +581,6 @@ export default function EventWorkbenchModal({
     }
   }
 
-  function beginEditEventDetails(): void {
-    setEditingEventDetails(true);
-    setEventEditForm({
-      name: currentEvent.name,
-      startDate: currentEvent.start_date,
-      dueAt: toDateTimeLocalValue(currentEvent.due_at),
-      isPrimary: currentEvent.is_primary,
-    });
-    setError(null);
-  }
-
-  function cancelEditEventDetails(): void {
-    setEditingEventDetails(false);
-    setEventEditForm(EMPTY_EVENT_EDIT_FORM);
-    setError(null);
-  }
-
   function updateCurrentEvent(updatedEvent: EventItem): void {
     setWorkbench((current) => (
       current
@@ -642,7 +636,12 @@ export default function EventWorkbenchModal({
         await activateEventSubApps(currentEvent.id);
       }
       updateCurrentEvent(updatedEvent);
-      setEditingEventDetails(false);
+      setEventEditForm({
+        name: updatedEvent.name,
+        startDate: updatedEvent.start_date,
+        dueAt: toDateTimeLocalValue(updatedEvent.due_at),
+        isPrimary: updatedEvent.is_primary,
+      });
       await Promise.resolve(onChanged?.());
       if (eventEditForm.isPrimary) {
         window.dispatchEvent(new CustomEvent('ark:reload-focus'));
@@ -1637,106 +1636,75 @@ export default function EventWorkbenchModal({
           {error ? <div className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</div> : null}
 
           <section className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <h3 className="text-base font-semibold">基本信息</h3>
-                <div className="mt-3 grid gap-2 text-sm text-ark-text sm:grid-cols-2">
-                  <div>开始日期 {currentEvent.start_date}</div>
-                  <div>截止时间 {formatEventDateTime(currentEvent.due_at)}</div>
-                  <div>{currentEvent.is_primary ? '主事件' : '非主事件'}</div>
-                  <div>创建于 {formatEventDateTime(currentEvent.created_at)}</div>
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                {!currentEvent.is_primary ? (
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  {!currentEvent.is_primary ? (
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      onClick={() => void handleSetPrimaryEvent()}
+                      loading={submitting}
+                    >
+                      设为主事件
+                    </Button>
+                  ) : null}
                   <Button
                     variant="primary"
                     size="md"
-                    onClick={() => void handleSetPrimaryEvent()}
+                    onClick={() => void handleSaveEventDetails()}
                     loading={submitting}
                   >
-                    设为主事件
+                    保存事件
                   </Button>
-                ) : null}
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={beginEditEventDetails}
-                  disabled={submitting}
-                >
-                  编辑事件
-                </Button>
-                <Button
-                  variant="danger"
-                  size="md"
-                  onClick={() => void handleDeleteEvent()}
-                  loading={submitting}
-                >
-                  删除事件
-                </Button>
+                  <Button
+                    variant="danger"
+                    size="md"
+                    onClick={() => void handleDeleteEvent()}
+                    loading={submitting}
+                  >
+                    删除事件
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                <label className="grid gap-1.5 text-xs text-ark-text-muted">
+                  事件名称
+                  <input
+                    value={eventEditForm.name}
+                    onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, name: changeEvent.target.value }))}
+                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-xs text-ark-text-muted">
+                  事件开始日期
+                  <input
+                    type="date"
+                    value={eventEditForm.startDate}
+                    onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, startDate: changeEvent.target.value }))}
+                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-xs text-ark-text-muted">
+                  事件截止时间
+                  <input
+                    type="datetime-local"
+                    value={eventEditForm.dueAt}
+                    onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, dueAt: changeEvent.target.value }))}
+                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ark-text-faint border-t border-ark-border/30 pt-3">
+                <div className="flex items-center gap-4">
+                  <span>状态：{currentEvent.is_primary ? '🟢 主事件' : '⚪ 非主事件'}</span>
+                  <span>创建于：{formatEventDateTime(currentEvent.created_at)}</span>
+                </div>
               </div>
             </div>
-            {editingEventDetails ? (
-              <div className="mt-4 grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
-                <div className="text-sm font-medium text-blue-100">编辑事件信息</div>
-                <div className="grid gap-3 md:grid-cols-[1.4fr_0.9fr_1.1fr]">
-                  <label className="grid gap-1 text-xs text-ark-text-muted">
-                    事件名称
-                    <input
-                      value={eventEditForm.name}
-                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, name: changeEvent.target.value }))}
-                      className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs text-ark-text-muted">
-                    开始日期
-                    <input
-                      type="date"
-                      value={eventEditForm.startDate}
-                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, startDate: changeEvent.target.value }))}
-                      className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs text-ark-text-muted">
-                    截止时间
-                    <input
-                      type="datetime-local"
-                      value={eventEditForm.dueAt}
-                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, dueAt: changeEvent.target.value }))}
-                      className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                    />
-                  </label>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 text-sm text-ark-text">
-                    <input
-                      type="checkbox"
-                      checked={eventEditForm.isPrimary}
-                      onChange={(changeEvent) => setEventEditForm((state) => ({ ...state, isPrimary: changeEvent.target.checked }))}
-                      className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle"
-                    />
-                    主事件
-                  </label>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={cancelEditEventDetails}
-                      className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveEventDetails()}
-                      disabled={submitting}
-                      className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      保存事件
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </section>
 
           <section className="mt-4 rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
