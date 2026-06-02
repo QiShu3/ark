@@ -176,6 +176,10 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_erc_logs_user_created ON erc_review_logs(user_id, created_at DESC);"
         )
+        # Migration: add is_published to erc_sets
+        await conn.execute(
+            "ALTER TABLE erc_sets ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE"
+        )
 
 
 def _json_param(value: Any) -> str:
@@ -321,9 +325,68 @@ async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
         """
         SELECT id::text AS id, key, name, description, exam, article_count, question_count
         FROM erc_sets
+        WHERE is_published = TRUE
         ORDER BY key ASC
         """
     )
+
+
+async def toggle_set_published(conn: asyncpg.Connection, *, set_id: str) -> bool:
+    row = await conn.fetchrow(
+        """
+        UPDATE erc_sets
+        SET is_published = NOT is_published, updated_at = NOW()
+        WHERE id = $1::uuid
+        RETURNING is_published
+        """,
+        set_id,
+    )
+    if row is None:
+        raise ValueError(f"阅读集 {set_id} 不存在")
+    return bool(row["is_published"])
+
+
+async def delete_set(conn: asyncpg.Connection, *, set_id: str) -> str:
+    """Hard-delete a set and all its articles/questions (CASCADE). Returns the set name."""
+    row = await conn.fetchrow(
+        "DELETE FROM erc_sets WHERE id = $1::uuid RETURNING name",
+        set_id,
+    )
+    if row is None:
+        raise ValueError(f"阅读集 {set_id} 不存在")
+    return str(row["name"])
+
+
+async def list_admin_articles(conn: asyncpg.Connection, *, set_id: str) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          a.id::text AS id,
+          a.article_id,
+          a.year,
+          a.text_no,
+          a.title,
+          a.sort_order,
+          COUNT(q.id)::int AS question_count
+        FROM erc_articles a
+        LEFT JOIN erc_questions q ON q.article_pk = a.id
+        WHERE a.set_id = $1::uuid
+        GROUP BY a.id
+        ORDER BY a.sort_order ASC
+        """,
+        set_id,
+    )
+
+
+async def delete_article(conn: asyncpg.Connection, *, article_pk: str) -> str:
+    """Hard-delete a single article (CASCADE). Returns the article_id."""
+    row = await conn.fetchrow(
+        "DELETE FROM erc_articles WHERE id = $1::uuid RETURNING article_id",
+        article_pk,
+    )
+    if row is None:
+        raise ValueError(f"文章 {article_pk} 不存在")
+    return str(row["article_id"])
 
 
 async def list_article_rows(

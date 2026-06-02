@@ -827,9 +827,11 @@ async def erc_stats(
 
 
 class ErcSetItem(BaseModel):
+    id: str
     name: str
     article_count: int
     attempt_count: int
+    is_published: bool
 
 
 @router.get("/apps/erc/sets", response_model=list[ErcSetItem])
@@ -841,7 +843,7 @@ async def erc_sets(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT s.name, s.article_count,
+            SELECT s.id::text AS id, s.name, s.article_count, s.is_published,
                    (SELECT COUNT(*) FROM erc_user_article_attempts a
                     JOIN erc_articles art ON art.id = a.article_pk
                     WHERE art.set_id = s.id) AS attempt_count
@@ -850,8 +852,239 @@ async def erc_sets(
             """
         )
     return [
-        ErcSetItem(name=r["name"], article_count=r["article_count"], attempt_count=r["attempt_count"]) for r in rows
+        ErcSetItem(id=r["id"], name=r["name"], article_count=r["article_count"], attempt_count=r["attempt_count"], is_published=r["is_published"]) for r in rows
     ]
+
+
+class ErcSetPublishOut(BaseModel):
+    is_published: bool
+
+
+@router.patch("/apps/erc/sets/{set_id}/publish", response_model=ErcSetPublishOut)
+async def toggle_erc_set_publish(
+    set_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ErcSetPublishOut:
+    from routes.erc.repository import toggle_set_published
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        try:
+            new_status = await toggle_set_published(conn, set_id=set_id)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    return ErcSetPublishOut(is_published=new_status)
+
+
+class ErcSetDeleteOut(BaseModel):
+    name: str
+
+
+@router.delete("/apps/erc/sets/{set_id}", response_model=ErcSetDeleteOut)
+async def delete_erc_set(
+    set_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ErcSetDeleteOut:
+    from routes.erc.repository import delete_set
+
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                name = await delete_set(conn, set_id=set_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    _import_logger.info("删除阅读集: set_id=%s, name=%s", set_id, name)
+    return ErcSetDeleteOut(name=name)
+
+
+class ErcArticleListItem(BaseModel):
+    id: str
+    article_id: str
+    year: int
+    text_no: int
+    title: str
+    question_count: int
+    sort_order: int
+
+
+@router.get("/apps/erc/sets/{set_id}/articles", response_model=list[ErcArticleListItem])
+async def erc_set_articles(
+    set_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> list[ErcArticleListItem]:
+    from routes.erc.repository import list_admin_articles
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await list_admin_articles(conn, set_id=set_id)
+    return [
+        ErcArticleListItem(
+            id=r["id"], article_id=r["article_id"], year=r["year"],
+            text_no=r["text_no"], title=r["title"], question_count=r["question_count"],
+            sort_order=r["sort_order"]
+        ) for r in rows
+    ]
+
+
+class ErcArticleDetailOut(BaseModel):
+    article_id: str
+    exam: str
+    year: int
+    text_no: int
+    title: str
+    paragraphs: list[dict]
+    questions: list[dict]
+
+
+@router.get("/apps/erc/articles/{article_id}", response_model=ErcArticleDetailOut)
+async def erc_article_detail(
+    article_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ErcArticleDetailOut:
+    from routes.erc.repository import get_article_row, list_paragraph_rows, list_question_rows
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        article = await get_article_row(conn, article_id=article_id)
+        if article is None:
+            raise HTTPException(status_code=404, detail="文章不存在")
+
+        paragraphs = await list_paragraph_rows(conn, article_pk=article["article_pk"])
+        questions = await list_question_rows(conn, article_pk=article["article_pk"])
+
+    return ErcArticleDetailOut(
+        article_id=article["article_id"],
+        exam=article["exam"],
+        year=article["year"],
+        text_no=article["text_no"],
+        title=article["title"],
+        paragraphs=[{"paragraph_no": p["paragraph_no"], "text": p["text"]} for p in paragraphs],
+        questions=[{
+            "question_id": q["question_id"], "question_no": q["question_no"],
+            "stem": q["stem"], "options": q["options_json"], "answer": q["answer"]
+        } for q in questions],
+    )
+
+
+class ErcArticleDeleteOut(BaseModel):
+    article_id: str
+
+
+@router.delete("/apps/erc/articles/{article_pk}", response_model=ErcArticleDeleteOut)
+async def delete_erc_article(
+    article_pk: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ErcArticleDeleteOut:
+    from routes.erc.repository import delete_article, refresh_set_counts
+
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                article_id = await delete_article(conn, article_pk=article_pk)
+                # Refresh parent set counts
+                set_id = await conn.fetchval(
+                    "SELECT set_id::text FROM erc_articles WHERE id = $1::uuid", article_pk
+                )
+                if set_id:
+                    await refresh_set_counts(conn, set_id=set_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    _import_logger.info("删除文章: article_pk=%s, article_id=%s", article_pk, article_id)
+    return ErcArticleDeleteOut(article_id=article_id)
+
+
+class ErcImportOut(BaseModel):
+    set_key: str
+    set_name: str
+    article_count: int
+    question_count: int
+
+
+@router.post("/apps/erc/import", response_model=ErcImportOut)
+async def import_erc_articles(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ErcImportOut:
+    from routes.erc.importer import parse_article_payload
+    from routes.erc.repository import upsert_set, upsert_article_seed, refresh_set_counts
+    import json as _json
+
+    # Read multipart form
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        raise HTTPException(status_code=400, detail="请上传 JSON 文件")
+
+    filename = getattr(upload, "filename", "unknown.json")
+    content = await upload.read()
+
+    _import_logger.info("开始导入 ERC: filename=%s, size=%d bytes", filename, len(content))
+
+    # Parse JSON
+    try:
+        raw = _json.loads(content)
+    except _json.JSONDecodeError as e:
+        _import_logger.error("ERC JSON 解析失败: filename=%s, error=%s", filename, e)
+        raise HTTPException(status_code=400, detail=f"JSON 格式错误: {e}")
+
+    # Support single article object or array of articles
+    if isinstance(raw, dict):
+        articles_raw = [raw]
+    elif isinstance(raw, list):
+        articles_raw = raw
+    else:
+        raise HTTPException(status_code=400, detail="JSON 必须是文章对象或文章数组")
+
+    if len(articles_raw) == 0:
+        raise HTTPException(status_code=400, detail="文章内容不能为空")
+
+    # Parse all articles
+    seeds = []
+    for i, item in enumerate(articles_raw, 1):
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail=f"第 {i} 条必须是对象")
+        try:
+            seed = parse_article_payload(item, source_name=f"{item.get('article_id', f'article_{i}')}.json", sort_order=i)
+        except (KeyError, TypeError, ValueError) as e:
+            _import_logger.error("ERC 第 %d 条解析失败: filename=%s, error=%s", i, filename, e)
+            raise HTTPException(status_code=400, detail=f"第 {i} 条解析失败: {e}")
+        seeds.append(seed)
+
+    # Derive set metadata from first article or filename
+    first_exam = seeds[0].exam if seeds else "unknown"
+    set_key = Path(filename).stem  # e.g., "cet4-2024.json" -> "cet4-2024"
+    set_name = set_key
+    description = f"{set_name} 阅读集"
+
+    # Import
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                set_id = await upsert_set(
+                    conn, key=set_key, name=set_name,
+                    description=description, exam=first_exam, source_version="json-import"
+                )
+                for seed in seeds:
+                    await upsert_article_seed(conn, set_id=set_id, seed=seed)
+                await refresh_set_counts(conn, set_id=set_id)
+    except Exception as e:
+        _import_logger.exception("ERC 数据库导入失败: filename=%s, error=%s", filename, e)
+        raise HTTPException(status_code=500, detail=f"导入失败: {e}")
+
+    total_questions = sum(len(s.questions) for s in seeds)
+    _import_logger.info("ERC 导入成功: filename=%s, set=%s, articles=%d, questions=%d",
+                        filename, set_name, len(seeds), total_questions)
+    return ErcImportOut(set_key=set_key, set_name=set_name, article_count=len(seeds), question_count=total_questions)
 
 
 # ---------------------------------------------------------------------------

@@ -9,9 +9,48 @@
     .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
     .breadcrumb a { color: var(--accent); text-decoration: none; }
     .breadcrumb a:hover { text-decoration: underline; }
-    
+
     .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 40px; }
     @media (max-width: 920px) { .stats-row { grid-template-columns: 1fr; } }
+
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .toolbar .spacer { flex: 1; }
+
+    .toggle-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border-soft);
+      font-size: 13px; cursor: pointer; transition: all 0.2s;
+      background: var(--surface); color: var(--muted);
+    }
+    .toggle-btn.published { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .toggle-btn.unpublished { background: var(--surface); border-color: var(--border-soft); color: var(--muted); }
+    .toggle-btn:hover { opacity: 0.85; }
+
+    .toggle-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: currentColor;
+    }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      justify-content: center; align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: var(--surface); border: 1px solid var(--border-soft);
+      border-radius: 12px; padding: 24px; max-width: 640px; width: 90%;
+      max-height: 80vh; overflow-y: auto;
+    }
+    .modal-box h3 { margin: 0 0 16px; font-size: 18px; }
+    .modal-box pre {
+      background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px;
+      font-size: 13px; line-height: 1.5; overflow-x: auto; white-space: pre;
+    }
+    .modal-box .modal-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+    .file-input-wrap { position: relative; display: inline-block; }
+    .file-input-wrap input[type="file"] { display: none; }
   </style>
 </head>
 <body>
@@ -84,6 +123,15 @@
     </div>
   </div>
 
+  <div class="toolbar">
+    <button class="btn btn-secondary" id="btn-template" type="button">查看模板</button>
+    <div class="spacer"></div>
+    <div class="file-input-wrap">
+      <button class="btn btn-primary" id="btn-import" type="button">导入文章</button>
+      <input type="file" id="file-import" accept=".json" />
+    </div>
+  </div>
+
   <div class="admin-card" style="padding: 0; overflow: hidden;">
     <table class="admin-table" style="border: 0; border-radius: 0;">
       <thead>
@@ -91,10 +139,50 @@
           <th>阅读集名称</th>
           <th>文章数</th>
           <th>做题人数</th>
+          <th>上架状态</th>
         </tr>
       </thead>
       <tbody data-erc-sets></tbody>
     </table>
+  </div>
+
+  <!-- Template Modal -->
+  <div class="modal-overlay" id="modal-template">
+    <div class="modal-box">
+      <h3>JSON 导入模板</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">上传的 JSON 文件可以是单篇文章对象或文章数组。文件名将作为阅读集名称。</p>
+      <pre>{
+  "article_id": "2024-cet4-text1",
+  "exam": "CET4",
+  "year": 2024,
+  "text_no": 1,
+  "title": "The Impact of AI on Education",
+  "content": [
+    { "paragraph_no": 1, "text": "Artificial intelligence is transforming..." },
+    { "paragraph_no": 2, "text": "One of the most significant changes..." }
+  ],
+  "questions": [
+    {
+      "question_id": "2024-cet4-text1-q1",
+      "question_no": 1,
+      "stem": "What is the main idea of the passage?",
+      "options": {
+        "A": "AI will replace teachers completely.",
+        "B": "AI is transforming education in significant ways.",
+        "C": "AI has no impact on traditional education.",
+        "D": "AI is only useful for administrative tasks."
+      },
+      "answer": "B",
+      "evidence": { "paragraphs": [1], "text": "Artificial intelligence is transforming..." },
+      "explanation": "文章主要讨论了AI对教育的重大影响...",
+      "question_type": "main_idea"
+    }
+  ]
+}</pre>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="modal-template-close" type="button">关闭</button>
+      </div>
+    </div>
   </div>
 </main>
 

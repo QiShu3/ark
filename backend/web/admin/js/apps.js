@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   else if (page === 'apps-vocab.html') loadVocabDetail();
   else if (page === 'apps-vocab-deck.html') loadVocabDeckDetail();
   else if (page === 'apps-erc.html') loadErcDetail();
+  else if (page === 'apps-erc-set.html') loadErcSetDetail();
 });
 
 async function loadAppsGrid() {
@@ -175,18 +176,114 @@ async function loadErcDetail() {
     }
 
     // Update sets table
-    const tbody = document.querySelector('[data-erc-sets]');
-    if (tbody) {
-      tbody.innerHTML = sets.map(s => `
-        <tr>
-          <td style="font-weight:500;">${s.name}</td>
-          <td style="font-family:var(--font-mono);">${s.article_count.toLocaleString()}</td>
-          <td style="font-family:var(--font-mono);">${s.attempt_count.toLocaleString()}</td>
-        </tr>
-      `).join('');
-    }
+    renderErcSetTable(sets);
+
+    // Bind toolbar buttons
+    initErcToolbar();
   } catch (e) {
     showToast('加载ERC数据失败', 'error');
+  }
+}
+
+function renderErcSetTable(sets) {
+  const tbody = document.querySelector('[data-erc-sets]');
+  if (!tbody) return;
+  tbody.innerHTML = sets.map(s => {
+    const pubClass = s.is_published ? 'published' : 'unpublished';
+    const pubLabel = s.is_published ? '已上架' : '未上架';
+    return `
+      <tr>
+        <td><a href="apps-erc-set.html?id=${s.id}" style="font-weight:500;color:var(--accent);text-decoration:none;">${s.name}</a></td>
+        <td style="font-family:var(--font-mono);">${s.article_count.toLocaleString()}</td>
+        <td style="font-family:var(--font-mono);">${s.attempt_count.toLocaleString()}</td>
+        <td>
+          <button class="toggle-btn ${pubClass}" data-set-id="${s.id}" data-action="toggle-erc-publish" type="button">
+            <span class="toggle-dot"></span>${pubLabel}
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // Bind toggle buttons
+  tbody.querySelectorAll('[data-action="toggle-erc-publish"]').forEach(btn => {
+    btn.addEventListener('click', () => handleErcTogglePublish(btn));
+  });
+}
+
+async function handleErcTogglePublish(btn) {
+  const setId = btn.dataset.setId;
+  btn.disabled = true;
+  try {
+    const result = await api.patch(`/apps/erc/sets/${setId}/publish`);
+    const published = result.is_published;
+    btn.className = `toggle-btn ${published ? 'published' : 'unpublished'}`;
+    btn.innerHTML = `<span class="toggle-dot"></span>${published ? '已上架' : '未上架'}`;
+    showToast(published ? '已上架' : '已下架', 'success');
+  } catch (e) {
+    showToast('操作失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function initErcToolbar() {
+  // Template modal
+  const btnTemplate = document.getElementById('btn-template');
+  const modalTemplate = document.getElementById('modal-template');
+  const btnModalClose = document.getElementById('modal-template-close');
+  if (btnTemplate && modalTemplate) {
+    btnTemplate.addEventListener('click', () => modalTemplate.classList.add('active'));
+    btnModalClose?.addEventListener('click', () => modalTemplate.classList.remove('active'));
+    modalTemplate.addEventListener('click', (e) => {
+      if (e.target === modalTemplate) modalTemplate.classList.remove('active');
+    });
+  }
+
+  // File import
+  const btnImport = document.getElementById('btn-import');
+  const fileInput = document.getElementById('file-import');
+  if (btnImport && fileInput) {
+    btnImport.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => handleErcFileImport(fileInput));
+  }
+}
+
+async function handleErcFileImport(fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  fileInput.value = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAuthToken();
+  if (!token) {
+    window.location.href = '/#/login';
+    return;
+  }
+
+  try {
+    showToast('正在导入...', 'info');
+    const resp = await fetch(`${API_BASE}/apps/erc/import`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${resp.status}`);
+    }
+
+    const result = await resp.json();
+    showToast(`导入成功: ${result.set_name}（${result.article_count} 篇文章，${result.question_count} 题）`, 'success');
+
+    // Reload set list
+    const sets = await api.get('/apps/erc/sets');
+    renderErcSetTable(sets);
+  } catch (e) {
+    showToast('导入失败: ' + e.message, 'error');
   }
 }
 
@@ -334,4 +431,150 @@ function renderDeckWords(words) {
       </tr>
     `;
   }).join('');
+}
+
+// --- ERC set detail page ---
+
+let _ercArticles = [];
+
+async function loadErcSetDetail() {
+  const params = new URLSearchParams(window.location.search);
+  const setId = params.get('id');
+  if (!setId) {
+    showToast('缺少阅读集 ID', 'error');
+    return;
+  }
+
+  try {
+    // Fetch set info and articles
+    const [setInfo, articles] = await Promise.all([
+      api.get(`/apps/erc/sets`).then(sets => sets.find(s => s.id === setId)),
+      api.get(`/apps/erc/sets/${setId}/articles`),
+    ]);
+
+    if (!setInfo) {
+      showToast('阅读集不存在', 'error');
+      return;
+    }
+
+    document.title = `Ark Admin · ${setInfo.name}`;
+    document.getElementById('set-breadcrumb').textContent = setInfo.name;
+    document.getElementById('set-name').textContent = setInfo.name;
+    document.getElementById('set-article-count').textContent = `${setInfo.article_count} 篇文章`;
+    document.getElementById('set-question-count').textContent = `${setInfo.attempt_count} 次做题`;
+
+    _ercArticles = articles || [];
+    renderErcArticles(_ercArticles);
+
+    // Search
+    const searchInput = document.getElementById('article-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        const q = searchInput.value.trim().toLowerCase();
+        if (!q) {
+          renderErcArticles(_ercArticles);
+        } else {
+          renderErcArticles(_ercArticles.filter(a =>
+            a.article_id.toLowerCase().includes(q) ||
+            a.title.toLowerCase().includes(q)
+          ));
+        }
+      });
+    }
+
+    // Delete button
+    initErcSetActions(setId, setInfo.name);
+  } catch (e) {
+    showToast('加载阅读集详情失败: ' + e.message, 'error');
+  }
+}
+
+function initErcSetActions(setId, setName) {
+  // Delete with confirmation
+  const btnDelete = document.getElementById('btn-delete');
+  const confirmOverlay = document.getElementById('confirm-delete');
+  const confirmName = document.getElementById('confirm-set-name');
+  const confirmOk = document.getElementById('confirm-ok');
+  const confirmCancel = document.getElementById('confirm-cancel');
+
+  if (btnDelete && confirmOverlay) {
+    btnDelete.addEventListener('click', () => {
+      confirmName.textContent = setName;
+      confirmOverlay.classList.add('active');
+    });
+    confirmCancel?.addEventListener('click', () => confirmOverlay.classList.remove('active'));
+    confirmOverlay.addEventListener('click', (e) => {
+      if (e.target === confirmOverlay) confirmOverlay.classList.remove('active');
+    });
+    confirmOk?.addEventListener('click', async () => {
+      confirmOk.disabled = true;
+      confirmOk.textContent = '删除中...';
+      try {
+        await api.delete(`/apps/erc/sets/${setId}`);
+        showToast(`已删除: ${setName}`, 'success');
+        window.location.href = 'apps-erc.html';
+      } catch (e) {
+        showToast('删除失败: ' + e.message, 'error');
+        confirmOk.disabled = false;
+        confirmOk.textContent = '确认删除';
+      }
+    });
+  }
+
+  // Update (re-upload JSON)
+  const btnUpdate = document.getElementById('btn-update');
+  const fileUpdate = document.getElementById('file-update');
+  if (btnUpdate && fileUpdate) {
+    btnUpdate.addEventListener('click', () => fileUpdate.click());
+    fileUpdate.addEventListener('change', async () => {
+      const file = fileUpdate.files[0];
+      if (!file) return;
+      fileUpdate.value = '';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = getAuthToken();
+      if (!token) { window.location.href = '/#/login'; return; }
+
+      try {
+        showToast('正在更新...', 'info');
+        const resp = await fetch(`${API_BASE}/apps/erc/import`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.detail || `HTTP ${resp.status}`);
+        }
+        const result = await resp.json();
+        showToast(`更新成功: ${result.set_name}（${result.article_count} 篇文章）`, 'success');
+        window.location.reload();
+      } catch (e) {
+        showToast('更新失败: ' + e.message, 'error');
+      }
+    });
+  }
+}
+
+function renderErcArticles(articles) {
+  const tbody = document.getElementById('articles-tbody');
+  if (!tbody) return;
+
+  if (!articles.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无文章</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = articles.map((a, i) => `
+    <tr>
+      <td style="color:var(--muted);font-family:var(--font-mono);">${i + 1}</td>
+      <td style="font-family:var(--font-mono);font-size:12px;">${a.article_id}</td>
+      <td style="font-family:var(--font-mono);">${a.year}</td>
+      <td style="font-family:var(--font-mono);">${a.text_no}</td>
+      <td style="font-weight:500;">${a.title || '—'}</td>
+      <td style="font-family:var(--font-mono);">${a.question_count}</td>
+    </tr>
+  `).join('');
 }
