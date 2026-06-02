@@ -1,5 +1,28 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-02 09:47 CST · `c4be299` · fix(frontend): resize focus-work panel to match ark-page shell frame
+
+### 用户提出的需求
+
+- "调整 focus-work 的弹窗大小，大小比 div 小一小圈"
+- "是变大啊，大到和 ark-page 一致"
+- "也不是完全一致，还是要小一点点"
+- "内缩16px吧"
+- "专注工作面板的背景调整为不透明的"
+- "初始状态太靠下了 div 往上移动，差不多靠近上边框"
+- "提前10px消失"
+
+### 本次完成的工作
+
+- 将 focus-work 全屏面板从居中小卡片改为贴近 ark-page 的大面板，四周内缩 16px。
+- 面板背景从半透明改为不透明（暗色 rgb(8,11,16) / 亮色 rgb(248,250,252)）。
+- 所有 ERC/Vocab 页面的滚动容器添加 clip-path: inset(10px round 28px)，使内容提前 10px 被裁切。
+- 所有 ERC/Vocab 页面的顶部内边距从 pt-32 改为 pt-6，内容初始位置靠近上边框。
+
+### 验证情况
+
+- `pnpm check` 通过
+
 ## 2026-06-01 20:38 CST · `78ffa79` · fix(frontend): align erc vocab shell
 
 ### 用户提出的需求
