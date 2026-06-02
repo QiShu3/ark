@@ -1649,31 +1649,31 @@ export default function EventWorkbenchModal({
               </div>
               <div className="flex shrink-0 flex-wrap justify-end gap-2">
                 {!currentEvent.is_primary ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={() => void handleSetPrimaryEvent()}
-                    disabled={submitting}
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    loading={submitting}
                   >
                     设为主事件
-                  </button>
+                  </Button>
                 ) : null}
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={beginEditEventDetails}
                   disabled={submitting}
-                  className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   编辑事件
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="danger"
+                  size="md"
                   onClick={() => void handleDeleteEvent()}
-                  disabled={submitting}
-                  className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  loading={submitting}
                 >
                   删除事件
-                </button>
+                </Button>
               </div>
             </div>
             {editingEventDetails ? (
