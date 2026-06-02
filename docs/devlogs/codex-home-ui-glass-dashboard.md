@@ -1,5 +1,34 @@
 # codex/home-ui-glass-dashboard
 
+## 2026-06-02 11:14 CST · `256bf8436fe71551fc8381ef026ddef70c19bae2` · style(frontend): align erc focus work prototype
+
+### 用户提出的需求
+
+- "这是新的设计稿原型图，我希望可以和他保持一致。"
+- "我希望内容可以在一页中固定呈现，你看看选项的下方的提交答案这一栏都在下方需要滚动了，可读性较差"
+- "连接处奇怪的阴影是什么？"
+- "为什么有一部分被划起来了？"
+- "[favicon.png](frontend/public/favicon.png) 左上角的icon添加回到首页的功能，并且把这个图标换成这个icon"
+- "这里也有类似的问题"
+
+### 本次完成的工作
+
+- 将 ERC 真题专注工作从左右分栏题单改为设计稿中的全宽阅读区 + 固定底部当前题卡结构。
+- 让阅读文章区域内部滚动，题目选项、上一题/提交答案/下一题控制固定在同一屏内。
+- 去除阅读卡和题卡连接处叠加阴影，避免固定布局下出现脏边。
+- 将“定位依据句”高亮改为用户点击后显示，默认不再自动划出一段文本。
+- 将导航栏左上角 logo 改为 `frontend/public/favicon.png`，并添加点击返回首页能力。
+- 优化子应用托管安排和首页安排总览里的 ready/完成任务等状态胶囊对比度，改善日间模式可读性。
+- 延续子应用首页模板调整：进度环、指标 chips、托管安排时间线和 Vocab 词书进度分段条。
+
+### 验证情况
+
+- `pnpm check` 通过（仅有 Node 22 与项目期望 Node 20.x 的 engine warning）
+- `pnpm test Navigation` 通过，7 个测试通过
+- `pnpm test PlaceholderCard.arrangements` 通过，12 个测试通过
+- in-app Browser 复查 ERC 真题专注工作：阅读区、当前题卡和提交控制可在同一屏固定呈现；左上角 favicon logo 可从 `#/erc` 跳回 `#/`
+- in-app Browser 复查安排总览：日间模式下“完成任务”胶囊使用更清晰的文字、边框和背景对比度
+
 ## 2026-06-02 10:22 CST · `1f82d9f` · style(frontend): differentiate subapp home sections
 
 ### 用户提出的需求
