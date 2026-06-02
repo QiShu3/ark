@@ -25,6 +25,7 @@ import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import WorkflowPhaseChips from '../WorkflowPhaseChips';
 import { ArrowLeft, X } from 'lucide-react';
+import Button from '../Button';
 import {
   cloneWorkflowForm,
   createDefaultWorkflowForm,
@@ -1411,20 +1412,20 @@ export default function EventWorkbenchModal({
                     />
                   </button>
                   <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => copyEventWorkflow(workflow)}
-                      className="rounded-lg border border-ark-border px-2.5 py-1 text-xs font-medium text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-200"
                     >
                       复制
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
                       onClick={() => void deleteEventWorkflow(workflow.id)}
-                      className="rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-200 hover:bg-red-500/20 transition-colors duration-200"
                     >
                       删除
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -1611,25 +1612,23 @@ export default function EventWorkbenchModal({
           </div>
           <div className="flex items-center gap-2.5">
             {onBackToOverview ? (
-              <button
-                type="button"
-                className="flex items-center gap-1.5 rounded-lg border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface hover:border-ark-border px-3.5 py-1.5 text-sm font-medium text-ark-text-muted hover:text-ark-text transition-all duration-200 shadow-sm hover:shadow active:scale-95 cursor-pointer"
+              <Button
+                variant="secondary"
                 onClick={onBackToOverview}
                 aria-label="事件总览"
+                leftIcon={<ArrowLeft size={14} />}
               >
-                <ArrowLeft size={14} className="shrink-0" />
                 事件总览
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-lg border border-ark-border bg-ark-surface-subtle hover:bg-ark-surface hover:border-ark-border px-3.5 py-1.5 text-sm font-medium text-ark-text-muted hover:text-ark-text transition-all duration-200 shadow-sm hover:shadow active:scale-95 cursor-pointer"
+            <Button
+              variant="secondary"
               onClick={onClose}
               aria-label="关闭安排"
+              leftIcon={<X size={14} />}
             >
-              <X size={14} className="shrink-0" />
               关闭
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -1746,13 +1745,13 @@ export default function EventWorkbenchModal({
                 <h3 className="text-base font-semibold">安排内容</h3>
                 <p className="mt-1 text-sm text-ark-text-muted">直接管理当前事件下的任务和日程</p>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={() => setShowAppConfigModal(true)}
-                className="shrink-0 rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle hover:text-ark-text"
+                className="shrink-0"
               >
                 应用配置
-              </button>
+              </Button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {renderArrangementColumn('task', taskArrangements)}
