@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import { apiJson } from '../lib/api';
+import AppModalFrame from './AppModalFrame';
 import AchievementBadgeCard from './AchievementBadgeCard';
 import type { AchievementEventItem, AchievementSummary } from './achievementTypes';
 
@@ -160,18 +161,17 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
   const surfaceAnimationClass = isOpen ? 'animate-in zoom-in-95 duration-200' : 'achievement-modal-surface-exit';
 
   return createPortal(
-    <div
-      className={`fixed inset-0 z-[80] flex items-start justify-center bg-ark-overlay px-4 pb-6 pt-20 backdrop-blur-sm ${overlayAnimationClass} md:items-center md:px-6 md:py-6`}
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="成就弹窗"
+    <AppModalFrame
+      open={isRendered}
+      onClose={onClose}
+      zIndexClassName="z-[80]"
+      ariaLabel="成就弹窗"
+      disableDefaultAnimation={true}
+      backdropClassName={`bg-ark-overlay backdrop-blur-sm ${overlayAnimationClass}`}
+      contentClassName="items-start px-4 md:items-center md:px-6"
+      panelClassName={`w-[920px] max-w-[94vw] overflow-y-auto rounded-3xl border border-ark-border bg-[#0d0f16] p-5 ${surfaceAnimationClass}`}
+      panelRef={dialogRef}
     >
-      <div
-        ref={dialogRef}
-        className={`w-[920px] max-w-[94vw] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-3xl border border-ark-border bg-[#0d0f16] p-5 ${surfaceAnimationClass}`}
-        onClick={(event) => event.stopPropagation()}
-      >
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-bold text-ark-text">
@@ -244,8 +244,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
             ))}
           </div>
         </section>
-      </div>
-    </div>,
+    </AppModalFrame>,
     document.body,
   );
 }

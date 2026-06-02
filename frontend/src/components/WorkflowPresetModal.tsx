@@ -1,8 +1,11 @@
 import React from 'react';
+import AppModalFrame from './AppModalFrame';
+import WorkflowPhaseChips from './WorkflowPhaseChips';
 
 import type { Task } from './taskTypes';
 import {
   buildWorkflowPreview,
+  getWorkflowPresetPhases,
   getWorkflowTaskOptions,
   type WorkflowFormPhase,
   type WorkflowFormState,
@@ -121,17 +124,13 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
   }
 
   return (
-    <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-ark-overlay backdrop-blur-sm`}
-      onClick={onClose}
+    <AppModalFrame
+      open={true}
+      onClose={onClose}
+      zIndexClassName={zIndexClass}
+      ariaLabelledBy="workflow-preset-modal-title"
+      panelClassName="w-[840px] max-w-[94vw] bg-ark-surface-strong border border-ark-border rounded-2xl shadow-2xl overflow-hidden"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="workflow-preset-modal-title"
-        className="w-[840px] max-w-[94vw] max-h-[82vh] bg-ark-surface-strong border border-ark-border rounded-2xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div className="border-b border-ark-border px-5 py-4 bg-ark-surface-subtle">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -188,9 +187,11 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="font-medium text-ark-text">{preset.name}</div>
-                        <div className="text-xs text-ark-text-muted mt-1">
-                          {preset.phases.map((phase, index) => `${index + 1}.${phase.phase_type === 'focus' ? '专注' : '休息'} ${Math.round(phase.duration / 60)}min`).join(' · ')}
-                        </div>
+                        <WorkflowPhaseChips
+                          phases={getWorkflowPresetPhases(preset)}
+                          className="mt-2"
+                          getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
+                        />
                         {preset.event_name ? (
                           <div className="text-xs text-ark-text-faint mt-1">事件：{preset.event_name}</div>
                         ) : null}
@@ -385,8 +386,7 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 };
 

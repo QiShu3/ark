@@ -126,7 +126,7 @@ export default function ERCPractice() {
   const currentPreheatItem = preheatItems[0] ?? null;
 
   return (
-    <div className="relative z-10 h-full w-full overflow-y-auto px-6 pb-10 pt-20">
+    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>

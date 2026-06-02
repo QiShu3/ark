@@ -5,6 +5,7 @@ import {
   fetchVocabOverviewCurrentWords,
   fetchVocabOverviewMasteredWords,
 } from '../../lib/vocab/api';
+import AppModalFrame from '../AppModalFrame';
 import type {
   VocabOverviewCompletedDeck,
   VocabOverviewCurrentWord,
@@ -125,8 +126,13 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-ark-overlay p-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="总览明细">
-      <div className="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-ark-border bg-ark-surface-strong text-ark-text shadow-2xl shadow-black/45">
+    <AppModalFrame
+      open={true}
+      onClose={onClose}
+      zIndexClassName="z-[85]"
+      ariaLabel="总览明细"
+      panelClassName="flex w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-ark-border bg-ark-surface-strong text-ark-text shadow-2xl shadow-black/45"
+    >
         <div className="border-b border-ark-border px-7 py-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -279,7 +285,6 @@ export default function OverviewDetailModal({ isOpen, baseDeckId, initialTab, in
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 }

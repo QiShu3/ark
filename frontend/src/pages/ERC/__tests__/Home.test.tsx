@@ -110,7 +110,7 @@ describe('ERC home page', () => {
     saveERCConfig.mockResolvedValue(buildERCConfigStatus());
   });
 
-  it('renders reading training summary and starts the review focus work from the event-bound config', async () => {
+  it('renders the unified sub-app template and starts review focus work from managed arrangements', async () => {
     render(
       <MemoryRouter>
         <Home />
@@ -118,14 +118,22 @@ describe('ERC home page', () => {
     );
 
     expect(await screen.findByText('阅读训练')).toBeInTheDocument();
-    expect(await screen.findByText('这份 ERC 配置会绑定在当前主事件「考研英语」。')).toBeInTheDocument();
+    expect(await screen.findByText('该配置会同步到当前主事件「考研英语」。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '配置' })).toBeInTheDocument();
+    expect(screen.getByText('今日优先任务')).toBeInTheDocument();
+    expect(screen.getByText('长期积累')).toBeInTheDocument();
+    expect(screen.getByText('托管安排')).toBeInTheDocument();
     expect(screen.getByText('今日待复习')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '进入题库' })).toHaveAttribute('href', '/erc/library');
+    expect(screen.getByText('进入题库').closest('a')).toHaveAttribute('href', '/erc/library');
+    expect(screen.getByText('查看错题').closest('a')).toHaveAttribute('href', '/erc/mistakes');
+    expect(screen.queryByRole('button', { name: '安排管理与设置' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '开始复习' })).not.toBeInTheDocument();
 
     const reloadFocusSpy = vi.fn();
     window.addEventListener('ark:reload-focus', reloadFocusSpy);
-    const reviewButton = screen.getByRole('button', { name: '开始复习' });
+    const arrangements = screen.getByText('托管安排').closest('section')!;
+    const reviewButton = within(arrangements).getAllByRole('button', { name: '开始' })[1];
     fireEvent.click(reviewButton);
     await waitFor(() => {
       expect(apiJson).toHaveBeenCalledWith('/todo/tasks/task-erc-review/focus/start', { method: 'POST' });
@@ -133,11 +141,9 @@ describe('ERC home page', () => {
     expect(reloadFocusSpy).toHaveBeenCalledTimes(1);
     expect(reviewButton).toHaveClass('bg-white');
     window.removeEventListener('ark:reload-focus', reloadFocusSpy);
-    expect(screen.getByRole('link', { name: '查看错题' })).toHaveAttribute('href', '/erc/mistakes');
-    expect(screen.getByRole('link', { name: '查看错题' })).toHaveClass('backdrop-blur-xl');
   });
 
-  it('shows a single app configuration prompt when both ERC modules are disabled', async () => {
+  it('keeps disabled ERC modules visible as configurable managed tasks', async () => {
     fetchERCConfigStatus.mockResolvedValue(
       buildERCConfigStatus({
         practice: { enabled: false, state: 'event_not_configured', task_id: null, config_id: null },
@@ -151,8 +157,9 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('阅读训练尚未启用')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '配置阅读训练' })).toBeInTheDocument();
+    expect(await screen.findByText('当前主事件「考研英语」尚未配置阅读训练，请通过右上角“配置”完成初始化。')).toBeInTheDocument();
+    expect(screen.getAllByText('未启用')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: '配置' }).length).toBeGreaterThanOrEqual(3);
     expect(screen.queryByRole('button', { name: '开始真题练习' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '开始复习' })).not.toBeInTheDocument();
   });
@@ -165,12 +172,12 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole('button', { name: '安排管理与设置' }));
-    const dialog = await screen.findByRole('dialog', { name: 'ERC 安排与设置' });
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    const dialog = await screen.findByRole('dialog', { name: 'ERC 配置' });
     fireEvent.change(within(dialog).getByLabelText('每日目标 (文章篇数)'), { target: { value: '2' } });
     fireEvent.change(within(dialog).getByLabelText('每日目标 (复习题数)'), { target: { value: '12' } });
     await user.click(within(dialog).getByRole('button', { name: '全部做错题目 随机挑选所有做错题目' }));
-    await user.click(within(dialog).getByRole('button', { name: '保存 ERC 配置' }));
+    await user.click(within(dialog).getByRole('button', { name: '保存配置' }));
 
     expect(saveERCConfig).toHaveBeenCalledWith({
       event_id: 'event-1',
@@ -190,7 +197,7 @@ describe('ERC home page', () => {
     });
   });
 
-  it('hides disabled module entry points but keeps the other module available', async () => {
+  it('marks a disabled module as not enabled but keeps the other module start action available', async () => {
     fetchERCConfigStatus.mockResolvedValue(
       buildERCConfigStatus({
         practice: { enabled: false, state: 'event_not_configured', task_id: null, config_id: null },
@@ -203,9 +210,11 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('button', { name: '开始复习' })).toBeInTheDocument();
+    expect(await screen.findByText('未启用')).toBeInTheDocument();
+    const arrangements = screen.getByText('托管安排').closest('section')!;
+    expect(within(arrangements).getByRole('button', { name: '开始' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '开始真题练习' })).not.toBeInTheDocument();
-    expect(screen.queryByText('真题练习', { selector: 'span' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('真题练习', { selector: 'span' }).length).toBeGreaterThan(0);
   });
 
   it('updates sync through the shared ERC config and surfaces manual-arrangement confirmation', async () => {
@@ -229,7 +238,7 @@ describe('ERC home page', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText('子应用安排');
+    await screen.findByText('托管安排');
     const switches = screen.getAllByRole('switch');
     await user.click(switches[0]);
 

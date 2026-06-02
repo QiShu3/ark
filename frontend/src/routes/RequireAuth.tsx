@@ -5,7 +5,6 @@ import BeianFooter from '../components/BeianFooter';
 import { useAuthStore } from '../lib/auth';
 import Navigation from '../components/Navigation';
 import FocusWorkProvider from '../components/focus-work/FocusWorkProvider';
-import { useCustomizationStore } from '../lib/customization';
 import { useTheme } from '../hooks/useTheme';
 import ToastContainer from '../components/ToastContainer';
 import '../lib/toast';
@@ -16,9 +15,6 @@ export default function RequireAuth() {
   const clear = useAuthStore((s) => s.clear);
   const location = useLocation();
 
-  const backgroundUrl = useCustomizationStore((s) => s.backgroundUrl);
-  const backgroundBlur = useCustomizationStore((s) => s.backgroundBlur);
-  const backgroundOpacity = useCustomizationStore((s) => s.backgroundOpacity);
   useTheme();
 
   useEffect(() => {
@@ -34,19 +30,10 @@ export default function RequireAuth() {
       data-testid="authenticated-shell"
       className="ark-shell relative h-screen w-screen overflow-hidden font-sans"
     >
-      {/* 背景图片 */}
-      <div className="fixed inset-0 z-0">
-        <img 
-          src={backgroundUrl} 
-          alt="Background" 
-          style={{
-            filter: `blur(${backgroundBlur}px)`,
-            opacity: backgroundOpacity,
-          }}
-          className="w-full h-full object-cover transition-all duration-300"
-        />
-        {/* 叠加一层渐变，增强文字可读性 */}
-        <div data-testid="background-overlay" className="ark-background-overlay absolute inset-0"></div>
+      {/* 全局低信息背景，主视觉图片由首页左栏接管。 */}
+      <div className="ark-shell-frame fixed inset-x-1 bottom-1 top-[7.5rem] z-0 overflow-hidden">
+        <div className="ark-shell-backdrop absolute inset-0" />
+        <div data-testid="background-overlay" className="ark-background-overlay absolute inset-0 opacity-50"></div>
       </div>
 
       {/* 顶部导航 */}

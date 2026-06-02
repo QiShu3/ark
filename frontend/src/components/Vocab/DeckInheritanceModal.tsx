@@ -1,3 +1,5 @@
+import AppModalFrame from '../AppModalFrame';
+
 type Props = {
   deckName: string;
   inheritableWordCount: number;
@@ -8,8 +10,13 @@ type Props = {
 
 export default function DeckInheritanceModal({ deckName, inheritableWordCount, submitting, onConfirm, onCancel }: Props) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-ark-overlay p-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="继承已掌握单词">
-      <div className="w-full max-w-xl rounded-[2rem] border border-ark-border bg-ark-surface-strong p-7 text-ark-text shadow-2xl shadow-black/40">
+    <AppModalFrame
+      open={true}
+      onClose={onCancel}
+      zIndexClassName="z-[90]"
+      ariaLabel="继承已掌握单词"
+      panelClassName="w-full max-w-xl rounded-[2rem] border border-ark-border bg-ark-surface-strong p-7 text-ark-text shadow-2xl shadow-black/40"
+    >
         <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Inheritance</div>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight">继承已掌握单词</h2>
         <p className="mt-3 text-sm leading-6 text-ark-text-muted">
@@ -35,7 +42,6 @@ export default function DeckInheritanceModal({ deckName, inheritableWordCount, s
             {submitting ? '继承中…' : '立即继承'}
           </button>
         </div>
-      </div>
-    </div>
+    </AppModalFrame>
   );
 }

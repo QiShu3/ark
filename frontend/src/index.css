@@ -51,11 +51,34 @@
   --ark-background-overlay: linear-gradient(to bottom, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.62));
   --ark-focus-ring: rgba(96, 165, 250, 0.68);
   --ark-accent: #60a5fa;
+  --ark-on-accent: #fff;
   --ark-accent-soft: rgba(96, 165, 250, 0.16);
   --ark-countdown-text: #7dd3fc;
   --ark-danger: #f87171;
   --ark-input: #121826;
   --ark-panel: #151923;
+  --ark-learning-accent: #34d399;
+  --ark-learning-accent-soft: rgba(52, 211, 153, 0.12);
+  --ark-learning-border: rgba(52, 211, 153, 0.2);
+  --ark-arrangement-accent: #fbbf24;
+  --ark-arrangement-accent-soft: rgba(251, 191, 36, 0.12);
+  --ark-arrangement-border: rgba(251, 191, 36, 0.22);
+  --ark-glass-surface-strong: rgba(15, 23, 42, 0.58);
+  --ark-glass-surface: rgba(15, 23, 42, 0.42);
+  --ark-glass-surface-soft: rgba(15, 23, 42, 0.34);
+  --ark-glass-border-strong: rgba(255, 255, 255, 0.2);
+  --ark-glass-border: rgba(255, 255, 255, 0.14);
+  --ark-glass-border-soft: rgba(255, 255, 255, 0.1);
+  --ark-glass-highlight: rgba(255, 255, 255, 0.22);
+  --ark-glass-shadow-strong: 0 28px 76px rgba(0, 0, 0, 0.28);
+  --ark-glass-shadow-medium: 0 18px 48px rgba(0, 0, 0, 0.18);
+  --ark-glass-shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.12);
+  --ark-glass-filter-strong: drop-shadow(0 22px 38px rgba(0, 0, 0, 0.22)) drop-shadow(0 6px 16px rgba(0, 0, 0, 0.14));
+  --ark-glass-filter-medium: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.15)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+  --ark-glass-filter-soft: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.1)) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.07));
+  --ark-glass-filter-soft-hover: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.12)) drop-shadow(0 3px 10px rgba(0, 0, 0, 0.08));
+  --ark-shell-frame-border: rgba(255, 255, 255, 0.28);
+  --ark-shell-frame-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
 
   /* Global status work colors */
   --focus-work-blue-text: rgba(147, 197, 253, 0.95);
@@ -71,25 +94,48 @@
 }
 
 :root[data-theme="light"] {
-  --ark-page-bg: #dbe7f3;
+  --ark-page-bg: #eef6ff;
   --ark-text: rgba(15, 23, 42, 0.96);
   --ark-text-muted: rgba(30, 41, 59, 0.78);
   --ark-text-faint: rgba(51, 65, 85, 0.62);
-  --ark-surface: rgba(226, 236, 248, 0.78);
-  --ark-surface-strong: rgba(241, 245, 249, 0.94);
-  --ark-surface-subtle: rgba(204, 218, 236, 0.66);
-  --ark-border: rgba(30, 41, 59, 0.18);
-  --ark-border-strong: rgba(30, 41, 59, 0.3);
-  --ark-overlay: rgba(226, 232, 240, 0.72);
-  --ark-overlay-strong: rgba(248, 250, 252, 0.9);
-  --ark-background-overlay: linear-gradient(to bottom, rgba(241, 245, 249, 0.46), rgba(226, 232, 240, 0.2), rgba(15, 23, 42, 0.34));
+  --ark-surface: rgba(248, 252, 255, 0.76);
+  --ark-surface-strong: rgba(255, 255, 255, 0.92);
+  --ark-surface-subtle: rgba(229, 241, 255, 0.58);
+  --ark-border: rgba(74, 101, 135, 0.13);
+  --ark-border-strong: rgba(74, 101, 135, 0.24);
+  --ark-overlay: rgba(241, 248, 255, 0.76);
+  --ark-overlay-strong: rgba(255, 255, 255, 0.92);
+  --ark-background-overlay: linear-gradient(to bottom, rgba(248, 252, 255, 0.32), rgba(238, 247, 255, 0.08), rgba(215, 233, 252, 0.18));
   --ark-focus-ring: rgba(37, 99, 235, 0.5);
   --ark-accent: #2563eb;
+  --ark-on-accent: #fff;
   --ark-accent-soft: rgba(37, 99, 235, 0.14);
   --ark-countdown-text: #0369a1;
   --ark-danger: #dc2626;
   --ark-input: rgba(226, 236, 248, 0.82);
   --ark-panel: rgba(239, 246, 255, 0.96);
+  --ark-learning-accent: #059669;
+  --ark-learning-accent-soft: rgba(5, 150, 105, 0.1);
+  --ark-learning-border: rgba(5, 150, 105, 0.2);
+  --ark-arrangement-accent: #b45309;
+  --ark-arrangement-accent-soft: rgba(180, 83, 9, 0.1);
+  --ark-arrangement-border: rgba(180, 83, 9, 0.22);
+  --ark-glass-surface-strong: rgba(255, 255, 255, 0.58);
+  --ark-glass-surface: rgba(255, 255, 255, 0.46);
+  --ark-glass-surface-soft: rgba(255, 255, 255, 0.34);
+  --ark-glass-border-strong: rgba(255, 255, 255, 0.82);
+  --ark-glass-border: rgba(255, 255, 255, 0.64);
+  --ark-glass-border-soft: rgba(255, 255, 255, 0.5);
+  --ark-glass-highlight: rgba(255, 255, 255, 0.88);
+  --ark-glass-shadow-strong: 0 26px 72px rgba(83, 119, 154, 0.18);
+  --ark-glass-shadow-medium: 0 16px 42px rgba(83, 119, 154, 0.12);
+  --ark-glass-shadow-soft: 0 9px 24px rgba(83, 119, 154, 0.08);
+  --ark-glass-filter-strong: drop-shadow(0 20px 30px rgba(83, 119, 154, 0.12)) drop-shadow(0 6px 12px rgba(83, 119, 154, 0.07));
+  --ark-glass-filter-medium: drop-shadow(0 12px 20px rgba(83, 119, 154, 0.09)) drop-shadow(0 4px 9px rgba(83, 119, 154, 0.06));
+  --ark-glass-filter-soft: drop-shadow(0 7px 14px rgba(83, 119, 154, 0.07)) drop-shadow(0 2px 6px rgba(83, 119, 154, 0.04));
+  --ark-glass-filter-soft-hover: drop-shadow(0 10px 18px rgba(83, 119, 154, 0.1)) drop-shadow(0 3px 8px rgba(83, 119, 154, 0.05));
+  --ark-shell-frame-border: rgba(255, 255, 255, 0.82);
+  --ark-shell-frame-shadow: 0 18px 42px rgba(83, 119, 154, 0.1);
 
   /* Global status work colors - Light mode (high contrast) */
   --focus-work-blue-text: #1d4ed8;
@@ -107,6 +153,18 @@
 .ark-shell {
   background: var(--ark-page-bg);
   color: var(--ark-text);
+}
+
+.ark-shell-frame {
+  border: 3px solid var(--ark-shell-frame-border);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    var(--ark-shell-frame-shadow);
+}
+
+.ark-shell-backdrop {
+  background: var(--ark-page-bg);
 }
 
 .ark-background-overlay {
@@ -162,14 +220,505 @@
 }
 
 .ark-panel-card {
-  border: 1px solid var(--ark-border);
-  background: var(--ark-surface);
+  border: 1px solid var(--ark-glass-border-soft);
+  background: var(--ark-glass-surface-soft);
+  background-clip: padding-box;
   color: var(--ark-text);
-  backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft);
+  backdrop-filter: blur(18px) saturate(130%);
 }
 
-.ark-panel-card:hover {
+.ark-subapp-hero-card {
+  border-color: color-mix(in srgb, var(--ark-accent) 20%, var(--ark-glass-border-soft));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ark-accent-soft) 72%, transparent), transparent 54%),
+    var(--ark-glass-surface-soft);
+}
+
+.ark-subapp-hero-side {
+  border-color: color-mix(in srgb, var(--ark-accent) 24%, var(--ark-border));
+}
+
+.ark-subapp-hero-eyebrow {
+  color: var(--ark-accent);
+}
+
+.ark-subapp-hero-progress {
+  background: linear-gradient(90deg, var(--ark-accent), color-mix(in srgb, var(--ark-accent) 52%, var(--ark-learning-accent)));
+}
+
+.ark-subapp-progress-gauge {
+  background:
+    conic-gradient(var(--ark-accent) var(--ark-subapp-progress), color-mix(in srgb, var(--ark-accent-soft) 48%, var(--ark-surface-subtle)) 0),
+    var(--ark-surface-subtle);
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    0 14px 30px color-mix(in srgb, var(--ark-accent) 12%, transparent);
+}
+
+.ark-subapp-metric-strip {
+  border-color: color-mix(in srgb, var(--ark-accent) 14%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-accent-soft) 44%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-metric-chip {
+  border: 1px solid color-mix(in srgb, var(--ark-accent) 10%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-surface) 72%, transparent);
+}
+
+.ark-subapp-section-heading {
+  border-left: 4px solid var(--ark-learning-accent);
+}
+
+.ark-subapp-asset-eyebrow,
+.ark-subapp-asset-accent {
+  color: var(--ark-learning-accent);
+}
+
+.ark-subapp-asset-card {
+  border: 1px solid color-mix(in srgb, var(--ark-learning-border) 68%, var(--ark-glass-border-soft));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ark-learning-accent-soft) 58%, transparent), transparent 76%),
+    var(--ark-glass-surface-soft);
+  background-clip: padding-box;
+  color: var(--ark-text);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.ark-subapp-asset-soft {
+  border-color: color-mix(in srgb, var(--ark-learning-border) 72%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 42%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-asset-progress {
+  background: linear-gradient(90deg, var(--ark-learning-accent), color-mix(in srgb, var(--ark-learning-accent) 46%, var(--ark-accent)));
+}
+
+.ark-subapp-asset-segment-unstarted {
+  background: color-mix(in srgb, var(--ark-text-faint) 46%, transparent);
+}
+
+.ark-subapp-asset-segment-learning {
+  background: color-mix(in srgb, var(--ark-accent) 64%, var(--ark-learning-accent));
+}
+
+.ark-subapp-asset-segment-mastered {
+  background: var(--ark-learning-accent);
+}
+
+.ark-subapp-arrangements {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 72%, var(--ark-glass-border-soft));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ark-arrangement-accent-soft) 58%, transparent), transparent 62%),
+    var(--ark-glass-surface-soft);
+}
+
+.ark-subapp-arrangement-accent {
+  color: var(--ark-arrangement-accent);
+}
+
+.ark-subapp-arrangement-card {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 72%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 38%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-arrangement-empty {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 70%, var(--ark-border));
+  background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 34%, var(--ark-surface-subtle));
+}
+
+.ark-subapp-timeline-rail {
+  border-color: color-mix(in srgb, var(--ark-arrangement-border) 82%, var(--ark-border));
+}
+
+.ark-subapp-timeline-node {
+  background: var(--ark-arrangement-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ark-arrangement-accent-soft) 72%, transparent);
+}
+
+.ark-subapp-status-ready {
+  border-color: color-mix(in srgb, var(--ark-learning-accent) 44%, transparent);
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 74%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-learning-accent) 92%, var(--ark-text));
+  font-weight: 650;
+}
+
+.ark-subapp-status-completed {
+  border-color: color-mix(in srgb, var(--ark-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--ark-accent-soft) 72%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-accent) 88%, var(--ark-text));
+  font-weight: 650;
+}
+
+.ark-subapp-status-blocked {
+  border-color: color-mix(in srgb, var(--ark-danger) 46%, transparent);
+  background: color-mix(in srgb, var(--ark-danger) 10%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-danger) 92%, var(--ark-text));
+  font-weight: 650;
+}
+
+.ark-subapp-status-pending {
+  border-color: color-mix(in srgb, var(--ark-arrangement-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--ark-arrangement-accent-soft) 74%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-arrangement-accent) 90%, var(--ark-text));
+  font-weight: 650;
+}
+
+:root[data-theme="light"] .ark-subapp-status-ready {
+  border-color: rgba(4, 120, 87, 0.48);
+  background: rgba(16, 185, 129, 0.16);
+  color: #065f46;
+  box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.12);
+}
+
+:root[data-theme="light"] .ark-subapp-status-completed {
+  border-color: rgba(37, 99, 235, 0.46);
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.1);
+}
+
+:root[data-theme="light"] .ark-subapp-status-blocked {
+  border-color: rgba(220, 38, 38, 0.46);
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.1);
+}
+
+:root[data-theme="light"] .ark-subapp-status-pending {
+  border-color: rgba(180, 83, 9, 0.46);
+  background: rgba(180, 83, 9, 0.14);
+  color: #92400e;
+  box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.1);
+}
+
+.ark-top-nav {
+  box-shadow: var(--ark-glass-shadow-soft);
+}
+
+.ark-logo-mark {
+  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--ark-accent) 16%, transparent));
+}
+
+.ark-event-nav-trigger {
+  color: var(--ark-text);
+}
+
+.ark-event-nav-trigger:hover {
+  background: color-mix(in srgb, var(--ark-accent-soft) 58%, transparent);
+}
+
+.ark-left-glass-panel {
+  border: 1px solid var(--ark-glass-border-strong);
+  background: var(--ark-glass-surface-strong);
+  background-clip: padding-box;
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 70%, transparent);
+  filter: var(--ark-glass-filter-medium);
+  backdrop-filter: blur(20px) saturate(142%);
+}
+
+.ark-home-card {
+  border: 1px solid var(--ark-glass-border);
+  background: var(--ark-glass-surface);
+  background-clip: padding-box;
+  color: var(--ark-text);
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 72%, transparent);
+  filter: var(--ark-glass-filter-soft);
+  backdrop-filter: blur(22px) saturate(140%);
+}
+
+.ark-nav-icon-button {
+  border: 1px solid color-mix(in srgb, var(--ark-border) 46%, transparent);
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.9), transparent 42%),
+    color-mix(in srgb, var(--ark-surface-strong) 82%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    0 10px 24px rgba(51, 65, 85, 0.1);
+}
+
+.ark-nav-icon-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--ark-border-strong) 56%, transparent);
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.96), transparent 44%),
+    color-mix(in srgb, var(--ark-surface-strong) 72%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 14px 30px rgba(51, 65, 85, 0.14);
+}
+
+.ark-nav-icon-button:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 8px rgba(51, 65, 85, 0.08),
+    0 8px 18px rgba(51, 65, 85, 0.1);
+}
+
+.ark-home-dashboard-shell {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-surface) 54%, transparent);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.ark-home-grid-card {
+  box-shadow: none;
+}
+
+.ark-home-side-action {
+  border-left: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-surface-subtle) 72%, transparent);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.ark-home-side-action:hover,
+.ark-home-icon-button:hover {
+  color: var(--ark-text);
   background: var(--ark-surface-subtle);
+}
+
+.ark-home-icon-button {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: var(--ark-glass-surface-soft);
+  color: var(--ark-text-muted);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ark-home-icon-button:active {
+  transform: scale(0.96);
+}
+
+.ark-home-icon-tile {
+  background: var(--ark-accent-soft);
+}
+
+.ark-home-mini-action {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-glass-surface-soft) 72%, transparent);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ark-home-mini-action:hover {
+  color: var(--ark-text);
+  background: var(--ark-surface-subtle);
+}
+
+.ark-home-text-link {
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.ark-home-text-link:hover {
+  color: var(--ark-text);
+  transform: translateX(1px);
+}
+
+.ark-home-task-check {
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--ark-accent) 22%, transparent);
+}
+
+.ark-arrangement-summary-complete {
+  border-color: color-mix(in srgb, var(--ark-learning-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 78%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-learning-accent) 88%, var(--ark-text));
+}
+
+.ark-arrangement-summary-complete:hover {
+  border-color: color-mix(in srgb, var(--ark-learning-accent) 58%, transparent);
+  background: color-mix(in srgb, var(--ark-learning-accent-soft) 92%, var(--ark-surface-subtle));
+}
+
+.ark-arrangement-summary-enter {
+  border-color: color-mix(in srgb, var(--ark-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--ark-accent-soft) 72%, var(--ark-surface-subtle));
+  color: color-mix(in srgb, var(--ark-accent) 86%, var(--ark-text));
+}
+
+:root[data-theme="light"] .ark-arrangement-summary-complete {
+  border-color: rgba(4, 120, 87, 0.42);
+  background: rgba(16, 185, 129, 0.16);
+  color: #065f46;
+  box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.1);
+}
+
+:root[data-theme="light"] .ark-arrangement-summary-complete:hover {
+  border-color: rgba(4, 120, 87, 0.56);
+  background: rgba(16, 185, 129, 0.22);
+}
+
+:root[data-theme="light"] .ark-arrangement-summary-enter {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.1);
+}
+
+.ark-home-empty-task {
+  border: 1px solid var(--ark-glass-border-soft);
+  background: color-mix(in srgb, var(--ark-glass-surface-soft) 78%, transparent);
+}
+
+.ark-home-shortcut-card {
+  border-color: var(--ark-glass-border-soft);
+  background: var(--ark-glass-surface-soft);
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft);
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, filter 180ms ease;
+}
+
+.ark-home-shortcut-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ark-glass-border);
+  background: color-mix(in srgb, var(--ark-glass-surface) 88%, var(--ark-accent-soft));
+  box-shadow: inset 0 1px 0 var(--ark-glass-highlight);
+  filter: var(--ark-glass-filter-soft-hover);
+}
+
+.ark-home-shortcut-icon {
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--ark-on-accent) 70%, transparent), transparent 42%),
+    var(--ark-accent-soft);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ark-on-accent) 48%, transparent);
+}
+
+.ark-home-play-dot {
+  background: color-mix(in srgb, var(--ark-on-accent) 24%, transparent);
+}
+
+.ark-home-timer-card {
+  background:
+    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--ark-accent-soft) 74%, transparent), transparent 24%),
+    var(--ark-glass-surface);
+}
+
+.ark-home-timer-digits {
+  font-variant-numeric: tabular-nums;
+}
+
+.ark-home-decorative-clock {
+  overflow: visible;
+  color: var(--ark-accent);
+  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--ark-accent) 16%, transparent));
+  opacity: 0.54;
+}
+
+.ark-home-clock-halo {
+  fill: color-mix(in srgb, var(--ark-accent-soft) 34%, transparent);
+  stroke: color-mix(in srgb, var(--ark-accent) 16%, transparent);
+  stroke-width: 1;
+}
+
+.ark-home-clock-face {
+  fill: color-mix(in srgb, var(--ark-accent-soft) 18%, transparent);
+  stroke: color-mix(in srgb, var(--ark-accent) 48%, transparent);
+  stroke-width: 2;
+}
+
+.ark-home-clock-tick {
+  stroke: color-mix(in srgb, var(--ark-accent) 60%, transparent);
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.ark-home-clock-hand {
+  stroke: color-mix(in srgb, var(--ark-accent) 78%, transparent);
+  stroke-linecap: round;
+  stroke-width: 4;
+}
+
+.ark-home-clock-hand-short {
+  stroke-width: 3.2;
+}
+
+.ark-home-clock-center {
+  fill: color-mix(in srgb, var(--ark-accent) 76%, transparent);
+}
+
+.ark-home-progress-fill {
+  background: linear-gradient(90deg, var(--ark-accent), color-mix(in srgb, var(--ark-accent) 48%, #67e8f9));
+}
+
+.ark-home-progress-fill-idle {
+  opacity: 0.42;
+}
+
+.ark-home-primary-button {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: var(--ark-on-accent);
+  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.26);
+}
+
+.ark-calendar-widget {
+  overflow: hidden;
+}
+
+.ark-calendar-nav-button {
+  color: var(--ark-text-muted);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.9), transparent 44%),
+    color-mix(in srgb, var(--ark-surface-strong) 72%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    0 8px 20px rgba(51, 65, 85, 0.08);
+}
+
+.ark-calendar-day {
+  position: relative;
+  display: flex;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ark-calendar-day-current {
+  color: var(--ark-text);
+  background: transparent;
+}
+
+.ark-calendar-day-muted {
+  color: var(--ark-text-faint);
+}
+
+.ark-calendar-day-today {
+  color: var(--ark-accent);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--ark-accent-soft) 82%, rgba(255, 255, 255, 0.72));
+}
+
+.ark-calendar-day-checked {
+  color: var(--ark-accent);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--ark-accent-soft) 82%, rgba(255, 255, 255, 0.72));
+}
+
+.ark-calendar-check {
+  background: var(--ark-accent);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--ark-accent) 22%, transparent);
+}
+
+:root[data-theme="light"] .ark-home-dashboard-shell {
+  background: rgba(236, 247, 255, 0.42);
+  border-color: rgba(255, 255, 255, 0.62);
+}
+
+.ark-annotation {
+  border: 1px solid var(--ark-border);
+  background: var(--ark-surface-subtle);
+  color: var(--ark-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
 }
 
 .ark-modal-backdrop {
@@ -183,9 +732,66 @@
   color: var(--ark-text);
 }
 
+.ark-workflow-phase-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  border-width: 1px;
+  padding: 0.125rem 0.625rem;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1rem;
+}
+
+.ark-workflow-phase-chip-focus {
+  border-color: rgba(96, 165, 250, 0.34);
+  background: rgba(37, 99, 235, 0.14);
+  color: rgba(147, 197, 253, 0.98);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.06);
+}
+
+.ark-workflow-phase-chip-break {
+  border-color: rgba(52, 211, 153, 0.32);
+  background: rgba(16, 185, 129, 0.14);
+  color: rgba(110, 231, 183, 0.98);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.06);
+}
+
+.ark-workflow-phase-separator {
+  font-size: 10px;
+  color: currentColor;
+  opacity: 0.5;
+}
+
+.ark-workflow-phase-task {
+  color: currentColor;
+  opacity: 0.88;
+}
+
 :root[data-theme="light"] .ark-modal {
   background: rgba(239, 246, 255, 0.96);
   box-shadow: 0 28px 90px rgba(51, 65, 85, 0.24);
+}
+
+:root[data-theme="light"] .ark-workflow-phase-chip-focus {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+:root[data-theme="light"] .ark-workflow-phase-chip-break {
+  border-color: rgba(5, 150, 105, 0.32);
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+:root[data-theme="light"] .ark-workflow-phase-task {
+  opacity: 0.92;
+}
+
+:root[data-theme="light"] .ark-workflow-phase-separator {
+  opacity: 0.45;
 }
 
 :root[data-theme="light"] .ark-modal :is(input, select, textarea) {
@@ -272,56 +878,70 @@
 }
 
 .ark-dialogue {
-  --dialogue-shade: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.8), transparent);
-  --dialogue-option-bg: rgba(0, 0, 0, 0.4);
-  --dialogue-option-border: rgba(255, 255, 255, 0.1);
-  --dialogue-option-text: rgba(255, 255, 255, 0.9);
-  --dialogue-index: #60a5fa;
-  --dialogue-input-placeholder: rgba(255, 255, 255, 0.3);
-  --dialogue-speaker-bg: linear-gradient(to right, rgba(100, 116, 139, 0.9), rgba(51, 65, 85, 0.9));
-  --dialogue-speaker-text: #fff;
-  --dialogue-box-bg: rgba(0, 0, 0, 0.5);
-  --dialogue-box-border: transparent;
+  --dialogue-card-bg: var(--ark-glass-surface-strong);
+  --dialogue-card-border: var(--ark-glass-border-strong);
+  --dialogue-card-shadow: var(--ark-glass-shadow-strong);
+  --dialogue-option-bg: rgba(255, 255, 255, 0.08);
+  --dialogue-option-border: rgba(255, 255, 255, 0.16);
+  --dialogue-option-text: rgba(255, 255, 255, 0.88);
+  --dialogue-input-bg: rgba(255, 255, 255, 0.08);
+  --dialogue-input-border: rgba(255, 255, 255, 0.14);
+  --dialogue-input-placeholder: rgba(255, 255, 255, 0.44);
+  --dialogue-speaker-bg: rgba(255, 255, 255, 0.1);
+  --dialogue-speaker-text: rgba(255, 255, 255, 0.92);
   --dialogue-message: rgba(255, 255, 255, 0.95);
-  --dialogue-volume-bg: rgba(255, 255, 255, 0.05);
-  --dialogue-volume-text: rgba(255, 255, 255, 0.4);
-  --dialogue-glow: rgba(59, 130, 246, 0.1);
+  --dialogue-send-bg: linear-gradient(135deg, rgba(96, 165, 250, 0.98), rgba(59, 130, 246, 0.92));
+  --dialogue-send-text: #fff;
 }
 
 :root[data-theme="light"] .ark-dialogue {
-  --dialogue-shade: linear-gradient(to top, rgba(226, 232, 240, 0.92), rgba(226, 232, 240, 0.5), transparent);
-  --dialogue-option-bg: rgba(226, 236, 248, 0.68);
-  --dialogue-option-border: rgba(51, 65, 85, 0.18);
-  --dialogue-option-text: rgba(15, 23, 42, 0.88);
-  --dialogue-index: #2563eb;
+  --dialogue-card-bg: var(--ark-glass-surface-strong);
+  --dialogue-card-border: var(--ark-glass-border-strong);
+  --dialogue-card-shadow: var(--ark-glass-shadow-strong);
+  --dialogue-option-bg: rgba(255, 255, 255, 0.6);
+  --dialogue-option-border: rgba(51, 65, 85, 0.13);
+  --dialogue-option-text: rgba(15, 23, 42, 0.84);
+  --dialogue-input-bg: rgba(248, 250, 252, 0.78);
+  --dialogue-input-border: rgba(51, 65, 85, 0.12);
   --dialogue-input-placeholder: rgba(71, 85, 105, 0.62);
-  --dialogue-speaker-bg: rgba(203, 218, 238, 0.92);
+  --dialogue-speaker-bg: rgba(248, 250, 252, 0.78);
   --dialogue-speaker-text: rgba(15, 23, 42, 0.95);
-  --dialogue-box-bg: rgba(241, 245, 249, 0.82);
-  --dialogue-box-border: rgba(51, 65, 85, 0.16);
   --dialogue-message: rgba(15, 23, 42, 0.95);
-  --dialogue-volume-bg: rgba(51, 65, 85, 0.08);
-  --dialogue-volume-text: rgba(30, 41, 59, 0.72);
-  --dialogue-glow: rgba(37, 99, 235, 0.08);
 }
 
-.ark-dialogue-shade {
-  background: var(--dialogue-shade);
+.ark-dialogue-card {
+  border: 1px solid var(--dialogue-card-border);
+  background: var(--dialogue-card-bg);
+  box-shadow: var(--dialogue-card-shadow);
+  backdrop-filter: blur(28px) saturate(145%);
 }
 
-.ark-dialogue-option,
-.ark-dialogue-input {
+.ark-dialogue-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46), inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.ark-dialogue-option {
   border: 1px solid var(--dialogue-option-border);
   background: var(--dialogue-option-bg);
   color: var(--dialogue-option-text);
 }
 
-.ark-dialogue-index {
-  color: var(--dialogue-index);
-  opacity: 0.86;
+.ark-dialogue-speaker {
+  border: 1px solid var(--dialogue-option-border);
+  background: var(--dialogue-speaker-bg);
+  color: var(--dialogue-speaker-text);
 }
 
-.ark-dialogue-option-text,
+.ark-dialogue-input-wrap {
+  border: 1px solid var(--dialogue-input-border);
+  background: var(--dialogue-input-bg);
+}
+
 .ark-dialogue-input {
   color: var(--dialogue-option-text);
 }
@@ -331,28 +951,9 @@
 }
 
 .ark-dialogue-send {
-  color: var(--dialogue-input-placeholder);
-}
-
-.ark-dialogue-speaker {
-  border: 1px solid var(--dialogue-option-border);
-  background: var(--dialogue-speaker-bg);
-  color: var(--dialogue-speaker-text);
-  box-shadow: 0 10px 28px rgba(51, 65, 85, 0.18);
-}
-
-.ark-dialogue-box {
-  border: 1px solid var(--dialogue-box-border);
-  background: var(--dialogue-box-bg);
-}
-
-.ark-dialogue-glow {
-  background: var(--dialogue-glow);
-}
-
-.ark-dialogue-volume {
-  background: var(--dialogue-volume-bg);
-  color: var(--dialogue-volume-text);
+  background: var(--dialogue-send-bg);
+  color: var(--dialogue-send-text);
+  box-shadow: 0 14px 32px rgba(59, 130, 246, 0.32);
 }
 
 .ark-dialogue-message {
@@ -361,8 +962,8 @@
 
 .ark-focus-work-shell {
   --focus-work-backdrop: rgba(0, 0, 0, 0.58);
-  --focus-work-surface: rgba(8, 11, 16, 0.95);
-  --focus-work-surface-raised: rgba(12, 16, 22, 0.92);
+  --focus-work-surface: rgb(8, 11, 16);
+  --focus-work-surface-raised: rgb(12, 16, 22);
   --focus-work-surface-soft: rgba(255, 255, 255, 0.08);
   --focus-work-surface-muted: rgba(0, 0, 0, 0.22);
   --focus-work-header: rgba(255, 255, 255, 0.04);
@@ -372,6 +973,8 @@
   --focus-work-text-muted: rgba(255, 255, 255, 0.68);
   --focus-work-text-faint: rgba(255, 255, 255, 0.42);
   --focus-work-shadow: 0 28px 100px rgba(0, 0, 0, 0.55);
+  --focus-work-card-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --focus-work-primary-button-text: rgba(255, 255, 255, 0.96);
 
   /* Component specific variables for status badges and buttons - Dark Mode */
   --focus-work-amber-bg: rgba(252, 211, 77, 0.1);
@@ -391,12 +994,13 @@
   --focus-work-blue-border: rgba(147, 197, 253, 0.2);
   --focus-work-blue-border-hover: rgba(147, 197, 253, 0.32);
   --focus-work-blue-text: rgba(147, 197, 253, 0.95);
+  --focus-work-blue-shadow: rgba(147, 197, 253, 0.16);
 }
 
 :root[data-theme="light"] .ark-focus-work-shell {
   --focus-work-backdrop: rgba(203, 213, 225, 0.62);
-  --focus-work-surface: rgba(248, 250, 252, 0.96);
-  --focus-work-surface-raised: rgba(255, 255, 255, 0.94);
+  --focus-work-surface: rgb(248, 250, 252);
+  --focus-work-surface-raised: rgb(255, 255, 255);
   --focus-work-surface-soft: rgba(37, 99, 235, 0.08);
   --focus-work-surface-muted: rgba(226, 232, 240, 0.76);
   --focus-work-header: rgba(226, 232, 240, 0.6);
@@ -406,6 +1010,8 @@
   --focus-work-text-muted: rgba(30, 41, 59, 0.82);
   --focus-work-text-faint: rgba(47, 55, 70, 0.76);
   --focus-work-shadow: 0 28px 100px rgba(51, 65, 85, 0.22);
+  --focus-work-card-shadow: 0 14px 34px rgba(51, 65, 85, 0.12);
+  --focus-work-primary-button-text: rgba(255, 255, 255, 0.96);
 
   /* Component specific variables for status badges and buttons - Light Mode (High Contrast, Rich Tones) */
   --focus-work-amber-bg: rgba(180, 83, 9, 0.08);
@@ -425,6 +1031,7 @@
   --focus-work-blue-border: rgba(29, 78, 216, 0.24);
   --focus-work-blue-border-hover: rgba(29, 78, 216, 0.38);
   --focus-work-blue-text: #1d4ed8;
+  --focus-work-blue-shadow: rgba(29, 78, 216, 0.22);
 }
 
 

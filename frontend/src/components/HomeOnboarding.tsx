@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import AppModalFrame from './AppModalFrame';
 
 import {
   FIRST_GUIDE_STORAGE_KEY,
@@ -286,12 +287,14 @@ export default function HomeOnboarding() {
 
   if (phase === 'intro') {
     return createPortal(
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ark-overlay px-4" aria-live="polite">
-        <div
-          role="dialog"
-          aria-label="首次引导"
-          className="w-[420px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-5 text-ark-text shadow-2xl backdrop-blur-md"
-        >
+      <AppModalFrame
+        open={true}
+        zIndexClassName="z-[120]"
+        ariaLabel="首次引导"
+        backdropClassName="bg-ark-overlay"
+        contentClassName="px-4"
+        panelClassName="w-[420px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-5 text-ark-text shadow-2xl backdrop-blur-md"
+      >
           <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">首次引导</div>
           <h2 className="mt-3 text-xl font-semibold">欢迎来到 Ark</h2>
           <p className="mt-3 text-sm leading-6 text-ark-text">
@@ -322,20 +325,21 @@ export default function HomeOnboarding() {
               开始体验
             </button>
           </div>
-        </div>
-      </div>,
+      </AppModalFrame>,
       document.body,
     );
   }
 
   if (phase === 'complete') {
     return createPortal(
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ark-overlay px-4" aria-live="polite">
-        <div
-          role="dialog"
-          aria-label="首次引导"
-          className="w-[460px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-5 text-ark-text shadow-2xl backdrop-blur-md"
-        >
+      <AppModalFrame
+        open={true}
+        zIndexClassName="z-[120]"
+        ariaLabel="首次引导"
+        backdropClassName="bg-ark-overlay"
+        contentClassName="px-4"
+        panelClassName="w-[460px] max-w-[94vw] rounded-2xl border border-cyan-200/20 bg-ark-surface-strong p-5 text-ark-text shadow-2xl backdrop-blur-md"
+      >
           <div className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-200/60">首次引导</div>
           <h2 className="mt-3 text-xl font-semibold">体验完成</h2>
           <p className="mt-3 text-sm leading-6 text-ark-text">
@@ -356,8 +360,7 @@ export default function HomeOnboarding() {
               知道了
             </button>
           </div>
-        </div>
-      </div>,
+      </AppModalFrame>,
       document.body,
     );
   }

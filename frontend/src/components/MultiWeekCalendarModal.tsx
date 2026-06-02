@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiJson } from '../lib/api';
 import { getPrimaryEvent } from '../lib/events/api';
+import AppModalFrame from './AppModalFrame';
 import CalendarDateDrawer from './CalendarDateDrawer';
 import MultiWeekCalendarGrid from './MultiWeekCalendarGrid';
 import AppointmentEditModal from './AppointmentEditModal';
@@ -128,8 +129,13 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
   }
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-ark-overlay p-6 backdrop-blur-sm" role="dialog" aria-label="多周安排日历">
-      <div className="flex h-[86vh] w-[92vw] max-w-[1500px] overflow-hidden rounded-[2rem] border border-ark-border bg-ark-surface-subtle text-ark-text shadow-2xl backdrop-blur-2xl">
+    <AppModalFrame
+      open={true}
+      onClose={onClose}
+      zIndexClassName="z-[75]"
+      ariaLabel="多周安排日历"
+      panelClassName="flex h-[86vh] w-[92vw] max-w-[1500px] overflow-hidden rounded-[2rem] border border-ark-border bg-ark-surface-subtle text-ark-text shadow-2xl backdrop-blur-2xl"
+    >
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="relative z-20 flex h-20 shrink-0 items-center justify-between gap-4 border-b border-ark-border bg-ark-surface-subtle px-6">
             <div className="relative flex items-center gap-3 text-2xl font-black tracking-tight">
@@ -280,8 +286,7 @@ const MultiWeekCalendarModal: React.FC<MultiWeekCalendarModalProps> = ({ open, o
             setReloadVersion((value) => value + 1);
           }}
         />
-      </div>
-    </div>
+    </AppModalFrame>
   );
 };
 

@@ -114,12 +114,28 @@ describe('Navigation', () => {
 
     renderNavigation('/apps');
 
+    await user.click(screen.getByRole('button', { name: '打开用户菜单' }));
     await user.click(screen.getByRole('button', { name: '退出登录' }));
 
     expect(useAuthStore.getState().token).toBeNull();
     expect(useAuthStore.getState().expiresAt).toBeNull();
     expect(useAuthStore.getState().user).toBeNull();
     expect(screen.getByTestId('current-path')).toHaveTextContent('/login');
+  });
+
+  it('uses the navbar logo as a home entry', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockResolvedValue(null);
+
+    renderNavigation('/erc');
+
+    const homeButton = screen.getByRole('button', { name: '返回首页' });
+    expect(homeButton).toBeInTheDocument();
+    expect(homeButton).toContainElement(screen.getByRole('presentation', { hidden: true }));
+
+    await user.click(homeButton);
+
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/');
   });
 
   it('adds a book entry beside the brand to restart the first-experience guide', async () => {

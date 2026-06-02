@@ -2,6 +2,7 @@ import React from 'react';
 
 import { apiJson } from '../../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
+import AppModalFrame from '../AppModalFrame';
 import FocusWorkModalShell from './FocusWorkModalShell';
 import { getFocusWorkDefinition } from './focusWorkRegistry';
 import {
@@ -190,13 +191,13 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       {children}
 
       {pendingStart ? (
-        <div className="ark-focus-work-shell ark-focus-work-backdrop fixed inset-x-0 bottom-0 top-16 z-[90] flex items-center justify-center backdrop-blur-sm">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="focus-work-record-title"
-            className="ark-focus-work-dialog w-[min(92vw,30rem)] rounded-[2rem] border p-6 shadow-2xl"
-          >
+        <AppModalFrame
+          open={true}
+          zIndexClassName="z-[90]"
+          backdropClassName="ark-focus-work-shell ark-focus-work-backdrop"
+          ariaLabelledBy="focus-work-record-title"
+          panelClassName="ark-focus-work-dialog w-[min(92vw,30rem)] rounded-[2rem] border p-6 shadow-2xl"
+        >
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Focus Work</div>
             <h2 id="focus-work-record-title" className="mt-3 text-2xl font-semibold text-[var(--focus-work-text)]">
               记录这次专注吗？
@@ -222,8 +223,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
                 不记录，直接进入
               </button>
             </div>
-          </section>
-        </div>
+        </AppModalFrame>
       ) : null}
 
       {isFullscreen && activeDefinition ? (

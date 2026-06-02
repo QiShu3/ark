@@ -21,7 +21,9 @@ import {
 import { activateEventSubApps } from '../../lib/events/eventAppSync';
 import { fetchVocabDecks, initializeVocabAppTask } from '../../lib/vocab/api';
 import { saveEventERCConfig } from '../../lib/erc/configSync';
+import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
+import WorkflowPhaseChips from '../WorkflowPhaseChips';
 import {
   cloneWorkflowForm,
   createDefaultWorkflowForm,
@@ -1402,37 +1404,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="truncate text-sm font-semibold text-ark-text tracking-wide">{workflow.name}</div>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    {workflow.phases.map((phase, idx) => {
-                      const minutes = Math.round(phase.duration / 60);
-                      const isFocus = phase.phase_type === 'focus';
-                      const boundTask = phase.task_id ? taskArrangements.find(t => t.id === phase.task_id) : null;
-                      const taskTitle = boundTask ? boundTask.title : null;
-
-                      return (
-                        <React.Fragment key={idx}>
-                          {idx > 0 && <span className="text-ark-text-faint text-[10px]">→</span>}
-                          <div className="inline-flex items-center">
-                            {isFocus ? (
-                              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 border border-blue-500/25 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.06)]">
-                                <span>🎯 {minutes}m</span>
-                                {taskTitle && (
-                                  <>
-                                    <span className="text-blue-500/30 text-[10px]">|</span>
-                                    <span className="truncate max-w-[90px] text-blue-200/80" title={taskTitle}>{taskTitle}</span>
-                                  </>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.06)]">
-                                <span>☕ {minutes}m</span>
-                              </div>
-                            )}
-                          </div>
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
+                  <WorkflowPhaseChips
+                    phases={workflow.phases}
+                    className="mt-2.5"
+                    getTaskTitle={(taskId) => taskArrangements.find((task) => task.id === taskId)?.title}
+                  />
                 </button>
                 <div className="flex shrink-0 gap-2">
                   <button
@@ -1614,17 +1590,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[80] flex items-center justify-center bg-ark-overlay px-5 py-20 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        aria-label="安排"
-        onClick={onClose}
+      <AppModalFrame
+        open={true}
+        onClose={onClose}
+        zIndexClassName="z-[80]"
+        ariaLabel="安排"
+        panelClassName="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
       >
-        <div
-          className="ark-modal flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
-          onClick={(clickEvent) => clickEvent.stopPropagation()}
-        >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-ark-text-faint">事件总览</div>
@@ -1800,20 +1772,15 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             )}
           </section>
         </div>
-        </div>
-      </div>
+      </AppModalFrame>
       {showAppConfigModal ? (
-        <div
-          className="fixed inset-0 z-[85] flex items-center justify-center bg-ark-overlay px-4 backdrop-blur-sm"
-          onClick={() => { setShowAppConfigModal(false); setAppConfigEditor(null); setAppConfigError(null); }}
+        <AppModalFrame
+          open={true}
+          onClose={() => { setShowAppConfigModal(false); setAppConfigEditor(null); setAppConfigError(null); }}
+          zIndexClassName="z-[85]"
+          ariaLabel="应用配置"
+          panelClassName="w-[560px] max-w-[94vw] flex flex-col overflow-hidden rounded-2xl shadow-2xl"
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="应用配置"
-            className="ark-modal w-[560px] max-w-[94vw] max-h-[80vh] flex flex-col overflow-hidden rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
             <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
               <div>
                 <h3 className="text-lg font-semibold">应用配置</h3>
@@ -1888,8 +1855,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 })()}
               </div>
             </div>
-          </div>
-        </div>
+        </AppModalFrame>
       ) : null}
       <WorkflowPresetModal
         open={showEventWorkflowModal}

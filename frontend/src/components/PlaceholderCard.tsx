@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import FocusStats from './FocusStats';
+import AppModalFrame from './AppModalFrame';
 import WorkflowProgressBar from './WorkflowProgressBar';
 import WorkflowPresetModal from './WorkflowPresetModal';
 import CalendarWidget from './CalendarWidget';
@@ -278,6 +279,29 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     window.addEventListener('ark:open-workflow-modal', handler);
     return () => window.removeEventListener('ark:open-workflow-modal', handler);
   }, [index, manageableWorkflowPresets.length]);
+
+  useEffect(() => {
+    if (index !== 0) return;
+    const handler = () => {
+      setShowFocusTaskPicker(true);
+      _loadTasks();
+    };
+    window.addEventListener('ark:open-focus-task-picker', handler);
+    return () => window.removeEventListener('ark:open-focus-task-picker', handler);
+  }, [index]);
+
+  useEffect(() => {
+    if (index !== 0) return;
+    const handler = () => {
+      setShowTaskModal(true);
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsOpened);
+      _loadTasks();
+      _loadAppointments();
+      void _loadArrangementEvents();
+    };
+    window.addEventListener('ark:open-arrangements-modal', handler);
+    return () => window.removeEventListener('ark:open-arrangements-modal', handler);
+  }, [index]);
 
   // Sync today focus minutes periodically
   useEffect(() => {
@@ -1454,14 +1478,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           <div className="flex items-center gap-1 shrink-0">
             {summaryEntry ? (
               !_isTaskCompletable(task) ? (
-                <span className="rounded-full border border-blue-300/15 bg-blue-300/10 px-2 py-0.5 text-[10px] font-semibold text-blue-100">
+                <span className="ark-arrangement-summary-enter rounded-full border px-2 py-0.5 text-[10px] font-semibold">
                   进入任务
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
-                  className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-100 transition hover:border-emerald-300/35 hover:bg-emerald-300/16"
+                  className="ark-arrangement-summary-complete rounded-full border px-2 py-0.5 text-[10px] font-semibold transition"
                   aria-label={`完成任务：${task.title}`}
                 >
                   完成任务
@@ -2042,17 +2066,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
         </div>
 
         {showWorkflowPicker && (
-          <div
-            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center"
-            onClick={() => setShowWorkflowPicker(false)}
+          <AppModalFrame
+            open={true}
+            onClose={() => setShowWorkflowPicker(false)}
+            zIndexClassName="z-[60]"
+            ariaLabelledBy="workflow-picker-title"
+            panelClassName="w-[520px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
           >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="workflow-picker-title"
-              className="ark-modal max-h-[72vh] w-[520px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
               <div className="flex h-14 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
                 <h3 id="workflow-picker-title" className="text-base font-semibold text-ark-text">选择工作流</h3>
                 <button
@@ -2101,19 +2121,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   新建工作流
                 </button>
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
 
         {showFocusTaskPicker && (
-          <div
-            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center"
-            onClick={() => setShowFocusTaskPicker(false)}
+          <AppModalFrame
+            open={true}
+            onClose={() => setShowFocusTaskPicker(false)}
+            zIndexClassName="z-[60]"
+            ariaLabel="全部任务"
+            panelClassName="w-[560px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
           >
-            <div
-              className="ark-modal max-h-[72vh] w-[560px] max-w-[92vw] overflow-hidden rounded-2xl shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
               <div className="h-14 border-b border-ark-border flex items-center justify-between px-5 bg-ark-surface-subtle">
                 <h3 className="text-base font-semibold text-ark-text">全部任务</h3>
                 <button
@@ -2148,8 +2166,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   <div className="text-center text-ark-text-faint py-6">暂无任务</div>
                 )}
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
 
         <WorkflowPresetModal
@@ -2177,8 +2194,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {/* 专注时长统计悬浮页面 */}
         {showStatsModal && (
-          <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-            <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+          <AppModalFrame
+            open={true}
+            onClose={() => setShowStatsModal(false)}
+            zIndexClassName="z-50"
+            ariaLabel="专注统计"
+            panelClassName="relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
+          >
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
                 <h2 className="text-base font-semibold text-ark-text">专注统计</h2>
@@ -2202,8 +2224,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   }} 
                 />
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
 
         <TaskEditModal
@@ -2227,8 +2248,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
         {/* 安排悬浮页面 */}
         {showTaskModal && (
-          <div className="ark-modal-backdrop fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-            <div className="ark-modal relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200">
+          <AppModalFrame
+            open={true}
+            onClose={() => {
+              setShowTaskModal(false);
+              dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsClosed);
+            }}
+            zIndexClassName="z-50"
+            ariaLabel="安排管理"
+            panelClassName="relative flex h-[80%] w-[80%] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
+          >
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
                 <h2 className="text-base font-semibold text-ark-text">安排管理</h2>
@@ -2467,19 +2496,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
 
         {showCreateTaskModal && (
-          <div
-            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center pt-16 animate-in fade-in duration-200"
-            onClick={_closeCreateTaskModal}
+          <AppModalFrame
+            open={true}
+            onClose={_closeCreateTaskModal}
+            zIndexClassName="z-[60]"
+            ariaLabel="创建安排"
+            panelClassName="relative flex w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
           >
-            <div
-              className="ark-modal relative flex max-h-[calc(100vh-6rem)] w-[520px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
               <div className="h-14 shrink-0 border-b border-ark-border flex items-center justify-between px-5 bg-ark-surface-subtle">
                 <h3 className="text-base font-semibold text-ark-text">创建安排</h3>
                 <button
@@ -2795,18 +2822,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     {createTaskSubmitting ? '创建中...' : '创建'}
                   </button>
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
         {showTaskDraftModal && (
-          <div
-            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center animate-in fade-in duration-200"
-            onClick={_closeTaskDraftModal}
+          <AppModalFrame
+            open={true}
+            onClose={_closeTaskDraftModal}
+            zIndexClassName="z-[60]"
+            ariaLabel="安排草稿"
+            panelClassName="flex w-[680px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
           >
-            <div
-              className="ark-modal flex max-h-[78vh] w-[680px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
               <div className="h-16 shrink-0 border-b border-ark-border px-5 bg-ark-surface-subtle flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-base font-semibold text-ark-text">识别到 {taskAssistantDrafts.length} 个安排草稿</h3>
@@ -2903,18 +2928,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   </div>
                 ) : null}
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
         {showTaskAssistantModal && (
-          <div
-            className="ark-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center animate-in fade-in duration-200"
-            onClick={_resetTaskAssistant}
+          <AppModalFrame
+            open={true}
+            onClose={_resetTaskAssistant}
+            zIndexClassName="z-[60]"
+            ariaLabel="安排解析助手"
+            panelClassName="flex h-[420px] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
           >
-            <div
-              className="ark-modal flex h-[420px] w-[560px] max-w-[92vw] flex-col overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
               <div className="flex-[1] border-b border-ark-border px-5 bg-ark-surface-subtle flex items-center justify-between">
                 <h3 className="text-base font-semibold text-ark-text">安排解析助手</h3>
                 <button
@@ -2957,8 +2980,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   {taskAssistantSubmitting ? '生成中...' : '快捷生成安排'}
                 </button>
               </div>
-            </div>
-          </div>
+          </AppModalFrame>
         )}
       </>
     );

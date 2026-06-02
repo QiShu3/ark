@@ -25,15 +25,17 @@ export default function FocusWorkModalShell({
   onAbandon,
   children,
 }: FocusWorkModalShellProps) {
+  const contentClassName = isPaused ? 'h-full pointer-events-none select-none opacity-35' : 'h-full';
+
   return (
-    <div className="ark-focus-work-shell fixed inset-x-0 bottom-0 top-16 z-[90]" aria-live="polite">
-      <div className="ark-focus-work-backdrop absolute inset-0 backdrop-blur-[2px]" aria-hidden="true" />
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="focus-work-modal-title"
-        className="ark-focus-work-dialog absolute left-1/2 top-1/2 flex h-[calc((100vh-4rem)*0.9)] w-[90vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[2.25rem] border shadow-[0_28px_100px_rgba(0,0,0,0.55)]"
-      >
+    <div className="ark-focus-work-shell fixed inset-x-1 bottom-1 top-[7.5rem] z-[90] p-4" aria-live="polite">
+      <div className="flex h-full w-full">
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="focus-work-modal-title"
+          className="ark-focus-work-dialog flex h-full w-full flex-col overflow-hidden rounded-[26px] border shadow-[0_28px_100px_rgba(0,0,0,0.55)]"
+        >
         <header className="ark-focus-work-header flex items-center justify-between gap-4 border-b px-6 py-4">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">{subtitle}</div>
@@ -83,7 +85,7 @@ export default function FocusWorkModalShell({
           </div>
         </header>
         <div className="relative min-h-0 flex-1 overflow-y-auto p-5">
-          <div className={isPaused ? 'pointer-events-none select-none opacity-35' : undefined} aria-hidden={isPaused ? true : undefined}>
+          <div className={contentClassName} aria-hidden={isPaused ? true : undefined}>
             {children}
           </div>
           {isPaused ? (
@@ -97,6 +99,7 @@ export default function FocusWorkModalShell({
           ) : null}
         </div>
       </section>
+      </div>
     </div>
   );
 }
