@@ -37,7 +37,7 @@ export default function VocabWordDetail() {
   }, [wordId]);
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-32">
+    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-4xl">
         <a href="#/vocab" className="text-sm text-ark-text-muted transition hover:text-ark-text">
           返回词书首页

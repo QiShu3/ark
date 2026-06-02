@@ -16,7 +16,7 @@ export default function VocabStudy() {
   const session = useVocabSession(activeDeck?.id ?? null, 'study', activeDeckVersion);
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-32">
+    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-5xl">
         <h1 className="text-3xl font-semibold tracking-tight">新词学习</h1>
         <p className="mt-3 text-ark-text-muted">按词书切换今天待学的新词，先把词形、音标和基本释义看熟。</p>

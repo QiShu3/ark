@@ -249,7 +249,7 @@ export default function VocabHome() {
   ];
 
   return (
-    <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-32 md:px-8">
+    <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="ark-panel-card rounded-lg p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">

@@ -691,8 +691,8 @@
 
 .ark-focus-work-shell {
   --focus-work-backdrop: rgba(0, 0, 0, 0.58);
-  --focus-work-surface: rgba(8, 11, 16, 0.95);
-  --focus-work-surface-raised: rgba(12, 16, 22, 0.92);
+  --focus-work-surface: rgb(8, 11, 16);
+  --focus-work-surface-raised: rgb(12, 16, 22);
   --focus-work-surface-soft: rgba(255, 255, 255, 0.08);
   --focus-work-surface-muted: rgba(0, 0, 0, 0.22);
   --focus-work-header: rgba(255, 255, 255, 0.04);
@@ -725,8 +725,8 @@
 
 :root[data-theme="light"] .ark-focus-work-shell {
   --focus-work-backdrop: rgba(203, 213, 225, 0.62);
-  --focus-work-surface: rgba(248, 250, 252, 0.96);
-  --focus-work-surface-raised: rgba(255, 255, 255, 0.94);
+  --focus-work-surface: rgb(248, 250, 252);
+  --focus-work-surface-raised: rgb(255, 255, 255);
   --focus-work-surface-soft: rgba(37, 99, 235, 0.08);
   --focus-work-surface-muted: rgba(226, 232, 240, 0.76);
   --focus-work-header: rgba(226, 232, 240, 0.6);

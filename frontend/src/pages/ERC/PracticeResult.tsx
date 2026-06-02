@@ -10,7 +10,7 @@ export default function ERCPracticeResult() {
 
   if (!article || !result) {
     return (
-      <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-32">
+      <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
         <div className="mx-auto max-w-4xl">
           <h1 className="text-3xl font-semibold text-ark-text">练习结果</h1>
           <p className="mt-4 text-ark-text-muted">没有可展示的练习结果。</p>
@@ -23,7 +23,7 @@ export default function ERCPracticeResult() {
   }
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-32">
+    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-5xl">
         <div className="border-b border-ark-border pb-6">
           <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Result</div>
