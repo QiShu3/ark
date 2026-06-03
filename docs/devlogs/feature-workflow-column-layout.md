@@ -2,6 +2,29 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-03 09:41 · 47299f6 · feat(frontend): redesign study timer card to match prototype layout and theme-adaptive aesthetics
+
+- 用户提出的需求：
+  - “我对其美学设计不满意，这是我重新生成的原型图，我希望你可以按照它来重新设计”
+
+- 本次完成的工作：
+  - **重塑首页计时器卡片排版**：强制采用左右横向布局（Flex Row），并在窄屏下配备缩放保护，替代原有的纵向与绝对定位排版，解决各尺寸屏幕的适应度。
+  - **整合时钟 PNG 贴图与流动波纹 SVG 背景**：
+    - 引入了用户提供的 `timer-clock.png` 图片，作为右下角层叠置底的秒表背景。
+    - 采用贝塞尔曲线（Bezier Curves）和闪烁的四角星星绘制了 SVG 动态覆盖，通过 `currentColor` 变量和 opacity 配置了高保真的流线波浪效果。
+  - **CTA 开始学习按钮圆角与圆圈图标**：
+    - 重构 “开始学习” 按钮为 `rounded-full` 胶囊型药丸。
+    - 添加了皇家蓝渐变色，并在 hover 悬停时添加 scale 微缩放，active 点击时添加微动画。
+    - 为 Lucide 的 `<Play>` 按钮设计了一个白色的圆形背景容器，保证图标和文字左右平衡排版。
+  - **双主题模式深度适配**：
+    - 浅色模式下完美复现浅蓝微光玻璃材质与深海军蓝文字。
+    - 深色模式下转化为科技感极强的深色半透明玻璃背景配以亮蓝线条高光。
+    - 添加了 `:disabled` 提交状态时的 cursor 及 shadow 禁用逻辑。
+
+- 验证情况：
+  - 运行 `pnpm check` 验证通过，TypeScript 无任何类型报错。
+  - 运行 `pnpm vitest run HomeRightDashboard.test.tsx` 单元测试通过，完全符合已有断言。
+
 ### 2026-06-03 08:50 · ca9e713 · feat(frontend): refactor workflow preset modal layout and styling with horizontal dnd
 
 - 用户提出的需求：
