@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-03 09:44 · 5cee4e0 · style(frontend): adjust size, position, and opacity of study timer clock image for visibility
+
+- 用户提出的需求：
+  - “不是哥们，我时钟呢？”
+
+- 本次完成的工作：
+  - **调整时钟背景尺寸与位置**：时钟 PNG 图片大小从 `180px` 增大为 `250px`，并将 `right` 从 `-8px` 调整为 `-30px`，使其在卡片上向左侧延伸扩展，从而不会被右侧的 “开始学习” 按钮完全遮挡。
+  - **调高双主题下的不透明度**：浅色模式下时钟不透明度提高至 `0.88`（高对比，贴合原型图），深色模式下提高至 `0.45`，保证时钟在背景中清晰可见。
+
+- 验证情况：
+  - `pnpm check` 验证通过，编译正常。
+
 ### 2026-06-03 09:41 · 47299f6 · feat(frontend): redesign study timer card to match prototype layout and theme-adaptive aesthetics
 
 - 用户提出的需求：
