@@ -8,6 +8,8 @@ import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
 import type { AchievementSummary } from './achievementTypes';
 import AppModalFrame from './AppModalFrame';
+import HomeCard from './HomeCard';
+import HomeSectionHeader from './HomeSectionHeader';
 import { getWorkflowPresetPhases, type WorkflowPreset } from './workflowPresetForm';
 import WorkflowPhaseChips from './WorkflowPhaseChips';
 import timerClockPng from '../assets/timer-clock.png';
@@ -380,7 +382,7 @@ export default function HomeRightDashboard() {
   return (
     <>
       <div className="grid h-full grid-rows-[1.25fr_0.85fr_1.15fr_1.7fr_1fr] gap-3">
-        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5">
+        <HomeCard variant="hero" className="px-6 py-5">
           <TimerCardArt />
 
           <div className="relative z-10 flex h-full min-h-[150px] flex-col justify-between">
@@ -410,15 +412,18 @@ export default function HomeRightDashboard() {
             </span>
             {actionLabel}
           </button>
-        </section>
+        </HomeCard>
 
-        <section className="ark-home-card rounded-[24px] px-6 py-3">
-          <div className="mb-2.5 flex items-center justify-between">
-            <span className="text-base font-semibold text-[var(--ark-text)]">今日进度</span>
-            <span className={`text-2xl font-medium ark-font-display ${progressIsZero ? 'text-[var(--ark-text-faint)]' : 'text-[var(--ark-accent)]'}`}>
-              {progressPercent}%
-            </span>
-          </div>
+        <HomeCard className="px-6 py-3">
+          <HomeSectionHeader
+            title="今日进度"
+            className="mb-2.5"
+            action={(
+              <span className={`text-2xl font-medium ark-font-display ${progressIsZero ? 'text-[var(--ark-text-faint)]' : 'text-[var(--ark-accent)]'}`}>
+                {progressPercent}%
+              </span>
+            )}
+          />
           <div className="h-3 overflow-hidden rounded-full bg-[var(--ark-surface-subtle)]">
             <div
               className={`ark-home-progress-fill h-full rounded-full transition-[width] duration-500 ${progressIsZero ? 'ark-home-progress-fill-idle' : ''}`}
@@ -428,9 +433,9 @@ export default function HomeRightDashboard() {
           <div className="mt-2 text-sm text-[var(--ark-text-faint)]">
             已完成 {todayFocusMinutes} 分钟 / {DAILY_GOAL_MINUTES} 分钟
           </div>
-        </section>
+        </HomeCard>
 
-        <section className="ark-home-card relative flex min-h-0 flex-col rounded-[24px] px-6 py-4">
+        <HomeCard className="relative flex min-h-0 flex-col px-6 py-4">
           <button
             type="button"
             onClick={openArrangementEntry}
@@ -440,7 +445,7 @@ export default function HomeRightDashboard() {
           </button>
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 pt-2">
             <div className="flex min-h-0 flex-col">
-              <div className="mb-3 text-base font-semibold text-[var(--ark-text)]">任务</div>
+              <HomeSectionHeader title="任务" className="mb-3" />
               <div
                 ref={taskListRef}
                 className={`relative flex min-h-0 flex-1 flex-col ${todayTasks.length ? 'justify-start gap-2' : 'justify-center'}`}
@@ -471,7 +476,7 @@ export default function HomeRightDashboard() {
             <div className="w-px bg-ark-border" aria-hidden="true" />
 
             <div className="flex min-h-0 flex-col">
-              <div className="mb-3 text-base font-semibold text-[var(--ark-text)]">日程</div>
+              <HomeSectionHeader title="日程" className="mb-3" />
               <div
                 ref={appointmentListRef}
                 className={`relative flex min-h-0 flex-1 flex-col ${upcomingAppointments.length ? 'justify-start gap-3' : 'justify-center'}`}
@@ -497,26 +502,30 @@ export default function HomeRightDashboard() {
               </div>
             </div>
           </div>
-        </section>
+        </HomeCard>
 
         <CalendarWidget className="ark-home-card min-h-0 rounded-[24px]" />
 
         <section className="grid min-h-0 grid-cols-3 gap-3">
-          <button
+          <HomeCard
+            as="button"
             type="button"
-            className="ark-home-card ark-home-shortcut-card flex min-w-0 flex-col justify-center rounded-[20px] px-5 text-left"
+            variant="shortcut"
+            className="flex min-w-0 flex-col justify-center px-5 text-left"
           >
             <span className="ark-home-shortcut-icon mb-3 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
               <BarChart3 className="h-7 w-7" aria-hidden="true" />
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">数据分析</span>
             <span className="mt-1 truncate text-xs font-medium text-[var(--ark-text-faint)]">学习数据可视化</span>
-          </button>
+          </HomeCard>
 
-          <button
+          <HomeCard
+            as="button"
             ref={achievementButtonRef}
             type="button"
-            className="ark-home-card ark-home-shortcut-card flex min-w-0 flex-col justify-center rounded-[20px] px-5 text-left"
+            variant="shortcut"
+            className="flex min-w-0 flex-col justify-center px-5 text-left"
             onClick={() => setAchievementOpen(true)}
           >
             <span className="ark-home-shortcut-icon mb-3 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
@@ -524,11 +533,13 @@ export default function HomeRightDashboard() {
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">成就</span>
             <span className="mt-1 max-w-full truncate text-xs font-medium text-[var(--ark-text-faint)]">解锁成长里程碑</span>
-          </button>
+          </HomeCard>
 
-          <button
+          <HomeCard
+            as="button"
             type="button"
-            className="ark-home-card ark-home-shortcut-card flex min-w-0 flex-col justify-center rounded-[20px] px-5 text-left"
+            variant="shortcut"
+            className="flex min-w-0 flex-col justify-center px-5 text-left"
             onClick={() => navigate('/apps')}
           >
             <span className="ark-home-shortcut-icon mb-3 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
@@ -536,7 +547,7 @@ export default function HomeRightDashboard() {
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">应用中心</span>
             <span className="mt-1 max-w-full truncate text-xs font-medium text-[var(--ark-text-faint)]">更多学习工具</span>
-          </button>
+          </HomeCard>
         </section>
       </div>
 
