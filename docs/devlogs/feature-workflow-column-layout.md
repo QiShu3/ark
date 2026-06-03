@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-03 08:50 · ca9e713 · feat(frontend): refactor workflow preset modal layout and styling with horizontal dnd
+
+- 用户提出的需求：
+  - “/browser 好，每次你觉得修改好后都要从浏览器上截图对比一下” (重构工作流预设管理与配置页面样式，横向拖拽阶段排序，修改微调时长 5min，支持 icon 自定义，左侧三点菜单)
+
+- 本次完成的工作：
+  - **后端数据库与 Pydantic 扩展**：为 `focus_workflow_presets` 表新增 `icon` 字段，并在 models/schemas/helpers 逻辑中全面接入，更新 API 接口实现自定义图标的读写与克隆逻辑。
+  - **横向流程轨道重构**：将纵向卡片列表重构为横向流程节点轨道布局，支持通过 `@dnd-kit/core` 与 `@dnd-kit/sortable` 进行轻量横向阶段排序。
+  - **编辑交互优化 (Fixed Footer)**：右侧配置面板右下角动作按钮（设为默认、重置、保存工作流）重构为固定底部 Footer（`shrink-0 bg-ark-surface-strong border-t`），解决表单超长时按钮被截断折叠的问题。
+  - **细节微调与字符控制**：绑定任务类型、支持倒计时与正计时，点击 `+` / `-` 按钮以 5 分钟步长进行微调；工作流名称限制最大 20 字且展示实时字数统计。
+  - **单元测试修复**：修复了 pre-existing timezone rollover Flake 报错，以及 vocab deck count mock 方法的入参签名不匹配问题，实现 `uv run pytest` 175 个后端测试 100% 通过。
+
+- 验证情况：
+  - `pnpm check` 与 `pnpm build` 验证通过，无任何 TypeScript 语法或打包错误。
+  - 启动 FastAPI 与 Vite 调试服务，并使用 `browser` 子代理成功进行账号登录与视觉保真度截图对比（保存到 artifact 目录下）。
+
 ### 2026-06-02 19:37 · 385dc28 · feat(frontend): convert event basic info card to responsive inline-editable form
 
 - 用户提出的需求：
