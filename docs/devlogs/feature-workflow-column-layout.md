@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-03 10:00 · 77da7d8 · fix(frontend): wrap timer card contents in a flex div to prevent stopwatch image squeeze
+
+- 用户提出的需求：
+  - “挡住不是问题啊，原型图也被挡住了啊？求求你再看一下原型图对比一下吧” (指正时钟未被拉大展露出左右两端，且被挤压缩放到最右边缘的问题)
+
+- 本次完成的工作：
+  - **脱离弹性容器挤压**：将 `<section className="ark-home-timer-card">` 的 Flex 布局类名移除，使其恢复为普通 Block 块级定位容器。这样其子项 `<img>` 时钟将不会被浏览器弹性收缩机制挤压缩小，保持原汁原味的 `250px` 物理尺寸。
+  - **前台内容嵌套排版**：新增一个 `relative z-10 flex items-center justify-between` 嵌套 `div` 包裹前台计时文本和按钮，在不影响前台横向响应式 Flex 对齐的前提下，实现背景图与前台内容的逻辑解耦。
+  - **对称中心对齐**：时钟水平定位微调为 `right: -15px`，使其中心与按钮基本重合，从而时钟表盘主体能够对称且饱满地从按钮的左侧和右侧同时露出来，还原原型图视觉层次感。
+
+- 验证情况：
+  - `pnpm check` 验证通过。
+  - `pnpm vitest run HomeRightDashboard.test.tsx` 单元测试通过。
+
 ### 2026-06-03 09:44 · 5cee4e0 · style(frontend): adjust size, position, and opacity of study timer clock image for visibility
 
 - 用户提出的需求：
