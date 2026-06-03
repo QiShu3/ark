@@ -594,52 +594,75 @@
 }
 
 .ark-home-timer-card {
-  background:
-    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--ark-accent-soft) 74%, transparent), transparent 24%),
+  background: radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--ark-accent-soft) 40%, transparent), transparent 35%),
     var(--ark-glass-surface);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+:root[data-theme="light"] .ark-home-timer-card {
+  background: linear-gradient(135deg, rgba(235, 244, 255, 0.82), rgba(219, 234, 254, 0.6));
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 30px rgba(37, 99, 235, 0.04);
 }
 
 .ark-home-timer-digits {
   font-variant-numeric: tabular-nums;
+  color: var(--ark-text);
+  transition: color 0.3s ease;
 }
 
-.ark-home-decorative-clock {
-  overflow: visible;
+:root[data-theme="light"] .ark-home-timer-digits {
+  color: #0c2b5c; /* 优雅的深海军蓝 */
+}
+
+/* 时钟与背景波浪 SVG 覆盖样式 */
+.ark-home-card-overlay-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
   color: var(--ark-accent);
-  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--ark-accent) 16%, transparent));
-  opacity: 0.54;
+  opacity: 0.12;
+  transition: color 0.3s ease, opacity 0.3s ease;
 }
 
-.ark-home-clock-halo {
-  fill: color-mix(in srgb, var(--ark-accent-soft) 34%, transparent);
-  stroke: color-mix(in srgb, var(--ark-accent) 16%, transparent);
-  stroke-width: 1;
+:root[data-theme="light"] .ark-home-card-overlay-svg {
+  color: #2563eb;
+  opacity: 0.08;
 }
 
-.ark-home-clock-face {
-  fill: color-mix(in srgb, var(--ark-accent-soft) 18%, transparent);
-  stroke: color-mix(in srgb, var(--ark-accent) 48%, transparent);
-  stroke-width: 2;
+/* 时钟图片定位 */
+.ark-home-card-clock-img {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.14;
+  transition: opacity 0.3s ease;
 }
 
-.ark-home-clock-tick {
-  stroke: color-mix(in srgb, var(--ark-accent) 60%, transparent);
-  stroke-linecap: round;
-  stroke-width: 2;
+:root[data-theme="light"] .ark-home-card-clock-img {
+  opacity: 0.22;
 }
 
-.ark-home-clock-hand {
-  stroke: color-mix(in srgb, var(--ark-accent) 78%, transparent);
-  stroke-linecap: round;
-  stroke-width: 4;
+/* 装饰星星 */
+.ark-home-card-sparkle {
+  color: var(--ark-accent);
+  opacity: 0.4;
 }
 
-.ark-home-clock-hand-short {
-  stroke-width: 3.2;
-}
-
-.ark-home-clock-center {
-  fill: color-mix(in srgb, var(--ark-accent) 76%, transparent);
+:root[data-theme="light"] .ark-home-card-sparkle {
+  color: #2563eb;
+  opacity: 0.3;
 }
 
 .ark-home-progress-fill {
@@ -651,9 +674,27 @@
 }
 
 .ark-home-primary-button {
-  background: linear-gradient(135deg, #60a5fa, #2563eb);
-  color: var(--ark-on-accent);
-  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.26);
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ark-home-primary-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.34);
+  transform: scale(1.02);
+}
+
+.ark-home-primary-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ark-home-primary-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: none;
 }
 
 .ark-calendar-widget {

@@ -10,6 +10,7 @@ import type { AchievementSummary } from './achievementTypes';
 import AppModalFrame from './AppModalFrame';
 import { getWorkflowPresetPhases, type WorkflowPreset } from './workflowPresetForm';
 import WorkflowPhaseChips from './WorkflowPhaseChips';
+import clockPng from '../assets/timer-clock.png';
 
 type FocusWorkflow = {
   state: 'normal' | 'focus' | 'break';
@@ -98,33 +99,54 @@ function getWorkflowSummary(preset: WorkflowPreset | null): string {
   return `${phases.length} 个阶段 · 专注 ${focusMinutes} 分钟 · 休息 ${breakMinutes} 分钟`;
 }
 
-function DecorativeClock() {
-  const ticks = Array.from({ length: 12 }, (_, index) => index * 30);
-
+function DecorativeCardOverlay() {
   return (
-    <svg
-      className="ark-home-decorative-clock absolute right-8 top-3 z-0 h-[92px] w-[92px]"
-      viewBox="0 0 100 100"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <circle className="ark-home-clock-halo" cx="50" cy="50" r="48" />
-      <circle className="ark-home-clock-face" cx="50" cy="50" r="39" />
-      {ticks.map((rotation) => (
-        <line
-          key={rotation}
-          className="ark-home-clock-tick"
-          x1="50"
-          y1="14"
-          x2="50"
-          y2={rotation % 90 === 0 ? '20' : '18'}
-          transform={`rotate(${rotation} 50 50)`}
+    <>
+      {/* 比例居中靠右定位的时钟 PNG 贴图 */}
+      <img
+        src={clockPng}
+        alt="Decorative Clock"
+        className="ark-home-card-clock-img"
+        aria-hidden="true"
+      />
+
+      {/* 流畅波浪线条与闪烁星星的 SVG 容器 */}
+      <svg
+        className="ark-home-card-overlay-svg"
+        viewBox="0 0 500 150"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        {/* 背景流动波纹曲线 */}
+        <path
+          d="M-20,110 C80,60 180,140 280,90 C380,40 430,90 520,30"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          opacity="0.6"
         />
-      ))}
-      <line className="ark-home-clock-hand" x1="50" y1="50" x2="50" y2="27" transform="rotate(40 50 50)" />
-      <line className="ark-home-clock-hand ark-home-clock-hand-short" x1="50" y1="50" x2="50" y2="33" transform="rotate(230 50 50)" />
-      <circle className="ark-home-clock-center" cx="50" cy="50" r="4" />
-    </svg>
+        <path
+          d="M-40,130 C70,80 160,160 260,110 C360,60 410,110 540,40"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinecap="round"
+          opacity="0.3"
+        />
+
+        {/* 闪烁的四角星星 */}
+        <path
+          className="ark-home-card-sparkle"
+          d="M310,32 Q310,37 315,37 Q310,37 310,42 Q310,37 305,37 Q310,37 310,32 Z"
+          fill="currentColor"
+        />
+        <path
+          className="ark-home-card-sparkle"
+          d="M335,22 Q335,29 342,29 Q335,29 335,36 Q335,29 328,29 Q335,29 335,22 Z"
+          fill="currentColor"
+        />
+      </svg>
+    </>
   );
 }
 
@@ -394,35 +416,36 @@ export default function HomeRightDashboard() {
   return (
     <>
       <div className="grid h-full grid-rows-[1.25fr_0.85fr_1.15fr_1.7fr_1fr] gap-3">
-        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5">
-          <div className="relative z-10 flex h-full min-h-[150px] flex-col justify-between">
-            <div className="flex items-center gap-2 text-base font-medium text-[var(--ark-text)]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[var(--ark-accent)] shadow-[0_0_12px_var(--ark-accent)]" />
+        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5 flex items-center justify-between gap-4">
+          <div className="relative z-10 flex flex-col justify-between h-full min-h-[120px]">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ark-text-muted)]">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb] shadow-[0_0_10px_#2563eb] dark:bg-[var(--ark-accent)] dark:shadow-[0_0_10px_var(--ark-accent)]" />
               {phaseLabel}
             </div>
 
-            <div className="pb-1">
-              <div className="ark-home-timer-digits text-[4.4rem] font-semibold leading-none text-[var(--ark-text)] ark-font-display">
+            <div className="my-1">
+              <div className="ark-home-timer-digits text-[3.8rem] sm:text-[4.4rem] font-bold leading-none ark-font-display">
                 {formatTimer(timerSeconds)}
               </div>
-              <div className="mt-5 text-sm text-[var(--ark-text-muted)]">
-                今日目标&nbsp;&nbsp;{DAILY_GOAL_MINUTES} 分钟
-              </div>
+            </div>
+
+            <div className="text-xs sm:text-sm text-[var(--ark-text-faint)]">
+              今日目标 <span className="font-semibold text-[var(--ark-text-muted)]">{DAILY_GOAL_MINUTES}</span> 分钟
             </div>
           </div>
 
-          <DecorativeClock />
+          <DecorativeCardOverlay />
 
           <button
             type="button"
             onClick={handlePrimaryAction}
             disabled={isSubmittingAction}
-            className="ark-home-primary-button absolute bottom-6 right-6 z-20 flex h-[52px] min-w-[212px] items-center justify-center gap-2 rounded-[20px] px-6 text-lg font-semibold transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
+            className="ark-home-primary-button relative z-20 flex h-[48px] sm:h-[52px] min-w-[140px] sm:min-w-[190px] shrink-0 items-center justify-center gap-2 rounded-full px-5 sm:px-6 text-base sm:text-lg font-semibold"
           >
-            <span className="ark-home-play-dot flex h-6 w-6 items-center justify-center rounded-full">
-              <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+            <span className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded-full bg-white text-[#2563eb] dark:text-[#1d4ed8]">
+              <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 fill-current" aria-hidden="true" />
             </span>
-            {actionLabel}
+            <span>{actionLabel}</span>
           </button>
         </section>
 
