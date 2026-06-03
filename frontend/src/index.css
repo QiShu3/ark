@@ -638,7 +638,7 @@
 /* 时钟图片定位 */
 .ark-home-card-clock-img {
   position: absolute;
-  right: -30px;
+  right: -15px;
   top: 50%;
   transform: translateY(-50%);
   width: 250px;

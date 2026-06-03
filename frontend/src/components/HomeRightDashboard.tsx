@@ -416,37 +416,39 @@ export default function HomeRightDashboard() {
   return (
     <>
       <div className="grid h-full grid-rows-[1.25fr_0.85fr_1.15fr_1.7fr_1fr] gap-3">
-        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5 flex items-center justify-between gap-4">
-          <div className="relative z-10 flex flex-col justify-between h-full min-h-[120px]">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ark-text-muted)]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb] shadow-[0_0_10px_#2563eb] dark:bg-[var(--ark-accent)] dark:shadow-[0_0_10px_var(--ark-accent)]" />
-              {phaseLabel}
-            </div>
+        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5">
+          <DecorativeCardOverlay />
 
-            <div className="my-1">
-              <div className="ark-home-timer-digits text-[3.8rem] sm:text-[4.4rem] font-bold leading-none ark-font-display">
-                {formatTimer(timerSeconds)}
+          <div className="relative z-10 flex items-center justify-between h-full min-h-[120px] gap-4">
+            <div className="flex flex-col justify-between h-full min-h-[120px]">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ark-text-muted)]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb] shadow-[0_0_10px_#2563eb] dark:bg-[var(--ark-accent)] dark:shadow-[0_0_10px_var(--ark-accent)]" />
+                {phaseLabel}
+              </div>
+
+              <div className="my-1">
+                <div className="ark-home-timer-digits text-[3.8rem] sm:text-[4.4rem] font-bold leading-none ark-font-display">
+                  {formatTimer(timerSeconds)}
+                </div>
+              </div>
+
+              <div className="text-xs sm:text-sm text-[var(--ark-text-faint)]">
+                今日目标 <span className="font-semibold text-[var(--ark-text-muted)]">{DAILY_GOAL_MINUTES}</span> 分钟
               </div>
             </div>
 
-            <div className="text-xs sm:text-sm text-[var(--ark-text-faint)]">
-              今日目标 <span className="font-semibold text-[var(--ark-text-muted)]">{DAILY_GOAL_MINUTES}</span> 分钟
-            </div>
+            <button
+              type="button"
+              onClick={handlePrimaryAction}
+              disabled={isSubmittingAction}
+              className="ark-home-primary-button flex h-[48px] sm:h-[52px] min-w-[140px] sm:min-w-[190px] shrink-0 items-center justify-center gap-2 rounded-full px-5 sm:px-6 text-base sm:text-lg font-semibold"
+            >
+              <span className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded-full bg-white text-[#2563eb] dark:text-[#1d4ed8]">
+                <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 fill-current" aria-hidden="true" />
+              </span>
+              <span>{actionLabel}</span>
+            </button>
           </div>
-
-          <DecorativeCardOverlay />
-
-          <button
-            type="button"
-            onClick={handlePrimaryAction}
-            disabled={isSubmittingAction}
-            className="ark-home-primary-button relative z-20 flex h-[48px] sm:h-[52px] min-w-[140px] sm:min-w-[190px] shrink-0 items-center justify-center gap-2 rounded-full px-5 sm:px-6 text-base sm:text-lg font-semibold"
-          >
-            <span className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded-full bg-white text-[#2563eb] dark:text-[#1d4ed8]">
-              <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 fill-current" aria-hidden="true" />
-            </span>
-            <span>{actionLabel}</span>
-          </button>
         </section>
 
         <section className="ark-home-card rounded-[24px] px-6 py-3">
