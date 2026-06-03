@@ -20,6 +20,7 @@ export interface WorkflowPreset {
   event_id?: string | null;
   event_name?: string | null;
   name: string;
+  icon?: string | null;
   focus_duration: number;
   break_duration: number;
   default_focus_timer_mode?: WorkflowTimerMode;
@@ -38,6 +39,7 @@ export type WorkflowFormPhase = {
 
 export type WorkflowFormState = {
   name: string;
+  icon: string | null;
   phases: WorkflowFormPhase[];
   isDefault: boolean;
 };
@@ -76,6 +78,7 @@ export function normalizeWorkflowFormPhases(
 export function createDefaultWorkflowForm(isDefault: boolean): WorkflowFormState {
   return {
     name: '',
+    icon: 'file',
     phases: normalizeWorkflowFormPhases([
       { duration: 25 * 60, timer_mode: 'countdown', task_id: null },
       { duration: 5 * 60, timer_mode: 'countdown', task_id: null },
@@ -99,6 +102,7 @@ export function createWorkflowFormFromPreset(preset: WorkflowPreset): WorkflowFo
 
   return {
     name: preset.name,
+    icon: preset.icon ?? 'file',
     phases: normalizeWorkflowFormPhases(phases, defaultFocusTimerMode),
     isDefault: preset.is_default,
   };

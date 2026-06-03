@@ -2274,14 +2274,15 @@ async def create_event_workflow(
             row = await conn.fetchrow(
                 f"""
                 INSERT INTO focus_workflow_presets(
-                    user_id, event_id, name, focus_duration, break_duration, phases, default_focus_timer_mode, is_default
+                    user_id, event_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default
                 )
-                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, FALSE)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, FALSE)
                 RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 int(user.id),
                 event_id,
                 body.name.strip(),
+                body.icon,
                 int(body.focus_duration),
                 int(body.break_duration),
                 _to_jsonb_param(phases),
@@ -2342,6 +2343,9 @@ async def update_event_workflow(
             if "name" in patch:
                 args.append(str(patch["name"]).strip())
                 sets.append(f"name = ${len(args)}")
+            if "icon" in patch:
+                args.append(str(patch["icon"]) if patch["icon"] is not None else None)
+                sets.append(f"icon = ${len(args)}")
             if "focus_duration" in patch:
                 args.append(int(patch["focus_duration"]))
                 sets.append(f"focus_duration = ${len(args)}")
@@ -2576,7 +2580,7 @@ async def list_focus_logs(
 
 
 WORKFLOW_PRESET_SELECT = """
-id, user_id, event_id, (SELECT name FROM events WHERE id = event_id) AS event_name, name, focus_duration, break_duration,
+id, user_id, event_id, (SELECT name FROM events WHERE id = event_id) AS event_name, name, icon, focus_duration, break_duration,
 default_focus_timer_mode, phases, is_default, created_at, updated_at
 """
 
@@ -2658,12 +2662,13 @@ async def create_focus_workflow_preset(
             phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
             row = await conn.fetchrow(
                 f"""
-                INSERT INTO focus_workflow_presets(user_id, name, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
-                VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+                INSERT INTO focus_workflow_presets(user_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
                 RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 int(user.id),
                 body.name.strip(),
+                body.icon,
                 int(body.focus_duration),
                 int(body.break_duration),
                 _to_jsonb_param(phases),
@@ -2721,6 +2726,9 @@ async def update_focus_workflow_preset(
             if "name" in patch:
                 args.append(str(patch["name"]).strip())
                 sets.append(f"name = ${len(args)}")
+            if "icon" in patch:
+                args.append(str(patch["icon"]) if patch["icon"] is not None else None)
+                sets.append(f"icon = ${len(args)}")
             if "focus_duration" in patch:
                 args.append(int(patch["focus_duration"]))
                 sets.append(f"focus_duration = ${len(args)}")

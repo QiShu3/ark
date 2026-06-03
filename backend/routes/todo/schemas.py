@@ -541,6 +541,7 @@ class FocusWorkflowOut(BaseModel):
 
 class FocusWorkflowPresetCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=50)
+    icon: str | None = Field(default=None, max_length=50)
     phases: list[FocusWorkflowPhase] | None = None
     focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
     break_duration: int = Field(default=300, ge=60, le=24 * 60 * 60)
@@ -550,6 +551,7 @@ class FocusWorkflowPresetCreateRequest(BaseModel):
 
 class FocusWorkflowPresetUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=50)
+    icon: str | None = Field(default=None, max_length=50)
     phases: list[FocusWorkflowPhase] | None = None
     focus_duration: int | None = Field(default=None, ge=60, le=24 * 60 * 60)
     break_duration: int | None = Field(default=None, ge=60, le=24 * 60 * 60)
@@ -563,6 +565,7 @@ class FocusWorkflowPresetOut(BaseModel):
     event_id: UUID | None = None
     event_name: str | None = None
     name: str
+    icon: str | None = None
     focus_duration: int
     break_duration: int
     default_focus_timer_mode: FocusTimerMode = "countdown"
