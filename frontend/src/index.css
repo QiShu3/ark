@@ -638,20 +638,20 @@
 /* 时钟图片定位 */
 .ark-home-card-clock-img {
   position: absolute;
-  right: -8px;
+  right: -30px;
   top: 50%;
   transform: translateY(-50%);
-  width: 180px;
-  height: 180px;
+  width: 250px;
+  height: 250px;
   object-fit: contain;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.14;
+  opacity: 0.45; /* 深色模式可见度 */
   transition: opacity 0.3s ease;
 }
 
 :root[data-theme="light"] .ark-home-card-clock-img {
-  opacity: 0.22;
+  opacity: 0.88; /* 浅色模式可见度（同原型图一致） */
 }
 
 /* 装饰星星 */
