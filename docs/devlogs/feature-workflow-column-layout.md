@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-03 11:29 · cdc068b · feat(frontend): polish home timer entry card
+
+- 用户提出的需求：
+  - “我希望你可以尽可以贴近原型图，每次修改后都要截图对比一下。时钟的PNG在 [timer-clock.png](frontend/src/assets/timer-clock.png)。”
+  - “改回原来的高度”
+  - “入口卡片下面有个奇怪的阴影”
+
+- 本次完成的工作：
+  - **首页入口卡片视觉美化**：保留原有专注工作流功能逻辑不变，将入口卡片装饰层改为使用 `timer-clock.png` 作为右上方半透明秒表水印，并补充波纹、星点、点阵等轻量背景装饰，贴近原型图的浅蓝玻璃质感。
+  - **CTA 按钮质感升级**：重做“开始学习”按钮的蓝色渐变、白色播放圆点、内高光、底部压痕与投影层次，使主动作更接近原型中的高亮胶囊按钮。
+  - **高度与阴影回调**：按反馈恢复 dashboard 原有行高分配与入口卡片高度，去掉入口卡片额外外阴影并收短按钮投影，避免卡片下方出现不自然暗影。
+
+- 验证情况：
+  - `pnpm check` 验证通过，无 TypeScript 语法或类型错误。
+  - 使用 in-app browser 对入口卡片进行多轮截图/尺寸检查；截图接口偶发超时，但成功捕获并对比了中间版本，后续通过 DOM 尺寸与 computed style 验证高度和阴影调整。
+  - 验证时存在环境提示：项目期望 Node `20.x`，当前运行环境为 Node `v22.18.0`。
+
 ### 2026-06-03 10:00 · 77da7d8 · fix(frontend): wrap timer card contents in a flex div to prevent stopwatch image squeeze
 
 - 用户提出的需求：
