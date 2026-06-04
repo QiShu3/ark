@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:40 · 30257ca · feat(frontend): hide reading passage on practice mode result phase
+
+- 用户提出的需求：
+  - 当 答题结束 后应该只出现选项，原文部分消失
+
+- 本次完成的工作：
+  - **前端**：在 `ERCPracticeFocusWork.tsx` 中，对 Reading Passage Card 组件块增加 `phase !== 'result'` 的渲染条件判定。当进入 `result`（答题结算）状态时，完全隐藏 Reading Passage 原文部分，使得 Attempt Summary 结果卡片自动撑满屏幕高度，提供更优的错题复盘与浏览视界。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run src/components/ERC/ERCPracticeFocusWork.test.tsx` — 测试通过 ✅
+
 ### 2026-06-04 19:31 · 49cfa7c · feat(frontend): add 'Practice Again' button to empty phase in ERC practice focus work
 
 - 用户提出的需求：
