@@ -175,17 +175,11 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                   type="button"
                   onClick={onCompleteTaskAndFinish}
                   disabled={isPaused}
-                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
+                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:opacity-50"
                 >
                   结束并完成今日任务
                 </button>
               ) : null}
-              <Link
-                to="/erc"
-                className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:bg-[var(--focus-work-surface-soft)]"
-              >
-                返回阅读主页
-              </Link>
             </div>
           </section>
         </div>
