@@ -1,11 +1,16 @@
-import type { WorkflowPresetPhase } from './workflowPresetForm';
-
 type WorkflowPhaseChipsProps = {
-  phases: WorkflowPresetPhase[];
+  phases: WorkflowPhaseChipPhase[];
   className?: string;
   getTaskTitle?: (taskId: string) => string | null | undefined;
   emptyText?: string;
   maxTaskWidthClassName?: string;
+};
+
+type WorkflowPhaseChipPhase = {
+  phase_type: 'focus' | 'break';
+  duration: number;
+  task_id?: string | null;
+  focus_work_type?: string | null;
 };
 
 const FOCUS_WORK_LABELS: Record<string, string> = {
@@ -15,7 +20,7 @@ const FOCUS_WORK_LABELS: Record<string, string> = {
   task_focus: '任务专注',
 };
 
-function getPhaseTaskLabel(phase: WorkflowPresetPhase, getTaskTitle?: WorkflowPhaseChipsProps['getTaskTitle']): string | null {
+function getPhaseTaskLabel(phase: WorkflowPhaseChipPhase, getTaskTitle?: WorkflowPhaseChipsProps['getTaskTitle']): string | null {
   if (phase.task_id && getTaskTitle) {
     return getTaskTitle(phase.task_id) ?? null;
   }

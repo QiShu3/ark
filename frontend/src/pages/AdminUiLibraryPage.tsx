@@ -5,6 +5,7 @@ import AppModalFrame from '../components/AppModalFrame';
 import Button from '../components/Button';
 import HomeCard from '../components/HomeCard';
 import HomeSectionHeader from '../components/HomeSectionHeader';
+import WorkflowPhaseChips from '../components/WorkflowPhaseChips';
 
 type ComponentEntry = {
   name: string;
@@ -110,6 +111,23 @@ export default function AdminUiLibraryPage() {
             action={<Button variant="secondary" size="xs">操作</Button>}
           />
         </div>
+      ),
+    },
+    {
+      name: 'WorkflowPhaseChips',
+      source: 'frontend/src/components/WorkflowPhaseChips.tsx',
+      use: '工作流阶段预览、当前工作流进度链、事件工作流草稿列表。',
+      avoid: '在不同页面重复手写蓝/绿阶段胶囊、箭头、任务标签和截断规则。',
+      preview: (
+        <WorkflowPhaseChips
+          phases={[
+            { phase_type: 'focus', duration: 1500, focus_work_type: 'vocab_today' },
+            { phase_type: 'break', duration: 300 },
+            { phase_type: 'focus', duration: 1500, focus_work_type: 'erc_practice' },
+            { phase_type: 'break', duration: 300 },
+          ]}
+          maxTaskWidthClassName="max-w-[120px]"
+        />
       ),
     },
     {

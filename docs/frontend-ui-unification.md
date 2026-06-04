@@ -25,6 +25,7 @@ This document is the long-running record for frontend UI unification work. Its j
 | `AppModalFrame` | `frontend/src/components/AppModalFrame.tsx` | Business modal shell, backdrop, safe area, and dialog semantics. | Hand-rolling modal backdrops for ordinary business dialogs. |
 | `HomeCard` | `frontend/src/components/HomeCard.tsx` | Home dashboard card shells and home-specific card variants. | Mixing `ark-home-card` with ad hoc radius/padding decisions in new home panels. |
 | `HomeSectionHeader` | `frontend/src/components/HomeSectionHeader.tsx` | Home dashboard section titles with optional right action. | Repeating section title markup with drifting typography. |
+| `WorkflowPhaseChips` | `frontend/src/components/WorkflowPhaseChips.tsx` | Workflow phase previews, active workflow phase chains, and event workflow draft cards. | Rebuilding blue/green phase capsules, arrows, task labels, or truncation rules per page. |
 | `SubAppHomeTemplate` | `frontend/src/components/SubAppHomeTemplate.tsx` | Sub-application landing pages with shared hero/metrics structure. | Designing each sub-app home as a separate bespoke layout. |
 | `CalendarWidget` | `frontend/src/components/CalendarWidget.tsx` | Compact home calendar entry. | Copying calendar grid styling into unrelated components. |
 
@@ -46,5 +47,6 @@ This document is the long-running record for frontend UI unification work. Its j
 
 | Date | Scope | Completed | Follow-up |
 | --- | --- | --- | --- |
+| 2026-06-04 | Workflow phase chips | Registered `WorkflowPhaseChips` in the admin UI library and reused it for the home dashboard active workflow chain. | Consider moving remaining hardcoded chip colors into semantic workflow tokens. |
 | 2026-06-03 | Home timer entry | Polished the timer card toward the prototype, kept original height, and reduced odd bottom shadow. | Move remaining hardcoded hero colors into home hero tokens. |
 | 2026-06-03 | UI governance | Added this document and the first admin-only React UI component library plan. | Keep this file updated when adding reusable UI primitives. |

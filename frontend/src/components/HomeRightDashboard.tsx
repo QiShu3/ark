@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Box, Check, Circle, Play, Trophy, X } from 'lucide-react';
 
-import { cn } from '../lib/utils';
 import { apiJson } from '../lib/api';
 import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
@@ -164,13 +163,6 @@ function renderDashboardAppointmentRow(appointment: Appointment, index: number, 
     </div>
   );
 }
-
-const FOCUS_WORK_LABELS: Record<string, string> = {
-  vocab_today: '今日单词',
-  erc_practice: 'ERC 真题练习',
-  erc_review: 'ERC 复习',
-  task_focus: '任务专注',
-};
 
 export default function HomeRightDashboard() {
   const navigate = useNavigate();
@@ -478,65 +470,13 @@ export default function HomeRightDashboard() {
           </div>
 
           {workflowIsActive && workflow?.phases ? (
-            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1">
-              {workflow.phases.map((phase, index) => {
-                const isCompleted = index < (workflow.current_phase_index ?? 0);
-                const isActive = index === (workflow.current_phase_index ?? 0);
-                const minutes = Math.round(phase.duration / 60);
-                const isFocus = phase.phase_type === 'focus';
-                
-                const taskLabel = isFocus
-                  ? (phase.task_id
-                      ? (tasks.find(t => t.id === phase.task_id)?.title ?? '任务专注')
-                      : (phase.focus_work_type
-                          ? (FOCUS_WORK_LABELS[phase.focus_work_type] ?? '应用任务')
-                          : '任务专注'))
-                  : null;
-
-                const isArrowCompleted = index <= (workflow.current_phase_index ?? 0) - 1;
-
-                return (
-                  <div key={index} className="flex items-center gap-1.5 shrink-0">
-                    {index > 0 && (
-                      <span
-                        className={cn(
-                          "text-[11px] select-none font-bold",
-                          isArrowCompleted ? "text-emerald-500" : "text-ark-text-faint/30"
-                        )}
-                      >
-                        →
-                      </span>
-                    )}
-                    <div
-                      className={cn(
-                        "rounded-full px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 transition-all duration-300",
-                        isCompleted && "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 dark:border-emerald-500/30",
-                        isActive && "relative border border-blue-500 bg-blue-500/10 text-white shadow-[0_0_12px_rgba(59,130,246,0.35)]",
-                        !isCompleted && !isActive && "border border-ark-border bg-transparent text-[var(--ark-text-faint)]"
-                      )}
-                    >
-                      {isActive && (
-                        <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_6px_rgba(103,232,249,1)]" />
-                      )}
-                      <span>{isFocus ? '🎯' : '☕'} {minutes}m</span>
-                      {taskLabel && (
-                        <>
-                          <span className={cn(
-                            "h-2.5 w-px",
-                            isCompleted ? "bg-emerald-500/30" : isActive ? "bg-white/30" : "bg-white/10"
-                          )} />
-                          <span className="truncate max-w-[120px]">{taskLabel}</span>
-                        </>
-                      )}
-                      {isCompleted && (
-                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
-                          <Check className="h-2.5 w-2.5 stroke-[3]" aria-hidden="true" />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="mt-3.5 overflow-x-auto scrollbar-none py-1">
+              <WorkflowPhaseChips
+                phases={workflow.phases}
+                getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
+                className="flex-nowrap"
+                maxTaskWidthClassName="max-w-[120px]"
+              />
             </div>
           ) : (
             <div className="mt-3.5 flex flex-col justify-center gap-2">
