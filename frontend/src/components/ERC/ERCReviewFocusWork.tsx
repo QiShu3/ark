@@ -194,23 +194,36 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {(Object.keys(item.question.options) as OptionKey[]).map((key) => {
                       const isSelected = selected === key;
+                      const isCorrect = result?.correct_option === key;
+
+                      let btnStyle = 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] text-[var(--focus-work-text)] hover:border-[var(--focus-work-blue-border)] hover:bg-[var(--focus-work-blue-bg)]';
+                      let badgeStyle = 'bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)] border-[var(--focus-work-blue-border)]';
+
+                      if (result) {
+                        if (isCorrect) {
+                          btnStyle = 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)] shadow-sm';
+                          badgeStyle = 'bg-[var(--focus-work-emerald-text)] text-white border-transparent';
+                        } else if (isSelected) {
+                          btnStyle = 'border-[var(--focus-work-rose-border)] bg-[var(--focus-work-rose-bg)] text-[var(--focus-work-rose-text)] shadow-sm';
+                          badgeStyle = 'bg-[var(--focus-work-rose-text)] text-white border-transparent';
+                        } else {
+                          btnStyle = 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)]/40 text-[var(--focus-work-text-faint)] opacity-60';
+                          badgeStyle = 'bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text-faint)] border-[var(--focus-work-border)]';
+                        }
+                      } else if (isSelected) {
+                        btnStyle = 'border-[var(--focus-work-blue-border-hover)] bg-[var(--focus-work-blue-bg-hover)] text-[var(--focus-work-text)] shadow-sm';
+                        badgeStyle = 'bg-[var(--focus-work-blue-text)] text-[var(--focus-work-primary-button-text)] border-transparent';
+                      }
+
                       return (
                         <button
                           key={key}
                           type="button"
                           disabled={isPaused || !!result}
                           onClick={() => setSelected(key)}
-                          className={`flex min-h-[2.5rem] items-center gap-4 rounded-xl border px-4 py-1.5 text-left text-sm transition ${
-                            isSelected
-                              ? 'border-[var(--focus-work-blue-border-hover)] bg-[var(--focus-work-blue-bg-hover)] text-[var(--focus-work-text)] shadow-sm'
-                              : 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] text-[var(--focus-work-text)] hover:border-[var(--focus-work-blue-border)] hover:bg-[var(--focus-work-blue-bg)]'
-                          }`}
+                          className={`flex min-h-[2.5rem] items-center gap-4 rounded-xl border px-4 py-1.5 text-left text-sm transition ${btnStyle}`}
                         >
-                          <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-sm font-semibold transition ${
-                            isSelected
-                              ? 'bg-[var(--focus-work-blue-text)] text-[var(--focus-work-primary-button-text)] border-transparent'
-                              : 'bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)] border-[var(--focus-work-blue-border)]'
-                          }`}>
+                          <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-sm font-semibold transition ${badgeStyle}`}>
                             {key}
                           </span>
                           <span className="font-medium">{item.question.options[key]}</span>
@@ -219,16 +232,6 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                     })}
                   </div>
                 </div>
-
-                {result ? (
-                  <div className={`mt-5 rounded-xl border p-4 text-sm font-semibold transition-all ${
-                    result.is_correct
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                      : 'border-rose-500/30 bg-rose-500/10 text-rose-400'
-                  }`}>
-                    {result.is_correct ? '回答正确！' : `回答错误，正确答案是 ${result.correct_option}`}
-                  </div>
-                ) : null}
               </div>
 
 

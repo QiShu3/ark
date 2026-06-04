@@ -1252,6 +1252,10 @@
   --focus-work-emerald-border: rgba(110, 231, 183, 0.2);
   --focus-work-emerald-text: rgba(110, 231, 183, 0.9);
 
+  --focus-work-rose-bg: rgba(244, 63, 94, 0.1);
+  --focus-work-rose-border: rgba(244, 63, 94, 0.2);
+  --focus-work-rose-text: rgba(244, 63, 94, 0.9);
+
   --focus-work-blue-bg: rgba(147, 197, 253, 0.1);
   --focus-work-blue-bg-hover: rgba(147, 197, 253, 0.16);
   --focus-work-blue-border: rgba(147, 197, 253, 0.2);
@@ -1288,6 +1292,10 @@
   --focus-work-emerald-bg: rgba(4, 120, 87, 0.08);
   --focus-work-emerald-border: rgba(4, 120, 87, 0.24);
   --focus-work-emerald-text: #047857;
+
+  --focus-work-rose-bg: rgba(190, 24, 74, 0.08);
+  --focus-work-rose-border: rgba(190, 24, 74, 0.24);
+  --focus-work-rose-text: #be184a;
 
   --focus-work-blue-bg: rgba(29, 78, 216, 0.08);
   --focus-work-blue-bg-hover: rgba(29, 78, 216, 0.14);
