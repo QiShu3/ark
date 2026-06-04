@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:14 · 6feafe5 · fix(frontend): remove return to home button and fix completion button hover style in empty phase
+
+- 用户提出的需求：
+  - 这里也有相同的问题（在今日真题已完成的空状态页面，去掉“返回阅读主页”按钮，并修复“结束并完成今日任务”按钮在悬浮态时背景变暗且文字看不清的问题）
+
+- 本次完成的工作：
+  - **前端**：移除 `ERCPracticeFocusWork.tsx` 在 `phase === 'empty'`（今日练习已全部完成的空白页面）状态下的“返回阅读主页”链接按钮。
+  - **前端**：修复该页面下“结束并完成今日任务”按钮的悬浮态（Hover）样式，将 `hover:bg-[var(--focus-work-surface-soft)]` 替换为 `hover:opacity-90`，确保与其它主要操作按钮的悬浮交互保持风格统一与信息清晰可读。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+
 ### 2026-06-04 19:12 · 5aede74 · fix(frontend): remove return to home button and fix completion button hover style in practice mode
 
 - 用户提出的需求：
