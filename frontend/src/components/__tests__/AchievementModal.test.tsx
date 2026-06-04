@@ -110,8 +110,7 @@ describe('AchievementModal', () => {
     expect(document.documentElement.style.overflow).toBe('hidden');
 
     await act(async () => {
-      const backdrop = document.querySelector('.ark-modal-backdrop');
-      backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      screen.getByRole('dialog', { name: '成就弹窗' }).click();
     });
 
     expect(screen.getByRole('dialog', { name: '成就弹窗' })).toBeInTheDocument();
@@ -147,8 +146,8 @@ describe('AchievementModal', () => {
 
     render(<AchievementModal isOpen={true} onClose={() => {}} initialSummary={null} />);
 
-    const overlay = document.querySelector('.ark-modal-backdrop');
-    const surface = screen.getByRole('dialog', { name: '成就弹窗' });
+    const overlay = await screen.findByRole('dialog', { name: '成就弹窗' });
+    const surface = screen.getByRole('button', { name: '关闭成就弹窗' }).closest('div[class*="rounded-3xl"]');
 
     expect(overlay).toHaveClass('animate-in', 'fade-in', 'duration-200');
     expect(surface).toHaveClass('animate-in', 'zoom-in-95', 'duration-200');
@@ -187,8 +186,8 @@ describe('AchievementModal', () => {
       closeButton.click();
     });
 
-    const overlay = document.querySelector('.ark-modal-backdrop');
-    const surface = screen.getByRole('dialog', { name: '成就弹窗' });
+    const overlay = screen.getByRole('dialog', { name: '成就弹窗' });
+    const surface = screen.getByRole('button', { name: '关闭成就弹窗' }).closest('div[class*="rounded-3xl"]');
 
     expect(overlay).toHaveClass('achievement-modal-overlay-exit');
     expect(surface).toHaveClass('achievement-modal-surface-exit');

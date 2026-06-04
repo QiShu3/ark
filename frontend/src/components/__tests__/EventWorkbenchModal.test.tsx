@@ -194,6 +194,7 @@ describe('EventWorkbenchModal', () => {
 
     render(<EventWorkbenchModal event={nonPrimaryEvent} onClose={vi.fn()} onChanged={onChanged} />);
 
+    expect(await screen.findByText('事件总览')).toBeInTheDocument();
     expect(await screen.findByText('高数期末 的当前进展')).toBeInTheDocument();
     expect(screen.getByText('最近解锁：首次推进')).toBeInTheDocument();
     expect(screen.getByText('下一步：进入状态 · 1h / 2h')).toBeInTheDocument();

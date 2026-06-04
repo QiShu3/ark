@@ -1074,7 +1074,7 @@ describe('EventCountdownCard', () => {
     );
   });
 
-  it('opens the workbench directly when clicking the primary event', async () => {
+  it('opens the overview first when clicking the primary event', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') {
@@ -1117,63 +1117,15 @@ describe('EventCountdownCard', () => {
             created_at: '2026-03-18T00:00:00Z',
             updated_at: '2026-03-18T00:00:00Z',
           },
-        ];
-      }
-      return {};
-    });
-
-    render(<EventCountdownCard />);
-
-    await user.click(await screen.findByRole('button', { name: /论文投稿/i }));
-
-    const workbench = await screen.findByRole('dialog', { name: '安排' });
-    expect(workbench).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: '事件总览' })).not.toBeInTheDocument();
-    expect(within(workbench).getByText('论文投稿')).toBeInTheDocument();
-  });
-
-  it('allows returning to the overview list from the workbench modal when opened directly', async () => {
-    const user = userEvent.setup();
-    (apiJson as Mock).mockImplementation(async (url: string) => {
-      if (url === '/todo/events/primary') {
-        return {
-          id: 'event-1',
-          user_id: 7,
-          name: '论文投稿',
-          start_date: '2026-03-01',
-          due_at: '2026-03-21T03:00:00Z',
-          is_primary: true,
-          created_at: '2026-03-18T00:00:00Z',
-          updated_at: '2026-03-18T00:00:00Z',
-        };
-      }
-      if (url === '/todo/events/event-1/workbench') {
-        return {
-          event: {
-            id: 'event-1',
-            user_id: 7,
-            name: '论文投稿',
-            start_date: '2026-03-01',
-            due_at: '2026-03-21T03:00:00Z',
-            is_primary: true,
-            created_at: '2026-03-18T00:00:00Z',
-            updated_at: '2026-03-18T00:00:00Z',
-          },
-          created_tasks: [],
-          created_appointments: [],
-        };
-      }
-      if (url === '/todo/events') {
-        return [
           {
-            id: 'event-1',
+            id: 'event-2',
             user_id: 7,
-            name: '论文投稿',
+            name: '毕业设计',
             start_date: '2026-03-01',
-            due_at: '2026-03-21T03:00:00Z',
-            is_primary: true,
-            created_at: '2026-03-18T00:00:00Z',
-            updated_at: '2026-03-18T00:00:00Z',
+            due_at: '2026-04-20T10:00:00Z',
+            is_primary: false,
+            created_at: '2026-03-19T00:00:00Z',
+            updated_at: '2026-03-19T00:00:00Z',
           },
         ];
       }
@@ -1184,17 +1136,12 @@ describe('EventCountdownCard', () => {
 
     await user.click(await screen.findByRole('button', { name: /论文投稿/i }));
 
-    const workbench = await screen.findByRole('dialog', { name: '安排' });
-    expect(workbench).toBeInTheDocument();
-
-    const backBtn = within(workbench).getByRole('button', { name: '事件总览' });
-    expect(backBtn).toBeInTheDocument();
-
-    await user.click(backBtn);
-
-    expect(screen.queryByRole('dialog', { name: '安排' })).not.toBeInTheDocument();
-    const overview = screen.getByRole('dialog', { name: '事件总览' });
+    const overview = await screen.findByRole('dialog', { name: '事件总览' });
     expect(overview).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '安排' })).not.toBeInTheDocument();
+    expect(within(overview).getByText('论文投稿')).toBeInTheDocument();
+    expect(within(overview).getByText('毕业设计')).toBeInTheDocument();
+    expect(within(overview).getByRole('button', { name: '添加事件' })).toBeInTheDocument();
   });
 
   it('opens the selected event workbench from the overview list', async () => {
