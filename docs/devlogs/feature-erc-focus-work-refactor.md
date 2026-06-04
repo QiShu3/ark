@@ -2,6 +2,36 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:55 · 9679d96 · feat(frontend): add practice again and prevent duplicate completion conflict in vocab and review focus work
+
+- 用户提出的需求：
+  - 防重复打卡冲突与“再来一次”加练 每个子应用配置任务都有吗？ -> 要
+
+- 本次完成的工作：
+  - **前端**：在 `VocabTodayFocusWork.tsx` 的今日单词已完成（空状态）页面中，新增 **“再来一次”** 按钮。实现 `handlePracticeAgain` 处理器，从当前词书的所有单词中随机抽取 10 个词，并行拉取详细释义并装入本地加练队列，彻底满足了词书背完后的再来一次加练诉求，不写入后端打卡以防 409 冲突。
+  - **前端**：在 `ERCReviewFocusWork.tsx` 中新增 **“再来一次”** 按钮和 **“结束并完成今日任务” / “结束本轮专注”** 按钮。如果进入时已经暂无复习任务（已完成），点击退出按钮将直接调用 `/todo/focus/stop` 结束专注以避免 409 报错；点击“再来一次”将随机加载一篇文章并抽取题目进行本轮加练。加练提交时，不重复结算工作流任务。
+  - **前端**：更新了 `VocabTodayFocusWork.test.tsx` 和 `ERCReviewFocusWork.test.tsx` 单元测试，添加了对空状态退出及“再来一次”加练交互流程的覆盖断言，并修复了 `Review.test.tsx` 页面测试中对面板卡片样式的过时类名断言。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run src/components/Vocab/VocabTodayFocusWork.test.tsx` — 测试通过 ✅
+  - `npx vitest run src/components/ERC/ERCReviewFocusWork.test.tsx` — 测试通过 ✅
+  - `npx vitest run src/pages/ERC/__tests__/Review.test.tsx` — 测试通过 ✅
+
+### 2026-06-04 19:50 · 61d184f · feat(frontend): prevent duplicate completion conflict on vocab today empty page
+
+- 用户提出的需求：
+  - 要（将“防重复打卡冲突”的退出逻辑同样引入到“背单词”应用中）
+
+- 本次完成的工作：
+  - **前端**：修改 `VocabTodayFocusWork.tsx`，在“今天这本词书的单词已经完成了”状态的空白页面中，将“完成今日单词”按钮的点击事件绑定到了新引入的 `handleExitFocus` 处理器上。
+  - **前端**：在 `handleExitFocus` 处理器中，通过 `POST /todo/focus/stop` 结束当前的专注轮次并刷新页面状态。此举避开了再次提交 `completedTask: true` 的重复打卡动作，完美杜绝了当背单词本日已被完成后二次打卡引发的“当前周期已达完成上限”报错。
+  - **前端**：更新了 `VocabTodayFocusWork.test.tsx` 单元测试用例，覆盖了空状态渲染与点击完成按钮时对 `POST /todo/focus/stop` 接口调用的断言，并完成了 apiJson 的 mockReset 清理工作。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run src/components/Vocab/VocabTodayFocusWork.test.tsx` — 测试通过 ✅
+
 ### 2026-06-04 19:40 · 30257ca · feat(frontend): hide reading passage on practice mode result phase
 
 - 用户提出的需求：
