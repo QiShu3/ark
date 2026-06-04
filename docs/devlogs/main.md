@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 10:10 · 78d307e · merge: merge feature/workflow-column-layout into main
+
+- 用户提出的需求：
+  - “提交代码并合并到主分支上吧。不要改我代码！！！！！！！！！！！！！！！！！！！！！！！”
+
+- 本次完成的工作：
+  - 保留主分支 `main` 上原有的已暂存修改，并首先提交为临时 Commit `91ab37b`。
+  - 将开发分支 `feature/workflow-column-layout` 合并到本地 `main` 分支。
+  - 解决 `frontend/src/components/events/EventWorkbenchModal.tsx` 中的合并冲突：在保留主分支新增的“事件总览”标题层及已移除的 `onBackToOverview` 导航逻辑的前提下，融合了开发分支中将“关闭”按钮升级为统一 `<Button>` 组件的设计。
+  - 解决 `docs/开发日志.md` 中的合并冲突，按时间倒序合并了最近的记录。
+
+- 验证情况：
+  - 本地运行后端测试 `uv run pytest`：175 个测试 100% 通过。
+  - 本地运行前端测试 `pnpm test -- --run`：安装合并引入的新依赖后，测试能正常编译并跑通。
+
 ### 2026-06-02 16:57 · 47bd75d · merge: home ui glass dashboard into main
 
 - 用户提出的需求：
