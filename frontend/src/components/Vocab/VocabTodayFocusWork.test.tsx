@@ -160,4 +160,84 @@ describe('VocabTodayFocusWork', () => {
 
     expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
   });
+
+  it('supports extra practice flow when clicking 再来一次', async () => {
+    useVocabTodaySession.mockReturnValue({
+      ready: true,
+      loading: false,
+      error: null,
+      currentItem: null,
+      isBatchReview: false,
+      currentBatchNumber: 0,
+      totalBatchCount: 0,
+      memorizedCount: 0,
+      currentMode: 'study',
+      submitting: false,
+      batchReviewCount: 0,
+      batchReviewGroups: [],
+      batchReviewActionLabel: '继续',
+      continueBatchReview: vi.fn(),
+      submit: vi.fn(),
+      lastResult: null,
+    });
+
+    const userEvent = (await import('@testing-library/user-event')).default.setup();
+
+    apiJson.mockImplementation(async (url) => {
+      if (url.includes('/overview/current-words')) {
+        return [{ id: 'word-extra-1', word: 'banana' }];
+      }
+      if (url.includes('/words/word-extra-1')) {
+        return {
+          id: 'word-extra-1',
+          deck_id: 'deck-1',
+          word: 'banana',
+          us_pronunciation: 'bəˈnænə',
+          uk_pronunciation: 'bəˈnænə',
+          translations: [{ pos: 'n.', translation: '香蕉' }],
+          phrases: [],
+          sentences: [],
+        };
+      }
+      if (url === '/todo/focus/stop') {
+        return { ok: true };
+      }
+      return null;
+    });
+
+    render(
+      <VocabTodayFocusWork
+        workflow={{
+          state: 'focus',
+          active_focus_work_type: 'vocab_today',
+          focus_work_display_state: 'fullscreen',
+          is_paused: false,
+        }}
+        recordFocus
+        onCompleteTaskAndFinish={vi.fn()}
+        onComplete={vi.fn()}
+        onInterrupt={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('今天这本词书的单词已经完成了。')).toBeInTheDocument();
+    const practiceAgainBtn = screen.getByRole('button', { name: '再来一次' });
+    await userEvent.click(practiceAgainBtn);
+
+    // Should load the extra word
+    expect(await screen.findByText('banana')).toBeInTheDocument();
+    expect(screen.getByText('加练进度：第 1 个 / 共 1 个')).toBeInTheDocument();
+
+    // Click any rating button to finish
+    const rateBtn = screen.getByRole('button', { name: /记住了/ });
+    await userEvent.click(rateBtn);
+
+    // Should show completed page
+    expect(screen.getByText('加练已全部完成！')).toBeInTheDocument();
+
+    const exitBtn = screen.getByRole('button', { name: '结束本轮专注' });
+    await userEvent.click(exitBtn);
+
+    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
+  });
 });

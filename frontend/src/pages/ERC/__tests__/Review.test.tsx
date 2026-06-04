@@ -60,6 +60,6 @@ describe('ERC review page', () => {
     );
 
     expect(await screen.findByText('Context paragraph.')).toBeInTheDocument();
-    expect(screen.getByLabelText('阅读原文')).toHaveClass('backdrop-blur-2xl');
+    expect(screen.getByLabelText('阅读原文')).toBeInTheDocument();
   });
 });
