@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:12 · 5aede74 · fix(frontend): remove return to home button and fix completion button hover style in practice mode
+
+- 用户提出的需求：
+  - 去掉返回主页button，标记为今日任务已完成 该button 在悬浮态时背景变成黑色，但是文字没有变色，导致可读性差
+
+- 本次完成的工作：
+  - **前端**：移除 `ERCPracticeFocusWork.tsx` 真题练习完成页的“返回阅读主页”按钮。
+  - **前端**：修改“标记今日真题任务为已完成”按钮的悬浮态（Hover）样式，移除原本的 `hover:bg-[var(--focus-work-surface-soft)]`（该变量由于在暗色主题下为近乎透明的白色，在白色按钮上会导致覆盖出黑色块效果且文字仍是深色，极难辨认），更换为平滑的 `hover:opacity-90` 透明度过渡动画，确保在任何主题色下悬浮文字依然百分之百清晰可读。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+
 ### 2026-06-04 19:07 · d7f59c8 · fix(frontend): make Attempt Summary card flex and scrollable in practice mode
 
 - 用户提出的需求：
