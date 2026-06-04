@@ -2,6 +2,25 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 12:58 · 6076231 · refactor(frontend): match Today's Progress block with workflow phases design
+
+- 用户提出的需求：
+  - “看看首页右侧边栏的 今日进度 板块”
+  - “这是原型图，我需要你每次修改完都要跟原型图对比一下，对比完之后告诉我它们还差多少，然后在我的同意之下再进行下一次修改。直到我说可以了，你就不用修改了。”
+
+- 本次完成的工作：
+  - **精美环形进度条集成**：在标题左侧新增了自适应圆环进度条（基于 SVG `strokeDasharray` 实现），其填充度随每日专注时间的百分比（`progressPercent`）动态推进，提升细节美感。
+  - **头部状态文字分栏**：重新规划了信息流布局，左侧在活跃时显示为 `今日进度 | 考研英语`（无活跃工作流时回退显示 `今日进度`）；右侧右上角则采用天蓝到翡翠绿的精美文字渐变特效展示 `progressPercent%` 和底部的 `整体进度` 标签。
+  - **横向工作流阶段链（Phases Chain）**：在有活跃工作流时，渲染横向排版节点轨道代替常规进度条：
+    - 已完成阶段使用绿色胶囊包边，带绿勾 Check 徽章标识。
+    - 活跃当前阶段应用皇家蓝包边，外发光投影，并在顶部正中央添加了绝对居中的亮青色呼吸点。
+    - 未开始阶段全部置灰处理，箭头根据前后已完成状态自适应绿色或灰色显示，同时对超长内容支持水平平滑滚动防止溢出。
+  - **单元测试补充**：在 `HomeRightDashboard.test.tsx` 中编写了专门模拟活跃工作流下各阶段渲染的断言测试，保证逻辑和界面的正确性。
+
+- 验证情况：
+  - 全量运行 `npx vitest run HomeRightDashboard.test.tsx` 三个测试 100% 通过。
+  - 通过 `agent-browser` 成功捕获运行时的本地渲染截图 `current_view.png` 存入 Artifact 目录，在 `walkthrough.md` 中以 carousel 模式向用户提供原型对比报告。
+
 ### 2026-06-04 11:40 · d0b716c · feat(frontend): support date clicking in calendar widget and remove milestone indicator
 
 - 用户提出的需求：
