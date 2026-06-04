@@ -1,6 +1,22 @@
 # 开发日志：feature/erc-focus-work-refactor
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
+
+### 2026-06-04 21:15 · 7e47f48 · refactor(frontend): simplify ERC page layout and clean up test assertions
+
+- 用户提出的需求：
+  - ERC (阅读训练) 页面主布局 有多个配置按钮，我觉得功能有点冗余，你有什么想法吗？
+
+- 本次完成的工作：
+  - **前端**：将 ERC 页面右上角的全局配置 (齿轮) 按钮移至子应用标题卡片中，并相应移除了“长期积累”栏目里冗余的 inline 配置按钮。
+  - **前端**：当今日所有的已启用阅读任务全部完成时，将 Today Workspace 卡片中的“开始专注”/“继续专注”按钮置灰，并标记为“今日任务已全部完成”。
+  - **前端**：对“托管安排”卡片中的任务列表进行了简化，隐藏了已完成、未启用、被阻碍及未配置任务的 inline 配置按钮（仅在 `ready` 状态显示“开始”/“继续”按钮，在 `uninitialized` 状态显示“初始化”按钮），最大程度减少主页面的视觉干扰与按钮冗余。
+  - **单元测试**：全面修复并重构了受影响的单元测试集，包括 `Home.test.tsx`（断言配置按钮数量降为 1）、`PlaceholderCard.workflow.test.tsx`（适配表单简化的输入项名称与三点菜单结构）、`EventCountdownCard.test.tsx` 和 `EventWorkbenchModal.test.tsx`（更新 legacy 字段 `阶段 1 绑定任务` 为 `绑定任务`）以及 `HomeLayout.test.tsx`（补充 `MemoryRouter` 上下文）和 `AchievementModal.test.tsx`（对齐 Unified `AppModalFrame` 重构后的 DOM 节点查询）。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test run` — 52 个测试文件、235 个测试用例全部通过 ✅
+
 ### 2026-06-04 20:02 · 351ab18 · fix(frontend): refactor ERC settings modal to use unified AppModalFrame to fix top overflow
 
 - 用户提出的需求：
