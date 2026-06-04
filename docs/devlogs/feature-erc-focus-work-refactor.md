@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:07 · d7f59c8 · fix(frontend): make Attempt Summary card flex and scrollable in practice mode
+
+- 用户提出的需求：
+  - 你看看是不是显示不完全，但是已经滑不下去了，怎么回事？（解决真题练习提交后的 Attempt Summary 卡片底部被裁切、按钮无法显示且无法滚动的 Bug）
+
+- 本次完成的工作：
+  - **前端**：在 `ERCPracticeFocusWork.tsx` 中，将 Attempt Summary `section` 配置为弹性布局容器（`flex flex-col min-h-0 flex-1`），并为头部与底部控制栏添加 `shrink-0`。
+  - **前端**：将中间的题目结果列表的 `max-h-[50vh]` 升级为 `flex-1 min-h-0` 结合 `overflow-y-auto`，使得 Attempt Summary 卡片整体高度适配屏幕剩余空间，内部题目列表支持完美滚动，底部“标记今日真题任务为已完成”和“返回阅读主页”按钮重归可见且不会被截断。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+
 ### 2026-06-04 18:57 · 287d0bb · feat(frontend): remove go-to-library button and add a beautiful completed task modal
 
 - 用户提出的需求：
