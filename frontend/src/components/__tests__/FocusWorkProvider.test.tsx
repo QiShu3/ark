@@ -261,6 +261,7 @@ describe('FocusWorkProvider', () => {
         }),
       }),
     );
+    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
     expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
   });
 });

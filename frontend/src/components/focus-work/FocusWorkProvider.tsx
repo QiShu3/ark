@@ -151,7 +151,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       if (isUserTaskFocus) {
         await apiJson(`/todo/tasks/${snapshot.task_id}/complete`, { method: 'POST' });
       }
-      const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/focus-work-result', {
+      await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/focus-work-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,7 +164,12 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           },
         }),
       });
-      setSnapshot(next);
+      try {
+        await apiJson('/todo/focus/stop', { method: 'POST' });
+      } catch (stopErr) {
+        console.error('Failed to auto-stop focus session', stopErr);
+      }
+      await loadSnapshot();
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (err) {
       console.error('Failed to complete task and finish focus work', err);
