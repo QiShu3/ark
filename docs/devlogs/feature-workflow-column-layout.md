@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 13:18 · d68c732 · feat(frontend): restore navigation bar visibility and interaction above modals
+
+- 用户提出的需求：
+  - “好，统一修改一下规则，取消交互与视觉上的完全遮盖。其他不变”
+
+- 本次完成的工作：
+  - **恢复导航栏层级与清晰度**：将顶部导航栏的 z-index 提升至 `z-[150]`，确保其层叠在所有普通业务弹窗遮罩层（通常最高为 `z-[120]`）之上。借此取消了弹窗出现时对导航栏的完全遮蔽和 `backdrop-filter` 模糊滤镜，使其维持清晰状态。
+  - **组件级交互可用性恢复**：由于导航栏置于最上层，当弹窗打开时，导航栏中的所有菜单、设置、日历、主题切换和通知按钮仍可被正常点击交互。
+  - **多弹窗互斥碰撞管理**：由于导航栏在弹窗开启期间依然支持点击，我们补充了互斥逻辑：当点击打开设置弹窗时，会自动关闭已开启的日历弹窗；反之亦然。这避免了同级弹窗发生重叠冲突。
+  - **通知气泡层级同步提升**：将系统 Toast 容器（`ToastContainer`）及导航栏内签到通知的层级提升至 `z-[180]`，使其渲染在导航栏更上方，保证通知提示的完美可见性。
+
+- 验证情况：
+  - `pnpm check` 类型校验完全成功。
+  - `pnpm test run Navigation.test.tsx SettingsModal.theme.test.tsx` 单元测试通过，未对现有核心交互流程造成任何 regression。
+
 ### 2026-06-04 12:58 · 6076231 · refactor(frontend): match Today's Progress block with workflow phases design
 
 - 用户提出的需求：
