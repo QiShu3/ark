@@ -5,6 +5,7 @@ import StudyCard from './StudyCard';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabTodaySession } from '../../hooks/vocab/useVocabTodaySession';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
+import { apiJson } from '../../lib/api';
 
 const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'good' | 'easy' }> = [
   { label: '没记住', hint: '今天稍后再看', value: 'again' },
@@ -20,6 +21,21 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
   const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
   const completedRef = React.useRef(false);
   const isPaused = workflow?.is_paused === true;
+
+  const [exiting, setExiting] = React.useState(false);
+
+  const handleExitFocus = async () => {
+    setExiting(true);
+    try {
+      await apiJson('/todo/focus/stop', { method: 'POST' });
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to stop focus session', err);
+      alert(err instanceof Error ? err.message : '结束专注失败');
+    } finally {
+      setExiting(false);
+    }
+  };
 
   React.useEffect(() => {
     if (completedRef.current) return;
@@ -101,16 +117,14 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
         {!session.isBatchReview && !session.loading && !session.error && !session.currentItem ? (
           <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
             <div>今天这本词书的单词已经完成了。</div>
-            {onCompleteTaskAndFinish ? (
-              <button
-                type="button"
-                disabled={isPaused}
-                onClick={onCompleteTaskAndFinish}
-                className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                完成今日单词
-              </button>
-            ) : null}
+            <button
+              type="button"
+              disabled={isPaused || exiting}
+              onClick={handleExitFocus}
+              className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exiting ? '正在结束...' : '完成今日单词'}
+            </button>
           </div>
         ) : null}
       </div>
