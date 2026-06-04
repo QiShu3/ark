@@ -142,9 +142,9 @@ describe('PlaceholderCard workflow UI', () => {
 
     await user.type(await screen.findByLabelText('工作流名称'), '深度工作');
     expect(screen.queryByLabelText('默认专注计时方式')).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('阶段 1 计时方式'), 'countup');
-    await user.selectOptions(screen.getByLabelText('阶段 1 绑定任务'), task.id);
-    expect(screen.queryByLabelText('阶段 1 绑定专注工作')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('计时方式'), 'countup');
+    await user.selectOptions(screen.getByLabelText('绑定任务'), task.id);
+    expect(screen.queryByLabelText('绑定专注工作')).not.toBeInTheDocument();
     expect(screen.queryByText('背单词：今日单词')).not.toBeInTheDocument();
     expect(screen.queryByText('ERC：开始复习')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '创建工作流' }));
@@ -455,12 +455,12 @@ describe('PlaceholderCard workflow UI', () => {
     renderCard();
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
-    const dialog = await screen.findByRole('dialog', { name: '工作流预设' });
+    const dialog = await screen.findByRole('dialog', { name: '工作流' });
     expect(within(dialog).getByText('全局工作流')).toBeInTheDocument();
     expect(within(dialog).getByText('期末冲刺')).toBeInTheDocument();
     expect(within(dialog).getByText('事件：高数期末')).toBeInTheDocument();
     expect(within(dialog).queryByText('其他事件工作流')).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '复制工作流 期末冲刺' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '工作流 期末冲刺 更多操作' })).toBeInTheDocument();
 
     // 1. Edit current-event workflow
     await user.click(within(dialog).getByText('期末冲刺'));
@@ -469,7 +469,7 @@ describe('PlaceholderCard workflow UI', () => {
     // Change name and save
     await user.clear(screen.getByLabelText('工作流名称'));
     await user.type(screen.getByLabelText('工作流名称'), '期末冲刺修改');
-    await user.click(screen.getByRole('button', { name: '保存修改' }));
+    await user.click(screen.getByRole('button', { name: '保存工作流' }));
 
     await waitFor(() => {
       expect(mockApiJson).toHaveBeenCalledWith(
@@ -484,6 +484,10 @@ describe('PlaceholderCard workflow UI', () => {
     // 2. Set as default
     const eventPresetCard = screen.getByText('期末冲刺').closest('.border') as HTMLElement;
     expect(eventPresetCard).toBeInTheDocument();
+    
+    // Open three dots menu
+    await user.click(within(eventPresetCard).getByRole('button', { name: '工作流 期末冲刺 更多操作' }));
+    
     const setDefaultBtn = within(eventPresetCard).getByRole('button', { name: '设为默认' });
     await user.click(setDefaultBtn);
     await waitFor(() => {
@@ -491,6 +495,9 @@ describe('PlaceholderCard workflow UI', () => {
     });
 
     // 3. Delete event workflow
+    // Open three dots menu again
+    await user.click(within(eventPresetCard).getByRole('button', { name: '工作流 期末冲刺 更多操作' }));
+    
     const deleteBtn = within(eventPresetCard).getByRole('button', { name: '删除' });
     await user.click(deleteBtn);
     await waitFor(() => {
@@ -535,7 +542,7 @@ describe('PlaceholderCard workflow UI', () => {
     await user.click(await screen.findByRole('button', { name: '切换工作流 A 工作流' }));
     await user.click(screen.getByRole('button', { name: '新建工作流' }));
 
-    expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '工作流' })).toBeInTheDocument();
   });
 
   it('opens the workflow preset modal from the empty workflow state', async () => {
@@ -550,7 +557,7 @@ describe('PlaceholderCard workflow UI', () => {
 
     await user.click(await screen.findByRole('button', { name: '新建工作流' }));
 
-    expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '工作流' })).toBeInTheDocument();
   });
 
   it('keeps the normal start-workflow hover scoped to workflow switching only', async () => {
@@ -623,9 +630,9 @@ describe('PlaceholderCard workflow UI', () => {
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
     await user.type(await screen.findByLabelText('工作流名称'), '正计时流');
-    await user.selectOptions(screen.getByLabelText('阶段 1 计时方式'), 'countup');
+    await user.selectOptions(screen.getByLabelText('计时方式'), 'countup');
 
-    expect(screen.queryByLabelText('阶段 1 时长（分钟）')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('专注时长')).not.toBeInTheDocument();
     expect(screen.getByText('正计时阶段不需要单独设置时长')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '创建工作流' }));
@@ -736,7 +743,8 @@ describe('PlaceholderCard workflow UI', () => {
     renderCard();
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
-    await user.click(await screen.findByRole('button', { name: '复制工作流 深度工作流' }));
+    await user.click(await screen.findByRole('button', { name: '工作流 深度工作流 更多操作' }));
+    await user.click(screen.getByRole('button', { name: '复制' }));
 
     expect(await screen.findByLabelText('工作流名称')).toHaveValue('深度工作流（副本）');
     expect(screen.getByRole('heading', { name: '创建工作流' })).toBeInTheDocument();
@@ -758,23 +766,20 @@ describe('PlaceholderCard workflow UI', () => {
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
     await user.type(await screen.findByLabelText('工作流名称'), '新的节奏');
-    await user.click(screen.getByRole('button', { name: '新增专注阶段' }));
+    await user.click(screen.getByRole('button', { name: '添加学习阶段' }));
 
     expect(screen.queryByLabelText('阶段 1 类型')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '上移阶段 3' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '下移阶段 1' })).not.toBeInTheDocument();
-    expect(screen.getByText('专注阶段 1')).toBeInTheDocument();
-    expect(screen.getByText('配套休息 1')).toBeInTheDocument();
-    expect(screen.getByText('专注阶段 2')).toBeInTheDocument();
-    expect(screen.getByText('配套休息 2')).toBeInTheDocument();
-    expect(screen.getByText('共 4 个阶段 · 专注 30min · 休息 10min')).toBeInTheDocument();
-    expect(screen.getByText('1.专注 25min · 2.休息 5min · 3.专注 5min · 4.休息 5min')).toBeInTheDocument();
+    expect(screen.getByText('流程编辑')).toBeInTheDocument();
+    expect(screen.getByText('(共 2 个阶段)')).toBeInTheDocument();
+    
+    // We should see three nodes/texts with "运行时选择任务" (two in nodes, one in editor pane)
+    expect(screen.getAllByText('运行时选择任务')).toHaveLength(3);
 
-    await user.click(screen.getByRole('button', { name: '删除专注阶段 2' }));
+    // Delete the second stage (which is active editing after adding)
+    await user.click(screen.getByRole('button', { name: '删除阶段' }));
 
-    expect(screen.queryByText('专注阶段 2')).not.toBeInTheDocument();
-    expect(screen.queryByText('配套休息 2')).not.toBeInTheDocument();
-    expect(screen.getByText('1.专注 25min · 2.休息 5min')).toBeInTheDocument();
+    expect(screen.getByText('(共 1 个阶段)')).toBeInTheDocument();
+    expect(screen.getAllByText('运行时选择任务')).toHaveLength(2);
   });
 
   it('prompts before closing when the workflow draft has unsaved changes', async () => {
@@ -788,7 +793,7 @@ describe('PlaceholderCard workflow UI', () => {
     await user.click(screen.getByRole('button', { name: '关闭工作流预设弹窗' }));
 
     expect(confirmSpy).toHaveBeenCalledWith('当前工作流还有未保存修改，确定要放弃吗？');
-    expect(screen.getByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '工作流' })).toBeInTheDocument();
 
     confirmSpy.mockRestore();
   });
@@ -807,10 +812,10 @@ describe('PlaceholderCard workflow UI', () => {
     renderCard();
     window.dispatchEvent(new Event('ark:open-workflow-modal'));
 
-    expect(await screen.findByRole('heading', { name: '工作流预设' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '工作流' })).toBeInTheDocument();
     expect(screen.getByText('这里管理的是可复用的专注流程模板，运行控制仍在主面板中完成。')).toBeInTheDocument();
 
-    const dialog = screen.getByRole('dialog', { name: '工作流预设' });
+    const dialog = screen.getByRole('dialog', { name: '工作流' });
     await user.click(within(dialog).getByText('深度工作流'));
 
     expect(screen.getByText('编辑中')).toBeInTheDocument();

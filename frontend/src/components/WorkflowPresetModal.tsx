@@ -417,6 +417,11 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                           <div className="min-w-0">
                             <div className="font-semibold text-ark-text text-sm truncate flex items-center gap-1.5">
                               {preset.name}
+                              {isEditing && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20 shrink-0">
+                                  编辑中
+                                </span>
+                              )}
                               {showDefaultControls && preset.is_default && !isReadOnly && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20 shrink-0">
                                   默认
@@ -426,6 +431,11 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                             <div className="text-[11px] text-ark-text-muted mt-1">
                               {presetPhases.filter(p => p.phase_type === 'focus').length} 个阶段 · 总时长 {focusMinsTotal + breakMinsTotal} 分钟
                             </div>
+                            {preset.event_name && (
+                              <div className="text-[11px] text-[var(--ark-text-muted)] mt-1">
+                                事件：{preset.event_name}
+                              </div>
+                            )}
                           </div>
                         </div>
 

@@ -609,7 +609,7 @@ describe('EventCountdownCard', () => {
     const workflowDialog = await screen.findByRole('dialog', { name: '工作流' });
     await user.type(within(workflowDialog).getByLabelText('工作流名称'), '冲刺工作流');
     await user.selectOptions(
-      within(workflowDialog).getByLabelText('阶段 1 绑定任务'),
+      within(workflowDialog).getByLabelText('绑定任务'),
       within(workflowDialog).getByRole('option', { name: '准备资料' }),
     );
     await user.click(within(workflowDialog).getByRole('button', { name: '创建工作流' }));
@@ -808,7 +808,7 @@ describe('EventCountdownCard', () => {
     expect(within(workflowDialog).getByRole('option', { name: '真题练习 (应用)' })).toBeInTheDocument();
     await user.type(within(workflowDialog).getByLabelText('工作流名称'), '应用工作流');
     await user.selectOptions(
-      within(workflowDialog).getByLabelText('阶段 1 绑定任务'),
+      within(workflowDialog).getByLabelText('绑定任务'),
       within(workflowDialog).getByRole('option', { name: '真题练习 (应用)' }),
     );
     await user.click(within(workflowDialog).getByRole('button', { name: '创建工作流' }));

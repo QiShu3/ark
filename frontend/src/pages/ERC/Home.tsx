@@ -282,7 +282,7 @@ export default function ERCHome() {
       return { label: '不可用', disabled: true, action: undefined };
     }
     if (!module.enabled || module.state === 'event_not_configured' || module.state === 'config_invalid' || module.state === 'completed_today' || module.state === 'blocked') {
-      return { label: '配置', disabled: appTaskBusy, action: () => setSettingsOpen(true) };
+      return { label: undefined, disabled: true, action: undefined };
     }
     if (module.state === 'uninitialized') {
       return { label: '初始化', disabled: appTaskBusy, action: onInitialize };
@@ -338,6 +338,11 @@ export default function ERCHome() {
       disabledReason: moduleDisabledReason(reviewTaskStatus),
     },
   ];
+  const isAllCompleted =
+    (practiceTaskStatus.enabled || reviewTaskStatus.enabled) &&
+    (!practiceTaskStatus.enabled || practiceTaskStatus.state === 'completed_today') &&
+    (!reviewTaskStatus.enabled || reviewTaskStatus.state === 'completed_today');
+
   const primaryAction = reviewTaskStatus.state === 'ready'
     ? {
         label: reviewAction.label === '继续' ? '继续错题复习' : '开始错题复习',
@@ -350,11 +355,17 @@ export default function ERCHome() {
           disabled: practiceAction.disabled,
           onClick: practiceAction.action,
         }
-      : {
-          label: '配置阅读训练',
-          disabled: appTaskBusy,
-          onClick: () => setSettingsOpen(true),
-        };
+      : isAllCompleted
+        ? {
+            label: '今日任务已全部完成',
+            disabled: true,
+            onClick: undefined,
+          }
+        : {
+            label: '配置阅读训练',
+            disabled: appTaskBusy,
+            onClick: () => setSettingsOpen(true),
+          };
   const assetContent = overview ? (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">

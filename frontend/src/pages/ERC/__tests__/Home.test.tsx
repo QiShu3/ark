@@ -159,7 +159,7 @@ describe('ERC home page', () => {
 
     expect(await screen.findByText('当前主事件「考研英语」尚未配置阅读训练，请通过右上角“配置”完成初始化。')).toBeInTheDocument();
     expect(screen.getAllByText('未启用')).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: '配置' }).length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByRole('button', { name: '配置' }).length).toBe(1);
     expect(screen.queryByRole('button', { name: '开始真题练习' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '开始复习' })).not.toBeInTheDocument();
   });

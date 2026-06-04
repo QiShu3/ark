@@ -426,7 +426,7 @@ describe('EventWorkbenchModal', () => {
 
     expect(await screen.findByRole('dialog', { name: '工作流' })).toBeInTheDocument();
     expect(screen.queryByText('设为默认工作流')).not.toBeInTheDocument();
-    const taskSelect = screen.getByLabelText('阶段 1 绑定任务');
+    const taskSelect = screen.getByLabelText('绑定任务');
     expect(within(taskSelect).getByRole('option', { name: '完成第一轮复习' })).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('工作流名称'), '期末冲刺');
