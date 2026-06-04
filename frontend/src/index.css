@@ -815,54 +815,150 @@
 
 .ark-calendar-widget {
   overflow: hidden;
+  border-radius: 24px;
 }
 
 .ark-calendar-nav-button {
   color: var(--ark-text-muted);
-  background:
-    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.9), transparent 44%),
-    color-mix(in srgb, var(--ark-surface-strong) 72%, white);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.64),
-    0 8px 20px rgba(51, 65, 85, 0.08);
+  background: var(--ark-surface-subtle);
+  border: 1px solid var(--ark-border);
+  transition: all 180ms ease;
+  cursor: pointer;
 }
 
-.ark-calendar-day {
+.ark-calendar-nav-button:hover {
+  background: var(--ark-surface-strong);
+  color: var(--ark-text);
+  transform: scale(1.05);
+}
+
+.ark-calendar-day-cell {
   position: relative;
   display: flex;
-  height: 1.25rem;
+  height: 1.35rem;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  line-height: 1;
 }
 
-.ark-calendar-day-current {
+.ark-calendar-day-circle {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 500;
+  transition: all 160ms ease;
+  user-select: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+}
+
+.ark-calendar-day-circle:focus-visible {
+  outline: 2.2px solid var(--ark-accent);
+  outline-offset: 2px;
+}
+
+/* 连续打卡连接线 */
+.ark-calendar-day-connection {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 1.25rem;
+  background: color-mix(in srgb, var(--ark-accent) 12%, transparent);
+  z-index: 5;
+}
+
+.ark-calendar-day-connection.connect-left {
+  left: 0;
+  width: 50%;
+}
+
+.ark-calendar-day-connection.connect-right {
+  right: 0;
+  width: 50%;
+}
+
+.ark-calendar-day-connection.connect-full {
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+/* 已打卡圆圈 */
+.ark-calendar-circle-checked {
+  border: 1px solid var(--ark-accent);
+  color: var(--ark-accent);
+  font-weight: 600;
+  background: var(--ark-surface);
+}
+
+/* 今日待打卡圆圈 (下方带空心小圆点) */
+.ark-calendar-circle-today-pending {
+  border: 1px solid var(--ark-accent);
+  color: var(--ark-accent);
+  font-weight: 700;
+  background: var(--ark-surface);
+}
+
+.ark-calendar-circle-today-pending::after {
+  content: '';
+  position: absolute;
+  bottom: -2.2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  border: 0.8px solid var(--ark-accent);
+  background: var(--ark-surface);
+  z-index: 20;
+}
+
+/* 今日已打卡圆圈 (下方带实心小圆点) */
+.ark-calendar-circle-today-checked {
+  border: 1px solid var(--ark-accent);
+  color: var(--ark-accent);
+  font-weight: 700;
+  background: var(--ark-surface);
+}
+
+.ark-calendar-circle-today-checked::after {
+  content: '';
+  position: absolute;
+  bottom: -2.2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: var(--ark-accent);
+  z-index: 20;
+}
+
+/* 未打卡圆圈 (灰色) */
+.ark-calendar-circle-missed {
+  border: 1px solid color-mix(in srgb, var(--ark-text-faint) 62%, transparent);
+  color: var(--ark-text-faint);
+  background: transparent;
+}
+
+
+/* 正常数字 */
+.ark-calendar-circle-normal {
   color: var(--ark-text);
   background: transparent;
 }
 
-.ark-calendar-day-muted {
+/* 非当前月日期 */
+.ark-calendar-circle-muted {
   color: var(--ark-text-faint);
-}
-
-.ark-calendar-day-today {
-  color: var(--ark-accent);
-  font-weight: 700;
-  background: color-mix(in srgb, var(--ark-accent-soft) 82%, rgba(255, 255, 255, 0.72));
-}
-
-.ark-calendar-day-checked {
-  color: var(--ark-accent);
-  font-weight: 700;
-  background: color-mix(in srgb, var(--ark-accent-soft) 82%, rgba(255, 255, 255, 0.72));
-}
-
-.ark-calendar-check {
-  background: var(--ark-accent);
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--ark-accent) 22%, transparent);
+  background: transparent;
 }
 
 :root[data-theme="light"] .ark-home-dashboard-shell {
