@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 18:57 · 287d0bb · feat(frontend): remove go-to-library button and add a beautiful completed task modal
+
+- 用户提出的需求：
+  - 先去掉功能二（进入题库按钮）。然后 功能一（完成今日复习按钮），我想出现一个好看的弹窗提示该任务完成了，你有什么想法吗？
+
+- 本次完成的工作：
+  - **前端**：在 `ERCReviewFocusWork.tsx` 的“暂无到期复习”空状态卡片中移除了“进入题库”的链接按钮。
+  - **前端**：在 `ERCReviewFocusWork.tsx` 中引入了 `AppModalFrame` 全局弹窗组件和 `Trophy` 奖杯图标。
+  - **前端**：添加了 `showFinishModal` 弹窗展示状态。当用户点击“完成今日 ERC 复习”时，弹出一个精心设计的、符合项目整体磨砂玻璃美学的“今日复习已圆满完成！”打卡弹窗，弹窗内含闪烁跳跃的翡翠绿奖杯图标、祝福语、以及“再看看”与“好的，返回”两个操作按纽。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+
 ### 2026-06-04 18:49 · 0cbd8f7 · feat(frontend): highlight option cards with success/error themes after submission and remove result banner
 
 - 用户提出的需求：
