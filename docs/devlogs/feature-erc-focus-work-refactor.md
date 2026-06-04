@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:31 · 49cfa7c · feat(frontend): add 'Practice Again' button to empty phase in ERC practice focus work
+
+- 用户提出的需求：
+  - 在得到我的许可前不要改代码哦，我希望在 结束并完成今日任务 按钮旁边有一个 再来一次 按钮，功能是再来一次任务，但是任务计数不变，你觉得好实现吗？
+
+- 本次完成的工作：
+  - **前端**：在 `ERCPracticeFocusWork.tsx` 的今日练习完成（空状态）页面中，新增 **“再来一次”** 按钮。
+  - **前端**：实现“再来一次”的点击处理器 `handlePracticeAgain`：调用 `fetchERCArticles()` 接口获取真题列表，随机选择一篇真题，并拉取文章详情与词汇预热。同时，重置答题、选项与结果状态，将阶段转入 preheat/reading，并置 `isExtraPractice` 为 `true`。
+  - **前端**：在今日练习已完成状态下，将“结束并完成今日任务”按钮绑定到 `handleExitFocus`，以直接调用 `/todo/focus/stop` 退出专注，彻底修复此状态下打卡触发的“当前周期已达完成上限”报错。
+  - **前端**：当处于加练状态 (`isExtraPractice` 为真) 时，在题目做完后的 Result 结算卡片底部仅显示 **“结束本轮专注”** 按钮，点击调用退出专注而不触发打卡计数，以防抛出“当前周期已达完成上限”的报错。
+  - **前端**：在 `ERCPracticeFocusWork.test.tsx` 中编写了空状态加练流程的单元测试用例，并处理了 jsdom 缺少 div.scrollTo 函数引发的兼容报错。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run src/components/ERC/ERCPracticeFocusWork.test.tsx` — 测试通过 ✅
+
 ### 2026-06-04 19:20 · 9e515e6 · feat(frontend): automatically end current focus round upon task completion
 
 - 用户提出的需求：
