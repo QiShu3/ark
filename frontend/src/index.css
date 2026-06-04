@@ -82,6 +82,11 @@
 
   /* Global status work colors */
   --focus-work-blue-text: rgba(147, 197, 253, 0.95);
+  --focus-work-blue-bg: rgba(147, 197, 253, 0.1);
+  --focus-work-blue-bg-hover: rgba(147, 197, 253, 0.15);
+  --focus-work-blue-border: rgba(147, 197, 253, 0.2);
+  --focus-work-blue-border-hover: rgba(147, 197, 253, 0.3);
+  --focus-work-primary-button-text: #05070d;
   --focus-work-amber-text: rgba(252, 211, 77, 0.9);
   --focus-work-amber-bg: rgba(252, 211, 77, 0.1);
   --focus-work-amber-border: rgba(252, 211, 77, 0.2);
@@ -139,6 +144,11 @@
 
   /* Global status work colors - Light mode (high contrast) */
   --focus-work-blue-text: #1d4ed8;
+  --focus-work-blue-bg: rgba(37, 99, 235, 0.08);
+  --focus-work-blue-bg-hover: rgba(37, 99, 235, 0.12);
+  --focus-work-blue-border: rgba(37, 99, 235, 0.24);
+  --focus-work-blue-border-hover: rgba(37, 99, 235, 0.36);
+  --focus-work-primary-button-text: #ffffff;
   --focus-work-amber-text: #b45309;
   --focus-work-amber-bg: rgba(180, 83, 9, 0.08);
   --focus-work-amber-border: rgba(180, 83, 9, 0.24);
