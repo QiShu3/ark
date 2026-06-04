@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 15:12 · a4aa36d · merge: merge feature/workflow-column-layout into main
+
+- 用户提出的需求：
+  - “合并该分支 feature/workflow-column-layout ，不考虑远程”
+
+- 本次完成的工作：
+  - 合并 `feature/workflow-column-layout` 分支的最新提交到本地 `main` 分支。
+  - 解决 `docs/开发日志.md` 中的合并冲突，将最近 10 条提交记录按时间倒序重新梳理和合并。
+
+- 验证情况：
+  - 运行 `pnpm check` 类型检查通过。
+  - 运行 `pnpm test -- --run HomeRightDashboard.test.tsx` 及 `CalendarWidget.test.tsx` 单元测试通过。
+  - 运行 `uv run pytest` 后端单元测试 175 个用例 100% 通过。
+
 ### 2026-06-04 10:10 · 78d307e · merge: merge feature/workflow-column-layout into main
 
 - 用户提出的需求：

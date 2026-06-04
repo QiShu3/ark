@@ -25,7 +25,7 @@ export const ToastContainer: React.FC = () => {
     <div
       role="region"
       aria-label="通知提示"
-      className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2.5 pointer-events-none w-full max-w-[420px] px-4"
+      className="fixed top-20 left-1/2 -translate-x-1/2 z-[180] flex flex-col gap-2.5 pointer-events-none w-full max-w-[420px] px-4"
     >
       {toasts.map((t) => (
         <div

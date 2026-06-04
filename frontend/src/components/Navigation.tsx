@@ -165,7 +165,7 @@ const Navigation: React.FC = () => {
 
   return (
     <>
-      <nav className="ark-top-nav fixed left-3 right-3 top-3 z-50 flex h-24 items-center rounded-[48px] border border-[var(--ark-glass-border-soft)] bg-[var(--ark-surface)] px-[30px] text-[var(--ark-text)] backdrop-blur-2xl">
+      <nav className="ark-top-nav fixed left-3 right-3 top-3 z-[150] flex h-24 items-center rounded-[48px] border border-[var(--ark-glass-border-soft)] bg-[var(--ark-surface)] px-[30px] text-[var(--ark-text)] backdrop-blur-2xl">
       <div className="flex items-center gap-[18px]">
         <button
           type="button"
@@ -208,6 +208,7 @@ const Navigation: React.FC = () => {
               className="ark-nav-icon-button ark-focus-ring flex h-[60px] w-[60px] items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 if (focusNavigationLocked) return;
+                setShowSettingsModal(false);
                 setShowCalendarModal(true);
               }}
             >
@@ -240,6 +241,7 @@ const Navigation: React.FC = () => {
               className="ark-nav-icon-button ark-focus-ring flex h-[60px] w-[60px] items-center justify-center rounded-full text-[var(--ark-text-muted)] transition-all hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 if (focusNavigationLocked) return;
+                setShowCalendarModal(false);
                 setShowSettingsModal(true);
               }}
             >
@@ -301,7 +303,7 @@ const Navigation: React.FC = () => {
 
     {/* Toast Notification */}
     {showToast && checkInState && (
-      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] animate-[slide-in-top_0.5s_ease-out]">
+      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[180] animate-[slide-in-top_0.5s_ease-out]">
         <div className="bg-ark-overlay backdrop-blur-lg border border-ark-border px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
           <span className="text-sm font-medium text-green-400">✅ 今日已打卡</span>
           <div className="w-px h-4 bg-ark-surface-subtle"></div>
