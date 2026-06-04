@@ -8,8 +8,11 @@ import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
 import type { AchievementSummary } from './achievementTypes';
 import AppModalFrame from './AppModalFrame';
+import HomeCard from './HomeCard';
+import HomeSectionHeader from './HomeSectionHeader';
 import { getWorkflowPresetPhases, type WorkflowPreset } from './workflowPresetForm';
 import WorkflowPhaseChips from './WorkflowPhaseChips';
+import timerClockPng from '../assets/timer-clock.png';
 
 type FocusWorkflow = {
   state: 'normal' | 'focus' | 'break';
@@ -98,33 +101,18 @@ function getWorkflowSummary(preset: WorkflowPreset | null): string {
   return `${phases.length} 个阶段 · 专注 ${focusMinutes} 分钟 · 休息 ${breakMinutes} 分钟`;
 }
 
-function DecorativeClock() {
-  const ticks = Array.from({ length: 12 }, (_, index) => index * 30);
-
+function TimerCardArt() {
   return (
-    <svg
-      className="ark-home-decorative-clock absolute right-8 top-3 z-0 h-[92px] w-[92px]"
-      viewBox="0 0 100 100"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <circle className="ark-home-clock-halo" cx="50" cy="50" r="48" />
-      <circle className="ark-home-clock-face" cx="50" cy="50" r="39" />
-      {ticks.map((rotation) => (
-        <line
-          key={rotation}
-          className="ark-home-clock-tick"
-          x1="50"
-          y1="14"
-          x2="50"
-          y2={rotation % 90 === 0 ? '20' : '18'}
-          transform={`rotate(${rotation} 50 50)`}
-        />
-      ))}
-      <line className="ark-home-clock-hand" x1="50" y1="50" x2="50" y2="27" transform="rotate(40 50 50)" />
-      <line className="ark-home-clock-hand ark-home-clock-hand-short" x1="50" y1="50" x2="50" y2="33" transform="rotate(230 50 50)" />
-      <circle className="ark-home-clock-center" cx="50" cy="50" r="4" />
-    </svg>
+    <>
+      <img className="ark-home-timer-clock" src={timerClockPng} alt="" aria-hidden="true" />
+      <svg className="ark-home-timer-waves" viewBox="0 0 720 220" aria-hidden="true" focusable="false">
+        <path d="M-44 190C78 142 139 167 236 132C337 96 371 26 493 50C585 68 630 135 765 88" />
+        <path d="M-28 224C112 159 197 205 313 151C418 102 452 61 557 85C642 105 695 126 766 79" />
+      </svg>
+      <span className="ark-home-timer-sparkle ark-home-timer-sparkle-main" aria-hidden="true" />
+      <span className="ark-home-timer-sparkle ark-home-timer-sparkle-soft" aria-hidden="true" />
+      <span className="ark-home-timer-dot-field" aria-hidden="true" />
+    </>
   );
 }
 
@@ -394,45 +382,48 @@ export default function HomeRightDashboard() {
   return (
     <>
       <div className="grid h-full grid-rows-[1.25fr_0.85fr_1.15fr_1.7fr_1fr] gap-3">
-        <section className="ark-home-card ark-home-timer-card relative overflow-hidden rounded-[24px] px-6 py-5">
+        <HomeCard variant="hero" className="px-6 py-5">
+          <TimerCardArt />
+
           <div className="relative z-10 flex h-full min-h-[150px] flex-col justify-between">
-            <div className="flex items-center gap-2 text-base font-medium text-[var(--ark-text)]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[var(--ark-accent)] shadow-[0_0_12px_var(--ark-accent)]" />
+            <div className="ark-home-timer-phase flex items-center gap-2 text-base font-semibold">
+              <span className="ark-home-timer-phase-dot h-2.5 w-2.5 rounded-full" />
               {phaseLabel}
             </div>
 
             <div className="pb-1">
-              <div className="ark-home-timer-digits text-[4.4rem] font-semibold leading-none text-[var(--ark-text)] ark-font-display">
+              <div className="ark-home-timer-digits font-bold leading-none ark-font-display">
                 {formatTimer(timerSeconds)}
               </div>
-              <div className="mt-5 text-sm text-[var(--ark-text-muted)]">
+              <div className="ark-home-timer-target mt-5 text-sm font-medium">
                 今日目标&nbsp;&nbsp;{DAILY_GOAL_MINUTES} 分钟
               </div>
             </div>
           </div>
 
-          <DecorativeClock />
-
           <button
             type="button"
             onClick={handlePrimaryAction}
             disabled={isSubmittingAction}
-            className="ark-home-primary-button absolute bottom-6 right-6 z-20 flex h-[52px] min-w-[212px] items-center justify-center gap-2 rounded-[20px] px-6 text-lg font-semibold transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
+            className="ark-home-primary-button absolute bottom-6 right-6 z-20 flex h-[58px] min-w-[240px] items-center justify-center gap-3 rounded-[24px] px-7 text-xl font-semibold transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
           >
-            <span className="ark-home-play-dot flex h-6 w-6 items-center justify-center rounded-full">
-              <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+            <span className="ark-home-play-dot flex h-8 w-8 items-center justify-center rounded-full">
+              <Play className="h-4.5 w-4.5 fill-current" aria-hidden="true" />
             </span>
             {actionLabel}
           </button>
-        </section>
+        </HomeCard>
 
-        <section className="ark-home-card rounded-[24px] px-6 py-3">
-          <div className="mb-2.5 flex items-center justify-between">
-            <span className="text-base font-semibold text-[var(--ark-text)]">今日进度</span>
-            <span className={`text-2xl font-medium ark-font-display ${progressIsZero ? 'text-[var(--ark-text-faint)]' : 'text-[var(--ark-accent)]'}`}>
-              {progressPercent}%
-            </span>
-          </div>
+        <HomeCard className="px-6 py-3">
+          <HomeSectionHeader
+            title="今日进度"
+            className="mb-2.5"
+            action={(
+              <span className={`text-2xl font-medium ark-font-display ${progressIsZero ? 'text-[var(--ark-text-faint)]' : 'text-[var(--ark-accent)]'}`}>
+                {progressPercent}%
+              </span>
+            )}
+          />
           <div className="h-3 overflow-hidden rounded-full bg-[var(--ark-surface-subtle)]">
             <div
               className={`ark-home-progress-fill h-full rounded-full transition-[width] duration-500 ${progressIsZero ? 'ark-home-progress-fill-idle' : ''}`}
@@ -442,9 +433,9 @@ export default function HomeRightDashboard() {
           <div className="mt-2 text-sm text-[var(--ark-text-faint)]">
             已完成 {todayFocusMinutes} 分钟 / {DAILY_GOAL_MINUTES} 分钟
           </div>
-        </section>
+        </HomeCard>
 
-        <section className="ark-home-card relative flex min-h-0 flex-col rounded-[24px] px-6 py-4">
+        <HomeCard className="relative flex min-h-0 flex-col px-6 py-4">
           <button
             type="button"
             onClick={openArrangementEntry}
@@ -454,7 +445,7 @@ export default function HomeRightDashboard() {
           </button>
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-5 pt-2">
             <div className="flex min-h-0 flex-col">
-              <div className="mb-3 text-base font-semibold text-[var(--ark-text)]">任务</div>
+              <HomeSectionHeader title="任务" className="mb-3" />
               <div
                 ref={taskListRef}
                 className={`relative flex min-h-0 flex-1 flex-col ${todayTasks.length ? 'justify-start gap-2' : 'justify-center'}`}
@@ -485,7 +476,7 @@ export default function HomeRightDashboard() {
             <div className="w-px bg-ark-border" aria-hidden="true" />
 
             <div className="flex min-h-0 flex-col">
-              <div className="mb-3 text-base font-semibold text-[var(--ark-text)]">日程</div>
+              <HomeSectionHeader title="日程" className="mb-3" />
               <div
                 ref={appointmentListRef}
                 className={`relative flex min-h-0 flex-1 flex-col ${upcomingAppointments.length ? 'justify-start gap-3' : 'justify-center'}`}
@@ -511,26 +502,30 @@ export default function HomeRightDashboard() {
               </div>
             </div>
           </div>
-        </section>
+        </HomeCard>
 
         <CalendarWidget className="ark-home-card min-h-0 rounded-[24px]" />
 
         <section className="grid min-h-0 grid-cols-3 gap-3">
-          <button
+          <HomeCard
+            as="button"
             type="button"
-            className="ark-home-card ark-home-shortcut-card flex min-w-0 flex-col justify-center rounded-[20px] px-5 text-left"
+            variant="shortcut"
+            className="flex min-w-0 flex-col justify-center px-5 text-left"
           >
             <span className="ark-home-shortcut-icon mb-3 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
               <BarChart3 className="h-7 w-7" aria-hidden="true" />
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">数据分析</span>
             <span className="mt-1 truncate text-xs font-medium text-[var(--ark-text-faint)]">学习数据可视化</span>
-          </button>
+          </HomeCard>
 
-          <button
+          <HomeCard
+            as="button"
             ref={achievementButtonRef}
             type="button"
-            className="ark-home-card ark-home-shortcut-card flex min-w-0 flex-col justify-center rounded-[20px] px-5 text-left"
+            variant="shortcut"
+            className="flex min-w-0 flex-col justify-center px-5 text-left"
             onClick={() => setAchievementOpen(true)}
           >
             <span className="ark-home-shortcut-icon mb-3 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
@@ -538,11 +533,13 @@ export default function HomeRightDashboard() {
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">成就</span>
             <span className="mt-1 max-w-full truncate text-xs font-medium text-[var(--ark-text-faint)]">解锁成长里程碑</span>
-          </button>
+          </HomeCard>
 
-          <button
+          <HomeCard
+            as="button"
             type="button"
-            className="ark-home-card ark-home-shortcut-card flex min-w-0 flex-col justify-center rounded-[20px] px-5 text-left"
+            variant="shortcut"
+            className="flex min-w-0 flex-col justify-center px-5 text-left"
             onClick={() => navigate('/apps')}
           >
             <span className="ark-home-shortcut-icon mb-3 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
@@ -550,7 +547,7 @@ export default function HomeRightDashboard() {
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">应用中心</span>
             <span className="mt-1 max-w-full truncate text-xs font-medium text-[var(--ark-text-faint)]">更多学习工具</span>
-          </button>
+          </HomeCard>
         </section>
       </div>
 

@@ -640,6 +640,7 @@ async def init_todo(app: Any) -> None:
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
               name VARCHAR(50) NOT NULL,
+              icon VARCHAR(50) NULL,
               focus_duration INTEGER NOT NULL,
               break_duration INTEGER NOT NULL,
               default_focus_timer_mode VARCHAR(20) NOT NULL DEFAULT 'countdown',
@@ -664,6 +665,9 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             "ALTER TABLE focus_workflow_presets ADD CONSTRAINT chk_focus_workflow_presets_timer_mode CHECK (default_focus_timer_mode IN ('countdown', 'countup'));"
+        )
+        await conn.execute(
+            "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS icon VARCHAR(50) NULL;"
         )
 
         await conn.execute(

@@ -590,56 +590,179 @@
 }
 
 .ark-home-play-dot {
-  background: color-mix(in srgb, var(--ark-on-accent) 24%, transparent);
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.84));
+  color: rgb(37, 99, 235);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 6px 14px rgba(20, 82, 214, 0.24);
 }
 
 .ark-home-timer-card {
+  container-type: inline-size;
+  border-color: color-mix(in srgb, var(--ark-glass-border-strong) 78%, transparent);
   background:
-    radial-gradient(circle at 84% 18%, color-mix(in srgb, var(--ark-accent-soft) 74%, transparent), transparent 24%),
+    linear-gradient(112deg, rgba(255, 255, 255, 0.08), transparent 32%),
+    radial-gradient(circle at 83% 13%, color-mix(in srgb, var(--ark-accent-soft) 96%, transparent), transparent 29%),
+    radial-gradient(circle at 64% 90%, color-mix(in srgb, var(--ark-accent-soft) 52%, transparent), transparent 34%),
     var(--ark-glass-surface);
+  box-shadow:
+    inset 0 1px 0 var(--ark-glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--ark-glass-border-soft) 74%, transparent);
+}
+
+.ark-home-timer-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 19%),
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.34), transparent 34%);
+  opacity: 0.76;
+}
+
+.ark-home-timer-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -18% -42% 40%;
+  z-index: 0;
+  height: 86%;
+  pointer-events: none;
+  border-radius: 999px 999px 0 0;
+  background: color-mix(in srgb, var(--ark-accent-soft) 64%, transparent);
+  opacity: 0.28;
+  transform: rotate(-13deg);
+  filter: blur(1px);
+}
+
+:root[data-theme="light"] .ark-home-timer-card {
+  background:
+    linear-gradient(116deg, rgba(255, 255, 255, 0.94), rgba(238, 247, 255, 0.74) 54%, rgba(222, 237, 255, 0.7)),
+    radial-gradient(circle at 84% 14%, rgba(146, 191, 255, 0.28), transparent 30%),
+    radial-gradient(circle at 66% 95%, rgba(37, 99, 235, 0.12), transparent 34%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.56);
 }
 
 .ark-home-timer-digits {
   font-variant-numeric: tabular-nums;
+  color: var(--ark-text);
+  font-size: clamp(3.65rem, 11.5cqw, 5.35rem);
+  letter-spacing: 0;
+  text-shadow: 0 2px 4px color-mix(in srgb, var(--ark-text) 8%, transparent);
 }
 
-.ark-home-decorative-clock {
-  overflow: visible;
+.ark-home-timer-phase {
+  color: var(--ark-text);
+}
+
+.ark-home-timer-phase-dot {
+  background: var(--ark-accent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--ark-accent) 10%, transparent),
+    0 0 16px color-mix(in srgb, var(--ark-accent) 56%, transparent);
+}
+
+.ark-home-timer-target {
+  color: var(--ark-text-muted);
+}
+
+:root[data-theme="light"] .ark-home-timer-digits,
+:root[data-theme="light"] .ark-home-timer-phase {
+  color: rgb(13, 44, 100);
+}
+
+:root[data-theme="light"] .ark-home-timer-target {
+  color: rgba(44, 62, 92, 0.72);
+}
+
+.ark-home-timer-clock {
+  position: absolute;
+  right: -84px;
+  top: -48px;
+  z-index: 0;
+  width: 226px;
+  height: 226px;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0.24;
+  filter:
+    drop-shadow(0 18px 30px color-mix(in srgb, var(--ark-accent) 16%, transparent))
+    saturate(1.08);
+}
+
+:root[data-theme="light"] .ark-home-timer-clock {
+  opacity: 0.34;
+}
+
+.ark-home-timer-waves {
+  position: absolute;
+  inset: auto -72px -16px 110px;
+  z-index: 0;
+  height: 146px;
+  width: 690px;
+  pointer-events: none;
   color: var(--ark-accent);
-  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--ark-accent) 16%, transparent));
-  opacity: 0.54;
+  opacity: 0.12;
 }
 
-.ark-home-clock-halo {
-  fill: color-mix(in srgb, var(--ark-accent-soft) 34%, transparent);
-  stroke: color-mix(in srgb, var(--ark-accent) 16%, transparent);
-  stroke-width: 1;
-}
-
-.ark-home-clock-face {
-  fill: color-mix(in srgb, var(--ark-accent-soft) 18%, transparent);
-  stroke: color-mix(in srgb, var(--ark-accent) 48%, transparent);
-  stroke-width: 2;
-}
-
-.ark-home-clock-tick {
-  stroke: color-mix(in srgb, var(--ark-accent) 60%, transparent);
+.ark-home-timer-waves path {
+  fill: none;
+  stroke: currentColor;
   stroke-linecap: round;
-  stroke-width: 2;
+  stroke-width: 1.2;
 }
 
-.ark-home-clock-hand {
-  stroke: color-mix(in srgb, var(--ark-accent) 78%, transparent);
-  stroke-linecap: round;
-  stroke-width: 4;
+:root[data-theme="light"] .ark-home-timer-waves {
+  opacity: 0.16;
 }
 
-.ark-home-clock-hand-short {
-  stroke-width: 3.2;
+.ark-home-timer-sparkle,
+.ark-home-timer-sparkle::before,
+.ark-home-timer-sparkle::after {
+  position: absolute;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--ark-accent) 24%, transparent);
 }
 
-.ark-home-clock-center {
-  fill: color-mix(in srgb, var(--ark-accent) 76%, transparent);
+.ark-home-timer-sparkle {
+  clip-path: polygon(50% 0, 61% 38%, 100% 50%, 61% 62%, 50% 100%, 39% 62%, 0 50%, 39% 38%);
+}
+
+.ark-home-timer-sparkle-main {
+  right: 138px;
+  top: 42px;
+  width: 38px;
+  height: 38px;
+  opacity: 0.26;
+}
+
+.ark-home-timer-sparkle-soft {
+  right: 264px;
+  top: 73px;
+  width: 18px;
+  height: 18px;
+  opacity: 0.2;
+}
+
+.ark-home-timer-dot-field {
+  position: absolute;
+  right: 150px;
+  top: 82px;
+  z-index: 0;
+  width: 112px;
+  height: 56px;
+  pointer-events: none;
+  opacity: 0.13;
+  background-image: radial-gradient(circle, var(--ark-accent) 1.6px, transparent 1.7px);
+  background-size: 16px 16px;
+  mask-image: linear-gradient(90deg, transparent, #000 28%, #000 78%, transparent);
 }
 
 .ark-home-progress-fill {
@@ -651,9 +774,43 @@
 }
 
 .ark-home-primary-button {
-  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 44%),
+    linear-gradient(135deg, rgb(94, 166, 250), rgb(35, 95, 238) 62%, rgb(28, 82, 226));
   color: var(--ark-on-accent);
-  box-shadow: 0 18px 36px rgba(37, 99, 235, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    inset 0 -4px 0 rgba(23, 70, 208, 0.28),
+    0 12px 24px rgba(37, 99, 235, 0.24),
+    0 4px 10px rgba(37, 99, 235, 0.16);
+}
+
+.ark-home-primary-button:hover:not(:disabled) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.54),
+    inset 0 -4px 0 rgba(23, 70, 208, 0.24),
+    0 14px 28px rgba(37, 99, 235, 0.28),
+    0 5px 12px rgba(37, 99, 235, 0.18);
+}
+
+@container (max-width: 560px) {
+  .ark-home-primary-button {
+    min-width: 206px;
+    height: 56px;
+    gap: 0.625rem;
+    padding-inline: 1.35rem;
+    font-size: 1.125rem;
+  }
+
+  .ark-home-play-dot {
+    width: 1.85rem;
+    height: 1.85rem;
+  }
+
+  .ark-home-timer-target {
+    margin-top: 0.875rem;
+  }
 }
 
 .ark-calendar-widget {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import FocusStats from './FocusStats';
+import Button from './Button';
 import AppModalFrame from './AppModalFrame';
 import WorkflowProgressBar from './WorkflowProgressBar';
 import WorkflowPresetModal from './WorkflowPresetModal';
@@ -1482,19 +1483,22 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   进入任务
                 </span>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="xs"
                   onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
-                  className="ark-arrangement-summary-complete rounded-full border px-2 py-0.5 text-[10px] font-semibold transition"
+                  className="ark-arrangement-summary-complete rounded-full font-semibold"
                   aria-label={`完成任务：${task.title}`}
                 >
                   完成任务
-                </button>
+                </Button>
               )
             ) : (
               <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                 {_isTaskCompletable(task) && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={(e) => { e.stopPropagation(); _handleCompleteTask(e, task); }}
                     className="p-1 rounded hover:bg-green-500/20 text-ark-text-faint hover:text-green-400"
                     title="完成"
@@ -1502,10 +1506,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                  </button>
+                  </Button>
                 )}
                 {task.status === 'done' && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={(e) => { e.stopPropagation(); _handleUndoCompleteTask(e, task); }}
                     className="p-1 rounded hover:bg-blue-500/20 text-ark-text-faint hover:text-blue-400"
                     title="撤销完成"
@@ -1514,10 +1520,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       <polyline points="9 14 4 9 9 4"></polyline>
                       <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
                     </svg>
-                  </button>
+                  </Button>
                 )}
                 {task.status === 'done' && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={(e) => { e.stopPropagation(); _handleDeleteTask(e, task); }}
                     className="p-1 rounded hover:bg-red-500/20 text-ark-text-faint hover:text-red-400"
                     title="删除"
@@ -1526,7 +1534,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       <line x1="18" y1="6" x2="6" y2="18"></line>
                       <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -1581,17 +1589,19 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               {_formatShortDateTime(appointment.ends_at)}
             </span>
             {isNeedsConfirmation ? (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="xs"
                 onClick={(e) => { e.stopPropagation(); _handleCompleteAppointment(e, appointment); }}
-                className="rounded-full border border-amber-300/25 bg-amber-300/12 px-2 py-0.5 text-[10px] font-semibold text-amber-100 transition hover:border-amber-300/40 hover:bg-amber-300/18"
+                className="rounded-full border border-amber-300/25 bg-amber-300/12 text-amber-100 transition hover:border-amber-300/40 hover:bg-amber-300/18 font-semibold shadow-none"
                 aria-label={`确认日程：${appointment.title}`}
               >
                 确认
-              </button>
+              </Button>
             ) : _isAppointmentCompletable(appointment) ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={(e) => { e.stopPropagation(); _handleCompleteAppointment(e, appointment); }}
                 className="p-1 rounded hover:bg-green-500/20 text-ark-text-faint hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="完成日程"
@@ -1599,7 +1609,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -1663,12 +1673,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               <h4 className="text-[10px] font-medium text-ark-text-faint tracking-wide">
                 已完成 ({completedTasks.length})
               </h4>
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={(e) => { e.stopPropagation(); setShowCompletedAll(!showCompletedAll); }}
-                className="text-[10px] text-blue-400/80 hover:text-blue-300"
+                className="text-blue-400/80 hover:text-blue-300 hover:bg-blue-500/10 px-1.5 py-0.5"
               >
                 {showCompletedAll ? '收起' : '展开'}
-              </button>
+              </Button>
             </div>
             {showCompletedAll && completedTasks.map(t => _renderSmallTaskCard(t, false))}
           </div>
@@ -1962,10 +1974,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             >
               {/* 右上角结束工作流按钮 */}
               {isWorkflowActive && (
-                <button
+                <Button
                   aria-label="结束工作流"
                   data-onboarding-anchor="workflow-stop-button"
-                  className="absolute top-2 right-2 px-2 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-all opacity-0 group-hover:opacity-100 z-10 w-10 flex items-center justify-center"
+                  variant="danger"
+                  size="sm"
+                  className="absolute top-2 right-2 z-10 w-10 h-8 opacity-0 group-hover:opacity-100 transition-all p-0 flex items-center justify-center shadow-none border-transparent"
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (confirm('当前正在工作流中，是否结束整个工作流？')) {
@@ -1978,7 +1992,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               )}
 
               <div className="flex flex-col items-center justify-center group-hover:opacity-0 transition-opacity duration-300">
@@ -1997,17 +2011,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <span className="text-xl font-semibold ark-font-display">{primaryActionLabel}</span>
                 {!isWorkflowActive && !isFocusing && effectiveSelectedWorkflow ? (
-                  <button
-                    type="button"
+                  <Button
                     aria-label={`切换工作流 ${effectiveSelectedWorkflow.name}`}
-                    className="ark-button-secondary mt-1 rounded-full px-3 py-1 text-sm transition"
+                    variant="secondary"
+                    size="xs"
+                    className="mt-1 rounded-full font-semibold shadow-none"
                     onClick={(event) => {
                       event.stopPropagation();
                       setShowWorkflowPicker(true);
                     }}
                   >
                     {effectiveSelectedWorkflow.name}
-                  </button>
+                  </Button>
                 ) : (
                   <span className="text-sm text-[var(--ark-text-muted)] mt-1">
                     {primaryActionSubtext}
@@ -2018,16 +2033,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             {hasPendingTaskSelection && (
               <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm bg-sky-500/15 border-t border-sky-400/30">
                 <span>当前专注阶段尚未绑定任务，先选一个未完成任务再开始。</span>
-                <button
-                  type="button"
+                <Button
                   onClick={() => {
                     setShowFocusTaskPicker(true);
                     _loadTasks();
                   }}
-                  className="px-3 py-1 rounded bg-sky-400/80 text-black font-medium hover:bg-sky-300"
+                  className="px-3 py-1 rounded bg-sky-400 hover:bg-sky-300 text-black font-semibold shadow-none border-transparent"
+                  size="sm"
                 >
                   选择当前阶段任务
-                </button>
+                </Button>
               </div>
             )}
             <div
@@ -2048,8 +2063,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             <span className="writing-vertical-rl text-base font-medium tracking-wider">安排</span>
             
             {/* 右下角加号按钮 */}
-            <button 
-              className="absolute bottom-2 right-2 w-8 h-8 rounded-full border ark-border bg-[var(--ark-surface)] hover:bg-[var(--ark-accent-soft)] flex items-center justify-center text-[var(--ark-text-muted)] hover:text-[var(--ark-text)] shadow-lg transition-all hover:scale-105 active:scale-95 group-hover/task:opacity-100 opacity-70 backdrop-blur-sm"
+            <Button 
+              variant="secondary"
+              size="sm"
+              className="absolute bottom-2 right-2 w-8 h-8 rounded-full shadow-lg group-hover/task:opacity-100 opacity-70 backdrop-blur-sm p-0 active:scale-95 flex items-center justify-center"
               aria-label="快捷创建安排"
               onClick={(e) => {
                 e.stopPropagation();
@@ -2061,7 +2078,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -2075,17 +2092,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           >
               <div className="flex h-14 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
                 <h3 id="workflow-picker-title" className="text-base font-semibold text-ark-text">选择工作流</h3>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowWorkflowPicker(false)}
-                  className="rounded-full p-2 text-ark-text-muted transition hover:bg-ark-surface-subtle hover:text-ark-text"
+                  className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
                   aria-label="关闭选择工作流"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
               <div className="flex max-h-[calc(72vh-56px)] flex-col gap-2 overflow-y-auto p-4">
                 {visibleWorkflowPresets.map((preset) => {
@@ -2113,13 +2131,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       </button>
                     );
                 })}
-                <button
-                  type="button"
+                <Button
                   onClick={_openNewWorkflowFromPicker}
-                  className="mt-2 rounded-xl border border-dashed border-ark-border bg-ark-surface-subtle px-4 py-3 text-left text-sm font-medium text-ark-text transition hover:border-ark-border hover:bg-ark-surface-subtle hover:text-ark-text"
+                  variant="secondary"
+                  className="mt-2 w-full text-left justify-start border-dashed px-4 py-3 font-semibold shadow-none rounded-xl"
                 >
                   新建工作流
-                </button>
+                </Button>
               </div>
           </AppModalFrame>
         )}
@@ -2134,15 +2152,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           >
               <div className="h-14 border-b border-ark-border flex items-center justify-between px-5 bg-ark-surface-subtle">
                 <h3 className="text-base font-semibold text-ark-text">全部任务</h3>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowFocusTaskPicker(false)}
-                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
+                  className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
               <div className="p-4 overflow-y-auto max-h-[calc(72vh-56px)] flex flex-col gap-2">
                 {arrangementTasks.filter((task) => task.status !== 'done' && !_isTaskHiddenFromActionList(task)).map((task) => (
@@ -2204,15 +2224,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
                 <h2 className="text-base font-semibold text-ark-text">专注统计</h2>
-                <button 
+                <Button 
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowStatsModal(false)}
-                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
+                  className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
               
               {/* 内容区域 */}
@@ -2261,20 +2283,22 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
               {/* 顶部标题栏 */}
               <div className="h-16 border-b border-ark-border flex items-center justify-between px-6 bg-ark-surface-subtle">
                 <h2 className="text-base font-semibold text-ark-text">安排管理</h2>
-                <button 
+                <Button 
                   aria-label="关闭安排管理"
                   data-onboarding-anchor="arrangements-close"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setShowTaskModal(false);
                     dispatchOnboardingEvent(ONBOARDING_EVENTS.arrangementsClosed);
                   }}
-                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
+                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text shadow-none border-transparent"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
 
               {/* 内容区域，双栏布局 */}
@@ -2405,12 +2429,14 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                                 <h4 className="text-[10px] font-medium text-ark-text-muted tracking-wide">
                                   已完成 ({dones.length})
                                 </h4>
-                                <button
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
                                   onClick={(e) => { e.stopPropagation(); setShowCompletedToday(!showCompletedToday); }}
-                                  className="text-[10px] text-blue-400/80 hover:text-blue-300"
+                                  className="text-blue-400/80 hover:text-blue-300 hover:bg-blue-500/10 px-1.5 py-0.5"
                                 >
                                   {showCompletedToday ? '收起' : '展开'}
-                                </button>
+                                </Button>
                               </div>
                               {showCompletedToday && dones.map(t => _renderSmallTaskCard(t, false, true))}
                             </div>
@@ -2509,15 +2535,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           >
               <div className="h-14 shrink-0 border-b border-ark-border flex items-center justify-between px-5 bg-ark-surface-subtle">
                 <h3 className="text-base font-semibold text-ark-text">创建安排</h3>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={_closeCreateTaskModal}
-                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
+                  className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
 
               <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
@@ -2800,27 +2828,30 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {createTaskError && <div className="text-sm text-red-400">{createTaskError}</div>}
               </div>
               <div className="p-5 pt-3 shrink-0 border-t border-ark-border flex items-center justify-end gap-3 bg-ark-surface-strong">
-                  <button
+                  <Button
                     onClick={_closeCreateTaskModal}
-                    className="px-4 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text hover:text-ark-text transition-colors"
+                    variant="secondary"
+                    size="md"
                     disabled={createTaskSubmitting}
                   >
                     取消
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => setShowCreateTaskMoreFields((v) => !v)}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    variant={createArrangementKind === 'appointment' ? 'secondary' : 'primary'}
+                    size="md"
                     disabled={createTaskSubmitting}
                   >
                     {createArrangementKind === 'appointment' ? '简表单' : (showCreateTaskMoreFields ? '收起' : '更多')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={_submitCreateTask}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={createTaskSubmitting}
+                    variant="primary"
+                    size="md"
+                    loading={createTaskSubmitting}
                   >
-                    {createTaskSubmitting ? '创建中...' : '创建'}
-                  </button>
+                    创建
+                  </Button>
               </div>
           </AppModalFrame>
         )}
@@ -2837,16 +2868,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   <h3 className="text-base font-semibold text-ark-text">识别到 {taskAssistantDrafts.length} 个安排草稿</h3>
                   <p className="text-xs text-ark-text-faint mt-1">请逐个确认，需要的草稿会进入现有创建表单。</p>
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={_closeTaskDraftModal}
-                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
+                  className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
                   aria-label="关闭安排草稿"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
 
               <div className="p-5 overflow-y-auto flex flex-col gap-3">
@@ -2903,19 +2936,21 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       <div className="flex shrink-0 items-center gap-2">
                         {draft.state === 'pending' ? (
                           <>
-                            <button
+                            <Button
                               onClick={() => _ignoreTaskDraft(draft.id)}
-                              className="px-3 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text-muted hover:text-ark-text transition-colors"
+                              variant="secondary"
+                              size="sm"
                             >
                               忽略
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               onClick={() => _openDraftInCreateForm(draft)}
-                              className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
+                              variant="primary"
+                              size="sm"
                               aria-label={`创建“${draft.title || draft.rawTitle}”`}
                             >
                               创建
-                            </button>
+                            </Button>
                           </>
                         ) : null}
                       </div>
@@ -2940,16 +2975,18 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
           >
               <div className="flex-[1] border-b border-ark-border px-5 bg-ark-surface-subtle flex items-center justify-between">
                 <h3 className="text-base font-semibold text-ark-text">安排解析助手</h3>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={_resetTaskAssistant}
-                  className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
+                  className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
                   aria-label="关闭安排解析助手"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               </div>
               <div className="flex-[4] p-5 flex flex-col gap-3">
                 <textarea
@@ -2962,23 +2999,25 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 {taskAssistantError ? <div className="text-sm text-red-400">{taskAssistantError}</div> : null}
               </div>
               <div className="flex-[1] px-5 pb-5 flex items-end justify-end gap-3">
-                <button
+                <Button
                   onClick={() => {
                     setShowTaskAssistantModal(false);
                     _openCreateTaskModal();
                   }}
-                  className="px-4 py-2 rounded-lg bg-ark-surface-subtle hover:bg-ark-surface-subtle border border-ark-border text-ark-text hover:text-ark-text transition-colors"
+                  variant="secondary"
+                  size="md"
                   disabled={taskAssistantSubmitting}
                 >
                   自定义安排
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={_generateTaskByAssistant}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  disabled={taskAssistantSubmitting}
+                  variant="primary"
+                  size="md"
+                  loading={taskAssistantSubmitting}
                 >
-                  {taskAssistantSubmitting ? '生成中...' : '快捷生成安排'}
-                </button>
+                  快捷生成安排
+                </Button>
               </div>
           </AppModalFrame>
         )}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiJson } from '../lib/api';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType } from './taskTypes';
 import AppModalFrame from './AppModalFrame';
+import Button from './Button';
 
 type EventItem = {
   id: string;
@@ -165,17 +166,18 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
     >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <h3 className="text-lg font-bold text-ark-text">编辑日程</h3>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="rounded-full p-2 text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
+            className="rounded-full p-2 shadow-none border-transparent text-ark-text-muted hover:text-ark-text"
             aria-label="关闭编辑日程弹窗"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
-          </button>
+          </Button>
         </div>
 
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
@@ -332,22 +334,22 @@ const AppointmentEditModalBody: React.FC<AppointmentEditModalBodyProps> = ({ app
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-ark-border bg-ark-surface-strong p-5 pt-3">
-          <button
-            type="button"
+          <Button
             onClick={onClose}
-            className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-2 text-ark-text transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
+            variant="secondary"
+            size="md"
             disabled={submitting}
           >
             取消
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={handleSubmit}
-            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
-            disabled={submitting}
+            variant="primary"
+            size="md"
+            loading={submitting}
           >
             保存
-          </button>
+          </Button>
         </div>
     </AppModalFrame>
   );

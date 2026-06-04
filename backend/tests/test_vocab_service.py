@@ -782,7 +782,7 @@ async def test_list_decks_groups_serial_parts_but_keeps_luan_separate(monkeypatc
         def acquire(self):
             return _PoolAcquire()
 
-    async def fake_list_vocab_decks(_conn):
+    async def fake_list_vocab_decks(_conn, *args, **kwargs):
         stamp = datetime(2026, 5, 5, tzinfo=UTC)
         return [
             {"id": "1", "key": "cet6_1", "name": "CET6_1", "description": "", "word_count": 10, "created_at": stamp, "updated_at": stamp},
@@ -814,7 +814,7 @@ async def test_list_decks_uses_human_friendly_display_names(monkeypatch) -> None
         def acquire(self):
             return _PoolAcquire()
 
-    async def fake_list_vocab_decks(_conn):
+    async def fake_list_vocab_decks(_conn, *args, **kwargs):
         stamp = datetime(2026, 5, 5, tzinfo=UTC)
         return [
             {"id": "1", "key": "beishigaozhong_1", "name": "BeiShiGaoZhong_1", "description": "", "word_count": 10, "created_at": stamp, "updated_at": stamp},

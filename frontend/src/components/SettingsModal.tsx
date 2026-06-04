@@ -5,6 +5,7 @@ import { useAuthStore } from '../lib/auth';
 import { uploadFile, updateProfile, getUserUploads, deleteUserUpload, UserUpload } from '../lib/api';
 import { useTheme, type ThemePreference } from '../hooks/useTheme';
 import AppModalFrame from './AppModalFrame';
+import Button from './Button';
 
 type SettingsModalProps = {
   open: boolean;
@@ -272,14 +273,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         <div className="flex flex-1 flex-col overflow-hidden bg-[var(--ark-surface)]">
           {/* 右上角关闭按钮 */}
           <div className="absolute right-4 top-4 z-10">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleCancel}
-              className="rounded-full p-2 text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-surface-subtle)] hover:text-[var(--ark-text)]"
+              className="rounded-full p-2 shadow-none border-transparent text-[var(--ark-text-muted)] hover:text-[var(--ark-text)]"
               aria-label="关闭设置弹窗"
             >
               <X size={20} />
-            </button>
+            </Button>
           </div>
 
           {/* 内容区 */}
@@ -465,15 +467,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                 {/* 上传本地背景图 */}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
+                    <Button
                       onClick={() => bgInputRef.current?.click()}
                       disabled={bgUploading}
-                      className="flex items-center gap-2 self-start rounded-lg border border-dashed ark-border bg-[var(--ark-surface-subtle)] px-3 py-1.5 text-xs text-[var(--ark-text-muted)] transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 hover:text-blue-400"
+                      loading={bgUploading}
+                      variant="secondary"
+                      size="xs"
+                      className="border-dashed self-start"
+                      leftIcon={!bgUploading ? <Upload size={14} /> : undefined}
                     >
-                      {bgUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                      {bgUploading ? '上传中…' : '或上传本地图片'}
-                    </button>
+                      或上传本地图片
+                    </Button>
                     <span className="text-xs text-[var(--ark-text-faint)]">已上传 {bgUploads.length}/3</span>
                   </div>
                   <input
@@ -635,15 +639,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                     {/* 上传本地立绘 */}
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
+                        <Button
                           onClick={() => charaInputRef.current?.click()}
                           disabled={charaUploading}
-                          className="flex items-center gap-2 self-start rounded-lg border border-dashed ark-border bg-[var(--ark-surface-subtle)] px-3 py-1.5 text-xs text-[var(--ark-text-muted)] transition-colors hover:border-blue-500/40 hover:bg-blue-500/5 hover:text-blue-400"
+                          loading={charaUploading}
+                          variant="secondary"
+                          size="xs"
+                          className="border-dashed self-start"
+                          leftIcon={!charaUploading ? <Upload size={14} /> : undefined}
                         >
-                          {charaUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                          {charaUploading ? '上传中…' : '或上传本地图片'}
-                        </button>
+                          或上传本地图片
+                        </Button>
                         <span className="text-xs text-[var(--ark-text-faint)]">已上传 {charaUploads.length}/3</span>
                       </div>
                       <input
@@ -683,30 +689,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
 
           {/* 底部操作栏 */}
           <div className="flex shrink-0 items-center justify-between border-t ark-border bg-[var(--ark-surface-subtle)] p-5 pt-3">
-            <button
-              type="button"
+            <Button
               onClick={handleRestoreDefaults}
-              className="ark-button-secondary rounded-lg px-4 py-1.5 text-xs transition-colors"
+              variant="secondary"
+              size="sm"
             >
               恢复默认
-            </button>
+            </Button>
             <div className="flex gap-3">
-              <button
-                type="button"
+              <Button
                 onClick={handleCancel}
-                className="ark-button-secondary rounded-lg px-4 py-1.5 text-sm transition-colors"
+                variant="secondary"
+                size="md"
               >
                 取消
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                variant="primary"
+                size="md"
+                loading={saving}
               >
-                {saving && <Loader2 size={14} className="animate-spin" />}
-                {saving ? '保存中…' : '保存并应用'}
-              </button>
+                保存并应用
+              </Button>
             </div>
           </div>
         </div>

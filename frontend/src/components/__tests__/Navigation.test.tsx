@@ -6,7 +6,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import Navigation from '../Navigation';
 import { apiJson, checkIn, getCheckInStatus } from '../../lib/api';
-import { useAuthStore } from '../../lib/auth';
+import { useAuthStore, type User } from '../../lib/auth';
 import { HOME_ONBOARDING_RESTART_EVENT, HOME_ONBOARDING_STORAGE_KEY } from '../../lib/onboardingEvents';
 
 vi.mock('canvas-confetti', () => ({
@@ -28,7 +28,7 @@ function PathProbe() {
   return <div data-testid="current-path">{location.pathname}</div>;
 }
 
-function renderNavigation(initialPath = '/vocab') {
+function renderNavigation(initialPath = '/vocab', userOverrides: Partial<User> = {}) {
   useAuthStore.getState().setSession('token', 3600);
   useAuthStore.getState().setUser({
     id: 1,
@@ -37,6 +37,7 @@ function renderNavigation(initialPath = '/vocab') {
     is_active: true,
     is_admin: false,
     created_at: '2026-05-14T00:00:00Z',
+    ...userOverrides,
   });
 
   render(
@@ -121,6 +122,18 @@ describe('Navigation', () => {
     expect(useAuthStore.getState().expiresAt).toBeNull();
     expect(useAuthStore.getState().user).toBeNull();
     expect(screen.getByTestId('current-path')).toHaveTextContent('/login');
+  });
+
+  it('shows the UI library entry for admins and navigates to it', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockResolvedValue(null);
+
+    renderNavigation('/apps', { is_admin: true });
+
+    await user.click(screen.getByRole('button', { name: '打开用户菜单' }));
+    await user.click(screen.getByRole('button', { name: 'UI 组件库' }));
+
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/admin/ui');
   });
 
   it('uses the navbar logo as a home entry', async () => {

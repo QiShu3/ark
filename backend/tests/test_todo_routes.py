@@ -3209,7 +3209,7 @@ def test_complete_repeating_task_rejects_after_period_limit(monkeypatch) -> None
         _completion_record(
             subject_type="task",
             subject_id=task["id"],
-            completed_at=datetime.now(UTC) - timedelta(hours=1),
+            completed_at=datetime.now(UTC) - timedelta(seconds=1),
             counted_period_start=datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0),
             counted_period_end=(
                 datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
@@ -4184,26 +4184,29 @@ class _WorkflowPresetConn:
                 user_id = int(args[0])
                 event_id = args[1]
                 name = str(args[2])
-                focus_duration = int(args[3])
-                break_duration = int(args[4])
-                phases_arg = args[5]
-                timer_mode = str(args[6])
+                icon = str(args[3]) if args[3] is not None else None
+                focus_duration = int(args[4])
+                break_duration = int(args[5])
+                phases_arg = args[6]
+                timer_mode = str(args[7])
                 is_default = False
             else:
                 user_id = int(args[0])
                 event_id = None
                 name = str(args[1])
-                focus_duration = int(args[2])
-                break_duration = int(args[3])
-                phases_arg = args[4]
-                timer_mode = str(args[5])
-                is_default = bool(args[6])
+                icon = str(args[2]) if args[2] is not None else None
+                focus_duration = int(args[3])
+                break_duration = int(args[4])
+                phases_arg = args[5]
+                timer_mode = str(args[6])
+                is_default = bool(args[7])
             phases = json.loads(phases_arg) if isinstance(phases_arg, str) else phases_arg
             row = {
                 "id": uuid4(),
                 "user_id": user_id,
                 "event_id": event_id,
                 "name": name,
+                "icon": icon,
                 "focus_duration": focus_duration,
                 "break_duration": break_duration,
                 "phases": phases,
@@ -4307,13 +4310,15 @@ class _WorkflowPresetConn:
                 )
             if target is None:
                 return None
-            for field in ("name", "focus_duration", "break_duration", "default_focus_timer_mode"):
+            for field in ("name", "icon", "focus_duration", "break_duration", "default_focus_timer_mode"):
                 match = re.search(rf"{field} = \$(\d+)", sql)
                 if match is None:
                     continue
                 value = args[int(match.group(1)) - 1]
                 if field in {"focus_duration", "break_duration"}:
                     target[field] = int(value)
+                elif value is None:
+                    target[field] = None
                 else:
                     target[field] = str(value)
             phases_match = re.search(r"phases = \$(\d+)::jsonb", sql)

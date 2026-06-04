@@ -75,6 +75,19 @@ describe('HomeRightDashboard', () => {
     mockApiJson.mockImplementation((path: string) => defaultApiResponse(path));
   });
 
+  it('renders the unified home dashboard sections and shortcuts', async () => {
+    renderDashboard();
+
+    expect(await screen.findByRole('button', { name: '开始学习' })).toBeInTheDocument();
+    expect(screen.getByText('今日进度')).toBeInTheDocument();
+    expect(screen.getByText('任务')).toBeInTheDocument();
+    expect(screen.getByText('日程')).toBeInTheDocument();
+    expect(screen.getByTestId('calendar-widget')).toBeInTheDocument();
+    expect(screen.getByText('数据分析')).toBeInTheDocument();
+    expect(screen.getByText('成就')).toBeInTheDocument();
+    expect(screen.getByText('应用中心')).toBeInTheDocument();
+  });
+
   it('previews and switches the workflow before starting study', async () => {
     const user = userEvent.setup();
     const defaultWorkflow = buildWorkflowPreset();
