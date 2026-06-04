@@ -381,7 +381,7 @@ export default function HomeRightDashboard() {
 
   return (
     <>
-      <div className="grid h-full grid-rows-[1.25fr_0.85fr_1.15fr_1.7fr_1fr] gap-3">
+      <div className="grid h-full grid-rows-[1.1fr_0.8fr_1.1fr_2.1fr_0.85fr] gap-3">
         <HomeCard variant="hero" className="px-6 py-5">
           <TimerCardArt />
 
