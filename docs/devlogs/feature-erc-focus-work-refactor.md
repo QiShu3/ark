@@ -1,6 +1,19 @@
 # 开发日志：feature/erc-focus-work-refactor
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
+### 2026-06-04 20:02 · 351ab18 · fix(frontend): refactor ERC settings modal to use unified AppModalFrame to fix top overflow
+
+- 用户提出的需求：
+  - 看看这个弹窗，它的位置上面溢出容器了
+
+- 本次完成的工作：
+  - **前端**：将 `Home.tsx` 中 ERC 的“配置阅读训练”弹窗重构，采用统一的 `AppModalFrame` 组件进行包裹，取代原先手写的弹窗遮罩及定位逻辑。
+  - **前端**：利用 `AppModalFrame` 内置的视口自适应最大高度限制（自动避开导航栏高度 120px 限制并启用滚动），使得该弹窗在小分辨率屏幕上能正确进行内部滚动，完美解决弹窗顶部向上溢出超出屏幕顶部的布局问题。
+  - **前端**：保持 `ariaLabel="ERC 配置"` 属性与重构前一致，保证页面测试正常通过。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm vitest run src/pages/ERC/__tests__/Home.test.tsx` — 测试通过 ✅
 
 ### 2026-06-04 19:55 · 9679d96 · feat(frontend): add practice again and prevent duplicate completion conflict in vocab and review focus work
 
