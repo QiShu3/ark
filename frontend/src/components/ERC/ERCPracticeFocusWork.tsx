@@ -11,12 +11,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+import { apiJson } from '../../lib/api';
 import {
   fetchERCOverview,
   fetchERCArticle,
   fetchERCVocabularyPreheat,
   submitERCVocabularyPreheat,
   submitERCArticle,
+  fetchERCArticles,
 } from '../../lib/erc/api';
 import type { ERCArticleDetail, ERCArticleSubmitResult } from '../../lib/erc/types';
 import type { VocabReviewItem } from '../../lib/vocab/types';
@@ -46,6 +48,62 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const passageScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const [isExtraPractice, setIsExtraPractice] = useState(false);
+  const [loadingAgain, setLoadingAgain] = useState(false);
+  const [exiting, setExiting] = useState(false);
+
+  const handleExitFocus = async () => {
+    setExiting(true);
+    try {
+      await apiJson('/todo/focus/stop', { method: 'POST' });
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to stop focus session', err);
+      alert(err instanceof Error ? err.message : '结束专注失败');
+    } finally {
+      setExiting(false);
+    }
+  };
+
+  const handlePracticeAgain = async () => {
+    if (isPaused) return;
+    setLoadingAgain(true);
+    setError(null);
+    try {
+      const articlesList = await fetchERCArticles();
+      if (!articlesList || articlesList.length === 0) {
+        throw new Error('没有找到可练习的真题文章');
+      }
+      
+      const randomIndex = Math.floor(Math.random() * articlesList.length);
+      const selectedArticle = articlesList[randomIndex];
+      
+      const [articleData, preheatData] = await Promise.all([
+        fetchERCArticle(selectedArticle.article_id),
+        fetchERCVocabularyPreheat(selectedArticle.article_id),
+      ]);
+      
+      setArticle(articleData);
+      setPreheatWords(preheatData);
+      setIsExtraPractice(true);
+      setPreheatIndex(0);
+      setRevealed(false);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers({});
+      setSubmitResult(null);
+      
+      if (preheatData.length > 0) {
+        setPhase('preheat');
+      } else {
+        setPhase('reading');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载真题文章失败');
+    } finally {
+      setLoadingAgain(false);
+    }
+  };
 
   const isPaused = workflow?.is_paused === true;
 
@@ -170,17 +228,26 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
               太棒了！您今日推荐的真题阅读已经全部完成了。您可以前往题库自行挑选其他的阅读文章，或者完成任务进入专注时间。
             </p>
             <div className="mt-8 flex gap-3">
-              {onCompleteTaskAndFinish ? (
-                <button
-                  type="button"
-                  onClick={onCompleteTaskAndFinish}
-                  disabled={isPaused}
-                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:opacity-50"
-                >
-                  结束并完成今日任务
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={handleExitFocus}
+                disabled={isPaused || exiting}
+                className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:opacity-50"
+              >
+                {exiting ? '正在结束...' : '结束并完成今日任务'}
+              </button>
+              <button
+                type="button"
+                onClick={handlePracticeAgain}
+                disabled={isPaused || loadingAgain}
+                className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
+              >
+                {loadingAgain ? '正在加载...' : '再来一次'}
+              </button>
             </div>
+            {error && (
+              <p className="mt-4 text-sm text-rose-400">{error}</p>
+            )}
           </section>
         </div>
       </div>
@@ -489,7 +556,16 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                   </div>
 
                   <div className="mt-6 pt-5 border-t border-[var(--focus-work-border)] flex flex-col gap-3 shrink-0">
-                    {onCompleteTaskAndFinish ? (
+                    {isExtraPractice ? (
+                      <button
+                        type="button"
+                        onClick={handleExitFocus}
+                        disabled={isPaused || exiting}
+                        className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
+                      >
+                        {exiting ? '正在结束...' : '结束本轮专注'}
+                      </button>
+                    ) : onCompleteTaskAndFinish ? (
                       <button
                         type="button"
                         onClick={onCompleteTaskAndFinish}
