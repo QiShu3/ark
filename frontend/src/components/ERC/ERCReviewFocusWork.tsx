@@ -162,6 +162,29 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                   <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-4 py-1 text-sm font-semibold text-[var(--focus-work-blue-text)]">
                     Q{item.question.question_no}
                   </div>
+
+                  <div className="flex flex-wrap items-center gap-2 z-10">
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={isPaused || !selected || !!result}
+                      className="inline-flex rounded-lg bg-[var(--focus-work-blue-text)] px-4 py-1.5 text-xs font-semibold text-[var(--focus-work-primary-button-text)] shadow-sm hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      提交答案
+                    </button>
+
+                    {result ? (
+                      <button
+                        type="button"
+                        disabled={isPaused}
+                        onClick={loadNext}
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-blue-text)] hover:bg-[var(--focus-work-blue-bg)] transition disabled:opacity-30 disabled:pointer-events-none"
+                      >
+                        下一题
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-4">
@@ -208,36 +231,7 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                 ) : null}
               </div>
 
-              <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4 flex flex-col items-center gap-3">
-                <div className="w-full flex items-center justify-between">
-                  <div className="w-24" /> {/* Spacer to center the main button */}
-                  
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={isPaused || !selected || !!result}
-                    className="inline-flex rounded-lg bg-[var(--focus-work-blue-text)] px-10 py-2.5 text-sm font-semibold text-[var(--focus-work-primary-button-text)] shadow-md hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    提交答案
-                  </button>
 
-                  <div className="w-24 flex justify-end">
-                    {result ? (
-                      <button
-                        type="button"
-                        disabled={isPaused}
-                        onClick={loadNext}
-                        className="inline-flex items-center gap-1 text-sm font-medium text-[var(--focus-work-blue-text)] hover:opacity-85 transition disabled:opacity-30 disabled:pointer-events-none"
-                      >
-                        下一题
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* Highlight hint removed */}
-              </div>
             </section>
           </div>
         ) : null}

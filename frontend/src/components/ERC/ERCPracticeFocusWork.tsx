@@ -373,20 +373,51 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                     Q{currentQuestionIndex + 1}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2 z-10">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-3 py-1.5 text-xs font-semibold text-[var(--focus-work-text)] hover:bg-[var(--focus-work-blue-bg)] transition"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-text)] hover:bg-[var(--focus-work-blue-bg)] transition"
                     >
                       <Bookmark className="h-3.5 w-3.5" />
                       标记本题
                     </button>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-3 py-1.5 text-xs font-semibold text-[var(--focus-work-text)] hover:bg-[var(--focus-work-blue-bg)] transition"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-text)] hover:bg-[var(--focus-work-blue-bg)] transition"
                     >
                       <FileText className="h-3.5 w-3.5" />
                       查看解析
+                    </button>
+
+                    <span className="hidden sm:inline h-5 w-px bg-[var(--focus-work-border)] mx-1" />
+
+                    <button
+                      type="button"
+                      disabled={currentQuestionIndex === 0}
+                      onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-text-muted)] hover:text-[var(--focus-work-text)] hover:bg-[var(--focus-work-surface-soft)] transition disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      上一题
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isPaused || submitting}
+                      onClick={handlePracticeSubmit}
+                      className="inline-flex rounded-lg bg-[var(--focus-work-blue-text)] px-4 py-1.5 text-xs font-semibold text-[var(--focus-work-primary-button-text)] shadow-sm hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? '提交中…' : '提交答案'}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={currentQuestionIndex >= questionCount - 1}
+                      onClick={() => setCurrentQuestionIndex((prev) => Math.min(questionCount - 1, prev + 1))}
+                      className="inline-flex items-center gap-1 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-blue-text)] hover:bg-[var(--focus-work-blue-bg)] transition disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      下一题
+                      <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
@@ -425,45 +456,6 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                 </div>
                 </div>
 
-                <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4 flex flex-col items-center gap-3">
-                  <div className="w-full flex items-center justify-between">
-                    <div className="w-24">
-                      <button
-                        type="button"
-                        disabled={currentQuestionIndex === 0}
-                        onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
-                        className="inline-flex items-center gap-1 text-sm font-medium text-[var(--focus-work-text-muted)] hover:text-[var(--focus-work-text)] transition disabled:opacity-30 disabled:pointer-events-none"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        上一题
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={isPaused || submitting}
-                      onClick={handlePracticeSubmit}
-                      className="inline-flex rounded-lg bg-[var(--focus-work-blue-text)] px-10 py-2.5 text-sm font-semibold text-[var(--focus-work-primary-button-text)] shadow-md hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? '提交中…' : '提交答案'}
-                    </button>
-
-
-                    <div className="w-24 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={currentQuestionIndex >= questionCount - 1}
-                        onClick={() => setCurrentQuestionIndex((prev) => Math.min(questionCount - 1, prev + 1))}
-                        className="inline-flex items-center gap-1 text-sm font-medium text-[var(--focus-work-blue-text)] hover:opacity-85 transition disabled:opacity-30 disabled:pointer-events-none"
-                      >
-                        下一题
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Highlight hint removed */}
-                </div>
               </section>
             ) : (
               <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-sm lg:p-6">
