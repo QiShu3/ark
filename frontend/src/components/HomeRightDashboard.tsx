@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Box, Check, Circle, Play, Trophy, X } from 'lucide-react';
 
+import { cn } from '../lib/utils';
 import { apiJson } from '../lib/api';
 import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
@@ -14,8 +15,19 @@ import { getWorkflowPresetPhases, type WorkflowPreset } from './workflowPresetFo
 import WorkflowPhaseChips from './WorkflowPhaseChips';
 import timerClockPng from '../assets/timer-clock.png';
 
+type FocusWorkflowPhase = {
+  phase_type: 'focus' | 'break';
+  duration: number;
+  timer_mode: 'countdown' | 'countup' | null;
+  task_id: string | null;
+  focus_work_type: 'vocab_today' | 'erc_review' | 'erc_practice' | 'task_focus' | null;
+};
+
 type FocusWorkflow = {
   state: 'normal' | 'focus' | 'break';
+  workflow_name?: string | null;
+  current_phase_index?: number | null;
+  phases?: FocusWorkflowPhase[];
   task_id: string | null;
   task_title: string | null;
   pending_confirmation: boolean;
@@ -153,6 +165,13 @@ function renderDashboardAppointmentRow(appointment: Appointment, index: number, 
   );
 }
 
+const FOCUS_WORK_LABELS: Record<string, string> = {
+  vocab_today: '今日单词',
+  erc_practice: 'ERC 真题练习',
+  erc_review: 'ERC 复习',
+  task_focus: '任务专注',
+};
+
 export default function HomeRightDashboard() {
   const navigate = useNavigate();
   const [workflow, setWorkflow] = useState<FocusWorkflow | null>(null);
@@ -214,6 +233,7 @@ export default function HomeRightDashboard() {
   const progressPercent = Math.min(100, Math.round((todayFocusMinutes / DAILY_GOAL_MINUTES) * 100));
   const progressIsZero = progressPercent === 0;
   const progressVisualPercent = progressIsZero ? 4 : progressPercent;
+  const workflowIsActive = !!(workflow && workflow.state !== 'normal' && workflow.phases && workflow.phases.length > 0);
   const todayTasks = useMemo(
     () => tasks
       .filter((task) => !task.completion_state?.hidden_from_action_list && taskMatchesToday(task))
@@ -414,25 +434,124 @@ export default function HomeRightDashboard() {
           </button>
         </HomeCard>
 
-        <HomeCard className="px-6 py-3">
-          <HomeSectionHeader
-            title="今日进度"
-            className="mb-2.5"
-            action={(
-              <span className={`text-2xl font-medium ark-font-display ${progressIsZero ? 'text-[var(--ark-text-faint)]' : 'text-[var(--ark-accent)]'}`}>
+        <HomeCard className="px-6 py-3 flex flex-col justify-center min-h-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 shrink-0" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+                <path
+                  className="text-ark-border/30 dark:text-white/10"
+                  strokeWidth="4.2"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  className="text-[var(--ark-accent)] transition-[stroke-dasharray] duration-500"
+                  strokeWidth="4.2"
+                  strokeDasharray={`${progressPercent}, 100`}
+                  strokeLinecap="round"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <h3 className="text-base font-semibold text-[var(--ark-text)] flex items-center gap-1.5">
+                <span>今日进度</span>
+                {workflowIsActive && workflow?.workflow_name && (
+                  <>
+                    <span className="text-[var(--ark-text-faint)] font-normal">|</span>
+                    <span className="text-[var(--ark-text-muted)] font-normal">{workflow.workflow_name}</span>
+                  </>
+                )}
+              </h3>
+            </div>
+            <div className="text-right flex flex-col items-end">
+              <span className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent leading-none">
                 {progressPercent}%
               </span>
-            )}
-          />
-          <div className="h-3 overflow-hidden rounded-full bg-[var(--ark-surface-subtle)]">
-            <div
-              className={`ark-home-progress-fill h-full rounded-full transition-[width] duration-500 ${progressIsZero ? 'ark-home-progress-fill-idle' : ''}`}
-              style={{ width: `${progressVisualPercent}%` }}
-            />
+              <span className="text-[10px] text-[var(--ark-text-faint)] mt-0.5 font-medium">整体进度</span>
+            </div>
           </div>
-          <div className="mt-2 text-sm text-[var(--ark-text-faint)]">
-            已完成 {todayFocusMinutes} 分钟 / {DAILY_GOAL_MINUTES} 分钟
-          </div>
+
+          {workflowIsActive && workflow?.phases ? (
+            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1">
+              {workflow.phases.map((phase, index) => {
+                const isCompleted = index < (workflow.current_phase_index ?? 0);
+                const isActive = index === (workflow.current_phase_index ?? 0);
+                const minutes = Math.round(phase.duration / 60);
+                const isFocus = phase.phase_type === 'focus';
+                
+                const taskLabel = isFocus
+                  ? (phase.task_id
+                      ? (tasks.find(t => t.id === phase.task_id)?.title ?? '任务专注')
+                      : (phase.focus_work_type
+                          ? (FOCUS_WORK_LABELS[phase.focus_work_type] ?? '应用任务')
+                          : '任务专注'))
+                  : null;
+
+                const isArrowCompleted = index <= (workflow.current_phase_index ?? 0) - 1;
+
+                return (
+                  <div key={index} className="flex items-center gap-1.5 shrink-0">
+                    {index > 0 && (
+                      <span
+                        className={cn(
+                          "text-[11px] select-none font-bold",
+                          isArrowCompleted ? "text-emerald-500" : "text-ark-text-faint/30"
+                        )}
+                      >
+                        →
+                      </span>
+                    )}
+                    <div
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 transition-all duration-300",
+                        isCompleted && "border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 dark:border-emerald-500/30",
+                        isActive && "relative border border-blue-500 bg-blue-500/10 text-white shadow-[0_0_12px_rgba(59,130,246,0.35)]",
+                        !isCompleted && !isActive && "border border-ark-border bg-transparent text-[var(--ark-text-faint)]"
+                      )}
+                    >
+                      {isActive && (
+                        <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_6px_rgba(103,232,249,1)]" />
+                      )}
+                      <span>{isFocus ? '🎯' : '☕'} {minutes}m</span>
+                      {taskLabel && (
+                        <>
+                          <span className={cn(
+                            "h-2.5 w-px",
+                            isCompleted ? "bg-emerald-500/30" : isActive ? "bg-white/30" : "bg-white/10"
+                          )} />
+                          <span className="truncate max-w-[120px]">{taskLabel}</span>
+                        </>
+                      )}
+                      {isCompleted && (
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                          <Check className="h-2.5 w-2.5 stroke-[3]" aria-hidden="true" />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3.5 flex flex-col justify-center gap-2">
+              <div className="h-2.5 overflow-hidden rounded-full bg-[var(--ark-surface-subtle)]">
+                <div
+                  className={`ark-home-progress-fill h-full rounded-full transition-[width] duration-500 ${progressIsZero ? 'ark-home-progress-fill-idle' : ''}`}
+                  style={{ width: `${progressVisualPercent}%` }}
+                />
+              </div>
+              <div className="text-xs text-[var(--ark-text-faint)] flex items-center justify-between">
+                <span>已完成 {todayFocusMinutes} 分钟 / {DAILY_GOAL_MINUTES} 分钟</span>
+                <span>目标已达成 {progressPercent}%</span>
+              </div>
+            </div>
+          )}
         </HomeCard>
 
         <HomeCard className="relative flex min-h-0 flex-col px-6 py-4">

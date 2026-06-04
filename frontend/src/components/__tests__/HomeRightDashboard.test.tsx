@@ -127,4 +127,34 @@ describe('HomeRightDashboard', () => {
       expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/workflow-2/start', { method: 'POST' });
     });
   });
+
+  it('renders the active workflow name and its phases chain when a workflow is active', async () => {
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflow/current') {
+        return Promise.resolve({
+          state: 'focus',
+          workflow_name: '考研英语',
+          current_phase_index: 1,
+          phases: [
+            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'vocab_today' },
+            { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'erc_practice' },
+          ],
+          task_id: null,
+          task_title: null,
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: 600,
+        });
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText('今日进度')).toBeInTheDocument();
+    expect(screen.getByText('考研英语')).toBeInTheDocument();
+    expect(screen.getByText('今日单词')).toBeInTheDocument();
+    expect(screen.getByText('ERC 真题练习')).toBeInTheDocument();
+  });
 });
