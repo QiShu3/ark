@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 19:20 · 9e515e6 · feat(frontend): automatically end current focus round upon task completion
+
+- 用户提出的需求：
+  - 我希望在点击“结束并完成今日任务”按钮 后可以自动 结束本轮专注
+
+- 本次完成的工作：
+  - **前端**：修改 `FocusWorkProvider.tsx` 中的 `completeTaskAndFinishCurrentFocus` 函数，在成功提交今日任务的结果（调用 `/todo/focus/workflow/focus-work-result` POST）之后，自动调用 `POST /todo/focus/stop` 接口结束当前专注轮次与活动工作流。
+  - **前端**：在调用停止专注后，通过 `loadSnapshot()` 重新同步当前工作流快照并派发 `ark:reload-focus` 自定义事件，使得前端能自动、平滑地退回正常面板。
+  - **前端**：在 `FocusWorkProvider.test.tsx` 中针对单词任务完成提交的测试案例添加对 `/todo/focus/stop` 接口调用的断言，保证业务流与测试用例一致。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run src/components/__tests__/FocusWorkProvider.test.tsx` — 测试通过 ✅
+
 ### 2026-06-04 19:14 · 6feafe5 · fix(frontend): remove return to home button and fix completion button hover style in empty phase
 
 - 用户提出的需求：
