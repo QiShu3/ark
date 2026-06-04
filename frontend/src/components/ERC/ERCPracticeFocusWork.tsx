@@ -458,15 +458,15 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
 
               </section>
             ) : (
-              <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-sm lg:p-6">
-                  <div className="text-center pb-5 border-b border-[var(--focus-work-border)]">
+              <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-sm lg:p-6 flex flex-col min-h-0 flex-1">
+                  <div className="text-center pb-5 border-b border-[var(--focus-work-border)] shrink-0">
                     <div className="text-xs uppercase tracking-widest text-[var(--focus-work-text-faint)]">Attempt Summary</div>
                     <div className="mt-2 text-4xl font-extrabold text-[var(--focus-work-text)]">
                       {submitResult?.correct_count} <span className="text-lg font-normal text-[var(--focus-work-text-muted)]">/ {submitResult?.question_count} 正确</span>
                     </div>
                   </div>
 
-                  <div className="mt-6 space-y-6 max-h-[50vh] overflow-y-auto pr-1">
+                  <div className="mt-6 space-y-6 flex-1 min-h-0 overflow-y-auto pr-1">
                     {submitResult?.items.map((item, idx) => {
                       const question = article.questions.find((q) => q.question_id === item.question_id);
                       if (!question) return null;
@@ -494,7 +494,7 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                     })}
                   </div>
 
-                  <div className="mt-6 pt-5 border-t border-[var(--focus-work-border)] flex flex-col gap-3">
+                  <div className="mt-6 pt-5 border-t border-[var(--focus-work-border)] flex flex-col gap-3 shrink-0">
                     {onCompleteTaskAndFinish ? (
                       <button
                         type="button"
