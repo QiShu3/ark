@@ -383,30 +383,32 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
         {article ? (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
             {/* Reading Passage Card */}
-            <article
-              aria-label="阅读原文"
-              className="flex min-h-0 flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8"
-            >
-              <div className="mb-5 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-4">
-                <h2 className="flex items-center gap-2.5 text-xl font-bold text-[var(--focus-work-text)] font-serif lg:text-2xl">
-                  <BookOpen className="h-5.5 w-5.5 text-[var(--focus-work-blue-text)]" />
-                  Reading Passage
-                </h2>
-              </div>
-              <div ref={passageScrollRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-3">
-                {article.paragraphs.map((paragraph) => (
-                  <p
-                    key={paragraph.paragraph_no}
-                    className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9"
-                  >
-                    <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">
-                      {paragraph.paragraph_no}
-                    </span>
-                    <span className="font-serif tracking-normal">{renderParagraphText(paragraph.text, paragraph.paragraph_no)}</span>
-                  </p>
-                ))}
-              </div>
-            </article>
+            {phase !== 'result' ? (
+              <article
+                aria-label="阅读原文"
+                className="flex min-h-0 flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8"
+              >
+                <div className="mb-5 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-4">
+                  <h2 className="flex items-center gap-2.5 text-xl font-bold text-[var(--focus-work-text)] font-serif lg:text-2xl">
+                    <BookOpen className="h-5.5 w-5.5 text-[var(--focus-work-blue-text)]" />
+                    Reading Passage
+                  </h2>
+                </div>
+                <div ref={passageScrollRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-3">
+                  {article.paragraphs.map((paragraph) => (
+                    <p
+                      key={paragraph.paragraph_no}
+                      className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9"
+                    >
+                      <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">
+                        {paragraph.paragraph_no}
+                      </span>
+                      <span className="font-serif tracking-normal">{renderParagraphText(paragraph.text, paragraph.paragraph_no)}</span>
+                    </p>
+                  ))}
+                </div>
+              </article>
+            ) : null}
 
             {/* Current Question Card */}
             {phase === 'reading' && currentQuestion ? (
