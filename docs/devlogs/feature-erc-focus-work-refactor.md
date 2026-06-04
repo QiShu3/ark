@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-04 18:49 · 0cbd8f7 · feat(frontend): highlight option cards with success/error themes after submission and remove result banner
+
+- 用户提出的需求：
+  - A方案：直接在选项框上高亮正确/错误颜色（取消提示 Banner）
+
+- 本次完成的工作：
+  - **前端**：在 `index.css` 的 focus-work 样式部分，为深色模式与浅色模式分别定义了 `--focus-work-rose-bg/border/text` 错误反馈自定义 CSS 变量，确保主题风格完美适配。
+  - **前端**：在 `ERCReviewFocusWork.tsx` 中，完全重构了选项渲染样式逻辑。在用户提交答案后，直接通过红绿主色调对选项进行标识，答对显示为绿色，答错则用户选项显示为红色、正确答案显示为绿色，其它选项则自动半透明虚化。
+  - **前端**：移除了原本显示在底部的正确/错误提示 Banner，既节省了纵向高度，又彻底解决了在提示 Banner 浮现时强行压缩选项卡片高度导致选项卡发生形变的体验问题。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+
 ### 2026-06-04 18:43 · 21bd901 · feat(frontend): move submit and navigation buttons to top-right of question card
 
 - 用户提出的需求：
