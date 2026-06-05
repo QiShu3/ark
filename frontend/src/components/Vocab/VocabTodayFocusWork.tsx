@@ -18,7 +18,7 @@ const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'g
 type VocabTodayFocusWorkProps = Partial<FocusWorkRendererProps>;
 
 export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish }: VocabTodayFocusWorkProps) {
-  const { activeDeck, activeDeckVersion } = useVocabDeck();
+  const { activeDeck, activeDeckVersion, loading: deckLoading = false, error: deckError = null } = useVocabDeck();
   const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
   const completedRef = React.useRef(false);
   const isPaused = workflow?.is_paused === true;
@@ -29,6 +29,42 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
   const [extraIndex, setExtraIndex] = React.useState(0);
   const [loadingExtra, setLoadingExtra] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  if (deckLoading) {
+    return (
+      <div className="flex h-48 w-full items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--focus-work-border)] border-t-white" />
+          <p className="mt-4 text-sm text-[var(--focus-work-text-muted)]">正在加载词书…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (deckError) {
+    return (
+      <div className="h-full w-full overflow-y-auto px-4 pb-8">
+        <div className="mx-auto flex max-w-4xl flex-col gap-6 pt-10">
+          <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
+            <p className="text-sm text-rose-200">{deckError}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeDeck) {
+    return (
+      <div className="h-full w-full overflow-y-auto px-4 pb-8">
+        <div className="mx-auto flex max-w-4xl flex-col gap-6 pt-10">
+          <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
+            <div className="text-lg font-medium text-[var(--focus-work-text)] mb-2">暂无可用的词书</div>
+            <p className="text-sm text-[var(--focus-work-text-muted)]">请联系管理员在后台发布词书后继续。</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleExitFocus = async () => {
     setExiting(true);
