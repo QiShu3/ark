@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 18:25 · 311bc5d · feat(workflow): add set default button on hover in workflow presets launcher list
+
+- 用户提出的需求：
+  - “/grill-me 这里再添加一个 设为默认 的功能”
+  - 允许用户在“开始学习”工作流弹窗中，通过鼠标悬浮在某个非默认工作流上时，直接将其设为默认工作流。
+
+- 本次完成的工作：
+  - **设为默认接口对接**：在 [HomeRightDashboard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/HomeRightDashboard.tsx) 中新增了 `handleSetDefault` 方法，用于发起 `/todo/focus/workflows/{preset_id}/default` 的 POST 请求，并自动更新前端预设列表，同时触发全局 `ark:reload-focus` 重新渲染当前选中的默认工作流。
+  - **列表容器与交互重构**：将左侧列表项由原有的 `<button>` 改为 `<div>` 容器，避免子元素出现按钮嵌套（Nested interactive elements）的 HTML 规范冲突；通过 Tailwind 的 `group` 属性控制「设为默认」文字按钮在鼠标悬浮（`group-hover:opacity-100`）时才优雅淡入。
+  - **单元测试补充**：在 [HomeRightDashboard.test.tsx](file:///Users/qishu/Project/ark/frontend/src/components/__tests__/HomeRightDashboard.test.tsx) 中增加 `sets a workflow as default` 测试用例，确保触发设为默认流程后能正确向后端发出 API 请求。
+
+- 验证情况：
+  - 前端编译与 ESLint 语法校验正常，移除了未使用的 `Circle` 库引入。
+  - Vitest 单元测试运行通过（4/4 成功）。
+
 ### 2026-06-05 18:13 · 37081c0 · fix(vocab): lock card height to fixed h-[420px] and enable internal scrolling to prevent layout shifts
 
 - 用户提出的需求：
