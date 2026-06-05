@@ -1116,6 +1116,115 @@
   color: #0f172a;
 }
 
+/* Achievement UI Enhancements */
+.achievement-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.25rem; /* p-5 */
+  border-radius: 1.25rem; /* rounded-2xl */
+  border: 1px solid var(--ark-border);
+  background: color-mix(in srgb, var(--ark-surface) 40%, var(--ark-surface-strong));
+  transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.achievement-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ark-border-strong);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+/* Locked card status */
+.achievement-card-locked {
+  border-color: var(--ark-border);
+  background: color-mix(in srgb, var(--ark-surface-subtle) 50%, var(--ark-surface-strong));
+}
+
+.achievement-card-locked:hover {
+  border-color: var(--ark-border-strong);
+}
+
+/* In progress card status */
+.achievement-card-in-progress {
+  border-color: var(--ark-border-strong);
+  background: color-mix(in srgb, var(--ark-surface) 60%, var(--ark-surface-strong));
+}
+
+/* Unlocked cards status */
+.achievement-card-unlocked-event {
+  border-color: color-mix(in srgb, var(--ark-arrangement-accent) 42%, var(--ark-border-strong));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ark-arrangement-accent-soft) 85%, transparent), var(--ark-surface-strong));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--ark-arrangement-accent) 6%, transparent);
+}
+.achievement-card-unlocked-event:hover {
+  border-color: var(--ark-arrangement-accent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ark-arrangement-accent) 12%, transparent);
+}
+
+.achievement-card-unlocked-global {
+  border-color: color-mix(in srgb, var(--ark-accent) 42%, var(--ark-border-strong));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ark-accent-soft) 85%, transparent), var(--ark-surface-strong));
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--ark-accent) 6%, transparent);
+}
+.achievement-card-unlocked-global:hover {
+  border-color: var(--ark-accent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ark-accent) 12%, transparent);
+}
+
+/* Achievement Progress Bar track & fill */
+.achievement-progress-track {
+  background: var(--ark-surface-subtle);
+  border-radius: 9999px;
+  overflow: hidden;
+  height: 0.375rem; /* h-1.5 */
+  border: 1px solid color-mix(in srgb, var(--ark-border) 40%, transparent);
+}
+
+.achievement-progress-fill-event {
+  background: var(--ark-arrangement-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ark-arrangement-accent) 50%, transparent);
+}
+
+.achievement-progress-fill-global {
+  background: var(--ark-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ark-accent) 50%, transparent);
+}
+
+/* Light mode overrides for high readability */
+:root[data-theme="light"] .achievement-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(74, 101, 135, 0.14);
+  box-shadow: 0 4px 12px rgba(83, 119, 154, 0.04);
+}
+:root[data-theme="light"] .achievement-card:hover {
+  background: rgba(255, 255, 255, 0.99);
+  box-shadow: 0 12px 28px rgba(83, 119, 154, 0.08);
+}
+:root[data-theme="light"] .achievement-card-locked {
+  background: rgba(243, 248, 255, 0.72);
+  border-color: rgba(74, 101, 135, 0.08);
+}
+:root[data-theme="light"] .achievement-card-unlocked-event {
+  border-color: rgba(180, 83, 9, 0.32);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 4px 14px rgba(180, 83, 9, 0.05);
+}
+:root[data-theme="light"] .achievement-card-unlocked-event:hover {
+  border-color: rgba(180, 83, 9, 0.52);
+}
+:root[data-theme="light"] .achievement-card-unlocked-global {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.14), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.05);
+}
+:root[data-theme="light"] .achievement-card-unlocked-global:hover {
+  border-color: rgba(37, 99, 235, 0.52);
+}
+:root[data-theme="light"] .achievement-progress-track {
+  border-color: rgba(74, 101, 135, 0.1);
+}
+
 .ark-button-primary {
   background: var(--ark-accent);
   color: #fff;

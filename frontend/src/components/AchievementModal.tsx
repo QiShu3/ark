@@ -169,7 +169,7 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
       disableDefaultAnimation={true}
       backdropClassName={`bg-ark-overlay backdrop-blur-sm ${overlayAnimationClass}`}
       contentClassName="items-start px-4 md:items-center md:px-6"
-      panelClassName={`w-[920px] max-w-[94vw] overflow-y-auto rounded-3xl border border-ark-border bg-[#0d0f16] p-5 ${surfaceAnimationClass}`}
+      panelClassName={`w-[960px] max-w-[94vw] overflow-y-auto rounded-3xl p-6 md:p-8 ${surfaceAnimationClass}`}
       panelRef={dialogRef}
     >
         <div className="flex items-start justify-between gap-4">
@@ -177,29 +177,32 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
             <h3 className="text-xl font-bold text-ark-text">
               {summary?.active_event ? `成就 · ${summary.active_event.name}` : '成就'}
             </h3>
-            <p className="mt-2 text-sm text-ark-text-muted">上半部分跟随事件切换，下半部分的全局成就始终显示。</p>
+            <p className="mt-1.5 text-xs text-ark-text-faint">上半部分跟随事件切换，下半部分的全局成就始终显示。</p>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
+            className="rounded-full p-2 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text transition-colors duration-150"
             aria-label="关闭成就弹窗"
           >
-            ×
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-80">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap gap-2">
           {events.map((eventItem) => (
             <button
               key={eventItem.id}
               type="button"
               onClick={() => void handleSelectEvent(eventItem.id)}
-              className={`rounded-full px-3 py-2 text-sm ${
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 hover:scale-[1.02] ${
                 summary?.active_event?.id === eventItem.id
-                  ? 'bg-amber-300 text-black'
-                  : 'border border-ark-border bg-ark-surface-subtle text-ark-text'
+                  ? 'bg-[var(--ark-arrangement-accent)] text-slate-950 shadow-md shadow-amber-500/10'
+                  : 'border border-ark-border bg-ark-surface-subtle text-ark-text hover:bg-ark-surface hover:border-ark-border-strong'
               }`}
             >
               {eventItem.name}
@@ -214,10 +217,12 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
         ) : null}
 
         {summary?.event_achievements ? (
-          <section className="mt-6">
-            <h4 className="text-sm font-semibold text-ark-text">当前事件成就</h4>
-            <div className="mt-2 text-xs text-ark-text-muted">{summary.event_achievements.summary_text}</div>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <section className="mt-8">
+            <div className="border-l-4 border-amber-400 pl-3">
+              <h4 className="text-base font-bold text-ark-text leading-none">当前事件成就</h4>
+              <p className="mt-1.5 text-xs text-ark-text-muted">{summary.event_achievements.summary_text}</p>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {summary.event_achievements.latest_unlocked.map((item) => (
                 <AchievementBadgeCard key={item.id} item={item} />
               ))}
@@ -227,15 +232,17 @@ export default function AchievementModal({ isOpen, onClose, initialSummary, retu
             </div>
           </section>
         ) : (
-          <section className="mt-6 rounded-2xl border border-ark-border bg-ark-surface-subtle p-4 text-sm text-ark-text-muted">
+          <section className="mt-8 rounded-2xl border border-ark-border bg-ark-surface-subtle p-4 text-sm text-ark-text-muted">
             暂无主事件成就，设置主事件后这里会显示当前事件的进展。
           </section>
         )}
 
-        <section className="mt-6 border-t border-ark-border pt-6">
-          <h4 className="text-sm font-semibold text-ark-text">全局成就</h4>
-          <div className="mt-2 text-xs text-ark-text-muted">{summary?.global_achievements.summary_text}</div>
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <section className="mt-8 border-t border-ark-border pt-6">
+          <div className="border-l-4 border-sky-400 pl-3">
+            <h4 className="text-base font-bold text-ark-text leading-none">全局成就</h4>
+            <p className="mt-1.5 text-xs text-ark-text-muted">{summary?.global_achievements.summary_text}</p>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 pb-2">
             {summary?.global_achievements.latest_unlocked.map((item) => (
               <AchievementBadgeCard key={item.id} item={item} tone="global" />
             ))}
