@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 10:52 · 6d56b0f · feat(frontend): add admin page redirect option in user profile dropdown menu
+
+- 用户提出的需求：
+  - 这个下拉菜单面板我想新增一个 管理页面 选项，只有管理员才可以看到这个选项
+
+- 本次完成的工作：
+  - **前端**：在导航栏 `Navigation.tsx` 用户菜单下拉框中，为管理员用户（`user.is_admin === true`）在“UI 组件库”上方新增了“管理页面”选项。
+  - **前端**：使用 Lucide 图标库中的 `LayoutDashboard` 仪表盘图标，并在点击时在当前标签页中重定向至独立静态管理面板路径 `/admin`。
+  - **单元测试**：在 `Navigation.test.tsx` 中新增测试用例，覆盖非管理员不可见、管理员可见且点击正确重定向到 `/admin` 的行为；同时修复了 `AchievementModal.test.tsx` 和 `Navigation.test.tsx` 中的 TypeScript 类型编译错误，确保 `pnpm check` 顺利编译通过。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-04 21:15 · 7e47f48 · refactor(frontend): simplify ERC page layout and clean up test assertions
 
 - 用户提出的需求：
