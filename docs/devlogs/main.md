@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 16:48 · c13e040 · fix(vocab): restrict word highlight to word boundaries in example sentence
+
+- 用户提出的需求：
+  - “怎么 have 的 a 也被高亮了？”
+
+- 本次完成的工作：
+  - **单词边界高亮匹配修复**：在 [StudyCard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/StudyCard.tsx) 的 `highlightKeyword` 中引入了 `\b` 单词边界元字符，使搜索匹配局限于完整独立的英文单词（例如，当搜索单词为 `a` 时，只会匹配独立的冠词 `a`，而不会错误匹配 `have` 内部包含的字母 `a`）。
+  - **ESLint 规则兼容**：将正则字符类中的连字符 `-` 置于末尾并移除了无谓的转义斜杠 `\/`，确保代码符合 ESLint 的正则转义检测。
+
+- 验证情况：
+  - 前端编译与 Vitest 单元测试通过。
+
 ### 2026-06-05 16:38 · e086cf0 · feat(vocab): update StudyCard definition layout to show centered translations and example sentence
 
 - 用户提出的需求：
