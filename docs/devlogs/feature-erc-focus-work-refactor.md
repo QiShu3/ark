@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 11:32 · 93e0918 · fix(frontend): improve readability and visual aesthetics of achievement modal and cards
+
+- 用户提出的需求：
+  - 这是 成就部分 的弹窗，可读性较差
+
+- 本次完成的工作：
+  - **前端**：修改 `index.css`，新增 `.achievement-card` 及其子状态样式类（`.achievement-card-locked`、`.achievement-card-in-progress`、`.achievement-card-unlocked-event`、`.achievement-card-unlocked-global`）。这些样式摒弃了原有的硬编码 hex 背景与透明度降低带来的对比度低下问题，采用语义化变量和优雅的渐变高亮样式，并精细适配了暗夜与日间两种主题。
+  - **前端**：新增进度条专用样式类 `.achievement-progress-track`、`.achievement-progress-fill-event` 与 `.achievement-progress-fill-global`，使用柔和的发光效果和主题变量指示，极大提升可读性。
+  - **前端**：重构 `AchievementBadgeCard.tsx`，采用新定义的 CSS 样式，并添加了三类状态的 SVG 图标：已解锁（Trophy 奖杯）、进行中（Target 靶心）、未解锁（Lock 锁），去除了此前对未解锁卡片应用全局 `opacity-60` 导致内部文字对比度过差的问题。当已达成时，显示“已达成”替代百分比。
+  - **前端**：重构 `AchievementModal.tsx`，将主体容器宽度从 `w-[920px]` 宽展至 `w-[960px]` 并微调内边距为 `p-6 md:p-8`；将关闭按钮替换为更现代的 SVG 图标；将两处成就大节标题调整为带左侧彩色标线（`border-l-4`）的高级排版；修改分类选择按钮在选中态与 hover 态下的缩放和光影过渡；修改卡片列表容器网格为更具响应式的 `sm:grid-cols-2 lg:grid-cols-3` 结构。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test` — 52 个测试文件、236 个测试用例全部成功通过 ✅
+
 ### 2026-06-05 11:29 · 51b620b · fix(frontend): adjust timer card padding and height to prevent text clipping at 100% zoom
 
 - 用户提出的需求：
