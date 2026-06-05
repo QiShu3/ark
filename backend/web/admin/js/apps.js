@@ -290,6 +290,13 @@ async function handleErcFileImport(fileInput) {
 // --- Vocab deck detail page ---
 
 let _deckWords = [];
+let _currentPage = 1;
+const _pageSize = 30;
+let _totalWordsCount = 0;
+let _totalPages = 1;
+let _searchQuery = '';
+let _searchTimeout = null;
+let _currentDeckId = null;
 
 async function loadVocabDeckDetail() {
   const params = new URLSearchParams(window.location.search);
@@ -298,78 +305,97 @@ async function loadVocabDeckDetail() {
     showToast('缺少词书 ID', 'error');
     return;
   }
+  _currentDeckId = deckId;
+
+  // Search
+  const searchInput = document.getElementById('word-search');
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = 'true';
+    searchInput.addEventListener('input', () => {
+      clearTimeout(_searchTimeout);
+      _searchTimeout = setTimeout(() => {
+        _searchQuery = searchInput.value.trim();
+        _currentPage = 1; // reset to first page on search
+        fetchAndRenderDeckWords();
+      }, 300);
+    });
+  }
+
+  // Bind actions
+  initDeckActions(deckId);
+
+  // Load first page
+  await fetchAndRenderDeckWords();
+}
+
+async function fetchAndRenderDeckWords() {
+  if (!_currentDeckId) return;
 
   try {
-    const deck = await api.get(`/apps/vocab/decks/${deckId}`);
+    const searchParam = _searchQuery ? `&search=${encodeURIComponent(_searchQuery)}` : '';
+    const deck = await api.get(`/apps/vocab/decks/${_currentDeckId}?page=${_currentPage}&limit=${_pageSize}${searchParam}`);
 
     document.title = `Ark Admin · ${deck.name}`;
     document.getElementById('deck-breadcrumb').textContent = deck.name;
     document.getElementById('deck-name').textContent = deck.name;
     document.getElementById('deck-description').textContent = deck.description;
-    document.getElementById('deck-word-count').textContent = `${deck.word_count.toLocaleString()} 词`;
+
+    let countLabel = `${deck.word_count.toLocaleString()} 词`;
+    if (_searchQuery) {
+      countLabel = `找到 ${deck.total_words.toLocaleString()} 词 / 共 ${deck.word_count.toLocaleString()} 词`;
+    }
+    document.getElementById('deck-word-count').textContent = countLabel;
 
     _deckWords = deck.words || [];
-    renderDeckWords(_deckWords);
+    _totalWordsCount = deck.total_words;
+    _totalPages = deck.total_pages;
+    _currentPage = deck.page;
 
-    // Search
-    const searchInput = document.getElementById('word-search');
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        const q = searchInput.value.trim().toLowerCase();
-        if (!q) {
-          renderDeckWords(_deckWords);
-        } else {
-          renderDeckWords(_deckWords.filter(w =>
-            w.word.toLowerCase().includes(q) ||
-            w.translations.some(t => t.translation.toLowerCase().includes(q))
-          ));
+    renderDeckWords(_deckWords);
+    renderPagination();
+
+    // Bind delete button once name is loaded
+    const btnDelete = document.getElementById('btn-delete');
+    if (btnDelete && !btnDelete.dataset.bound) {
+      btnDelete.dataset.bound = 'true';
+      const confirmOverlay = document.getElementById('confirm-delete');
+      const confirmName = document.getElementById('confirm-deck-name');
+      const confirmOk = document.getElementById('confirm-ok');
+      const confirmCancel = document.getElementById('confirm-cancel');
+
+      btnDelete.addEventListener('click', () => {
+        confirmName.textContent = deck.name;
+        confirmOverlay.classList.add('active');
+      });
+      confirmCancel?.addEventListener('click', () => confirmOverlay.classList.remove('active'));
+      confirmOverlay.addEventListener('click', (e) => {
+        if (e.target === confirmOverlay) confirmOverlay.classList.remove('active');
+      });
+      confirmOk?.addEventListener('click', async () => {
+        confirmOk.disabled = true;
+        confirmOk.textContent = '删除中...';
+        try {
+          await api.delete(`/apps/vocab/decks/${_currentDeckId}`);
+          showToast(`已删除: ${deck.name}`, 'success');
+          window.location.href = 'apps-vocab.html';
+        } catch (e) {
+          showToast('删除失败: ' + e.message, 'error');
+          confirmOk.disabled = false;
+          confirmOk.textContent = '确认删除';
         }
       });
     }
-
-    // Delete button
-    initDeckActions(deckId, deck.name);
   } catch (e) {
     showToast('加载词书详情失败: ' + e.message, 'error');
   }
 }
 
-function initDeckActions(deckId, deckName) {
-  // Delete with confirmation
-  const btnDelete = document.getElementById('btn-delete');
-  const confirmOverlay = document.getElementById('confirm-delete');
-  const confirmName = document.getElementById('confirm-deck-name');
-  const confirmOk = document.getElementById('confirm-ok');
-  const confirmCancel = document.getElementById('confirm-cancel');
-
-  if (btnDelete && confirmOverlay) {
-    btnDelete.addEventListener('click', () => {
-      confirmName.textContent = deckName;
-      confirmOverlay.classList.add('active');
-    });
-    confirmCancel?.addEventListener('click', () => confirmOverlay.classList.remove('active'));
-    confirmOverlay.addEventListener('click', (e) => {
-      if (e.target === confirmOverlay) confirmOverlay.classList.remove('active');
-    });
-    confirmOk?.addEventListener('click', async () => {
-      confirmOk.disabled = true;
-      confirmOk.textContent = '删除中...';
-      try {
-        await api.delete(`/apps/vocab/decks/${deckId}`);
-        showToast(`已删除: ${deckName}`, 'success');
-        window.location.href = 'apps-vocab.html';
-      } catch (e) {
-        showToast('删除失败: ' + e.message, 'error');
-        confirmOk.disabled = false;
-        confirmOk.textContent = '确认删除';
-      }
-    });
-  }
-
+function initDeckActions(deckId) {
   // Update (re-upload JSON)
   const btnUpdate = document.getElementById('btn-update');
   const fileUpdate = document.getElementById('file-update');
-  if (btnUpdate && fileUpdate) {
+  if (btnUpdate && fileUpdate && !btnUpdate.dataset.bound) {
+    btnUpdate.dataset.bound = 'true';
     btnUpdate.addEventListener('click', () => fileUpdate.click());
     fileUpdate.addEventListener('change', async () => {
       const file = fileUpdate.files[0];
@@ -395,7 +421,6 @@ function initDeckActions(deckId, deckName) {
         }
         const result = await resp.json();
         showToast(`更新成功: ${result.name}（${result.word_count} 词）`, 'success');
-        // Reload page to show new data
         window.location.reload();
       } catch (e) {
         showToast('更新失败: ' + e.message, 'error');
@@ -409,7 +434,7 @@ function renderDeckWords(words) {
   if (!tbody) return;
 
   if (!words.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">暂无单词</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无单词</td></tr>';
     return;
   }
 
@@ -422,15 +447,81 @@ function renderDeckWords(words) {
         }).join('')
       : '<span style="color:var(--muted);">—</span>';
 
+    const sentences = w.sentences.length
+      ? `
+          <div class="sentence-container">
+            <div class="sentence-en">${w.sentences[0].sentence}</div>
+            <div class="sentence-zh">${w.sentences[0].translation}</div>
+          </div>
+        `
+      : '<span style="color:var(--muted);">—</span>';
+
     return `
       <tr>
-        <td style="color:var(--muted);font-family:var(--font-mono);">${i + 1}</td>
+        <td style="color:var(--muted);font-family:var(--font-mono);">${(_currentPage - 1) * _pageSize + (i + 1)}</td>
         <td style="font-weight:500;">${w.word}</td>
         <td class="pronunciation">${pron}</td>
         <td>${translations}</td>
+        <td>${sentences}</td>
       </tr>
     `;
   }).join('');
+}
+
+function renderPagination() {
+  const container = document.getElementById('pagination-controls');
+  if (!container) return;
+
+  if (_totalPages <= 1) {
+    container.innerHTML = `<span class="pagination-info">共 ${_totalWordsCount} 个单词</span>`;
+    return;
+  }
+
+  let html = '';
+  // Prev button
+  html += `<button class="pagination-btn" ${_currentPage === 1 ? 'disabled' : ''} data-page="${_currentPage - 1}">上一页</button>`;
+
+  // Page Numbers
+  const range = 2;
+  let startPage = Math.max(1, _currentPage - range);
+  let endPage = Math.min(_totalPages, _currentPage + range);
+
+  if (startPage > 1) {
+    html += `<button class="pagination-btn ${_currentPage === 1 ? 'active' : ''}" data-page="1">1</button>`;
+    if (startPage > 2) {
+      html += `<span style="padding: 0 4px; color: var(--muted);">...</span>`;
+    }
+  }
+
+  for (let p = startPage; p <= endPage; p++) {
+    html += `<button class="pagination-btn ${_currentPage === p ? 'active' : ''}" data-page="${p}">${p}</button>`;
+  }
+
+  if (endPage < _totalPages) {
+    if (endPage < _totalPages - 1) {
+      html += `<span style="padding: 0 4px; color: var(--muted);">...</span>`;
+    }
+    html += `<button class="pagination-btn ${_currentPage === _totalPages ? 'active' : ''}" data-page="${_totalPages}">${_totalPages}</button>`;
+  }
+
+  // Next button
+  html += `<button class="pagination-btn" ${_currentPage === _totalPages ? 'disabled' : ''} data-page="${_currentPage + 1}">下一页</button>`;
+
+  // Info
+  html += `<span class="pagination-info">第 ${_currentPage} / ${_totalPages} 页 (共 ${_totalWordsCount} 词)</span>`;
+
+  container.innerHTML = html;
+
+  // Event Listeners
+  container.querySelectorAll('.pagination-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = parseInt(btn.dataset.page, 10);
+      if (page && page >= 1 && page <= _totalPages && page !== _currentPage) {
+        _currentPage = page;
+        fetchAndRenderDeckWords();
+      }
+    });
+  });
 }
 
 // --- ERC set detail page ---

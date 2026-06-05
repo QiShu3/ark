@@ -975,28 +975,106 @@ async def list_mastered_word_rows(
     )
 
 
-async def list_admin_deck_words(
+async def count_admin_deck_words(
     conn: asyncpg.Connection,
     *,
     deck_id: str,
+    search: str | None = None,
+) -> int:
+    if search:
+        search_pattern = f"%{search}%"
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(DISTINCT w.id) AS total
+            FROM vocab_words w
+            LEFT JOIN vocab_word_translations t ON t.word_id = w.id
+            WHERE w.deck_id = $1::uuid
+              AND (w.word ILIKE $2 OR t.translation ILIKE $2)
+            """,
+            deck_id,
+            search_pattern,
+        )
+    else:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS total FROM vocab_words WHERE deck_id = $1::uuid",
+            deck_id,
+        )
+    return int(row["total"]) if row else 0
+
+
+async def list_admin_deck_words_paginated(
+    conn: asyncpg.Connection,
+    *,
+    deck_id: str,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[asyncpg.Record]:
+    if search:
+        search_pattern = f"%{search}%"
+        return await conn.fetch(
+            """
+            SELECT DISTINCT w.id::text AS id, w.word, w.us_pronunciation, w.uk_pronunciation, w.sort_order
+            FROM vocab_words w
+            LEFT JOIN vocab_word_translations t ON t.word_id = w.id
+            WHERE w.deck_id = $1::uuid
+              AND (w.word ILIKE $2 OR t.translation ILIKE $2)
+            ORDER BY w.sort_order ASC, w.word ASC
+            LIMIT $3 OFFSET $4
+            """,
+            deck_id,
+            search_pattern,
+            limit,
+            offset,
+        )
+    else:
+        return await conn.fetch(
+            """
+            SELECT id::text AS id, word, us_pronunciation, uk_pronunciation, sort_order
+            FROM vocab_words
+            WHERE deck_id = $1::uuid
+            ORDER BY sort_order ASC, word ASC
+            LIMIT $2 OFFSET $3
+            """,
+            deck_id,
+            limit,
+            offset,
+        )
+
+
+async def list_translations_for_word_ids(
+    conn: asyncpg.Connection,
+    *,
+    word_ids: list[str],
+) -> list[asyncpg.Record]:
+    if not word_ids:
+        return []
     return await conn.fetch(
         """
-        SELECT
-          w.id::text AS id,
-          w.word,
-          w.us_pronunciation,
-          w.uk_pronunciation,
-          w.sort_order,
-          t.pos,
-          t.translation,
-          COALESCE(t.sort_order, 999999) AS translation_sort_order
-        FROM vocab_words w
-        LEFT JOIN vocab_word_translations t ON t.word_id = w.id
-        WHERE w.deck_id = $1::uuid
-        ORDER BY w.sort_order ASC, COALESCE(t.sort_order, 999999) ASC
+        SELECT word_id::text AS word_id, pos, translation
+        FROM vocab_word_translations
+        WHERE word_id = ANY($1::uuid[])
+        ORDER BY sort_order ASC
         """,
-        deck_id,
+        word_ids,
+    )
+
+
+async def list_sentences_for_word_ids(
+    conn: asyncpg.Connection,
+    *,
+    word_ids: list[str],
+) -> list[asyncpg.Record]:
+    if not word_ids:
+        return []
+    return await conn.fetch(
+        """
+        SELECT word_id::text AS word_id, sentence, translation
+        FROM vocab_word_sentences
+        WHERE word_id = ANY($1::uuid[])
+        ORDER BY sort_order ASC
+        """,
+        word_ids,
     )
 
 

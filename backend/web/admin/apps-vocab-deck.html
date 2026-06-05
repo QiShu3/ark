@@ -44,6 +44,39 @@
       font-family: var(--font-mono);
     }
 
+    .sentence-container {
+      margin: 4px 0; padding: 4px 10px;
+      background: rgba(0,0,0,0.02); border-left: 3px solid var(--accent);
+      border-radius: 4px; font-size: 12px;
+    }
+    .sentence-en { font-family: var(--font-sans); color: var(--text); font-weight: 500; }
+    .sentence-zh { color: var(--muted); margin-top: 2px; }
+
+    .pagination-bar {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin-top: 0; padding: 16px 24px;
+      background: var(--surface); border-top: 1px solid var(--border-soft);
+      border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
+      font-size: 13px;
+    }
+    .pagination-btn {
+      padding: 6px 12px; border: 1px solid var(--border-soft);
+      background: var(--surface); color: var(--text); border-radius: 6px;
+      cursor: pointer; font-size: 13px; transition: all 0.2s;
+    }
+    .pagination-btn:hover:not(:disabled) {
+      border-color: var(--accent); background: var(--accent-bg); color: var(--accent);
+    }
+    .pagination-btn.active {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .pagination-btn:disabled {
+      opacity: 0.5; cursor: not-allowed;
+    }
+    .pagination-info {
+      margin: 0 16px; color: var(--muted);
+    }
+
     .empty-state { text-align: center; padding: 40px; color: var(--muted); }
 
     .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -153,18 +186,20 @@
     </div>
   </div>
 
-  <div class="admin-card" style="padding: 0; overflow: hidden;">
+  <div class="admin-card" style="padding: 0; overflow: hidden; margin-bottom: 24px;">
     <table class="admin-table" style="border: 0; border-radius: 0;">
       <thead>
         <tr>
           <th style="width: 40px;">#</th>
           <th>单词</th>
           <th>音标</th>
-          <th>释义</th>
+          <th style="width: 35%;">释义</th>
+          <th>例句</th>
         </tr>
       </thead>
       <tbody id="words-tbody"></tbody>
     </table>
+    <div class="pagination-bar" id="pagination-controls"></div>
   </div>
 </main>
 

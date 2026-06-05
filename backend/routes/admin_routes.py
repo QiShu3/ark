@@ -22,7 +22,7 @@ if not _import_logger.handlers:
     _import_logger.addHandler(_fh)
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from routes.auth_routes import _AuthUser, get_current_user
@@ -620,12 +620,18 @@ class VocabWordTranslationItem(BaseModel):
     translation: str
 
 
+class VocabWordSentenceItem(BaseModel):
+    sentence: str
+    translation: str
+
+
 class VocabWordItem(BaseModel):
     id: str
     word: str
     us_pronunciation: str | None = None
     uk_pronunciation: str | None = None
     translations: list[VocabWordTranslationItem] = []
+    sentences: list[VocabWordSentenceItem] = []
 
 
 class VocabDeckDetailOut(BaseModel):
@@ -634,6 +640,10 @@ class VocabDeckDetailOut(BaseModel):
     description: str
     word_count: int
     is_published: bool
+    page: int
+    limit: int
+    total_pages: int
+    total_words: int
     words: list[VocabWordItem] = []
 
 
@@ -642,8 +652,16 @@ async def vocab_deck_detail(
     deck_id: str,
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=30, ge=1, le=200),
+    search: str | None = Query(default=None),
 ) -> VocabDeckDetailOut:
-    from routes.vocab.repository import list_admin_deck_words
+    from routes.vocab.repository import (
+        count_admin_deck_words,
+        list_admin_deck_words_paginated,
+        list_translations_for_word_ids,
+        list_sentences_for_word_ids,
+    )
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -654,24 +672,53 @@ async def vocab_deck_detail(
         if deck is None:
             raise HTTPException(status_code=404, detail="词书不存在")
 
-        rows = await list_admin_deck_words(conn, deck_id=deck_id)
+        total_words = await count_admin_deck_words(conn, deck_id=deck_id, search=search)
+        
+        offset = (page - 1) * limit
+        word_records = await list_admin_deck_words_paginated(
+            conn, deck_id=deck_id, search=search, limit=limit, offset=offset
+        )
+        
+        word_ids = [r["id"] for r in word_records]
+        
+        translations = await list_translations_for_word_ids(conn, word_ids=word_ids)
+        sentences = await list_sentences_for_word_ids(conn, word_ids=word_ids)
 
-    # Group translations by word
-    words_map: dict[str, dict] = {}
-    for r in rows:
+    # Group translations and sentences by word_id
+    translations_by_word: dict[str, list[VocabWordTranslationItem]] = {}
+    for t in translations:
+        wid = t["word_id"]
+        if wid not in translations_by_word:
+            translations_by_word[wid] = []
+        translations_by_word[wid].append(
+            VocabWordTranslationItem(pos=t["pos"], translation=t["translation"])
+        )
+
+    sentences_by_word: dict[str, list[VocabWordSentenceItem]] = {}
+    for s in sentences:
+        wid = s["word_id"]
+        if wid not in sentences_by_word:
+            sentences_by_word[wid] = []
+        sentences_by_word[wid].append(
+            VocabWordSentenceItem(sentence=s["sentence"], translation=s["translation"])
+        )
+
+    words_list: list[VocabWordItem] = []
+    for r in word_records:
         wid = r["id"]
-        if wid not in words_map:
-            words_map[wid] = {
-                "id": wid,
-                "word": r["word"],
-                "us_pronunciation": r["us_pronunciation"],
-                "uk_pronunciation": r["uk_pronunciation"],
-                "translations": [],
-            }
-        if r["translation"]:
-            words_map[wid]["translations"].append(
-                VocabWordTranslationItem(pos=r["pos"], translation=r["translation"])
+        words_list.append(
+            VocabWordItem(
+                id=wid,
+                word=r["word"],
+                us_pronunciation=r["us_pronunciation"],
+                uk_pronunciation=r["uk_pronunciation"],
+                translations=translations_by_word.get(wid, []),
+                sentences=sentences_by_word.get(wid, []),
             )
+        )
+
+    import math
+    total_pages = math.ceil(total_words / limit) if total_words > 0 else 1
 
     return VocabDeckDetailOut(
         id=deck["id"],
@@ -679,7 +726,11 @@ async def vocab_deck_detail(
         description=deck["description"],
         word_count=deck["word_count"],
         is_published=deck["is_published"],
-        words=[VocabWordItem(**w) for w in words_map.values()],
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+        total_words=total_words,
+        words=words_list,
     )
 
 
