@@ -130,6 +130,44 @@ describe('HomeRightDashboard', () => {
     });
   });
 
+  it('sets a workflow as default', async () => {
+    const user = userEvent.setup();
+    const defaultWorkflow = buildWorkflowPreset();
+    const longWorkflow = buildWorkflowPreset({
+      id: 'workflow-2',
+      name: '长专注',
+      is_default: false,
+      phases: [
+        { phase_type: 'focus', duration: 2700, timer_mode: 'countup', task_id: null },
+        { phase_type: 'break', duration: 600, timer_mode: 'countdown', task_id: null },
+      ],
+    });
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([defaultWorkflow, longWorkflow]);
+      if (path === '/todo/focus/workflows/workflow-2/default' && init?.method === 'POST') {
+        return Promise.resolve({ ...longWorkflow, is_default: true });
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderDashboard();
+
+    await user.click(await screen.findByRole('button', { name: '开始学习' }));
+
+    const presetItem = screen.getByRole('button', { name: /长专注/ });
+    expect(presetItem).toBeInTheDocument();
+
+    const setDefaultButton = screen.getByRole('button', { name: '设为默认' });
+    expect(setDefaultButton).toBeInTheDocument();
+
+    await user.click(setDefaultButton);
+
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/workflow-2/default', { method: 'POST' });
+    });
+  });
+
   it('renders the active workflow name and its phases chain when a workflow is active', async () => {
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflow/current') {

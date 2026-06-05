@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Box, Calendar, Check, Circle, ListTodo, Play, Trophy, X } from 'lucide-react';
+import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy, X } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
 import type { Appointment, Task } from './taskTypes';
@@ -364,6 +364,23 @@ export default function HomeRightDashboard() {
     }
   }
 
+  async function handleSetDefault(presetId: string) {
+    if (isSubmittingAction) return;
+    setIsSubmittingAction(true);
+    try {
+      await apiJson(`/todo/focus/workflows/${presetId}/default`, { method: 'POST' });
+      const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
+      setWorkflowStartPresets(presets);
+      setSelectedWorkflowStartId(presetId);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      await loadDashboard();
+    } catch (error) {
+      console.error('Failed to set default workflow', error);
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  }
+
   function openArrangementEntry() {
     window.dispatchEvent(new Event('ark:open-arrangements-modal'));
   }
@@ -697,11 +714,18 @@ export default function HomeRightDashboard() {
               {workflowStartPresets.map((preset) => {
                 const selected = preset.id === selectedWorkflowStartPreset?.id;
                 return (
-                  <button
+                  <div
                     key={preset.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedWorkflowStartId(preset.id)}
-                    className={`rounded-lg border px-3 py-3 text-left transition ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedWorkflowStartId(preset.id);
+                      }
+                    }}
+                    className={`group relative rounded-lg border px-3 py-3 text-left transition cursor-pointer select-none ${
                       selected
                         ? 'border-ark-border bg-ark-surface-strong text-ark-text'
                         : 'border-ark-border bg-ark-surface-subtle text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text'
@@ -713,10 +737,22 @@ export default function HomeRightDashboard() {
                         <span className="shrink-0 rounded-full bg-ark-surface-subtle px-2 py-0.5 text-[10px] text-ark-text-muted">
                           默认
                         </span>
-                      ) : null}
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isSubmittingAction}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleSetDefault(preset.id);
+                          }}
+                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded border border-ark-border bg-ark-surface-subtle px-2 py-0.5 text-[10px] text-ark-text-muted hover:bg-ark-surface-strong hover:text-ark-text disabled:cursor-wait disabled:opacity-50"
+                        >
+                          设为默认
+                        </button>
+                      )}
                     </div>
                     <div className="mt-1 truncate text-xs text-ark-text-faint">{getWorkflowSummary(preset)}</div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
