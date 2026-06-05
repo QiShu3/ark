@@ -186,12 +186,13 @@ export default function HomeRightDashboard() {
   const [visibleAppointmentCount, setVisibleAppointmentCount] = useState(3);
 
   async function loadDashboard() {
-    const [workflowRes, todayFocusRes, tasksRes, appointmentsRes, achievementRes] = await Promise.allSettled([
+    const [workflowRes, todayFocusRes, tasksRes, appointmentsRes, achievementRes, presetsRes] = await Promise.allSettled([
       apiJson<FocusWorkflow>('/todo/focus/workflow/current'),
       apiJson<TodayFocusSummary>('/todo/focus/today'),
       apiJson<Task[]>('/todo/tasks?limit=100'),
       apiJson<Appointment[]>('/todo/appointments'),
       apiJson<AchievementSummary>('/todo/achievements/summary'),
+      apiJson<WorkflowPreset[]>('/todo/focus/workflows'),
     ]);
 
     if (workflowRes.status === 'fulfilled') setWorkflow(workflowRes.value);
@@ -199,6 +200,7 @@ export default function HomeRightDashboard() {
     if (tasksRes.status === 'fulfilled') setTasks(Array.isArray(tasksRes.value) ? tasksRes.value : []);
     if (appointmentsRes.status === 'fulfilled') setAppointments(Array.isArray(appointmentsRes.value) ? appointmentsRes.value : []);
     if (achievementRes.status === 'fulfilled') setAchievementSummary(achievementRes.value);
+    if (presetsRes.status === 'fulfilled') setWorkflowStartPresets(Array.isArray(presetsRes.value) ? presetsRes.value : []);
   }
 
   useEffect(() => {
@@ -272,6 +274,13 @@ export default function HomeRightDashboard() {
     () => getWorkflowPresetPhases(selectedWorkflowStartPreset),
     [selectedWorkflowStartPreset],
   );
+
+  const defaultWorkflowName = useMemo(() => {
+    const defaultPreset = workflowStartPresets.find((item) => item.is_default) ?? workflowStartPresets[0];
+    return defaultPreset?.name || '默认工作流';
+  }, [workflowStartPresets]);
+
+  const currentWorkflowName = workflow?.workflow_name || defaultWorkflowName;
 
   async function handlePrimaryAction() {
     if (isSubmittingAction) return;
@@ -408,7 +417,7 @@ export default function HomeRightDashboard() {
                 {formatTimer(timerSeconds)}
               </div>
               <div className="ark-home-timer-target mt-5 text-sm font-medium">
-                今日目标&nbsp;&nbsp;{DAILY_GOAL_MINUTES} 分钟
+                当前工作流：{currentWorkflowName}
               </div>
             </div>
           </div>

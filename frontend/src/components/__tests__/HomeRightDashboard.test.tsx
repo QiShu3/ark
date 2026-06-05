@@ -58,6 +58,7 @@ function defaultApiResponse(path: string) {
   if (path === '/todo/tasks?limit=100') return Promise.resolve([]);
   if (path === '/todo/appointments') return Promise.resolve([]);
   if (path === '/todo/achievements/summary') return Promise.resolve(null);
+  if (path === '/todo/focus/workflows') return Promise.resolve([buildWorkflowPreset()]);
   return Promise.resolve({});
 }
 
@@ -79,6 +80,7 @@ describe('HomeRightDashboard', () => {
     renderDashboard();
 
     expect(await screen.findByRole('button', { name: '开始学习' })).toBeInTheDocument();
+    expect(screen.getByText('当前工作流：默认番茄')).toBeInTheDocument();
     expect(screen.getByText('今日进度')).toBeInTheDocument();
     expect(screen.getByText('任务')).toBeInTheDocument();
     expect(screen.getByText('日程')).toBeInTheDocument();
@@ -153,6 +155,7 @@ describe('HomeRightDashboard', () => {
     renderDashboard();
 
     expect(await screen.findByText('今日进度')).toBeInTheDocument();
+    expect(screen.getByText('当前工作流：考研英语')).toBeInTheDocument();
     expect(screen.getByText('考研英语')).toBeInTheDocument();
     expect(screen.getByText('今日单词')).toBeInTheDocument();
     expect(screen.getByText('ERC 真题练习')).toBeInTheDocument();
