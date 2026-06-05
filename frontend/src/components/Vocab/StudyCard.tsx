@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import type { VocabReviewItem } from '../../lib/vocab/types';
-import WordMetaPanel from './WordMetaPanel';
 
 interface StudyCardProps {
   item: VocabReviewItem;
@@ -17,8 +16,28 @@ export default function StudyCard({ item, revealed: propRevealed, onToggleReveal
   // Extract unique part of speech tags
   const posTags = Array.from(new Set(item.translations.map((t) => t.pos).filter(Boolean)));
 
+  // Helper to highlight the keyword case-insensitively in the example sentence
+  const highlightKeyword = (sentence: string, keyword: string) => {
+    if (!keyword) return <span>{sentence}</span>;
+    const regex = new RegExp(`(${keyword})`, 'gi');
+    const parts = sentence.split(regex);
+    return (
+      <>
+        {parts.map((part, i) =>
+          regex.test(part) ? (
+            <span key={i} className="text-[var(--focus-work-emerald-text)] font-semibold">
+              {part}
+            </span>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
+
   return (
-    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)]">
+    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] animate-fade-in">
       {/* Radial Background Mesh Glow */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.06),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.1),transparent_60%)]" />
 
@@ -42,17 +61,50 @@ export default function StudyCard({ item, revealed: propRevealed, onToggleReveal
           {item.uk_pronunciation ? <span>UK /{item.uk_pronunciation}/</span> : null}
         </div>
 
-        {/* Separator Decorator */}
-        <div className="my-5 flex items-center justify-center">
-          <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
-          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_8px_rgba(110,231,183,0.6)] animate-pulse" />
-          <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
-        </div>
+        {!isRevealed ? (
+          <>
+            {/* Separator Decorator */}
+            <div className="my-5 flex items-center justify-center">
+              <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_8px_rgba(110,231,183,0.6)] animate-pulse" />
+              <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+            </div>
 
-        {/* Recall Hint */}
-        <div className="text-sm text-[var(--focus-work-text-faint)] select-none">
-          先在脑中回忆释义
-        </div>
+            {/* Recall Hint */}
+            <div className="text-sm text-[var(--focus-work-text-faint)] select-none">
+              先在脑中回忆释义
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Centered Translations */}
+            <div className="text-3xl font-medium text-[var(--focus-work-text)] my-6 leading-normal tracking-wide">
+              {item.translations.map((t) => t.translation).join('；')}
+            </div>
+
+            {/* Separator Decorator */}
+            <div className="my-5 flex items-center justify-center">
+              <div className="h-[1px] w-24 bg-[var(--focus-work-border)] opacity-60" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_8px_rgba(110,231,183,0.6)] animate-pulse" />
+              <div className="h-[1px] w-24 bg-[var(--focus-work-border)] opacity-60" />
+            </div>
+
+            {/* First Example Sentence */}
+            {item.sentences && item.sentences.length > 0 && (
+              <div className="mt-4 mb-6 max-w-xl mx-auto text-center">
+                <div className="text-base text-[var(--focus-work-text-muted)] leading-relaxed flex items-start justify-center gap-1.5">
+                  <span className="text-emerald-400 font-serif text-xl font-bold leading-none select-none">“</span>
+                  <p className="inline text-lg">
+                    {highlightKeyword(item.sentences[0].sentence, item.word)}
+                  </p>
+                </div>
+                <div className="mt-2 text-sm text-[var(--focus-work-text-faint)]">
+                  {item.sentences[0].translation}
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {/* Display Toggle Button */}
         <div className="mt-4 flex justify-center">
@@ -73,13 +125,6 @@ export default function StudyCard({ item, revealed: propRevealed, onToggleReveal
           </button>
         </div>
       </div>
-
-      {/* Expanded Meta Panel */}
-      {isRevealed && (
-        <div className="mt-8 border-t border-[var(--focus-work-border)] pt-6 text-left w-full transition-all duration-300">
-          <WordMetaPanel detail={item} />
-        </div>
-      )}
     </section>
   );
 }

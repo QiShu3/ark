@@ -6,7 +6,7 @@ import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabTodaySession } from '../../hooks/vocab/useVocabTodaySession';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import { apiJson } from '../../lib/api';
-import type { VocabReviewItem } from '../../lib/vocab/types';
+import type { VocabReviewItem, VocabWordDetail } from '../../lib/vocab/types';
 import { Frown, Meh, CheckCircle2, Rocket } from 'lucide-react';
 
 const actions = [
