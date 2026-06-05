@@ -219,9 +219,6 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
                     </button>
                   ))}
                 </div>
-                <a href={`#/vocab/words/${session.currentItem.id}`} className="inline-block text-sm text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)]">
-                  查看完整词条
-                </a>
               </div>
             ) : null}
 
