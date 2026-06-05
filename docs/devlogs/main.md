@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 18:13 · 37081c0 · fix(vocab): lock card height to fixed h-[420px] and enable internal scrolling to prevent layout shifts
+
+- 用户提出的需求：
+  - “高度还是会发生改变啊？”
+  - 彻底锁定单词卡片和测试提示卡片的高度，防止部分长单词、多释义或长例句在展开定义时撑开容器引发下方按键位移。
+
+- 本次完成的工作：
+  - **卡片高度完全固定**：将 [StudyCard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/StudyCard.tsx) 和 [QuizRenderer.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/QuizRenderer.tsx) 容器高度由 `min-h-[360px]` 统一调整为固定高度 `h-[420px]`，保证其物理高度在所有状态下完全恒定。
+  - **内容溢出滚动处理**：在两个组件内部构造了 `.vocab-scrollable-content` 滚动包裹层，并使用 `overflow-y-auto min-h-0` 使超长文本可以垂直滚动而不改变卡片总体高度，并且利用 `shrink-0` 锁定“收起释义”等底部功能按键的位置。
+  - **滚动条体验优化**：在 [index.css](file:///Users/qishu/Project/ark/frontend/src/index.css) 中为 `.vocab-scrollable-content` 新增了现代的 `scrollbar-color` 与 `scrollbar-width: thin` 定制样式，并添加 WebKit 兼容回退，使其在暗色系毛玻璃背景下能够优雅呈现。
+
+- 验证情况：
+  - 前端编译（pnpm check）与 ESLint（pnpm lint）均无报错。
+  - Vitest 单元测试运行通过（22/22 成功）。
+
 ### 2026-06-05 18:07 · 0a7d05d · feat(vocab): stabilize card layout height and add smooth fade-in transitions
 
 - 用户提出的需求：
