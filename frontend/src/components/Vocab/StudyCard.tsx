@@ -19,12 +19,15 @@ export default function StudyCard({ item, revealed: propRevealed, onToggleReveal
   // Helper to highlight the keyword case-insensitively in the example sentence
   const highlightKeyword = (sentence: string, keyword: string) => {
     if (!keyword) return <span>{sentence}</span>;
-    const regex = new RegExp(`(${keyword})`, 'gi');
+    // Escape special regex characters in the keyword
+    const escapedKeyword = keyword.replace(/[\\^$*+?.()|[\]{}-]/g, '\\$&');
+    // Match only standalone words using word boundaries
+    const regex = new RegExp(`\\b(${escapedKeyword})\\b`, 'gi');
     const parts = sentence.split(regex);
     return (
       <>
         {parts.map((part, i) =>
-          regex.test(part) ? (
+          part.toLowerCase() === keyword.toLowerCase() ? (
             <span key={i} className="text-[var(--focus-work-emerald-text)] font-semibold">
               {part}
             </span>
