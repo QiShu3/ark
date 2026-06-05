@@ -5,7 +5,7 @@ export default function QuizRenderer({ item }: { item: VocabReviewItem }) {
   const posTags = Array.from(new Set(item.translations.map((t) => t.pos).filter(Boolean)));
 
   return (
-    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)]">
+    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] min-h-[360px] flex flex-col justify-center">
       {/* Radial Background Mesh Glow */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.06),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.1),transparent_60%)]" />
 
