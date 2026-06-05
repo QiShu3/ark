@@ -142,7 +142,7 @@ describe('Navigation', () => {
     expect(adminButton).toBeInTheDocument();
 
     await user.click(adminButton);
-    expect(window.location.href).toBe('/admin');
+    expect(window.location.href).toBe('/admin/');
 
     (window as any).location = originalLocation;
   });

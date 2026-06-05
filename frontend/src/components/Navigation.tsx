@@ -160,7 +160,7 @@ const Navigation: React.FC = () => {
 
   function openAdminDashboard() {
     setAvatarMenuOpen(false);
-    window.location.href = '/admin';
+    window.location.href = '/admin/';
   }
 
   function openAdminUiLibrary() {
