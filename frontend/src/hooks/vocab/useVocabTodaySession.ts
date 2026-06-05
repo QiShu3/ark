@@ -214,5 +214,9 @@ export function useVocabTodaySession(deckId: string | null, refreshToken = 0) {
     batchReviewGroups,
     batchReviewActionLabel: loading || currentItem ? '进入下一批' : '今日已完成',
     continueBatchReview,
+    activeIndex: activeQueue.activeIndex,
+    queueLength: activeQueue.items.length,
+    goToNext: activeQueue.goToNext,
+    goToPrev: activeQueue.goToPrev,
   };
 }

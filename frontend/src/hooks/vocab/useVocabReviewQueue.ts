@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { fetchVocabLearningQueue, fetchVocabReviewQueue, fetchVocabStudyQueue } from '../../lib/vocab/api';
 import type { VocabReviewItem } from '../../lib/vocab/types';
@@ -13,7 +13,7 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
   const [loadedDeckId, setLoadedDeckId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!deckId) {
       setItems([]);
       setActiveIndex(0);
@@ -44,16 +44,25 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
       setHasLoaded(true);
       setLoadedDeckId(deckId);
     }
-  };
+  }, [deckId, mode, limit]);
 
   useEffect(() => {
     void refresh();
-  }, [deckId, mode, limit, refreshToken]);
+  }, [refresh, refreshToken]);
 
   const consumeCurrent = () => {
     const shouldRefetch = items.length <= 1 && !!deckId;
-    setItems((prev) => prev.slice(1));
-    setActiveIndex(0);
+    setItems((prev) => {
+      const next = [...prev];
+      next.splice(activeIndex, 1);
+      return next;
+    });
+    setActiveIndex((prev) => {
+      const newLen = items.length - 1;
+      if (newLen <= 0) return 0;
+      if (prev >= newLen) return newLen - 1;
+      return prev;
+    });
     if (shouldRefetch) {
       void refresh();
     }
@@ -63,18 +72,33 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
     const shouldRefetch = items.length <= 1 && !!deckId;
     setItems((prev) => {
       if (prev.length <= 1) return prev;
-      const [current, ...rest] = prev;
-      return [...rest, current];
+      const next = [...prev];
+      const [current] = next.splice(activeIndex, 1);
+      return [...next, current];
     });
-    setActiveIndex(0);
+    setActiveIndex((prev) => {
+      const newLen = items.length;
+      if (prev >= newLen - 1) return newLen - 1;
+      return prev;
+    });
     if (shouldRefetch) {
       void refresh();
     }
   };
 
+  const goToNext = () => {
+    setActiveIndex((prev) => (prev < items.length - 1 ? prev + 1 : prev));
+  };
+
+  const goToPrev = () => {
+    setActiveIndex((prev) => (prev > 0 ? prev - 1 : prev));
+  };
+
   return {
     items,
     currentItem: items[activeIndex] ?? null,
+    activeIndex,
+    setActiveIndex,
     loading,
     hasLoaded,
     loadedDeckId,
@@ -82,5 +106,7 @@ export function useVocabReviewQueue(deckId: string | null, mode: QueueMode = 're
     refresh,
     consumeCurrent,
     requeueCurrent,
+    goToNext,
+    goToPrev,
   };
 }

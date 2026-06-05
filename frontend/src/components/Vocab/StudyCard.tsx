@@ -3,29 +3,83 @@ import { useState } from 'react';
 import type { VocabReviewItem } from '../../lib/vocab/types';
 import WordMetaPanel from './WordMetaPanel';
 
-export default function StudyCard({ item }: { item: VocabReviewItem }) {
-  const [revealed, setRevealed] = useState(false);
+interface StudyCardProps {
+  item: VocabReviewItem;
+  revealed?: boolean;
+  onToggleRevealed?: () => void;
+}
+
+export default function StudyCard({ item, revealed: propRevealed, onToggleRevealed }: StudyCardProps) {
+  const [localRevealed, setLocalRevealed] = useState(false);
+  const isRevealed = propRevealed !== undefined ? propRevealed : localRevealed;
+  const toggleRevealed = onToggleRevealed || (() => setLocalRevealed((prev) => !prev));
+
+  // Extract unique part of speech tags
+  const posTags = Array.from(new Set(item.translations.map((t) => t.pos).filter(Boolean)));
 
   return (
-    <section className="rounded-[2rem] border border-ark-border bg-ark-surface-subtle p-6 backdrop-blur-md">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-4xl font-semibold tracking-tight">{item.word}</div>
-          <div className="mt-2 flex gap-4 text-sm text-ark-text-muted">
-            {item.us_pronunciation ? <span>US /{item.us_pronunciation}/</span> : null}
-            {item.uk_pronunciation ? <span>UK /{item.uk_pronunciation}/</span> : null}
-          </div>
+    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)]">
+      {/* Radial Background Mesh Glow */}
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.06),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.1),transparent_60%)]" />
+
+      <div className="flex flex-col items-center">
+        {/* Word and POS Tags */}
+        <div className="flex items-center justify-center flex-wrap gap-2">
+          <h2 className="text-5xl font-bold tracking-tight text-[var(--focus-work-text)]">{item.word}</h2>
+          {posTags.map((pos) => (
+            <span
+              key={pos}
+              className="inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)] border border-[var(--focus-work-emerald-border)] align-middle uppercase"
+            >
+              {pos}
+            </span>
+          ))}
         </div>
-        <button
-          type="button"
-          onClick={() => setRevealed((prev) => !prev)}
-          className="rounded-full border border-ark-border px-4 py-2 text-sm text-ark-text transition hover:border-ark-border"
-        >
-          {revealed ? '收起释义' : '显示释义'}
-        </button>
+
+        {/* Phonetics Display */}
+        <div className="mt-3 flex items-center justify-center gap-4 text-sm text-[var(--focus-work-text-muted)] font-mono">
+          {item.us_pronunciation ? <span>US /{item.us_pronunciation}/</span> : null}
+          {item.uk_pronunciation ? <span>UK /{item.uk_pronunciation}/</span> : null}
+        </div>
+
+        {/* Separator Decorator */}
+        <div className="my-5 flex items-center justify-center">
+          <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_8px_rgba(110,231,183,0.6)] animate-pulse" />
+          <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+        </div>
+
+        {/* Recall Hint */}
+        <div className="text-sm text-[var(--focus-work-text-faint)] select-none">
+          先在脑中回忆释义
+        </div>
+
+        {/* Display Toggle Button */}
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={toggleRevealed}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-2.5 text-xs font-medium text-[var(--focus-work-text-muted)] transition hover:border-[var(--focus-work-border-strong)] hover:bg-[var(--focus-work-surface-soft)] active:scale-95"
+          >
+            <span>{isRevealed ? '收起释义' : '显示释义'}</span>
+            <svg
+              className={`h-3.5 w-3.5 transition-transform duration-300 ${isRevealed ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {revealed ? <div className="mt-6"><WordMetaPanel detail={item} /></div> : null}
+      {/* Expanded Meta Panel */}
+      {isRevealed && (
+        <div className="mt-8 border-t border-[var(--focus-work-border)] pt-6 text-left w-full transition-all duration-300">
+          <WordMetaPanel detail={item} />
+        </div>
+      )}
     </section>
   );
 }
