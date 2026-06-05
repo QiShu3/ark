@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 15:05 · 102cb69 · refactor(frontend): use '下一阶段：' prefix for next task display in active timer card
+
+- 用户提出的需求：
+  - 去掉 （n分钟）吧，不太好看
+  - 下个任务： 也太口语化了，有没有更好的呢？先不改代码，回答我的问题。
+  - 这个改一下吧，把下一阶段放到这里
+
+- 本次完成的工作：
+  - **前端**：修改 `HomeRightDashboard.tsx`，将激活状态下倒计时卡片显示的 `"下个任务："` 前缀变更为更加严谨书面的 **`"下一阶段："`**。
+  - **前端**：移除了下个专注任务名称后的 `(n分钟)` 持续时间括号后缀。
+  - **单元测试**：同步修改 `HomeRightDashboard.test.tsx` 中的断言，改为检验是否渲染了 `"下一阶段：ERC 真题练习"`。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test` — 52 个测试文件、236 个测试用例全部成功通过 ✅
+
 ### 2026-06-05 11:48 · 9e08705 · feat(frontend): display next focus task and duration in active timer card
 
 - 用户提出的需求：
