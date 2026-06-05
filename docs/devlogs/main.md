@@ -2,6 +2,19 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 16:11 · 1bb5869 · fix(frontend): handle null activeDeck in VocabTodayFocusWork and add loading/error checks
+
+- 用户提出的需求：
+  - “/browser 怎么点击再来一次没有反应？”
+
+- 本次完成的工作：
+  - **修复词书空状态显示逻辑**：重构 `VocabTodayFocusWork.tsx`，对 `useVocabDeck()` 返回的 `loading`、`error` 状态进行捕获和分流渲染。当未加载到任何已发布的词书（`activeDeck` 为 `null`）时，不再错误展示 misleading 的“今天这本词书的单词已经完成了。”，而是显示“暂无可用的词书”并指导用户联系管理员发布。
+  - **添加针对性单元测试**：在 `VocabTodayFocusWork.test.tsx` 中新增对 `loading` 状态、`error` 状态以及 `activeDeck` 空状态的单元测试用例，全部顺利通过。
+  - **后台数据库调试**：排查并发现开发环境中的词书 `考研英语` 为“未上架”状态（`is_published = False`），导致 API 无法返回任何可用词书，已在数据库将其变更为“已上架”状态。
+
+- 验证情况：
+  - 运行 `pnpm test -- --run` 全量前端 Vitest 单元测试 239 个全部通过。
+
 ### 2026-06-05 16:04 · e4232aa · feat(vocab): add server-side pagination and example sentence rendering to vocab admin page
 
 - 用户提出的需求：
