@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 11:36 · 2561e82 · fix(frontend): adjust grid rows and card paddings to prevent clipping of workflow chips
+
+- 用户提出的需求：
+  - 100% 的情况今日进度没有完全显示工作流进度条
+
+- 本次完成的工作：
+  - **前端**：将仪表盘的全局行高度比例网格从 `grid-rows-[1.25fr_0.8fr_1.1fr_1.9fr_0.9fr]` 调整为 `grid-rows-[1.25fr_0.9fr_1.1fr_1.8fr_0.9fr]`，分给今日进度卡片更多垂直空间，日历卡片占比微降。
+  - **前端**：将今日进度卡片内边距从 `py-3` 减少为 `py-2.5`。
+  - **前端**：将工作流阶段芯片容器的顶部外边距从 `mt-3.5` 改为 `mt-2`，并将垂直内边距从 `py-1` 减少为 `py-0.5`，确保 100% 缩放比例时工作流进度条（芯片）完整可见、不被底层切割。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-05 11:32 · 93e0918 · fix(frontend): improve readability and visual aesthetics of achievement modal and cards
 
 - 用户提出的需求：

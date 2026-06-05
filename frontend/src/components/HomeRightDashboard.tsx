@@ -402,7 +402,7 @@ export default function HomeRightDashboard() {
 
   return (
     <>
-      <div className="grid h-full grid-rows-[1.25fr_0.8fr_1.1fr_1.9fr_0.9fr] gap-3">
+      <div className="grid h-full grid-rows-[1.25fr_0.9fr_1.1fr_1.8fr_0.9fr] gap-3">
         <HomeCard variant="hero" className="px-6 py-4">
           <TimerCardArt />
 
@@ -435,7 +435,7 @@ export default function HomeRightDashboard() {
           </button>
         </HomeCard>
 
-        <HomeCard className="px-6 py-3 flex flex-col justify-center min-h-0">
+        <HomeCard className="px-6 py-2.5 flex flex-col justify-center min-h-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <svg className="h-5 w-5 shrink-0" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
@@ -479,7 +479,7 @@ export default function HomeRightDashboard() {
           </div>
 
           {workflowIsActive && workflow?.phases ? (
-            <div className="mt-3.5 overflow-x-auto scrollbar-none py-1">
+            <div className="mt-2 overflow-x-auto scrollbar-none py-0.5">
               <WorkflowPhaseChips
                 phases={workflow.phases}
                 getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
