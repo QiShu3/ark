@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Box, Check, Circle, Play, Trophy, X } from 'lucide-react';
+import { BarChart3, Box, Calendar, Check, Circle, ListTodo, Play, Trophy, X } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
 import type { Appointment, Task } from './taskTypes';
@@ -521,7 +521,7 @@ export default function HomeRightDashboard() {
                 {todayTasks.length ? visibleTasks.map((task) => renderDashboardTaskRow(task, workflow)) : (
                   <div className="ark-home-empty-task flex min-h-0 flex-1 items-center gap-3 rounded-2xl px-4 py-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--ark-border)] text-[var(--ark-accent)]">
-                      <Circle className="h-4.5 w-4.5" aria-hidden="true" />
+                      <ListTodo className="h-4.5 w-4.5" aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-[var(--ark-text)]">今日暂无任务</div>
@@ -552,8 +552,14 @@ export default function HomeRightDashboard() {
                 {upcomingAppointments.length ? visibleAppointments.map((appointment, index) => (
                   renderDashboardAppointmentRow(appointment, index, visibleAppointments.length)
                 )) : (
-                  <div className="flex min-h-0 flex-1 items-center rounded-2xl px-4 py-3 text-sm text-[var(--ark-text-faint)]">
-                    暂无近期日程
+                  <div className="ark-home-empty-task flex min-h-0 flex-1 items-center gap-3 rounded-2xl px-4 py-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--ark-border)] text-[var(--ark-accent)]">
+                      <Calendar className="h-4.5 w-4.5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[var(--ark-text)]">暂无近期日程</div>
+                      <div className="mt-1 text-xs text-[var(--ark-text-faint)]">点击右上角安排今日日程</div>
+                    </div>
                   </div>
                 )}
                 {appointmentProbeItems.length >= 3 ? (
