@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 11:05 · 0643b88 · feat(frontend): display active or default workflow name in dashboard timer card
+
+- 用户提出的需求：
+  - 将 今日目标 120 分钟 的显示 改成为 当前工作流：默认工作流名字 (去掉书名号《》)
+
+- 本次完成的工作：
+  - **前端**：修改 `HomeRightDashboard.tsx`，在组件加载时（`loadDashboard`）一并拉取 `/todo/focus/workflows` 预设列表。
+  - **前端**：根据状态动态计算当前工作流名称（未激活时取 `is_default` 标记的默认模板名，激活时取 `workflow.workflow_name`），并将计时器卡片中原固定文案 `今日目标 120 分钟` 变更为 `当前工作流：{currentWorkflowName}`。
+  - **单元测试**：在 `HomeRightDashboard.test.tsx` 模拟接口拦截中补充对 `/todo/focus/workflows` 请求的响应逻辑，并更新初始状态及激活状态下的工作流名称文案断言。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-05 10:55 · 49f571f · fix(frontend): append trailing slash to admin page redirection URL
 
 - 用户提出的需求：
