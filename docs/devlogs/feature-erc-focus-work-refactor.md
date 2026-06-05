@@ -2,6 +2,18 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 11:07 · 5de2cb3 · feat(frontend): remove 'View Full Entry' link from vocab today focus work
+
+- 用户提出的需求：
+  - 去掉 背单词 专注工作 的 查看完整词条 功能
+
+- 本次完成的工作：
+  - **前端**：修改 `VocabTodayFocusWork.tsx`，移除了背单词专注学习/复习卡片底部的“查看完整词条”链接。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-05 11:05 · 0643b88 · feat(frontend): display active or default workflow name in dashboard timer card
 
 - 用户提出的需求：
