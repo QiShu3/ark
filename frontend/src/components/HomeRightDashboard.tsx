@@ -403,10 +403,10 @@ export default function HomeRightDashboard() {
   return (
     <>
       <div className="grid h-full grid-rows-[1.25fr_0.8fr_1.1fr_1.9fr_0.9fr] gap-3">
-        <HomeCard variant="hero" className="px-6 py-5">
+        <HomeCard variant="hero" className="px-6 py-4">
           <TimerCardArt />
 
-          <div className="relative z-10 flex h-full min-h-[150px] flex-col justify-between">
+          <div className="relative z-10 flex h-full min-h-[120px] flex-col justify-between">
             <div className="ark-home-timer-phase flex items-center gap-2 text-base font-semibold">
               <span className="ark-home-timer-phase-dot h-2.5 w-2.5 rounded-full" />
               {phaseLabel}
@@ -416,7 +416,7 @@ export default function HomeRightDashboard() {
               <div className="ark-home-timer-digits font-bold leading-none ark-font-display">
                 {formatTimer(timerSeconds)}
               </div>
-              <div className="ark-home-timer-target mt-5 text-sm font-medium">
+              <div className="ark-home-timer-target mt-2 text-sm font-medium">
                 当前工作流：{currentWorkflowName}
               </div>
             </div>

@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 11:29 · 51b620b · fix(frontend): adjust timer card padding and height to prevent text clipping at 100% zoom
+
+- 用户提出的需求：
+  - 前者是在浏览器中缩放为 100% 时的截图 ，后者是 90% ，你有发现什么吗？在得到我的许可前不要改代码
+
+- 本次完成的工作：
+  - **前端**：修改 `HomeRightDashboard.tsx`，将倒计时卡片（`HomeCard variant="hero"`）的内边距自 `px-6 py-5` 缩减为 `px-6 py-4`。
+  - **前端**：将卡片内部弹性盒容器的最小高度从 `min-h-[150px]` 降低为 `min-h-[120px]`。
+  - **前端**：将“当前工作流：”提示文本的顶部外边距从 `mt-5` 压缩至 `mt-2`，以节省垂直空间，彻底解决在小屏幕/100%缩放比例下，因为卡片物理分配高度受限且带有 `overflow-hidden` 而导致的底部文字被截断、不可见 Bug。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `npx vitest run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-05 11:14 · a70774d · feat(frontend): unify empty states for tasks and schedules with card layout and icons
 
 - 用户提出的需求：
