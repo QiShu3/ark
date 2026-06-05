@@ -2,6 +2,24 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 16:38 · e086cf0 · feat(vocab): update StudyCard definition layout to show centered translations and example sentence
+
+- 用户提出的需求：
+  - “显示释义应该是这样的。”
+  - 设计包含：
+    - 展开释义后，只展示居中对齐的简明中文翻译；
+    - 中文翻译下方渲染带绿色微光圆点的分割线；
+    - 最下方展示第一个例句（高亮当前英文单词并以绿色双引号“引导）和对应的中文释义。
+
+- 本次完成的工作：
+  - **精简释义渲染逻辑**：在 [StudyCard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/StudyCard.tsx) 中移除了原有的 `WordMetaPanel` 详尽展示，改用以 `；` 拼接的居中中文翻译。
+  - **单词例句高亮**：在 [StudyCard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/StudyCard.tsx) 中新增 `highlightKeyword` 替换逻辑，支持不区分大小写高亮英文例句中出现的单词关键字为 `text-[var(--focus-work-emerald-text)]`，并加上了绿色的 `“` 衬线字体引号。
+  - **类型检查补齐**：在 [VocabTodayFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/VocabTodayFocusWork.tsx) 中补齐了缺失 of `VocabWordDetail` 类型导入，彻底解决 `tsc` 编译报错。
+
+- 验证情况：
+  - 运行 `pnpm check` 进行 TS 类型检查完全通过（0 报错）。
+  - 前端单元测试 `pnpm test run VocabTodayFocusWork.test.tsx` 完美通过。
+
 ### 2026-06-05 16:32 · b8b950a · feat(vocab): redesign vocabulary study card UI and support keyboard shortcuts & queue navigation in focus work
 
 - 用户提出的需求：
