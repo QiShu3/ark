@@ -1641,3 +1641,24 @@
 .animate-fade-in {
   animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+.vocab-scrollable-content {
+  --scrollbar-thumb: var(--focus-work-border);
+  --scrollbar-track: transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+@supports not (scrollbar-color: auto) {
+  .vocab-scrollable-content::-webkit-scrollbar {
+    width: 6px;
+  }
+  .vocab-scrollable-content::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+  .vocab-scrollable-content::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+}
+

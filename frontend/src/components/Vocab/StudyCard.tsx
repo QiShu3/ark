@@ -40,11 +40,12 @@ export default function StudyCard({ item, revealed: propRevealed, onToggleReveal
   };
 
   return (
-    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] min-h-[360px] flex flex-col justify-center">
+    <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] h-[420px] flex flex-col justify-between">
       {/* Radial Background Mesh Glow */}
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.06),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.1),transparent_60%)]" />
 
-      <div className="flex flex-col items-center">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col justify-center items-center overflow-y-auto min-h-0 w-full pr-1 vocab-scrollable-content">
         {/* Word and POS Tags */}
         <div className="flex items-center justify-center flex-wrap gap-2">
           <h2 className="text-5xl font-bold tracking-tight text-[var(--focus-work-text)]">{item.word}</h2>
@@ -108,25 +109,25 @@ export default function StudyCard({ item, revealed: propRevealed, onToggleReveal
             )}
           </>
         )}
+      </div>
 
-        {/* Display Toggle Button */}
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={toggleRevealed}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-2.5 text-xs font-medium text-[var(--focus-work-text-muted)] transition hover:border-[var(--focus-work-border-strong)] hover:bg-[var(--focus-work-surface-soft)] active:scale-95"
+      {/* Display Toggle Button */}
+      <div className="mt-4 flex justify-center shrink-0">
+        <button
+          type="button"
+          onClick={toggleRevealed}
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-2.5 text-xs font-medium text-[var(--focus-work-text-muted)] transition hover:border-[var(--focus-work-border-strong)] hover:bg-[var(--focus-work-surface-soft)] active:scale-95"
+        >
+          <span>{isRevealed ? '收起释义' : '显示释义'}</span>
+          <svg
+            className={`h-3.5 w-3.5 transition-transform duration-300 ${isRevealed ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            <span>{isRevealed ? '收起释义' : '显示释义'}</span>
-            <svg
-              className={`h-3.5 w-3.5 transition-transform duration-300 ${isRevealed ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
     </section>
   );
