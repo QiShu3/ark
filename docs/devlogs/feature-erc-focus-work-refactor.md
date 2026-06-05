@@ -2,7 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 11:14 · a70774d · feat(frontend): unify empty states for tasks and schedules with card layout and icons
+
+- 用户提出的需求：
+  - 再看看 ，怎么显示逻辑不一样 (选择方案 A 将任务与日程的空状态统一为卡片样式)
+
+- 本次完成的工作：
+  - **前端**：修改 `HomeRightDashboard.tsx`，将日程 (Schedules) 的空状态也改造成与任务 (Tasks) 相同的毛玻璃边框背景卡片样式 (`ark-home-empty-task`)，并补充了左侧日历图标 (`Calendar`) 占位与统一的提示文案 `"暂无近期日程"` / `"点击右上角安排今日日程"`。
+  - **前端**：优化了任务空状态的图标，由原来存在双层圆圈视觉缺陷的 `<Circle />` 图标更新为更能代表任务列表特征的 `<ListTodo />` 图标，消除视觉违和感。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-05 11:07 · 5de2cb3 · feat(frontend): remove 'View Full Entry' link from vocab today focus work
+
 
 - 用户提出的需求：
   - 去掉 背单词 专注工作 的 查看完整词条 功能
