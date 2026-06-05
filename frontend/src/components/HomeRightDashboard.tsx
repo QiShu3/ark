@@ -282,6 +282,41 @@ export default function HomeRightDashboard() {
 
   const currentWorkflowName = workflow?.workflow_name || defaultWorkflowName;
 
+  const nextFocusTaskLabel = useMemo(() => {
+    if (
+      !workflow ||
+      !workflow.phases ||
+      workflow.current_phase_index === null ||
+      workflow.current_phase_index === undefined
+    ) {
+      return '';
+    }
+
+    const nextFocusPhase = workflow.phases
+      .slice(workflow.current_phase_index + 1)
+      .find((p) => p.phase_type === 'focus');
+
+    if (!nextFocusPhase) {
+      return '无后续任务';
+    }
+
+    let taskLabel = '任务专注';
+    if (nextFocusPhase.task_id) {
+      taskLabel = tasks.find((t) => t.id === nextFocusPhase.task_id)?.title || '任务专注';
+    } else if (nextFocusPhase.focus_work_type) {
+      const FOCUS_WORK_LABELS: Record<string, string> = {
+        vocab_today: '今日单词',
+        erc_practice: 'ERC 真题练习',
+        erc_review: 'ERC 复习',
+        task_focus: '任务专注',
+      };
+      taskLabel = FOCUS_WORK_LABELS[nextFocusPhase.focus_work_type] ?? '应用任务';
+    }
+
+    const minutes = Math.round(nextFocusPhase.duration / 60);
+    return `${taskLabel} (${minutes}分钟)`;
+  }, [workflow, tasks]);
+
   async function handlePrimaryAction() {
     if (isSubmittingAction) return;
     setIsSubmittingAction(true);
@@ -413,9 +448,15 @@ export default function HomeRightDashboard() {
             </div>
 
             <div className="pb-1">
-              <div className="ark-home-timer-digits font-bold leading-none ark-font-display">
-                {formatTimer(timerSeconds)}
-              </div>
+              {workflowIsActive ? (
+                <div className="text-xl md:text-2xl font-bold text-ark-text tracking-wide leading-tight mt-1 mb-2 line-clamp-2 max-w-[280px]">
+                  下个任务：{nextFocusTaskLabel}
+                </div>
+              ) : (
+                <div className="ark-home-timer-digits font-bold leading-none ark-font-display">
+                  {formatTimer(timerSeconds)}
+                </div>
+              )}
               <div className="ark-home-timer-target mt-2 text-sm font-medium">
                 当前工作流：{currentWorkflowName}
               </div>
