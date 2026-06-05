@@ -313,8 +313,7 @@ export default function HomeRightDashboard() {
       taskLabel = FOCUS_WORK_LABELS[nextFocusPhase.focus_work_type] ?? '应用任务';
     }
 
-    const minutes = Math.round(nextFocusPhase.duration / 60);
-    return `${taskLabel} (${minutes}分钟)`;
+    return taskLabel;
   }, [workflow, tasks]);
 
   async function handlePrimaryAction() {
@@ -450,7 +449,7 @@ export default function HomeRightDashboard() {
             <div className="pb-1">
               {workflowIsActive ? (
                 <div className="text-xl md:text-2xl font-bold text-ark-text tracking-wide leading-tight mt-1 mb-2 line-clamp-2 max-w-[280px]">
-                  下个任务：{nextFocusTaskLabel}
+                  下一阶段：{nextFocusTaskLabel}
                 </div>
               ) : (
                 <div className="ark-home-timer-digits font-bold leading-none ark-font-display">

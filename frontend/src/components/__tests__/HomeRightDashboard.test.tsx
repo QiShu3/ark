@@ -159,7 +159,7 @@ describe('HomeRightDashboard', () => {
     expect(screen.getByText('考研英语')).toBeInTheDocument();
     expect(screen.getByText('今日单词')).toBeInTheDocument();
     expect(screen.getByText('ERC 真题练习')).toBeInTheDocument();
-    expect(screen.getByText('下个任务：ERC 真题练习 (25分钟)')).toBeInTheDocument();
+    expect(screen.getByText('下一阶段：ERC 真题练习')).toBeInTheDocument();
     expect(screen.queryByText('10:00')).not.toBeInTheDocument();
   });
 });
