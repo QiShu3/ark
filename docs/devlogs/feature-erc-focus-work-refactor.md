@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 10:55 · 49f571f · fix(frontend): append trailing slash to admin page redirection URL
+
+- 用户提出的需求：
+  - 后端报错了，看看什么问题 INFO: 127.0.0.1:51043 - "GET /todo/focus/workflow/current HTTP/1.1" 200 OK INFO: 127.0.0.1:51054 - "GET /admin HTTP/1.1" 307 Temporary Redirect INFO: 127.0.0.1:51060 - "GET / HTTP/1.1" 404 Not Found
+
+- 本次完成的工作：
+  - **前端**：将 `Navigation.tsx` 中“管理页面”的跳转链接从 `/admin` 调整为 `/admin/`（补齐末尾斜杠）。
+  - **原因分析**：没有斜杠访问 `/admin` 时，FastAPI 后端 `StaticFiles` 会发起 307 重定向。由于 Vite 代理配置 `changeOrigin: true`，后端在重构重定向目标时，将其指向了后端端口 `localhost:8000/admin/`，使得浏览器跳出了 Vite 开发端口 `localhost:5173`。跳出后，在 `localhost:8000` 域名下因无法读取前端 `localhost:5173` 域下的 localStorage `ark-auth` 用户信息，触发了 `app.js` 的未登录校验保护，被进一步重定向到 `/#/`，造成后端 404。通过补齐斜杠，直接请求 `/admin/`，避开了重定向，从而使端口和登录状态保持在 `5173` 前端域名下。
+  - **单元测试**：同步修改 `Navigation.test.tsx` 中的断言以适配带斜杠路径 `/admin/`。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test run` — 52 个测试文件、236 个测试用例全部通过 ✅
+
 ### 2026-06-05 10:52 · 6d56b0f · feat(frontend): add admin page redirect option in user profile dropdown menu
 
 - 用户提出的需求：
