@@ -116,12 +116,35 @@ describe('Navigation', () => {
     renderNavigation('/apps');
 
     await user.click(screen.getByRole('button', { name: '打开用户菜单' }));
+    expect(screen.queryByRole('button', { name: '管理页面' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'UI 组件库' })).not.toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: '退出登录' }));
 
     expect(useAuthStore.getState().token).toBeNull();
     expect(useAuthStore.getState().expiresAt).toBeNull();
     expect(useAuthStore.getState().user).toBeNull();
     expect(screen.getByTestId('current-path')).toHaveTextContent('/login');
+  });
+
+  it('shows the admin dashboard entry for admins and redirects to it', async () => {
+    const user = userEvent.setup();
+    mockApiJson.mockResolvedValue(null);
+
+    const originalLocation = window.location;
+    delete (window as any).location;
+    (window as any).location = { ...originalLocation, href: '' };
+
+    renderNavigation('/apps', { is_admin: true });
+
+    await user.click(screen.getByRole('button', { name: '打开用户菜单' }));
+    const adminButton = screen.getByRole('button', { name: '管理页面' });
+    expect(adminButton).toBeInTheDocument();
+
+    await user.click(adminButton);
+    expect(window.location.href).toBe('/admin');
+
+    (window as any).location = originalLocation;
   });
 
   it('shows the UI library entry for admins and navigates to it', async () => {

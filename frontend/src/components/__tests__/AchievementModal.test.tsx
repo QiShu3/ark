@@ -110,7 +110,7 @@ describe('AchievementModal', () => {
     expect(document.documentElement.style.overflow).toBe('hidden');
 
     await act(async () => {
-      screen.getByRole('dialog', { name: '成就弹窗' }).closest('.ark-modal-backdrop')?.click();
+      (screen.getByRole('dialog', { name: '成就弹窗' }).closest('.ark-modal-backdrop') as HTMLElement | null)?.click();
     });
 
     expect(screen.getByRole('dialog', { name: '成就弹窗' })).toBeInTheDocument();

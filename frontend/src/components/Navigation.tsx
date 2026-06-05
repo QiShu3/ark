@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
 import confetti from 'canvas-confetti';
-import { Bell, BookOpen, CalendarDays, LogOut, Monitor, Moon, Palette, Settings, Sun } from 'lucide-react';
+import { Bell, BookOpen, CalendarDays, LayoutDashboard, LogOut, Monitor, Moon, Palette, Settings, Sun } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
 import { restartFirstGuide } from '../lib/onboardingEvents';
@@ -158,6 +158,11 @@ const Navigation: React.FC = () => {
     navigate('/');
   }
 
+  function openAdminDashboard() {
+    setAvatarMenuOpen(false);
+    window.location.href = '/admin';
+  }
+
   function openAdminUiLibrary() {
     setAvatarMenuOpen(false);
     navigate('/admin/ui');
@@ -269,14 +274,24 @@ const Navigation: React.FC = () => {
                 <div className="absolute right-0 top-full z-50 mt-3 w-48 overflow-hidden rounded-2xl border border-ark-border bg-ark-overlay p-2 text-ark-text shadow-xl backdrop-blur-xl">
                   <div className="px-3 py-2 text-sm font-medium text-ark-text">{user.username}</div>
                   {user.is_admin ? (
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
-                      onClick={openAdminUiLibrary}
-                    >
-                      <Palette className="h-4 w-4" aria-hidden="true" />
-                      UI 组件库
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
+                        onClick={openAdminDashboard}
+                      >
+                        <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                        管理页面
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ark-text-muted transition-colors hover:bg-ark-surface-subtle hover:text-ark-text"
+                        onClick={openAdminUiLibrary}
+                      >
+                        <Palette className="h-4 w-4" aria-hidden="true" />
+                        UI 组件库
+                      </button>
+                    </>
                   ) : null}
                   <button
                     type="button"
