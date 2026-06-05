@@ -2,18 +2,27 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
-### 2026-06-05 16:11 · 1bb5869 · fix(frontend): handle null activeDeck in VocabTodayFocusWork and add loading/error checks
+### 2026-06-05 16:32 · b8b950a · feat(vocab): redesign vocabulary study card UI and support keyboard shortcuts & queue navigation in focus work
 
 - 用户提出的需求：
-  - “/browser 怎么点击再来一次没有反应？”
+  - “后者是我的原型图，你有什么看法吗？”
+  - 设计包含：
+    - 毛玻璃/拟态卡片背景与径向渐变科技微光；
+    - 多节点横向批次进度条；
+    - 带有彩色状态图标及按键呼吸光效的记忆反馈按钮；
+    - 键盘快捷键支持：数字键 1-4 选择等级，Space/Enter 展开释义，←/→ 可以在本批次未提交单词间左右切换浏览；
+    - 极简底部提示（不包含学习设置按钮）。
 
 - 本次完成的工作：
-  - **修复词书空状态显示逻辑**：重构 `VocabTodayFocusWork.tsx`，对 `useVocabDeck()` 返回的 `loading`、`error` 状态进行捕获和分流渲染。当未加载到任何已发布的词书（`activeDeck` 为 `null`）时，不再错误展示 misleading 的“今天这本词书的单词已经完成了。”，而是显示“暂无可用的词书”并指导用户联系管理员发布。
-  - **添加针对性单元测试**：在 `VocabTodayFocusWork.test.tsx` 中新增对 `loading` 状态、`error` 状态以及 `activeDeck` 空状态的单元测试用例，全部顺利通过。
-  - **后台数据库调试**：排查并发现开发环境中的词书 `考研英语` 为“未上架”状态（`is_published = False`），导致 API 无法返回任何可用词书，已在数据库将其变更为“已上架”状态。
+  - **队列与会话导航改造**：在 [useVocabReviewQueue.ts](file:///Users/qishu/Project/ark/frontend/src/hooks/vocab/useVocabReviewQueue.ts) 中新增 `goToNext`/`goToPrev` 切换未提交词逻辑，并更新 `consumeCurrent`/`requeueCurrent` 为 index-aware 版本；在 [useVocabTodaySession.ts](file:///Users/qishu/Project/ark/frontend/src/hooks/vocab/useVocabTodaySession.ts) 中对齐暴露上述方法。
+  - **单词与测试卡片拟态升级**：在 [StudyCard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/StudyCard.tsx) 和 [QuizRenderer.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/QuizRenderer.tsx) 中重构为居中排版、带有径向渐变微光背景的玻璃质感卡片，提取 translations 中的词性（POS）以胶囊 badge 显示，折叠按钮移至卡片下方正中并配有旋转动画。
+  - **键盘快捷键与主视图升级**：在 [VocabTodayFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/VocabTodayFocusWork.tsx) 中将 `revealed` 展开状态交由父组件控制并在切词时自动收起，整合 `useEffect` 键盘事件绑定（1-4 提交，Space/Enter 展开，左右箭头导航），设计包含节点高亮的渐变进度条，将四种记忆选项改造成大卡片式的彩色表情按钮，并在底部展示统一的快捷键说明栏。
+  - **自检与 linter 修复**：清理了 `VocabTodayFocusWork.test.tsx` 中的旧失效测试，将 `VocabTodayFocusWork.tsx` 与 `useVocabReviewQueue.ts` 中的 `any` 类型声明与 Hook 依赖缺失全部修正至 lint-free。
 
 - 验证情况：
-  - 运行 `pnpm test -- --run` 全量前端 Vitest 单元测试 239 个全部通过。
+  - 前端 Vitest 单元测试运行 `pnpm test run vocab` 全部 22 个用例成功通过。
+  - 运行 `pnpm check` 类型检查完全通过（0 报错）。
+  - 运行 `pnpm lint` 验证修改文件均完全符合 ESLint 校验。
 
 ### 2026-06-05 16:04 · e4232aa · feat(vocab): add server-side pagination and example sentence rendering to vocab admin page
 
