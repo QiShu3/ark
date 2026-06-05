@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 15:07 · 3f08b65 · refactor(frontend): change active timer card label to '下个任务' and display name without prefix
+
+- 用户提出的需求：
+  - 那边 当前工作流的状态标签 改成 下个任务 吧，第二行直接显示下一任务名字
+
+- 本次完成的工作：
+  - **前端**：修改 `HomeRightDashboard.tsx`，将激活状态下倒计时卡片第一行的状态标签改为 **`"下个任务"`**。
+  - **前端**：将第二行（原倒计时数字位置）修改为直接渲染下一个任务的名称，去掉原有的 `"下个任务："` / `"下一阶段："` 前缀。
+  - **单元测试**：同步修改 `HomeRightDashboard.test.tsx` 中的断言以适配该变化。
+
+- 验证情况：
+  - `pnpm check` — 验证通过，无编译错误 ✅
+  - `pnpm test` — 52 个测试文件、236 个测试用例全部成功通过 ✅
+
 ### 2026-06-05 15:05 · 102cb69 · refactor(frontend): use '下一阶段：' prefix for next task display in active timer card
 
 - 用户提出的需求：
