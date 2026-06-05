@@ -2,6 +2,20 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 18:07 · 0a7d05d · feat(vocab): stabilize card layout height and add smooth fade-in transitions
+
+- 用户提出的需求：
+  - “显示 释义 前/后，容器高度会发生变化，不好看，你有什么看法吗？”
+  - 稳定卡片在展开释义前后的物理高度，消除下方记忆反馈按钮的抖动，并为显现的翻译和例句添加平缓淡入过渡动画。
+
+- 本次完成的工作：
+  - **CSS 淡入渐变类新增**：在 [index.css](file:///Users/qishu/Project/ark/frontend/src/index.css) 末尾新增了 `@keyframes fadeIn` 和 `.animate-fade-in`，实现 0.25 秒淡入并伴随 4px 向上平滑浮动的动画。
+  - **单词卡片高度稳定**：在 [StudyCard.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/StudyCard.tsx) 的卡片主容器中，将高度样式限定为最小高度 `min-h-[360px]` 并使用 `flex flex-col justify-center` 垂直对齐，确保展开释义时整体高度不再抖动；并在中文释义和英文例句容器上添加 `.animate-fade-in` 动效类。
+  - **测试卡片高度对齐**：同步在 [QuizRenderer.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/QuizRenderer.tsx) 中追加 `min-h-[360px]` 和垂直居中，确保 review/study 模式切换时容器物理高度绝对恒定。
+
+- 验证情况：
+  - Vitest 单元测试运行通过。
+
 ### 2026-06-05 16:48 · c13e040 · fix(vocab): restrict word highlight to word boundaries in example sentence
 
 - 用户提出的需求：
