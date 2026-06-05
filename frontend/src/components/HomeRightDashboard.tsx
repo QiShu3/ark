@@ -443,13 +443,13 @@ export default function HomeRightDashboard() {
           <div className="relative z-10 flex h-full min-h-[120px] flex-col justify-between">
             <div className="ark-home-timer-phase flex items-center gap-2 text-base font-semibold">
               <span className="ark-home-timer-phase-dot h-2.5 w-2.5 rounded-full" />
-              {phaseLabel}
+              {workflowIsActive ? '下个任务' : phaseLabel}
             </div>
 
             <div className="pb-1">
               {workflowIsActive ? (
                 <div className="text-xl md:text-2xl font-bold text-ark-text tracking-wide leading-tight mt-1 mb-2 line-clamp-2 max-w-[280px]">
-                  下一阶段：{nextFocusTaskLabel}
+                  {nextFocusTaskLabel}
                 </div>
               ) : (
                 <div className="ark-home-timer-digits font-bold leading-none ark-font-display">
