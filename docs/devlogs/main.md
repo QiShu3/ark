@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-05 16:04 · e4232aa · feat(vocab): add server-side pagination and example sentence rendering to vocab admin page
+
+- 用户提出的需求：
+  - “1. 可以分页展示”
+  - “2. 增加 例句 字段”
+  - “1. 默认只显示第一个例句”
+  - “2. 默认单页只有30个单词”
+
+- 本次完成的工作：
+  - 在 [repository.py](file:///Users/qishu/Project/ark/backend/routes/vocab/repository.py) 中实现了 `count_admin_deck_words`、`list_admin_deck_words_paginated`、`list_translations_for_word_ids` 和 `list_sentences_for_word_ids` 数据库分页辅助函数。
+  - 修改 [admin_routes.py](file:///Users/qishu/Project/ark/backend/routes/admin_routes.py) 的 `/apps/vocab/decks/{deck_id}` 接口和相关数据模型，支持 `page`/`limit`/`search` 查询参数，并将 limit 默认设定为 30。
+  - 在前端 HTML [apps-vocab-deck.html](file:///Users/qishu/Project/ark/backend/web/admin/apps-vocab-deck.html) 中添加“例句”列，并设计了分页控制器及例句气泡框样式。
+  - 在前端 JS [apps.js](file:///Users/qishu/Project/ark/backend/web/admin/js/apps.js) 中重构单词拉取与渲染机制，增加防抖搜索与动态分页条交互逻辑，默认单页加载 30 个单词且只渲染第一个例句。
+
+- 验证情况：
+  - 后端 pytest 单元测试（共 175 个）100% 成功通过。
+
 ### 2026-06-04 15:12 · 19def99 · merge: merge feature/workflow-column-layout into main
 
 - 用户提出的需求：
