@@ -2,6 +2,30 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-07 01:50 · 6da4af4 · feat(ios): add native iPad app shell
+
+- 用户提出的需求：
+  - “可以先做ipad端的吗？”
+  - “目标是 再 ipad端复刻一遍专注流程”
+  - “在web端点击开始学习后会出现工作流弹窗，你看看，iPad则没有，还是要一步步对一下”
+  - “还有一个重要功能：就是左上角的 考研英语 ，你在web端和代码层面仔细看看它的功能”
+  - “纳入版本控制吧”
+
+- 本次完成的工作：
+  - **新增原生 iPad 工程**：创建 [ios/ArkMobile](file:///Users/qishu/Project/ark/ios/ArkMobile) SwiftUI 工程，接入登录会话、API 客户端、主题、首页 Shell、任务、词汇、ERC、专注和设置等基础模块。
+  - **复刻首页与专注入口**：实现 iPad 首页主事件、开始学习、任务/日程概览、工作流启动选择、专注流程弹窗、专注结果提交与工作流完成提示。
+  - **复刻左上角“考研英语”事件工作台**：实现事件总览、事件基本信息编辑、任务/日程/工作流安排、应用配置、任务/日程增删改，以及工作流新建、编辑、复制、删除。
+  - **对齐 Web 工作流编辑体验**：将 iPad 工作流编辑器改为 Web 同款“学习阶段”卡片视图，支持工作流名称、图标选择、阶段任务绑定、计时方式、专注时长、休息时长和阶段增删。
+  - **后端默认工作流副作用修复**：修复 [routes.py](file:///Users/qishu/Project/ark/backend/routes/todo/routes.py) 中事件工作流 PATCH 会强制取消 `is_default` 的问题，避免 iPad 保存事件工作流后把默认工作流从“考研英语”误切到其他工作流。
+  - **版本控制清理**：将 Xcode 本地构建目录 `ios/ArkMobile/.DerivedData/` 加入 `.gitignore`，只纳入源码、资源与工程配置。
+
+- 验证情况：
+  - iPad Simulator 使用 `iPad Pro 13-inch (M5)` 构建运行成功，`xcodebuild` 无警告/错误。
+  - 通过 XcodeBuildMCP 验证：左上角“考研英语”入口、事件工作台、应用配置、任务/日程增删改、工作流编辑/复制/删除、工作流阶段组编辑和保存。
+  - 使用 in-app browser 对 Web 端工作流编辑弹窗截图对比，确认 iPad 阶段组视图和 Web 交互模型对齐。
+  - 后端回归测试通过：`cd backend && uv run pytest tests/test_todo_routes.py -k event_workflows_surface_in_global_list_but_stay_event_managed`。
+  - API 回查确认本地默认工作流恢复为“考研英语”，iPad 再次保存后仍保持 `is_default: true`。
+
 ### 2026-06-05 18:25 · 311bc5d · feat(workflow): add set default button on hover in workflow presets launcher list
 
 - 用户提出的需求：
