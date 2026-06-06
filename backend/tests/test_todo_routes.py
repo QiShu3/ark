@@ -4542,6 +4542,18 @@ def test_event_workflows_surface_in_global_list_but_stay_event_managed(monkeypat
     assert update_resp.json()["name"] == "期末冲刺改"
     assert update_resp.json()["is_default"] is False
 
+    set_default_resp = client.post(f"/todo/focus/workflows/{created['id']}/default")
+    assert set_default_resp.status_code == 200
+    assert set_default_resp.json()["is_default"] is True
+
+    preserve_default_resp = client.patch(
+        f"/todo/events/{event_id}/workflows/{created['id']}",
+        json={"icon": "book"},
+    )
+    assert preserve_default_resp.status_code == 200
+    assert preserve_default_resp.json()["icon"] == "book"
+    assert preserve_default_resp.json()["is_default"] is True
+
     delete_resp = client.delete(f"/todo/events/{event_id}/workflows/{created['id']}")
     assert delete_resp.status_code == 200
     assert delete_resp.json()["ok"] is True

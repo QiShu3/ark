@@ -63,3 +63,6 @@ docs/superpowers/plans/2026-05-01-frontend-architecture-diagram.md
 
 # Runtime logs
 backend/logs/
+
+# Xcode local build output
+ios/ArkMobile/.DerivedData/

@@ -2367,7 +2367,7 @@ async def update_event_workflow(
             row = await conn.fetchrow(
                 f"""
                 UPDATE focus_workflow_presets
-                SET {", ".join(sets)}, is_default = FALSE, updated_at = NOW()
+                SET {", ".join(sets)}, updated_at = NOW()
                 WHERE id = ${p_i} AND user_id = ${u_i} AND event_id = ${e_i}
                 RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
