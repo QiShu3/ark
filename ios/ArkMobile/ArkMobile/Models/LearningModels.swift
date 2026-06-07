@@ -20,6 +20,26 @@ struct VocabTodaySummary: Decodable {
     let memorizedCount: Int
 }
 
+struct VocabOverview: Decodable {
+    let completedDeckCount: Int
+    let totalDeckCount: Int
+    let masteredWordCount: Int
+    let currentDeck: VocabOverviewCurrentDeck
+}
+
+struct VocabOverviewCurrentDeck: Decodable {
+    let deckId: String
+    let deckName: String
+    let totalWordCount: Int
+    let masteredWordCount: Int
+    let learningWordCount: Int
+    let unstartedWordCount: Int
+}
+
+struct VocabTodaySettingsPayload: Encodable {
+    let totalTargetCount: Int
+}
+
 struct VocabTranslation: Decodable, Identifiable {
     let pos: String?
     let translation: String
@@ -61,7 +81,7 @@ struct VocabReviewItem: Decodable, Identifiable {
     let masteryScore: Double?
 }
 
-struct VocabWordDetail: Decodable {
+struct VocabWordDetail: Decodable, Identifiable {
     let id: String
     let deckId: String
     let word: String
@@ -70,6 +90,19 @@ struct VocabWordDetail: Decodable {
     let translations: [VocabTranslation]
     let phrases: [VocabPhrase]
     let sentences: [VocabSentence]
+}
+
+struct VocabMistakeItem: Decodable, Identifiable {
+    let id: String
+    let deckId: String
+    let word: String
+    let usPronunciation: String?
+    let ukPronunciation: String?
+    let translations: [VocabTranslation]
+    let phrases: [VocabPhrase]
+    let sentences: [VocabSentence]
+    let lastWrongAt: String?
+    let wrongCount: Int
 }
 
 struct VocabCurrentWordBrief: Decodable, Identifiable {
@@ -109,6 +142,16 @@ struct ERCOverview: Decodable {
     let accuracy: Double?
     let mistakeCount: Int?
     let recommendedArticle: ERCRecommendedArticle?
+}
+
+struct ERCSet: Decodable, Identifiable {
+    let id: String
+    let key: String
+    let name: String
+    let description: String
+    let exam: String
+    let articleCount: Int
+    let questionCount: Int
 }
 
 struct ERCRecommendedArticle: Decodable {
@@ -211,6 +254,24 @@ struct ERCArticleSubmitItem: Decodable, Identifiable {
     }
 }
 
+struct ERCMistakeItem: Decodable, Identifiable {
+    let articleId: String
+    let year: Int
+    let textNo: Int
+    let questionId: String
+    let questionNo: Int
+    let stem: String
+    let correctOption: String
+    let lastChosenOption: String?
+    let wrongCount: Int
+    let lastWrongAt: String
+    let isDue: Bool
+
+    var id: String {
+        questionId
+    }
+}
+
 struct ERCArticleVocabularyWord: Decodable, Identifiable {
     let word: String
     let state: String
@@ -276,4 +337,25 @@ struct ERCPracticeAppTaskInitPayload: Encodable {
     let defaultFocusDuration: Int
     let addToTodayPlan: Bool
     let dailyArticleTarget: Int
+}
+
+struct ERCConfigSavePayload: Encodable {
+    let eventId: String?
+    let practiceEnabled: Bool
+    let reviewEnabled: Bool
+    let practice: ERCPracticeConfigPayload
+    let review: ERCReviewConfigPayload
+}
+
+struct ERCPracticeConfigPayload: Encodable {
+    let dailyArticleTarget: Int
+    let defaultFocusDuration: Int
+    let addToTodayPlan: Bool
+}
+
+struct ERCReviewConfigPayload: Encodable {
+    let reviewScope: String
+    let dailyQuestionTarget: Int
+    let defaultFocusDuration: Int
+    let addToTodayPlan: Bool
 }

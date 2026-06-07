@@ -45,7 +45,9 @@ struct ArkShellScreen: View {
                         }
                     } else {
                         NavigationStack {
-                            AppDetailView(selection: selection ?? .home)
+                            AppDetailView(selection: selection ?? .home) { section in
+                                selection = section
+                            }
                                 .toolbar(.hidden, for: .navigationBar)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -2947,27 +2949,6 @@ private struct VocabAppTaskPayload: Encodable {
     let eventId: String
 }
 
-private struct ERCConfigSavePayload: Encodable {
-    let eventId: String
-    let practiceEnabled: Bool
-    let reviewEnabled: Bool
-    let practice: ERCPracticeConfigPayload
-    let review: ERCReviewConfigPayload
-}
-
-private struct ERCPracticeConfigPayload: Encodable {
-    let dailyArticleTarget: Int
-    let defaultFocusDuration: Int
-    let addToTodayPlan: Bool
-}
-
-private struct ERCReviewConfigPayload: Encodable {
-    let reviewScope: String
-    let dailyQuestionTarget: Int
-    let defaultFocusDuration: Int
-    let addToTodayPlan: Bool
-}
-
 private func phaseDisplayTitle(_ phase: WorkflowPresetPhase) -> String {
     if phase.phaseType == "break" {
         return ""
@@ -3786,7 +3767,7 @@ private struct HomeGlassDashboard: View {
             HStack(spacing: 10) {
                 ShortcutCard(symbol: "chart.bar.xaxis", title: "数据分析", subtitle: "学习数据可视化") { onRefresh() }
                 ShortcutCard(symbol: "trophy", title: "成就", subtitle: "解锁成长里程碑") { onRefresh() }
-                ShortcutCard(symbol: "shippingbox", title: "应用中心", subtitle: "更多学习工具") { onNavigate(.vocab) }
+                ShortcutCard(symbol: "shippingbox", title: "应用中心", subtitle: "更多学习工具") { onNavigate(.apps) }
             }
             .frame(height: 104)
 

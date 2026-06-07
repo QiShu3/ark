@@ -21,6 +21,8 @@
 		A1000000000000000000000C /* TasksScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* TasksScreen.swift */; };
 		A1000000000000000000000D /* FocusScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* FocusScreen.swift */; };
 		A10000000000000000000014 /* FocusWorkOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* FocusWorkOverlay.swift */; };
+		A10000000000000000000017 /* FocusWorkRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* FocusWorkRegistry.swift */; };
+		A10000000000000000000016 /* AppCenterScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* AppCenterScreen.swift */; };
 		A1000000000000000000000E /* VocabScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* VocabScreen.swift */; };
 		A1000000000000000000000F /* ERCScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* ERCScreen.swift */; };
 		A10000000000000000000010 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* SettingsScreen.swift */; };
@@ -45,6 +47,8 @@
 		A2000000000000000000000C /* TasksScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksScreen.swift; sourceTree = "<group>"; };
 		A2000000000000000000000D /* FocusScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScreen.swift; sourceTree = "<group>"; };
 		A20000000000000000000015 /* FocusWorkOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusWorkOverlay.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* FocusWorkRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusWorkRegistry.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* AppCenterScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCenterScreen.swift; sourceTree = "<group>"; };
 		A2000000000000000000000E /* VocabScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocabScreen.swift; sourceTree = "<group>"; };
 		A2000000000000000000000F /* ERCScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ERCScreen.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
@@ -139,6 +143,7 @@
 				A4000000000000000000000A /* Home */,
 				A4000000000000000000000B /* Tasks */,
 				A4000000000000000000000C /* Focus */,
+				A40000000000000000000011 /* AppCenter */,
 				A4000000000000000000000D /* Vocab */,
 				A4000000000000000000000E /* ERC */,
 				A4000000000000000000000F /* Settings */,
@@ -149,7 +154,8 @@
 		A40000000000000000000009 /* Auth */ = {isa = PBXGroup; children = (A2000000000000000000000A /* LoginScreen.swift */,); path = Auth; sourceTree = "<group>"; };
 		A4000000000000000000000A /* Home */ = {isa = PBXGroup; children = (A20000000000000000000012 /* ArkShellScreen.swift */, A2000000000000000000000B /* HomeDashboardScreen.swift */,); path = Home; sourceTree = "<group>"; };
 		A4000000000000000000000B /* Tasks */ = {isa = PBXGroup; children = (A2000000000000000000000C /* TasksScreen.swift */,); path = Tasks; sourceTree = "<group>"; };
-		A4000000000000000000000C /* Focus */ = {isa = PBXGroup; children = (A2000000000000000000000D /* FocusScreen.swift */, A20000000000000000000015 /* FocusWorkOverlay.swift */,); path = Focus; sourceTree = "<group>"; };
+		A4000000000000000000000C /* Focus */ = {isa = PBXGroup; children = (A2000000000000000000000D /* FocusScreen.swift */, A20000000000000000000015 /* FocusWorkOverlay.swift */, A20000000000000000000018 /* FocusWorkRegistry.swift */,); path = Focus; sourceTree = "<group>"; };
+		A40000000000000000000011 /* AppCenter */ = {isa = PBXGroup; children = (A20000000000000000000017 /* AppCenterScreen.swift */,); path = AppCenter; sourceTree = "<group>"; };
 		A4000000000000000000000D /* Vocab */ = {isa = PBXGroup; children = (A2000000000000000000000E /* VocabScreen.swift */,); path = Vocab; sourceTree = "<group>"; };
 		A4000000000000000000000E /* ERC */ = {isa = PBXGroup; children = (A2000000000000000000000F /* ERCScreen.swift */,); path = ERC; sourceTree = "<group>"; };
 		A4000000000000000000000F /* Settings */ = {isa = PBXGroup; children = (A20000000000000000000010 /* SettingsScreen.swift */,); path = Settings; sourceTree = "<group>"; };
@@ -239,6 +245,8 @@
 				A1000000000000000000000C /* TasksScreen.swift in Sources */,
 				A1000000000000000000000D /* FocusScreen.swift in Sources */,
 				A10000000000000000000014 /* FocusWorkOverlay.swift in Sources */,
+				A10000000000000000000017 /* FocusWorkRegistry.swift in Sources */,
+				A10000000000000000000016 /* AppCenterScreen.swift in Sources */,
 				A1000000000000000000000E /* VocabScreen.swift in Sources */,
 				A1000000000000000000000F /* ERCScreen.swift in Sources */,
 				A10000000000000000000010 /* SettingsScreen.swift in Sources */,

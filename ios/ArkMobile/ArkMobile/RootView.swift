@@ -2,7 +2,13 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var session: AppSession
-    @State private var selection: AppSection? = .home
+    @State private var selection: AppSection?
+
+    init() {
+        let initialSection = ProcessInfo.processInfo.environment["ARK_INITIAL_SECTION"]
+            .flatMap(AppSection.init(rawValue:)) ?? .home
+        _selection = State(initialValue: initialSection)
+    }
 
     var body: some View {
         Group {
@@ -22,6 +28,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case home
     case tasks
     case focus
+    case apps
     case vocab
     case erc
     case settings
@@ -33,6 +40,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: "首页"
         case .tasks: "今日安排"
         case .focus: "专注"
+        case .apps: "应用中心"
         case .vocab: "Vocab"
         case .erc: "ERC"
         case .settings: "设置"
@@ -44,6 +52,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: "house"
         case .tasks: "calendar"
         case .focus: "timer"
+        case .apps: "shippingbox"
         case .vocab: "textformat.abc"
         case .erc: "book.pages"
         case .settings: "gearshape"
@@ -66,6 +75,7 @@ struct AppSidebar: View {
 
 struct AppDetailView: View {
     let selection: AppSection
+    let onNavigate: (AppSection) -> Void
 
     var body: some View {
         switch selection {
@@ -75,6 +85,8 @@ struct AppDetailView: View {
             TasksScreen()
         case .focus:
             FocusScreen()
+        case .apps:
+            AppCenterScreen(onNavigate: onNavigate)
         case .vocab:
             VocabScreen()
         case .erc:

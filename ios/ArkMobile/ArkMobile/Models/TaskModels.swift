@@ -115,7 +115,21 @@ struct ERCModuleStatus: Decodable {
     let state: String
     let taskId: String?
     let configId: String?
+    let completionState: TaskCompletionState?
+    let blockedReason: String?
     let config: [String: JSONPrimitive]
+    let confirmationNeeded: Bool
+}
+
+struct TaskCompletionState: Decodable {
+    let completionState: String
+    let isCompletableNow: Bool
+    let completedCountInPeriod: Int
+    let remainingCompletionsInPeriod: Int
+    let currentPeriodStart: String?
+    let currentPeriodEnd: String?
+    let blockedReason: String?
+    let hiddenFromActionList: Bool
 }
 
 enum JSONPrimitive: Decodable {

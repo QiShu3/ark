@@ -21,6 +21,7 @@ struct FocusWorkOverlay: View {
     var body: some View {
         Group {
             if shouldShow, let workflow, let focusWorkType = workflow.activeFocusWorkType {
+                let definition = FocusWorkRegistry.definition(for: focusWorkType)
                 ZStack {
                     LinearGradient(
                         colors: [
@@ -35,8 +36,8 @@ struct FocusWorkOverlay: View {
                     VStack(spacing: 18) {
                         FocusWorkOverlayHeader(
                             workflow: workflow,
-                            title: focusTitle(focusWorkType),
-                            subtitle: focusSubtitle(focusWorkType),
+                            title: definition.title,
+                            subtitle: definition.subtitle,
                             timerText: overlayTimerText(workflow.liveTimerSeconds(now: timerNow)),
                             isBusy: isBusy,
                             onPauseResume: { Task { await togglePause() } },
@@ -45,7 +46,7 @@ struct FocusWorkOverlay: View {
                         )
 
                         ZStack {
-                            focusContent(type: focusWorkType, workflow: workflow)
+                            definition.render(workflow, focusWorkRuntimeActions)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .opacity(workflow.isPaused == true ? 0.35 : 1)
                                 .allowsHitTesting(workflow.isPaused != true)
@@ -110,35 +111,11 @@ struct FocusWorkOverlay: View {
         }
     }
 
-    @ViewBuilder
-    private func focusContent(type: String, workflow: FocusWorkflow) -> some View {
-        switch type {
-        case "vocab_today":
-            VocabFocusWorkContent(
-                isPaused: workflow.isPaused == true,
-                onCompleteTaskAndFinish: { await completeTaskAndFinishCurrentFocus() },
-                onStopFocus: { await stopFocus() }
-            )
-        case "erc_review":
-            ERCReviewFocusWorkContent(
-                isPaused: workflow.isPaused == true,
-                onCompleteTaskAndFinish: { await completeTaskAndFinishCurrentFocus() },
-                onStopFocus: { await stopFocus() }
-            )
-        case "erc_practice":
-            ERCPracticeFocusWorkContent(
-                isPaused: workflow.isPaused == true,
-                onCompleteTaskAndFinish: { _ = await completeTaskAndFinishCurrentFocus() },
-                onStopFocus: { await stopFocus() }
-            )
-        default:
-            FocusWorkPlaceholderCard(
-                symbol: "timer",
-                title: "任务专注",
-                subtitle: "这里应该承载 TaskFocusWork：当前任务内容和完成动作。",
-                taskTitle: workflow.taskTitle
-            )
-        }
+    private var focusWorkRuntimeActions: FocusWorkRuntimeActions {
+        FocusWorkRuntimeActions(
+            completeTaskAndFinish: { await completeTaskAndFinishCurrentFocus() },
+            stopFocus: { await stopFocus() }
+        )
     }
 
     private func load() async {
@@ -296,23 +273,6 @@ struct FocusWorkOverlay: View {
         }
     }
 
-    private func focusTitle(_ type: String) -> String {
-        switch type {
-        case "vocab_today": "今日单词"
-        case "erc_review": "开始复习"
-        case "erc_practice": "真题练习"
-        default: "任务专注"
-        }
-    }
-
-    private func focusSubtitle(_ type: String) -> String {
-        switch type {
-        case "vocab_today": "背单词"
-        case "erc_review", "erc_practice": "ERC 阅读理解"
-        default: "自定义任务"
-        }
-    }
-
     private func overlayTimerText(_ seconds: Int) -> String {
         let safeSeconds = max(0, seconds)
         let minutes = safeSeconds / 60
@@ -321,7 +281,7 @@ struct FocusWorkOverlay: View {
     }
 }
 
-private struct ERCReviewFocusWorkContent: View {
+struct ERCReviewFocusWorkContent: View {
     @EnvironmentObject private var session: AppSession
     let isPaused: Bool
     let onCompleteTaskAndFinish: () async -> Bool
@@ -768,7 +728,7 @@ private struct ERCReviewOptionButton: View {
     }
 }
 
-private struct ERCPracticeFocusWorkContent: View {
+struct ERCPracticeFocusWorkContent: View {
     @EnvironmentObject private var session: AppSession
     let isPaused: Bool
     let onCompleteTaskAndFinish: () async -> Void
@@ -1268,7 +1228,7 @@ private struct ERCPracticeOptionButton: View {
     }
 }
 
-private struct VocabFocusWorkContent: View {
+struct VocabFocusWorkContent: View {
     @EnvironmentObject private var session: AppSession
     let isPaused: Bool
     let onCompleteTaskAndFinish: () async -> Bool
@@ -2122,41 +2082,6 @@ private struct PauseOverlayCard: View {
                     .stroke(.white.opacity(0.55), lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.15), radius: 28, x: 0, y: 14)
-        }
-    }
-}
-
-private struct FocusWorkPlaceholderCard: View {
-    let symbol: String
-    let title: String
-    let subtitle: String
-    let taskTitle: String?
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: symbol)
-                .font(.system(size: 72, weight: .semibold))
-                .foregroundStyle(ArkTheme.accent)
-            Text(title)
-                .font(.system(size: 44, weight: .heavy, design: .rounded))
-            Text(subtitle)
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 760)
-            if let taskTitle {
-                Text(taskTitle)
-                    .font(.headline)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial, in: Capsule())
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(.white.opacity(0.55), lineWidth: 1)
         }
     }
 }

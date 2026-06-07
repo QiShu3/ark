@@ -20,6 +20,10 @@ struct APIClient {
         try await request(path, method: "POST", token: token, body: Optional<EmptyBody>.none)
     }
 
+    func put<T: Decodable, Body: Encodable>(_ path: String, token: String? = nil, body: Body) async throws -> T {
+        try await request(path, method: "PUT", token: token, body: body)
+    }
+
     func patch<T: Decodable, Body: Encodable>(_ path: String, token: String? = nil, body: Body) async throws -> T {
         try await request(path, method: "PATCH", token: token, body: body)
     }
