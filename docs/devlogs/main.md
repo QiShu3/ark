@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-07 14:56 · ca6f932 · feat(ios): add AppCenter and unify Vocab/ERC sub-app UI with FocusWorkRegistry
+
+- 用户提出的需求：
+  - 根据修改内容本地帮我提交一下
+
+- 本次完成的工作：
+  - **新增应用中心屏幕**：新增了 [AppCenterScreen.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/Screens/AppCenter/AppCenterScreen.swift)，支持快捷切换并跳转至背单词（Vocab）与阅读训练（ERC）原生子应用页面。
+  - **提取与重构专注渲染机制**：新增并实现了注册器 [FocusWorkRegistry.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/Screens/Focus/FocusWorkRegistry.swift)，将原本混合在 [FocusWorkOverlay.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/Screens/Focus/FocusWorkOverlay.swift) 中的专注渲染逻辑彻底抽离解耦，实现动态注册与配置。
+  - **组件化与视觉风格统一**：在 [ArkTheme.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/Design/ArkTheme.swift) 中扩展封装了多个通用的子应用原生 UI 控件，包括 `SubAppTabSwitcher`、`SubAppHeroCard`、`SubAppLaunchCard`、`SubAppSettingsFormScreen` 以及 `ProgressRing` 等，并在 Vocab 和 ERC 两个大子应用中完成完全重构与继承。
+  - **数据层与路由集成**：在 [RootView.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/RootView.swift) 与 [ArkShellScreen.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/Screens/Home/ArkShellScreen.swift) 中完成了 `AppCenter` 导航槽与参数化路由跳转，支持通过 `ARK_INITIAL_SECTION` 环境变量自定义初始跳转路径；在 [APIClient.swift](file:///Users/qishu/Project/ark/ios/ArkMobile/ArkMobile/Networking/APIClient.swift) 中新增了 `put` 网络客户端请求，同步升级了 `LearningModels.swift` 与 `TaskModels.swift` 中的相关数据模型。
+
+- 验证情况：
+  - 代码通过 Xcode 成功编译构建且零报错/警告。
+  - Git 本地 Commit 已成功生成。
+
 ### 2026-06-07 01:50 · 6da4af4 · feat(ios): add native iPad app shell
 
 - 用户提出的需求：
