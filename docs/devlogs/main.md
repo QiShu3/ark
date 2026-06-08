@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-08 14:50 · d511dd3 · fix(focus-work): auto-load extra practice on force-start if task is completed
+
+- 用户提出的需求：
+  - “等等，我在进行专注工作时，如果点击 仍然开始该任务，会直接跳转到 如图片所示。先不改代码，告诉我怎么回事？”
+  - “OK，改动对应代码吧”
+  - “好，本地提交代码吧”
+
+- 本次完成的工作：
+  - **加练模式自动激活**：修改了 [VocabTodayFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/VocabTodayFocusWork.tsx)、[ERCPracticeFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/ERC/ERCPracticeFocusWork.tsx) 和 [ERCReviewFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/ERC/ERCReviewFocusWork.tsx) 的 `isExtraPractice` 状态初始值，如果在挂载时检测到今日任务已达上限（即 `workflow?.is_task_completed_today` 为真），则自动激活加练模式。
+  - **自动拉取加练数据**：在三个子应用的挂载及初始化数据拉取中增加条件分支拦截：如果是加练启动，则直接异步触发加练数据的加载动作，跳过原本今日常规任务拉取流程，避免因拉取数据为空而意外触发 `onFinished()` 并闪退到结算屏幕。
+
+- 验证情况：
+  - 前端类型校验 `pnpm check` 与后端代码规范 `uv run ruff check .` 全部无报错通过。
+  - 前端回归单元测试全部通过（52个文件，237个用例全部绿色）。
+  - 后端回归测试全部通过（175个用例全部绿色）。
+
 ### 2026-06-08 14:22 · 8cc84f0 · refactor(focus-work): decouple business logic from sub-apps and centralize in shell provider
 
 - 用户提出的需求：
