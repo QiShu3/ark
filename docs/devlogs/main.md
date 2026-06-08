@@ -2,6 +2,25 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-08 14:22 · 8cc84f0 · refactor(focus-work): decouple business logic from sub-apps and centralize in shell provider
+
+- 用户提出的需求：
+  - “如果本任务之前已经被完成过，系统会提示 当前周期已达上限 ，我希望它会跳过这个检测，直接结束该任务阶段。”
+  - “专注工作 在 执行对应子任务之前可以检查它是否已达到上限，然后提示用户该任务今日已被完成。”
+  - “钩子我想设置在 全屏专注工作台展开后 ，子应用加载前”
+  - “子应用也搭载了 完成xx任务 和 再来一次 功能，这里是不是功能重复了。我想让业务工作都让全屏专注工作台去执行，子应用只负责展开专注工作即可”
+  - “好，提交代码”
+
+- 本次完成的工作：
+  - **后端拦截逻辑优化**：修改了 [schemas.py](file:///Users/qishu/Project/ark/backend/routes/todo/schemas.py)，在 `FocusWorkflowOut` 中增加了表示该任务今日已完成的 `is_task_completed_today` 等状态；在 [helpers.py](file:///Users/qishu/Project/ark/backend/routes/todo/helpers.py) 中新增了 `_check_task_completion_status` 辅助函数；在 [routes.py](file:///Users/qishu/Project/ark/backend/routes/todo/routes.py) 的工作流初始化与流转路由中集成此状态拉取，允许跳过已达上限的任务。
+  - **容器外壳控制集中化**：在 [FocusWorkProvider.tsx](file:///Users/qishu/Project/ark/frontend/src/components/focus-work/FocusWorkProvider.tsx) 中重构，并在 [FocusWorkModalShell.tsx](file:///Users/qishu/Project/ark/frontend/src/components/focus-work/FocusWorkModalShell.tsx) 外部添加了“任务上限拦截遮罩（可强制开始或跳过阶段）”和“专注成功结算遮罩（可一键进入下阶段或加练再试一次）”。
+  - **子应用纯展示化改造**：移除了 [VocabTodayFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/VocabTodayFocusWork.tsx)、[ERCPracticeFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/ERC/ERCPracticeFocusWork.tsx) 和 [ERCReviewFocusWork.tsx](file:///Users/qishu/Project/ark/frontend/src/components/ERC/ERCReviewFocusWork.tsx) 内自带的完成弹窗、退出与完成逻辑。让它们在无内容时回调 `onFinished()`，并注册加练的 `resetFn`，交由全屏外壳统一调度。
+  - **测试与代码规范回归**：修正了 [VocabTodayFocusWork.test.tsx](file:///Users/qishu/Project/ark/frontend/src/components/Vocab/VocabTodayFocusWork.test.tsx)、[ERCPracticeFocusWork.test.tsx](file:///Users/qishu/Project/ark/frontend/src/components/ERC/ERCPracticeFocusWork.test.tsx)、[ERCReviewFocusWork.test.tsx](file:///Users/qishu/Project/ark/frontend/src/components/ERC/ERCReviewFocusWork.test.tsx) 以及 [Review.test.tsx](file:///Users/qishu/Project/ark/frontend/src/pages/ERC/__tests__/Review.test.tsx)，将用例断言修改为对应 `onFinished` 触发或 `resetFn` 注册等逻辑；修复了 `admin_routes.py` 中的 PEP 8 导入顺序问题。
+
+- 验证情况：
+  - 前端类型校验 `pnpm check` 与后端代码规范 `uv run ruff check .` 全部无报错通过。
+  - 前端 Vitest 测试 `pnpm test -- --run`（全部 237 个用例）和后端 pytest 测试 `uv run pytest`（全部 175 个用例）全部成功通过。
+
 ### 2026-06-07 14:56 · ca6f932 · feat(ios): add AppCenter and unify Vocab/ERC sub-app UI with FocusWorkRegistry
 
 - 用户提出的需求：
