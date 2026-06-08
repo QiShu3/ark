@@ -50,13 +50,17 @@ const actions = [
 
 type VocabTodayFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish }: VocabTodayFocusWorkProps) {
+export default function VocabTodayFocusWork({
+  workflow,
+  onCompleteTaskAndFinish,
+  onFinished,
+  registerResetCommand,
+}: VocabTodayFocusWorkProps) {
   const { activeDeck, activeDeckVersion } = useVocabDeck();
   const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
   const completedRef = React.useRef(false);
   const isPaused = workflow?.is_paused === true;
 
-  const [exiting, setExiting] = React.useState(false);
   const [isExtraPractice, setIsExtraPractice] = React.useState(false);
   const [extraQueue, setExtraQueue] = React.useState<VocabReviewItem[]>([]);
   const [extraIndex, setExtraIndex] = React.useState(0);
@@ -69,19 +73,6 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
   React.useEffect(() => {
     setRevealed(false);
   }, [session.currentItem?.id, extraIndex]);
-
-  const handleExitFocus = async () => {
-    setExiting(true);
-    try {
-      await apiJson('/todo/focus/stop', { method: 'POST' });
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-    } catch (err) {
-      console.error('Failed to stop focus session', err);
-      alert(err instanceof Error ? err.message : '结束专注失败');
-    } finally {
-      setExiting(false);
-    }
-  };
 
   const handlePracticeAgain = async () => {
     if (isPaused || !activeDeck) return;
@@ -108,12 +99,21 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
       setExtraQueue(extraItems);
       setExtraIndex(0);
     } catch (err) {
-      console.error('Failed to load extra vocab items', err);
+      console.error('Failed to load extra words', err);
       setError(err instanceof Error ? err.message : '加载加练单词失败');
     } finally {
       setLoadingExtra(false);
     }
   };
+
+  React.useEffect(() => {
+    registerResetCommand?.(() => {
+      completedRef.current = false;
+      setIsExtraPractice(true);
+      void handlePracticeAgain();
+    });
+  }, [registerResetCommand]);
+
 
   const handleRatingSubmit = React.useCallback(async (value: 'again' | 'hard' | 'good' | 'easy') => {
     if (isPaused) return;
@@ -205,9 +205,9 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
     if (!session.ready) return;
     if (session.loading || session.error || session.isBatchReview || session.currentItem) return;
     completedRef.current = true;
-    onCompleteTaskAndFinish?.();
+    onFinished?.();
   }, [
-    onCompleteTaskAndFinish,
+    onFinished,
     activeDeck,
     isPaused,
     session.currentBatchNumber,
@@ -219,6 +219,12 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
     session.ready,
     session.totalBatchCount,
   ]);
+
+  React.useEffect(() => {
+    if (isExtraPractice && extraQueue.length > 0 && extraIndex >= extraQueue.length) {
+      onFinished?.();
+    }
+  }, [isExtraPractice, extraQueue, extraIndex, onFinished]);
 
   // Premium progress bars
   const renderProgressBar = () => {
@@ -304,14 +310,6 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
               <div className="mt-5 flex gap-3">
                 <button
                   type="button"
-                  disabled={isPaused || exiting}
-                  onClick={handleExitFocus}
-                  className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {exiting ? '正在结束...' : '结束本轮专注'}
-                </button>
-                <button
-                  type="button"
                   disabled={isPaused || loadingExtra}
                   onClick={handlePracticeAgain}
                   className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
@@ -356,30 +354,7 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
                 })}
               </div>
             </div>
-          ) : (
-            <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
-              <div className="text-xl font-bold text-[var(--focus-work-text)] mb-3">加练已全部完成！</div>
-              <div>您已完成了本轮加练单词。您可以选择再次加练，或者结束专注。</div>
-              <div className="mt-5 flex gap-3">
-                <button
-                  type="button"
-                  disabled={isPaused || exiting}
-                  onClick={handleExitFocus}
-                  className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {exiting ? '正在结束...' : '结束本轮专注'}
-                </button>
-                <button
-                  type="button"
-                  disabled={isPaused || loadingExtra}
-                  onClick={handlePracticeAgain}
-                  className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
-                >
-                  再来一次
-                </button>
-              </div>
-            </div>
-          )
+          ) : null
         ) : (
           <>
             <p className="text-sm leading-6 text-[var(--focus-work-text-muted)] text-center">
@@ -441,30 +416,6 @@ export default function VocabTodayFocusWork({ workflow, onCompleteTaskAndFinish 
                       </button>
                     );
                   })}
-                </div>
-              </div>
-            ) : null}
-
-            {!session.isBatchReview && !session.loading && !session.error && !session.currentItem ? (
-              <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
-                <div>今天这本词书的单词已经完成了。</div>
-                <div className="mt-5 flex gap-3">
-                  <button
-                    type="button"
-                    disabled={isPaused || exiting}
-                    onClick={handleExitFocus}
-                    className="mt-5 rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {exiting ? '正在结束...' : '完成今日单词'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isPaused || loadingExtra}
-                    onClick={handlePracticeAgain}
-                    className="mt-5 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
-                  >
-                    {loadingExtra ? '正在加载...' : '再来一次'}
-                  </button>
                 </div>
               </div>
             ) : null}

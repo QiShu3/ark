@@ -18,6 +18,8 @@ export type FocusWorkRendererProps = {
   onResume?: () => void;
   onInterrupt: (progressSnapshot?: Record<string, unknown>) => void;
   onAbandon?: (progressSnapshot?: Record<string, unknown>) => void;
+  onFinished?: (progressSnapshot?: Record<string, unknown>) => void;
+  registerResetCommand?: (resetFn: () => void) => void;
 };
 
 export type FocusWorkDefinition = {
@@ -45,6 +47,8 @@ export type FocusWorkSnapshot = {
   active_task_app_id?: AppTaskId | null;
   active_task_app_task_type?: AppTaskType | null;
   active_task_app_config_id?: string | null;
+  is_task_completed_today?: boolean;
+  task_blocked_reason?: string | null;
 };
 
 export const FOCUS_WORK_LABELS: Record<FocusWorkType, string> = {

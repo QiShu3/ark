@@ -5,11 +5,16 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import secrets
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any
+
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
+
+from routes.auth_routes import _AuthUser, get_current_user
 
 # --- Import logger setup ---
 _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -20,12 +25,6 @@ if not _import_logger.handlers:
     _fh = logging.FileHandler(_LOG_DIR / "admin_import.log", encoding="utf-8")
     _fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     _import_logger.addHandler(_fh)
-
-import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
-
-from routes.auth_routes import _AuthUser, get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -537,7 +536,7 @@ async def update_vocab_deck(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> VocabDeckUpdateOut:
-    from routes.vocab.importer import DeckSeed, detect_format, parse_word_entry
+    from routes.vocab.importer import detect_format, parse_word_entry
     from routes.vocab.repository import replace_deck_words, sync_vocab_deck_word_counts
 
     # Verify deck exists
@@ -659,8 +658,8 @@ async def vocab_deck_detail(
     from routes.vocab.repository import (
         count_admin_deck_words,
         list_admin_deck_words_paginated,
-        list_translations_for_word_ids,
         list_sentences_for_word_ids,
+        list_translations_for_word_ids,
     )
 
     pool = _pool(request)
@@ -673,14 +672,14 @@ async def vocab_deck_detail(
             raise HTTPException(status_code=404, detail="词书不存在")
 
         total_words = await count_admin_deck_words(conn, deck_id=deck_id, search=search)
-        
+
         offset = (page - 1) * limit
         word_records = await list_admin_deck_words_paginated(
             conn, deck_id=deck_id, search=search, limit=limit, offset=offset
         )
-        
+
         word_ids = [r["id"] for r in word_records]
-        
+
         translations = await list_translations_for_word_ids(conn, word_ids=word_ids)
         sentences = await list_sentences_for_word_ids(conn, word_ids=word_ids)
 
@@ -745,7 +744,13 @@ async def import_vocab_deck(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> VocabDeckImportOut:
-    from routes.vocab.importer import DeckSeed, WordSeed, TranslationSeed, PhraseSeed, SentenceSeed, _deck_meta_from_filename, detect_format, parse_word_entry
+    from routes.vocab.importer import (
+        DeckSeed,
+        WordSeed,
+        _deck_meta_from_filename,
+        detect_format,
+        parse_word_entry,
+    )
     from routes.vocab.repository import import_deck, sync_vocab_deck_word_counts
 
     # Read multipart form
@@ -1065,9 +1070,10 @@ async def import_erc_articles(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcImportOut:
-    from routes.erc.importer import parse_article_payload
-    from routes.erc.repository import upsert_set, upsert_article_seed, refresh_set_counts
     import json as _json
+
+    from routes.erc.importer import parse_article_payload
+    from routes.erc.repository import refresh_set_counts, upsert_article_seed, upsert_set
 
     # Read multipart form
     form = await request.form()

@@ -1,4 +1,4 @@
-import { render, waitFor, screen } from '@testing-library/react';
+import { render, waitFor, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -89,14 +89,44 @@ describe('VocabTodayFocusWork', () => {
       />,
     );
 
-    await waitFor(() => {
-    expect(useVocabTodaySession).toHaveBeenCalled();
+    useVocabDeck.mockReturnValue({
+      activeDeck: { id: 'deck-1', name: 'CET4' },
+      activeDeckVersion: 1,
     });
-    expect(complete).not.toHaveBeenCalled();
   });
 
-  it('removes the vocab title and deck switch entry from the focus view', () => {
-    const { queryByText, getByText } = render(
+  it('renders learning view when deck has items', () => {
+    useVocabTodaySession.mockReturnValue({
+      ready: true,
+      loading: false,
+      error: null,
+      currentItem: {
+        id: 'word-1',
+        deck_id: 'deck-1',
+        word: 'apple',
+        us_pronunciation: 'ˈæp.əl',
+        uk_pronunciation: 'ˈæp.əl',
+        translations: [{ pos: 'n.', translation: '苹果' }],
+        phrases: [],
+        sentences: [],
+        prompt_type: 'en_to_zh',
+        review_mode: 'study',
+        mastery_score: 0,
+      },
+      currentBatchNumber: 1,
+      totalBatchCount: 1,
+      memorizedCount: 0,
+      currentMode: 'study',
+      submitting: false,
+      batchReviewCount: 0,
+      batchReviewGroups: [],
+      batchReviewActionLabel: '继续',
+      continueBatchReview: vi.fn(),
+      submit: vi.fn(),
+      lastResult: null,
+    });
+
+    const { getByText, queryByText } = render(
       <VocabTodayFocusWork
         workflow={{
           state: 'focus',
@@ -117,7 +147,7 @@ describe('VocabTodayFocusWork', () => {
     expect(queryByText('切换词书')).not.toBeInTheDocument();
   });
 
-  it('renders completed state when no words are left, and clicking complete calls /todo/focus/stop', async () => {
+  it('calls onFinished when no words are left', async () => {
     useVocabTodaySession.mockReturnValue({
       ready: true,
       loading: false,
@@ -137,7 +167,7 @@ describe('VocabTodayFocusWork', () => {
       lastResult: null,
     });
 
-    const userEvent = (await import('@testing-library/user-event')).default.setup();
+    const onFinishedMock = vi.fn();
 
     render(
       <VocabTodayFocusWork
@@ -148,20 +178,16 @@ describe('VocabTodayFocusWork', () => {
           is_paused: false,
         }}
         recordFocus
-        onCompleteTaskAndFinish={vi.fn()}
+        onFinished={onFinishedMock}
         onComplete={vi.fn()}
         onInterrupt={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('今天这本词书的单词已经完成了。')).toBeInTheDocument();
-    const completeBtn = screen.getByRole('button', { name: '完成今日单词' });
-    await userEvent.click(completeBtn);
-
-    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
+    expect(onFinishedMock).toHaveBeenCalled();
   });
 
-  it('supports extra practice flow when clicking 再来一次', async () => {
+  it('supports extra practice flow via registerResetCommand', async () => {
     useVocabTodaySession.mockReturnValue({
       ready: true,
       loading: false,
@@ -199,11 +225,14 @@ describe('VocabTodayFocusWork', () => {
           sentences: [],
         };
       }
-      if (url === '/todo/focus/stop') {
-        return { ok: true };
-      }
       return null;
     });
+
+    let resetFn: (() => void) | undefined;
+    const registerResetCommandMock = vi.fn((fn) => {
+      resetFn = fn;
+    });
+    const onFinishedMock = vi.fn();
 
     render(
       <VocabTodayFocusWork
@@ -214,30 +243,26 @@ describe('VocabTodayFocusWork', () => {
           is_paused: false,
         }}
         recordFocus
-        onCompleteTaskAndFinish={vi.fn()}
+        registerResetCommand={registerResetCommandMock}
+        onFinished={onFinishedMock}
         onComplete={vi.fn()}
         onInterrupt={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('今天这本词书的单词已经完成了。')).toBeInTheDocument();
-    const practiceAgainBtn = screen.getByRole('button', { name: '再来一次' });
-    await userEvent.click(practiceAgainBtn);
+    expect(registerResetCommandMock).toHaveBeenCalled();
+    expect(resetFn).toBeDefined();
 
-    // Should load the extra word
+    await act(async () => {
+      resetFn!();
+    });
+
     expect(await screen.findByText('banana')).toBeInTheDocument();
     expect(screen.getByText('加练进度：第 1 个 / 共 1 个')).toBeInTheDocument();
 
-    // Click any rating button to finish
     const rateBtn = screen.getByRole('button', { name: /记住了/ });
     await userEvent.click(rateBtn);
 
-    // Should show completed page
-    expect(screen.getByText('加练已全部完成！')).toBeInTheDocument();
-
-    const exitBtn = screen.getByRole('button', { name: '结束本轮专注' });
-    await userEvent.click(exitBtn);
-
-    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
+    expect(onFinishedMock).toHaveBeenCalled();
   });
 });

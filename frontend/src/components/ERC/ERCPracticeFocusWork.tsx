@@ -35,7 +35,12 @@ const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'g
   { label: '太简单', hint: '延后很久', value: 'easy' },
 ];
 
-export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish }: ERCPracticeFocusWorkProps) {
+export default function ERCPracticeFocusWork({
+  workflow,
+  onCompleteTaskAndFinish,
+  onFinished,
+  registerResetCommand,
+}: ERCPracticeFocusWorkProps) {
   const [phase, setPhase] = useState<'loading' | 'preheat' | 'reading' | 'result' | 'empty'>('loading');
   const [article, setArticle] = useState<ERCArticleDetail | null>(null);
   const [preheatWords, setPreheatWords] = useState<VocabReviewItem[]>([]);
@@ -51,20 +56,28 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
 
   const [isExtraPractice, setIsExtraPractice] = useState(false);
   const [loadingAgain, setLoadingAgain] = useState(false);
-  const [exiting, setExiting] = useState(false);
 
-  const handleExitFocus = async () => {
-    setExiting(true);
-    try {
-      await apiJson('/todo/focus/stop', { method: 'POST' });
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-    } catch (err) {
-      console.error('Failed to stop focus session', err);
-      alert(err instanceof Error ? err.message : '结束专注失败');
-    } finally {
-      setExiting(false);
+  useEffect(() => {
+    registerResetCommand?.(() => {
+      setPhase('loading');
+      setArticle(null);
+      setPreheatWords([]);
+      setPreheatIndex(0);
+      setRevealed(false);
+      setCurrentQuestionIndex(0);
+      setSelectedAnswers({});
+      setSubmitResult(null);
+      setError(null);
+      setIsExtraPractice(true);
+      void handlePracticeAgain();
+    });
+  }, [registerResetCommand]);
+
+  useEffect(() => {
+    if (phase === 'empty') {
+      onFinished?.();
     }
-  };
+  }, [phase, onFinished]);
 
   const handlePracticeAgain = async () => {
     if (isPaused) return;
@@ -219,39 +232,7 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
   }
 
   if (phase === 'empty') {
-    return (
-      <div className="h-full w-full overflow-y-auto px-4 pb-8">
-        <div className="mx-auto max-w-2xl pt-12">
-          <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-8 backdrop-blur-md">
-            <h2 className="text-2xl font-semibold text-[var(--focus-work-text)]">今日真题练习已完成</h2>
-            <p className="mt-4 text-sm leading-6 text-[var(--focus-work-text-muted)]">
-              太棒了！您今日推荐的真题阅读已经全部完成了。您可以前往题库自行挑选其他的阅读文章，或者完成任务进入专注时间。
-            </p>
-            <div className="mt-8 flex gap-3">
-              <button
-                type="button"
-                onClick={handleExitFocus}
-                disabled={isPaused || exiting}
-                className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:opacity-50"
-              >
-                {exiting ? '正在结束...' : '结束并完成今日任务'}
-              </button>
-              <button
-                type="button"
-                onClick={handlePracticeAgain}
-                disabled={isPaused || loadingAgain}
-                className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
-              >
-                {loadingAgain ? '正在加载...' : '再来一次'}
-              </button>
-            </div>
-            {error && (
-              <p className="mt-4 text-sm text-rose-400">{error}</p>
-            )}
-          </section>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (phase === 'preheat') {
@@ -558,25 +539,14 @@ export default function ERCPracticeFocusWork({ workflow, onCompleteTaskAndFinish
                   </div>
 
                   <div className="mt-6 pt-5 border-t border-[var(--focus-work-border)] flex flex-col gap-3 shrink-0">
-                    {isExtraPractice ? (
-                      <button
-                        type="button"
-                        onClick={handleExitFocus}
-                        disabled={isPaused || exiting}
-                        className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
-                      >
-                        {exiting ? '正在结束...' : '结束本轮专注'}
-                      </button>
-                    ) : onCompleteTaskAndFinish ? (
-                      <button
-                        type="button"
-                        onClick={onCompleteTaskAndFinish}
-                        disabled={isPaused}
-                        className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
-                      >
-                        标记今日真题任务为已完成
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => onFinished?.()}
+                      disabled={isPaused}
+                      className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      完成并结束
+                    </button>
                   </div>
                 </section>
             )}

@@ -1470,6 +1470,55 @@ def _phase_at_index(phases: list[FocusWorkflowPhase], index: int | None) -> Focu
     return phases[index]
 
 
+async def _check_task_completion_status(
+    conn: Any,
+    user_id: int,
+    task_id: UUID | None,
+) -> tuple[bool, str | None]:
+    """Check if the task is already completed today or has reached its completion limit.
+    Returns:
+        (is_task_completed_today, task_blocked_reason)
+    """
+    if task_id is None:
+        return False, None
+
+    # Query task details from database
+    row = await conn.fetchrow(
+        """
+        SELECT id, user_id, status, is_recurring, period_type, custom_period_days, max_completions_per_period, weekday_only
+        FROM tasks
+        WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+        """,
+        task_id,
+        user_id,
+    )
+    if row is None:
+        return False, None
+
+    def safe_get(r, key, default=None):
+        if hasattr(r, "get"):
+            return r.get(key, default)
+        try:
+            return r[key]
+        except (KeyError, TypeError):
+            return default
+
+    state = await _build_completion_state(
+        conn,
+        user_id=user_id,
+        subject_type="task",
+        subject_id=safe_get(row, "id", task_id),
+        is_recurring=bool(safe_get(row, "is_recurring", False)),
+        period_type=safe_get(row, "period_type", "once"),
+        custom_period_days=safe_get(row, "custom_period_days"),
+        max_completions_per_period=int(safe_get(row, "max_completions_per_period", 1)),
+        weekday_only=bool(safe_get(row, "weekday_only", False)),
+        permanent_done=safe_get(row, "status") == "done",
+    )
+
+    return not state.is_completable_now, state.blocked_reason
+
+
 def _row_to_focus_workflow(
     row: asyncpg.Record | None,
     *,
@@ -1479,6 +1528,8 @@ def _row_to_focus_workflow(
     task_app_task_type: str | None = None,
     task_app_config_id: UUID | None = None,
     completed_workflow_name: str | None = None,
+    is_task_completed_today: bool = False,
+    task_blocked_reason: str | None = None,
 ) -> FocusWorkflowOut:
     """将工作流行数据转换为返回模型。"""
     if row is None:
@@ -1566,6 +1617,8 @@ def _row_to_focus_workflow(
         active_task_app_id=task_app_id,
         active_task_app_task_type=task_app_task_type,
         active_task_app_config_id=task_app_config_id,
+        is_task_completed_today=is_task_completed_today,
+        task_blocked_reason=task_blocked_reason,
     )
 
 
@@ -1932,7 +1985,18 @@ async def _advance_focus_workflow_to_next_phase(
                 runtime_task_id=None,
                 pending_task_selection=False,
             )
-            return _row_to_focus_workflow(next_row, task_title=current_task_title)
+            is_task_completed_today = False
+            task_blocked_reason = None
+            if current_task_id is not None:
+                is_task_completed_today, task_blocked_reason = await _check_task_completion_status(
+                    conn, user_id, current_task_id
+                )
+            return _row_to_focus_workflow(
+                next_row,
+                task_title=current_task_title,
+                is_task_completed_today=is_task_completed_today,
+                task_blocked_reason=task_blocked_reason,
+            )
         phase_focus_work_type = _phase_focus_work_type_value(phase)
         if phase_focus_work_type is not None:
             record_focus = bool(phase.get("record_focus", True))
@@ -1977,6 +2041,9 @@ async def _advance_focus_workflow_to_next_phase(
         )
         await _start_focus_app_work_log(conn, user_id, workflow_id, focus_work_type, True)
         await _start_focus_log_for_task(conn, user_id, task_row["id"])
+        is_task_completed_today, task_blocked_reason = await _check_task_completion_status(
+            conn, user_id, task_row["id"]
+        )
         return _row_to_focus_workflow(
             next_row,
             task_title=str(task_row["title"]),
@@ -1984,6 +2051,8 @@ async def _advance_focus_workflow_to_next_phase(
             task_app_id=_record_get(task_row, "app_id"),
             task_app_task_type=_record_get(task_row, "app_task_type"),
             task_app_config_id=_record_get(task_row, "app_config_id"),
+            is_task_completed_today=is_task_completed_today,
+            task_blocked_reason=task_blocked_reason,
         )
     return await _complete_focus_workflow(conn, workflow_id, workflow_name)
 

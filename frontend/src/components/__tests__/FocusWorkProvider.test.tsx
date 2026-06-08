@@ -154,10 +154,8 @@ describe('FocusWorkProvider', () => {
     expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/pause', { method: 'POST' });
   });
 
-  it('ends an app-managed focus round without completing the app task', async () => {
+  it('ends an app-managed focus round and completes the app task', async () => {
     const user = userEvent.setup();
-    const phaseEnded = vi.fn();
-    window.addEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, phaseEnded);
     mockCurrentWorkflow({
       task_id: 'task-vocab',
       task_title: '今日单词',
@@ -170,34 +168,31 @@ describe('FocusWorkProvider', () => {
       pending_task_selection: false,
     });
 
-    try {
-      render(
-        <FocusWorkProvider>
-          <div>App</div>
-        </FocusWorkProvider>,
-      );
-      const completeRoundButton = await screen.findByRole('button', { name: '结束本轮专注' });
-      expect(completeRoundButton).toHaveAttribute('data-onboarding-anchor', 'focus-work-complete-round');
-      await user.click(completeRoundButton);
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+    const completeRoundButton = await screen.findByRole('button', { name: '结束本轮专注' });
+    expect(completeRoundButton).toHaveAttribute('data-onboarding-anchor', 'focus-work-complete-round');
+    await user.click(completeRoundButton);
 
-      expect(apiJson).toHaveBeenCalledWith(
-        '/todo/focus/workflow/focus-work-result',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            focus_work_type: 'vocab_today',
-            result: 'completed',
-            progress_snapshot: {
-              completedTask: false,
-            },
-          }),
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/focus/workflow/focus-work-result',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          focus_work_type: 'vocab_today',
+          result: 'completed',
+          progress_snapshot: {
+            taskId: 'task-vocab',
+            completedTask: true,
+            appTaskType: 'vocab_today',
+          },
         }),
-      );
-      expect(phaseEnded).toHaveBeenCalledTimes(1);
-      expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
-    } finally {
-      window.removeEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, phaseEnded);
-    }
+      }),
+    );
+    expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
   });
 
   it('resumes paused app-managed focus work from the modal shell', async () => {
@@ -261,7 +256,7 @@ describe('FocusWorkProvider', () => {
         }),
       }),
     );
-    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
+    expect(apiJson).not.toHaveBeenCalledWith('/todo/focus/stop', expect.anything());
     expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
   });
 });

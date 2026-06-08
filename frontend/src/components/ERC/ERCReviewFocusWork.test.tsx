@@ -72,7 +72,7 @@ describe('ERCReviewFocusWork', () => {
     expect(screen.getByRole('button', { name: '提交答案' })).toBeDisabled();
   });
 
-  it('renders empty state when no review items are due and exits gracefully via stop endpoint', async () => {
+  it('calls onFinished when no review items are due', async () => {
     fetchERCReviewNext.mockResolvedValue({
       has_item: false,
       next_due_at: null,
@@ -81,7 +81,7 @@ describe('ERCReviewFocusWork', () => {
       question: null,
     });
 
-    const userEvent = (await import('@testing-library/user-event')).default.setup();
+    const onFinishedMock = vi.fn();
 
     render(
       <MemoryRouter>
@@ -93,20 +93,17 @@ describe('ERCReviewFocusWork', () => {
             is_paused: false,
           }}
           recordFocus
-          onCompleteTaskAndFinish={vi.fn()}
+          onFinished={onFinishedMock}
         />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('暂无到期复习')).toBeInTheDocument();
-    
-    const stopBtn = screen.getByRole('button', { name: '结束并完成今日任务' });
-    await userEvent.click(stopBtn);
-
-    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
+    await waitFor(() => {
+      expect(onFinishedMock).toHaveBeenCalled();
+    });
   });
 
-  it('supports extra practice flow via 再来一次 button', async () => {
+  it('supports resetting via registerResetCommand for extra practice flow', async () => {
     fetchERCReviewNext.mockResolvedValue({
       has_item: false,
       next_due_at: null,
@@ -138,6 +135,11 @@ describe('ERCReviewFocusWork', () => {
       explanation: 'Matches text.'
     });
 
+    let resetFn: (() => void) | undefined;
+    const registerResetCommandMock = vi.fn((fn) => {
+      resetFn = fn;
+    });
+    const onFinishedMock = vi.fn();
     const userEvent = (await import('@testing-library/user-event')).default.setup();
 
     render(
@@ -150,15 +152,22 @@ describe('ERCReviewFocusWork', () => {
             is_paused: false,
           }}
           recordFocus
-          onCompleteTaskAndFinish={vi.fn()}
+          registerResetCommand={registerResetCommandMock}
+          onFinished={onFinishedMock}
         />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('暂无到期复习')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onFinishedMock).toHaveBeenCalled();
+    });
+    expect(registerResetCommandMock).toHaveBeenCalled();
+    expect(resetFn).toBeDefined();
 
-    const practiceAgainBtn = screen.getByRole('button', { name: '再来一次' });
-    await userEvent.click(practiceAgainBtn);
+    const { act } = await import('@testing-library/react');
+    await act(async () => {
+      resetFn!();
+    });
 
     // Should load the extra review question
     expect(await screen.findByText('Extra practice passage text.')).toBeInTheDocument();
@@ -172,11 +181,5 @@ describe('ERCReviewFocusWork', () => {
     await userEvent.click(submitBtn);
 
     expect(submitERCReview).toHaveBeenCalledWith('q-1', 'A');
-
-    // Should show extra practice control buttons (结束本轮专注)
-    const exitBtn = screen.getByRole('button', { name: '结束本轮专注' });
-    await userEvent.click(exitBtn);
-
-    expect(apiJson).toHaveBeenCalledWith('/todo/focus/stop', { method: 'POST' });
   });
 });

@@ -11,18 +11,38 @@ import { apiJson } from '../../lib/api';
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCReviewFocusWorkProps = Partial<FocusWorkRendererProps>;
 
-export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }: ERCReviewFocusWorkProps) {
+export default function ERCReviewFocusWork({
+  workflow,
+  onCompleteTaskAndFinish,
+  onFinished,
+  registerResetCommand,
+}: ERCReviewFocusWorkProps) {
   const [item, setItem] = useState<ERCReviewNext | null>(null);
   const [selected, setSelected] = useState<OptionKey | null>(null);
   const [result, setResult] = useState<ERCReviewSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showFinishModal, setShowFinishModal] = useState(false);
   const isPaused = workflow?.is_paused === true;
 
   const [isExtraPractice, setIsExtraPractice] = useState(false);
   const [loadingAgain, setLoadingAgain] = useState(false);
-  const [exiting, setExiting] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
+
+  useEffect(() => {
+    registerResetCommand?.(() => {
+      setItem(null);
+      setSelected(null);
+      setResult(null);
+      setError(null);
+      setIsExtraPractice(true);
+      void handlePracticeAgain();
+    });
+  }, [registerResetCommand]);
+
+  useEffect(() => {
+    if (item && !item.has_item) {
+      onFinished?.();
+    }
+  }, [item, onFinished]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,19 +72,6 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
         setError(null);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : '复习题加载失败'));
-  };
-
-  const handleExitFocus = async () => {
-    setExiting(true);
-    try {
-      await apiJson('/todo/focus/stop', { method: 'POST' });
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-    } catch (err) {
-      console.error('Failed to stop focus session', err);
-      alert(err instanceof Error ? err.message : '结束专注失败');
-    } finally {
-      setExiting(false);
-    }
   };
 
   const handlePracticeAgain = async () => {
@@ -155,51 +162,28 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
 
         {error ? <p className="mb-4 text-sm text-rose-200">{error}</p> : null}
 
-        {item && !item.has_item ? (
-          <section className="rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-8">
-            <h2 className="text-2xl font-semibold text-[var(--focus-work-text)]">暂无到期复习</h2>
-            <p className="mt-3 text-sm text-[var(--focus-work-text-muted)]">
-              {isExtraPractice ? '加练已结束。' : '今天没有需要复习的阅读题，点击下方按钮完成今日学习任务吧！'}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {isExtraPractice ? (
+        {item && !item.has_item && !onFinished ? (
+          <div className="flex h-full w-full items-center justify-center p-8">
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+                <Trophy className="h-8 w-8" />
+              </div>
+              <h2 className="mt-6 text-2xl font-bold text-[var(--focus-work-text)]">暂无到期复习</h2>
+              <p className="mt-2 text-sm text-[var(--focus-work-text-muted)]">
+                太棒了！您所有的真题错题都已复习完毕。
+              </p>
+              <div className="mt-8 flex justify-center gap-3">
                 <button
                   type="button"
-                  disabled={isPaused || exiting}
-                  onClick={handleExitFocus}
-                  className="inline-flex rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
+                  disabled={loadingAgain}
+                  onClick={handlePracticeAgain}
+                  className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
                 >
-                  {exiting ? '正在结束...' : '结束本轮专注'}
+                  {loadingAgain ? '正在加载...' : '再来一次'}
                 </button>
-              ) : answeredCount > 0 && onCompleteTaskAndFinish ? (
-                <button
-                  type="button"
-                  disabled={isPaused}
-                  onClick={() => setShowFinishModal(true)}
-                  className="inline-flex rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 animate-pulse transition hover:opacity-90"
-                >
-                  完成今日 ERC 复习
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={isPaused || exiting}
-                  onClick={handleExitFocus}
-                  className="inline-flex rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
-                >
-                  {exiting ? '正在结束...' : '结束并完成今日任务'}
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={isPaused || loadingAgain}
-                onClick={handlePracticeAgain}
-                className="inline-flex rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
-              >
-                {loadingAgain ? '正在加载...' : '再来一次'}
-              </button>
+              </div>
             </div>
-          </section>
+          </div>
         ) : null}
 
         {item?.has_item && item.question ? (
@@ -270,17 +254,6 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     ) : null}
-
-                    {isExtraPractice ? (
-                      <button
-                        type="button"
-                        onClick={handleExitFocus}
-                        disabled={isPaused || exiting}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-text-muted)] hover:text-[var(--focus-work-text)] hover:bg-[var(--focus-work-surface-soft)] transition disabled:opacity-30"
-                      >
-                        {exiting ? '正在结束...' : '结束本轮专注'}
-                      </button>
-                    ) : null}
                   </div>
                 </div>
 
@@ -339,48 +312,7 @@ export default function ERCReviewFocusWork({ workflow, onCompleteTaskAndFinish }
         {!item ? <p className="text-sm text-[var(--focus-work-text-muted)]">复习题加载中...</p> : null}
       </div>
 
-      <AppModalFrame
-        open={showFinishModal}
-        onClose={() => setShowFinishModal(false)}
-        zIndexClassName="z-[80]"
-        avoidNav={true}
-        panelClassName="w-[420px] max-w-[90vw] rounded-[24px] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 text-center shadow-2xl animate-in zoom-in-95 duration-200"
-      >
-        <div className="flex flex-col items-center py-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)] shadow-sm">
-            <Trophy className="h-8 w-8 text-[var(--focus-work-emerald-text)] animate-bounce" />
-          </div>
-          
-          <h3 className="mt-5 text-xl font-bold text-[var(--focus-work-text)] font-serif">
-            今日复习已圆满完成！
-          </h3>
-          
-          <p className="mt-2.5 text-sm text-[var(--focus-work-text-muted)] leading-relaxed">
-            您已学完今天所有的到期复习题目，<br />
-            好习惯成就好成绩，明天继续保持哦！
-          </p>
 
-          <div className="mt-8 flex w-full gap-3">
-            <button
-              type="button"
-              onClick={() => setShowFinishModal(false)}
-              className="flex-1 rounded-xl border border-[var(--focus-work-border)] py-2.5 text-sm font-semibold text-[var(--focus-work-text)] hover:bg-[var(--focus-work-surface-soft)] transition"
-            >
-              再看看
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowFinishModal(false);
-                onCompleteTaskAndFinish?.();
-              }}
-              className="flex-1 rounded-xl bg-[var(--focus-work-blue-text)] py-2.5 text-sm font-semibold text-[var(--focus-work-primary-button-text)] hover:opacity-90 transition shadow-md"
-            >
-              好的，返回
-            </button>
-          </div>
-        </div>
-      </AppModalFrame>
     </div>
   );
 }

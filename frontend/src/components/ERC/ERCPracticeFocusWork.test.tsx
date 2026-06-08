@@ -1,5 +1,5 @@
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -101,10 +101,16 @@ describe('ERCPracticeFocusWork', () => {
     expect(screen.getByText('benevolent')).toBeInTheDocument();
   });
 
-  it('renders empty phase when recommended_article is null, and allows practicing again', async () => {
+  it('calls onFinished when recommended_article is null, and supports resetting for extra practice', async () => {
     fetchERCOverview.mockResolvedValue({
       recommended_article: null,
     });
+
+    let resetFn: (() => void) | undefined;
+    const registerResetCommandMock = vi.fn((fn) => {
+      resetFn = fn;
+    });
+    const onFinishedMock = vi.fn();
 
     render(
       <MemoryRouter>
@@ -114,25 +120,29 @@ describe('ERCPracticeFocusWork', () => {
             active_focus_work_type: 'erc_practice',
             focus_work_display_state: 'fullscreen',
           }}
+          registerResetCommand={registerResetCommandMock}
+          onFinished={onFinishedMock}
         />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('今日真题练习已完成')).toBeInTheDocument();
-    const practiceAgainBtn = screen.getByRole('button', { name: '再来一次' });
-    expect(practiceAgainBtn).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '结束并完成今日任务' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onFinishedMock).toHaveBeenCalled();
+    });
+    expect(registerResetCommandMock).toHaveBeenCalled();
+    expect(resetFn).toBeDefined();
 
-    // Mock articles list and detail to check "Practice Again"
+    // Mock articles list and detail to check reset function
     fetchERCArticles.mockResolvedValue([
       { article_id: 'kaoyan2_2025_text2', title: 'Passage Two' }
     ]);
     fetchERCArticle.mockResolvedValue(mockArticleDetail());
     fetchERCVocabularyPreheat.mockResolvedValue([]);
 
-    // Click "再来一次"
-    const userEvent = (await import('@testing-library/user-event')).default.setup();
-    await userEvent.click(practiceAgainBtn);
+    const { act } = await import('@testing-library/react');
+    await act(async () => {
+      resetFn!();
+    });
 
     expect(fetchERCArticles).toHaveBeenCalledTimes(1);
     expect(fetchERCArticle).toHaveBeenCalledWith('kaoyan2_2025_text2');

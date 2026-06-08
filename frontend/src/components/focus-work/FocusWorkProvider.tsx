@@ -29,6 +29,22 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   const [snapshot, setSnapshot] = React.useState<FocusWorkSnapshot | null>(null);
   const [pendingStart, setPendingStart] = React.useState<PendingStart | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [forceStart, setForceStart] = React.useState(false);
+  const [isSubAppFinished, setIsSubAppFinished] = React.useState(false);
+  const resetCommandRef = React.useRef<(() => void) | null>(null);
+
+  React.useEffect(() => {
+    setForceStart(false);
+    setIsSubAppFinished(false);
+  }, [snapshot?.task_id, snapshot?.current_phase_index]);
+
+  function handleResetSubApp() {
+    setIsSubAppFinished(false);
+    if (resetCommandRef.current) {
+      resetCommandRef.current();
+    }
+  }
+
   const activeDefinition = getFocusWorkDefinition(snapshot?.active_focus_work_type);
   const isFullscreen = snapshot?.state === 'focus'
     && snapshot.focus_work_display_state === 'fullscreen'
@@ -143,32 +159,33 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   }
 
   async function completeTaskAndFinishCurrentFocus() {
-    if (!snapshot?.task_id || busy) return;
-    const isUserTaskFocus = snapshot.active_focus_work_type === 'task_focus'
+    if (busy) return;
+    const taskId = snapshot?.task_id;
+    const isUserTaskFocus = taskId
+      && snapshot.active_focus_work_type === 'task_focus'
       && (snapshot.active_task_source_type ?? 'user') === 'user';
     setBusy(true);
     try {
-      if (isUserTaskFocus) {
-        await apiJson(`/todo/tasks/${snapshot.task_id}/complete`, { method: 'POST' });
+      if (isUserTaskFocus && taskId) {
+        try {
+          await apiJson(`/todo/tasks/${taskId}/complete`, { method: 'POST' });
+        } catch (completeErr) {
+          console.warn('Task completion failed in focus workflow, skipping:', completeErr);
+        }
       }
       await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/focus-work-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          focus_work_type: snapshot.active_focus_work_type,
+          focus_work_type: snapshot?.active_focus_work_type,
           result: 'completed',
           progress_snapshot: {
-            taskId: snapshot.task_id,
-            completedTask: true,
-            appTaskType: snapshot.active_task_app_task_type ?? null,
+            taskId: taskId ?? null,
+            completedTask: !!taskId,
+            appTaskType: snapshot?.active_task_app_task_type ?? null,
           },
         }),
       });
-      try {
-        await apiJson('/todo/focus/stop', { method: 'POST' });
-      } catch (stopErr) {
-        console.error('Failed to auto-stop focus session', stopErr);
-      }
       await loadSnapshot();
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (err) {
@@ -185,10 +202,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   }
 
   async function completeCurrentFocusRound() {
-    const succeeded = await submitResult('completed', { completedTask: false });
-    if (succeeded) {
-      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowPhaseEnded);
-    }
+    await completeTaskAndFinishCurrentFocus();
   }
 
   return (
@@ -243,18 +257,72 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           onCompleteRound={() => void completeCurrentFocusRound()}
           onAbandon={abandonCurrentWork}
         >
-          {activeDefinition.render({
-            workflow: snapshot,
-            recordFocus,
-            onPause: undefined,
-            onResume: undefined,
-            onComplete: (progressSnapshot) => void submitResult('completed', progressSnapshot),
-            onCompleteTaskAndFinish: snapshot.task_id
-              ? () => void completeTaskAndFinishCurrentFocus()
-              : undefined,
-            onInterrupt: (progressSnapshot) => void submitResult('interrupted', progressSnapshot),
-            onAbandon: undefined,
-          })}
+          {snapshot.is_task_completed_today && !forceStart ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center h-full max-w-md mx-auto">
+              <div className="text-5xl mb-6">⚠️</div>
+              <h3 className="text-xl font-semibold text-[var(--focus-work-text)] mb-3">该任务今日已达完成上限</h3>
+              <p className="text-sm text-[var(--focus-work-text-muted)] leading-relaxed mb-8">
+                您今天已经完成了此项学习任务。您可以选择跳过此阶段进入下一阶段，或者仍然强制开始该任务。
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                <button
+                  type="button"
+                  onClick={() => setForceStart(true)}
+                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90"
+                >
+                  仍然开始该任务
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void completeCurrentFocusRound()}
+                  className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]"
+                >
+                  直接跳过进入下一阶段
+                </button>
+              </div>
+            </div>
+          ) : isSubAppFinished ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center h-full max-w-md mx-auto">
+              <div className="text-5xl mb-6">🎉</div>
+              <h3 className="text-xl font-semibold text-[var(--focus-work-text)] mb-3">今日专注任务已圆满完成！</h3>
+              <p className="text-sm text-[var(--focus-work-text-muted)] leading-relaxed mb-8">
+                太棒了！您已完成该专注任务的所有内容。
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                <button
+                  type="button"
+                  onClick={() => void completeTaskAndFinishCurrentFocus()}
+                  className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90"
+                >
+                  标记任务已完成并进入下一阶段
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetSubApp}
+                  className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]"
+                >
+                  再来一次 (加练)
+                </button>
+              </div>
+            </div>
+          ) : (
+            activeDefinition.render({
+              workflow: snapshot,
+              recordFocus,
+              onPause: undefined,
+              onResume: undefined,
+              onComplete: (progressSnapshot) => void submitResult('completed', progressSnapshot),
+              onCompleteTaskAndFinish: snapshot.task_id
+                ? () => void completeTaskAndFinishCurrentFocus()
+                : undefined,
+              onFinished: () => setIsSubAppFinished(true),
+              registerResetCommand: (resetFn) => {
+                resetCommandRef.current = resetFn;
+              },
+              onInterrupt: (progressSnapshot) => void submitResult('interrupted', progressSnapshot),
+              onAbandon: undefined,
+            })
+          )}
         </FocusWorkModalShell>
       ) : null}
     </>

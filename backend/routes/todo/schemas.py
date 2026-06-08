@@ -537,6 +537,8 @@ class FocusWorkflowOut(BaseModel):
     active_task_app_id: AppTaskId | None = None
     active_task_app_task_type: AppTaskType | None = None
     active_task_app_config_id: UUID | None = None
+    is_task_completed_today: bool = False
+    task_blocked_reason: str | None = None
 
 
 class FocusWorkflowPresetCreateRequest(BaseModel):
