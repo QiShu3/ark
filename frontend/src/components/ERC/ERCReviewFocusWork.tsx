@@ -23,7 +23,9 @@ export default function ERCReviewFocusWork({
   const [error, setError] = useState<string | null>(null);
   const isPaused = workflow?.is_paused === true;
 
-  const [isExtraPractice, setIsExtraPractice] = useState(false);
+  const [isExtraPractice, setIsExtraPractice] = useState(() => {
+    return workflow?.is_task_completed_today === true;
+  });
   const [loadingAgain, setLoadingAgain] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
 
@@ -39,12 +41,18 @@ export default function ERCReviewFocusWork({
   }, [registerResetCommand]);
 
   useEffect(() => {
+    if (isExtraPractice) return;
     if (item && !item.has_item) {
       onFinished?.();
     }
-  }, [item, onFinished]);
+  }, [item, onFinished, isExtraPractice]);
 
   useEffect(() => {
+    if (workflow?.is_task_completed_today) {
+      void handlePracticeAgain();
+      return;
+    }
+
     let cancelled = false;
 
     fetchERCReviewNext()

@@ -61,7 +61,9 @@ export default function VocabTodayFocusWork({
   const completedRef = React.useRef(false);
   const isPaused = workflow?.is_paused === true;
 
-  const [isExtraPractice, setIsExtraPractice] = React.useState(false);
+  const [isExtraPractice, setIsExtraPractice] = React.useState(() => {
+    return workflow?.is_task_completed_today === true;
+  });
   const [extraQueue, setExtraQueue] = React.useState<VocabReviewItem[]>([]);
   const [extraIndex, setExtraIndex] = React.useState(0);
   const [loadingExtra, setLoadingExtra] = React.useState(false);
@@ -113,6 +115,12 @@ export default function VocabTodayFocusWork({
       void handlePracticeAgain();
     });
   }, [registerResetCommand]);
+
+  React.useEffect(() => {
+    if (workflow?.is_task_completed_today && activeDeck && extraQueue.length === 0 && !loadingExtra && !error) {
+      void handlePracticeAgain();
+    }
+  }, [activeDeck, workflow?.is_task_completed_today]);
 
 
   const handleRatingSubmit = React.useCallback(async (value: 'again' | 'hard' | 'good' | 'easy') => {
@@ -199,6 +207,7 @@ export default function VocabTodayFocusWork({
   }, [isPaused, isExtraPractice, extraQueue, extraIndex, session, handleRatingSubmit]);
 
   React.useEffect(() => {
+    if (isExtraPractice) return;
     if (completedRef.current) return;
     if (isPaused) return;
     if (!activeDeck) return;

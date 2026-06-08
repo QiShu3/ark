@@ -54,7 +54,9 @@ export default function ERCPracticeFocusWork({
   const [submitting, setSubmitting] = useState(false);
   const passageScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [isExtraPractice, setIsExtraPractice] = useState(false);
+  const [isExtraPractice, setIsExtraPractice] = useState(() => {
+    return workflow?.is_task_completed_today === true;
+  });
   const [loadingAgain, setLoadingAgain] = useState(false);
 
   useEffect(() => {
@@ -74,10 +76,11 @@ export default function ERCPracticeFocusWork({
   }, [registerResetCommand]);
 
   useEffect(() => {
+    if (isExtraPractice) return;
     if (phase === 'empty') {
       onFinished?.();
     }
-  }, [phase, onFinished]);
+  }, [phase, onFinished, isExtraPractice]);
 
   const handlePracticeAgain = async () => {
     if (isPaused) return;
@@ -121,6 +124,11 @@ export default function ERCPracticeFocusWork({
   const isPaused = workflow?.is_paused === true;
 
   useEffect(() => {
+    if (workflow?.is_task_completed_today) {
+      void handlePracticeAgain();
+      return;
+    }
+
     let active = true;
     const loadPractice = async () => {
       try {
@@ -157,7 +165,7 @@ export default function ERCPracticeFocusWork({
     return () => {
       active = false;
     };
-  }, []);
+  }, [workflow?.is_task_completed_today]);
 
   useEffect(() => {
     passageScrollRef.current?.scrollTo({ top: 0 });
