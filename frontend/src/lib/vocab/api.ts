@@ -107,3 +107,11 @@ export function submitVocabReview(payload: VocabReviewSubmitPayload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function submitVocabContentReview(payload: VocabReviewSubmitPayload) {
+  return apiJson<VocabReviewSubmitResult>('/api/vocab/content-reviews', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}

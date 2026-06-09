@@ -4,16 +4,20 @@ import QuizRenderer from './QuizRenderer';
 import StudyCard from './StudyCard';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabTodaySession } from '../../hooks/vocab/useVocabTodaySession';
+import { fetchVocabOverviewCurrentWords, submitVocabContentReview } from '../../lib/vocab/api';
+import type { VocabOverviewCurrentWord, VocabReviewItem } from '../../lib/vocab/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
-import { apiJson } from '../../lib/api';
-import type { VocabReviewItem, VocabWordDetail } from '../../lib/vocab/types';
 import { Frown, Meh, CheckCircle2, Rocket } from 'lucide-react';
+
+type RatingValue = 'again' | 'hard' | 'good' | 'easy';
+
+const EXTRA_ROUND_LIMIT = 50;
 
 const actions = [
   {
     label: '没记住',
     hint: '今天稍后再看',
-    value: 'again' as const,
+    value: 'again' as RatingValue,
     icon: Frown,
     bgClass: 'hover:bg-[var(--focus-work-rose-bg)] hover:border-[var(--focus-work-rose-border)] focus-visible:bg-[var(--focus-work-rose-bg)] focus-visible:border-[var(--focus-work-rose-border)]',
     iconColor: 'text-[var(--focus-work-rose-text)]',
@@ -22,7 +26,7 @@ const actions = [
   {
     label: '有点难',
     hint: '进入较短间隔',
-    value: 'hard' as const,
+    value: 'hard' as RatingValue,
     icon: Meh,
     bgClass: 'hover:bg-[var(--focus-work-amber-bg)] hover:border-[var(--focus-work-amber-border)] focus-visible:bg-[var(--focus-work-amber-bg)] focus-visible:border-[var(--focus-work-amber-border)]',
     iconColor: 'text-[var(--focus-work-amber-text)]',
@@ -31,7 +35,7 @@ const actions = [
   {
     label: '记住了',
     hint: '进入正常间隔',
-    value: 'good' as const,
+    value: 'good' as RatingValue,
     icon: CheckCircle2,
     bgClass: 'hover:bg-[var(--focus-work-emerald-bg)] hover:border-[var(--focus-work-emerald-border)] focus-visible:bg-[var(--focus-work-emerald-bg)] focus-visible:border-[var(--focus-work-emerald-border)]',
     iconColor: 'text-[var(--focus-work-emerald-text)]',
@@ -40,7 +44,7 @@ const actions = [
   {
     label: '很轻松',
     hint: '延后更久再看',
-    value: 'easy' as const,
+    value: 'easy' as RatingValue,
     icon: Rocket,
     bgClass: 'hover:bg-[var(--focus-work-sky-bg)] hover:border-[var(--focus-work-sky-border)] focus-visible:bg-[var(--focus-work-sky-bg)] focus-visible:border-[var(--focus-work-sky-border)]',
     iconColor: 'text-[var(--focus-work-sky-text)]',
@@ -48,89 +52,203 @@ const actions = [
   },
 ];
 
-type VocabTodayFocusWorkProps = Partial<FocusWorkRendererProps>;
+type VocabTodayFocusWorkProps = FocusWorkRendererProps;
+
+function extraTargetCountFromRun(run: FocusWorkRendererProps['run']) {
+  const rawTarget = Number(run.config_snapshot?.target_word_count ?? run.config_snapshot?.daily_target_count ?? 10);
+  if (!Number.isFinite(rawTarget)) return 10;
+  return Math.max(1, Math.min(EXTRA_ROUND_LIMIT, Math.floor(rawTarget)));
+}
+
+function countedTargetCountFromRun(run: FocusWorkRendererProps['run'], fallback: number) {
+  const rawTarget = Number(run.config_snapshot?.target_word_count ?? run.config_snapshot?.daily_target_count ?? fallback);
+  if (!Number.isFinite(rawTarget)) return fallback;
+  return Math.max(0, Math.floor(rawTarget));
+}
+
+function toExtraReviewItem(word: VocabOverviewCurrentWord): VocabReviewItem {
+  return {
+    id: word.id,
+    deck_id: word.deck_id,
+    word: word.word,
+    us_pronunciation: word.us_pronunciation,
+    uk_pronunciation: word.uk_pronunciation,
+    translations: word.translations,
+    phrases: [],
+    sentences: [],
+    prompt_type: 'en_to_zh',
+    review_mode: word.mastery_state === 'unstarted' ? 'study' : 'review',
+    mastery_score: word.mastery_state === 'mastered' ? 100 : word.mastery_state === 'learning' ? 50 : 0,
+  };
+}
+
+function orderExtraWords(words: VocabOverviewCurrentWord[]) {
+  const priority: Record<VocabOverviewCurrentWord['mastery_state'], number> = {
+    unstarted: 0,
+    learning: 1,
+    mastered: 2,
+  };
+  return [...words].sort((a, b) => priority[a.mastery_state] - priority[b.mastery_state]);
+}
 
 export default function VocabTodayFocusWork({
-  workflow,
-  onCompleteTaskAndFinish,
-  onFinished,
-  registerResetCommand,
+  run,
+  disabled,
+  onContentCompleted,
 }: VocabTodayFocusWorkProps) {
   const { activeDeck, activeDeckVersion } = useVocabDeck();
-  const session = useVocabTodaySession(activeDeck?.id ?? null, activeDeckVersion);
+  const activeDeckId = activeDeck?.id ?? null;
+  const session = useVocabTodaySession(activeDeckId, activeDeckVersion);
   const completedRef = React.useRef(false);
-  const isPaused = workflow?.is_paused === true;
+  const isPaused = disabled;
+  const isExtraRun = !run.counts_for_task_completion;
+  const extraTargetCount = React.useMemo(() => extraTargetCountFromRun(run), [run]);
+  const [extraItems, setExtraItems] = React.useState<VocabReviewItem[]>([]);
+  const [extraLoadedRunId, setExtraLoadedRunId] = React.useState<string | null>(null);
+  const [extraLoading, setExtraLoading] = React.useState(false);
+  const [extraError, setExtraError] = React.useState<string | null>(null);
+  const [extraSubmitting, setExtraSubmitting] = React.useState(false);
+  const [extraCompletedCount, setExtraCompletedCount] = React.useState(0);
+  const extraCurrentItem = isExtraRun ? extraItems[0] ?? null : null;
+  const displayCurrentItem = isExtraRun ? extraCurrentItem : session.currentItem;
+  const displayCurrentMode = isExtraRun ? extraCurrentItem?.review_mode ?? null : session.currentMode;
+  const displayLoading = isExtraRun ? extraLoading : session.loading;
+  const displayError = isExtraRun ? extraError : session.error;
+  const displaySubmitting = isExtraRun ? extraSubmitting : session.submitting;
+  const displayBatchNumber = isExtraRun ? 1 : session.currentBatchNumber;
+  const displayBatchCount = isExtraRun ? 1 : session.totalBatchCount;
+  const extraPlannedCount = extraCompletedCount + extraItems.length;
 
-  const [isExtraPractice, setIsExtraPractice] = React.useState(() => {
-    return workflow?.is_task_completed_today === true;
-  });
-  const [extraQueue, setExtraQueue] = React.useState<VocabReviewItem[]>([]);
-  const [extraIndex, setExtraIndex] = React.useState(0);
-  const [loadingExtra, setLoadingExtra] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    completedRef.current = false;
+  }, [run.id]);
 
   // Lift revealed state up to allow keyboard control and automatic reset
   const [revealed, setRevealed] = React.useState(false);
 
   React.useEffect(() => {
     setRevealed(false);
-  }, [session.currentItem?.id, extraIndex]);
-
-  const handlePracticeAgain = async () => {
-    if (isPaused || !activeDeck) return;
-    setLoadingExtra(true);
-    setIsExtraPractice(true);
-    setError(null);
-    try {
-      interface CurrentWordBrief {
-        id: string;
-      }
-      const currentWords = await apiJson<CurrentWordBrief[]>(`/api/vocab/decks/${activeDeck.id}/overview/current-words?state=all`);
-      if (!currentWords || currentWords.length === 0) {
-        throw new Error('当前词书没有任何单词');
-      }
-      const shuffled = [...currentWords].sort(() => 0.5 - Math.random());
-      const selectedWords = shuffled.slice(0, 10);
-      const details = await Promise.all(selectedWords.map((w) => apiJson<VocabWordDetail>(`/api/vocab/words/${w.id}`)));
-      const extraItems: VocabReviewItem[] = details.map((detail) => ({
-        ...detail,
-        prompt_type: 'en_to_zh',
-        review_mode: 'study',
-        mastery_score: 0,
-      }));
-      setExtraQueue(extraItems);
-      setExtraIndex(0);
-    } catch (err) {
-      console.error('Failed to load extra words', err);
-      setError(err instanceof Error ? err.message : '加载加练单词失败');
-    } finally {
-      setLoadingExtra(false);
-    }
-  };
+  }, [displayCurrentItem?.id]);
 
   React.useEffect(() => {
-    registerResetCommand?.(() => {
-      completedRef.current = false;
-      setIsExtraPractice(true);
-      void handlePracticeAgain();
+    if (!isExtraRun || !activeDeckId) {
+      setExtraItems([]);
+      setExtraLoadedRunId(null);
+      setExtraLoading(false);
+      setExtraError(null);
+      setExtraSubmitting(false);
+      setExtraCompletedCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    setExtraItems([]);
+    setExtraLoadedRunId(null);
+    setExtraLoading(true);
+    setExtraError(null);
+    setExtraSubmitting(false);
+    setExtraCompletedCount(0);
+
+    fetchVocabOverviewCurrentWords(activeDeckId, 'all')
+      .then((words) => {
+        if (cancelled) return;
+        const items = orderExtraWords(words)
+          .slice(0, extraTargetCount)
+          .map(toExtraReviewItem);
+        setExtraItems(items);
+        setExtraLoadedRunId(run.id);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setExtraError(err instanceof Error ? err.message : '额外词卡加载失败');
+        setExtraLoadedRunId(run.id);
+      })
+      .finally(() => {
+        if (!cancelled) setExtraLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDeckId, extraTargetCount, isExtraRun, run.id]);
+
+  const completeEmptyExtraRun = React.useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    onContentCompleted({
+      completed_word_count: extraCompletedCount,
+      target_word_count: extraTargetCount,
+      extra_round: true,
+      no_available_content: true,
     });
-  }, [registerResetCommand]);
+  }, [extraCompletedCount, extraTargetCount, onContentCompleted]);
+
+  const submitExtraRating = React.useCallback(async (value: RatingValue) => {
+    if (!activeDeckId || !extraCurrentItem || extraSubmitting) return;
+    const item = extraCurrentItem;
+    setExtraSubmitting(true);
+    try {
+      const payload = await submitVocabContentReview({
+        deck_id: activeDeckId,
+        word_id: item.id,
+        result: value,
+        review_mode: item.review_mode,
+        prompt_type: item.prompt_type,
+      });
+      setExtraError(null);
+      if (payload.should_repeat_today) {
+        setExtraItems((prev) => {
+          const index = prev.findIndex((candidate) => candidate.id === item.id);
+          if (index < 0) return prev;
+          const next = [...prev];
+          const [current] = next.splice(index, 1);
+          return [...next, current];
+        });
+      } else {
+        setExtraCompletedCount((prev) => prev + 1);
+        setExtraItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
+      }
+    } catch (err) {
+      setExtraError(err instanceof Error ? err.message : '提交失败');
+    } finally {
+      setExtraSubmitting(false);
+    }
+  }, [activeDeckId, extraCurrentItem, extraSubmitting]);
 
   React.useEffect(() => {
-    if (workflow?.is_task_completed_today && activeDeck && extraQueue.length === 0 && !loadingExtra && !error) {
-      void handlePracticeAgain();
-    }
-  }, [activeDeck, workflow?.is_task_completed_today]);
+    if (!isExtraRun) return;
+    if (completedRef.current) return;
+    if (isPaused || extraLoading || extraError) return;
+    if (extraLoadedRunId !== run.id) return;
+    if (extraItems.length > 0 || extraCompletedCount <= 0) return;
+    completedRef.current = true;
+    onContentCompleted({
+      completed_word_count: extraCompletedCount,
+      target_word_count: extraPlannedCount || extraTargetCount,
+      extra_round: true,
+    });
+  }, [
+    extraCompletedCount,
+    extraError,
+    extraItems.length,
+    extraLoadedRunId,
+    extraLoading,
+    extraPlannedCount,
+    extraTargetCount,
+    isExtraRun,
+    isPaused,
+    onContentCompleted,
+    run.id,
+  ]);
 
-
-  const handleRatingSubmit = React.useCallback(async (value: 'again' | 'hard' | 'good' | 'easy') => {
+  const handleRatingSubmit = React.useCallback(async (value: RatingValue) => {
     if (isPaused) return;
-    if (isExtraPractice) {
-      setExtraIndex((prev) => prev + 1);
-    } else {
-      await session.submit(value);
+    if (isExtraRun) {
+      await submitExtraRating(value);
+      return;
     }
-  }, [isPaused, isExtraPractice, session]);
+    await session.submit(value);
+  }, [isExtraRun, isPaused, session, submitExtraRating]);
 
   // Keyboard shortcut listeners
   React.useEffect(() => {
@@ -143,34 +261,30 @@ export default function VocabTodayFocusWork({
         return;
       }
 
-      const hasActiveItem = isExtraPractice
-        ? (extraQueue.length > 0 && extraIndex < extraQueue.length)
-        : !!session.currentItem;
-
-      if (!hasActiveItem) return;
+      if (!displayCurrentItem) return;
 
       switch (e.key) {
         case '1':
           e.preventDefault();
-          if (!session.submitting) {
+          if (!displaySubmitting) {
             void handleRatingSubmit('again');
           }
           break;
         case '2':
           e.preventDefault();
-          if (!session.submitting) {
+          if (!displaySubmitting) {
             void handleRatingSubmit('hard');
           }
           break;
         case '3':
           e.preventDefault();
-          if (!session.submitting) {
+          if (!displaySubmitting) {
             void handleRatingSubmit('good');
           }
           break;
         case '4':
           e.preventDefault();
-          if (!session.submitting) {
+          if (!displaySubmitting) {
             void handleRatingSubmit('easy');
           }
           break;
@@ -181,19 +295,11 @@ export default function VocabTodayFocusWork({
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          if (!isExtraPractice) {
-            session.goToPrev?.();
-          } else {
-            setExtraIndex((prev) => Math.max(0, prev - 1));
-          }
+          if (!isExtraRun) session.goToPrev?.();
           break;
         case 'ArrowRight':
           e.preventDefault();
-          if (!isExtraPractice) {
-            session.goToNext?.();
-          } else {
-            setExtraIndex((prev) => Math.min(extraQueue.length - 1, prev + 1));
-          }
+          if (!isExtraRun) session.goToNext?.();
           break;
         default:
           break;
@@ -204,21 +310,26 @@ export default function VocabTodayFocusWork({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isPaused, isExtraPractice, extraQueue, extraIndex, session, handleRatingSubmit]);
+  }, [displayCurrentItem, displaySubmitting, handleRatingSubmit, isExtraRun, isPaused, session]);
 
   React.useEffect(() => {
-    if (isExtraPractice) return;
+    if (isExtraRun) return;
     if (completedRef.current) return;
     if (isPaused) return;
     if (!activeDeck) return;
     if (!session.ready) return;
     if (session.loading || session.error || session.isBatchReview || session.currentItem) return;
     completedRef.current = true;
-    onFinished?.();
+    onContentCompleted({
+      completed_word_count: session.memorizedCount,
+      target_word_count: countedTargetCountFromRun(run, session.memorizedCount),
+    });
   }, [
-    onFinished,
+    onContentCompleted,
     activeDeck,
     isPaused,
+    isExtraRun,
+    run.config_snapshot,
     session.currentBatchNumber,
     session.currentItem,
     session.error,
@@ -229,16 +340,10 @@ export default function VocabTodayFocusWork({
     session.totalBatchCount,
   ]);
 
-  React.useEffect(() => {
-    if (isExtraPractice && extraQueue.length > 0 && extraIndex >= extraQueue.length) {
-      onFinished?.();
-    }
-  }, [isExtraPractice, extraQueue, extraIndex, onFinished]);
-
   // Premium progress bars
   const renderProgressBar = () => {
-    const total = session.totalBatchCount;
-    const current = session.currentBatchNumber;
+    const total = displayBatchCount;
+    const current = displayBatchNumber;
 
     const getDotPosition = (index: number) => {
       if (total <= 1) return 50;
@@ -265,7 +370,7 @@ export default function VocabTodayFocusWork({
               className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3.5 w-3.5 rounded-full border transition-all duration-300 ${
                 isNodeActive
                   ? 'bg-emerald-400 border-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.7)]'
-                  : 'bg-slate-800 border-slate-700'
+                  : 'bg-[var(--focus-work-surface-muted)] border-[var(--focus-work-border)]'
               } ${isCurrent ? 'scale-125 border-emerald-200' : ''}`}
               style={{ left: `${pos}%` }}
               title={`第 ${i + 1} 批`}
@@ -276,104 +381,48 @@ export default function VocabTodayFocusWork({
     );
   };
 
-  const renderExtraProgressBar = () => {
-    const total = extraQueue.length;
-    const current = extraIndex;
-    const progress = total > 0 ? (current / total) * 100 : 0;
-
-    return (
-      <div className="relative mt-3 h-2 w-full bg-[var(--focus-work-surface-soft)] rounded-full border border-[var(--focus-work-border)] overflow-hidden">
-        <div
-          className="h-full bg-emerald-500 rounded-full transition-all duration-300 ease-out shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-    );
-  };
-
   return (
     <div className="h-full w-full overflow-y-auto px-4 pb-8">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <header className="pt-2">
           <div className="text-sm font-medium text-[var(--focus-work-text)] text-center">
-            {isExtraPractice
-              ? `加练进度：第 ${extraIndex + 1} 个 / 共 ${extraQueue.length} 个`
-              : session.loading
+            {displayLoading
               ? '批次加载中…'
-              : `第 ${session.currentBatchNumber} 批 / 共 ${session.totalBatchCount} 批`}
+              : isExtraRun
+                ? `额外轮次：已完成 ${extraCompletedCount} / ${extraPlannedCount || extraTargetCount}`
+                : `第 ${displayBatchNumber} 批 / 共 ${displayBatchCount} 批`}
           </div>
-          {isExtraPractice ? renderExtraProgressBar() : renderProgressBar()}
+          {renderProgressBar()}
         </header>
 
-        {isExtraPractice ? (
-          loadingExtra ? (
-            <div className="flex h-48 w-full items-center justify-center">
-              <div className="text-center">
-                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--focus-work-border)] border-t-white" />
-                <p className="mt-4 text-sm text-[var(--focus-work-text-muted)]">正在为您加载加练单词…</p>
-              </div>
-            </div>
-          ) : error ? (
-            <div className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-[var(--focus-work-text-muted)]">
-              <p className="text-sm text-rose-200">{error}</p>
-              <div className="mt-5 flex gap-3">
-                <button
-                  type="button"
-                  disabled={isPaused || loadingExtra}
-                  onClick={handlePracticeAgain}
-                  className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
-                >
-                  再试一次
-                </button>
-              </div>
-            </div>
-          ) : extraQueue.length > 0 && extraIndex < extraQueue.length ? (
-            <div className="space-y-6">
-              <StudyCard
-                key={extraQueue[extraIndex].id}
-                item={extraQueue[extraIndex]}
-                revealed={revealed}
-                onToggleRevealed={() => setRevealed((r) => !r)}
-              />
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {actions.map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.value}
-                      type="button"
-                      disabled={isPaused}
-                      onClick={() => void handleRatingSubmit(action.value)}
-                      className={`flex items-center gap-4 rounded-[1.5rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 disabled:pointer-events-none disabled:opacity-50 ${action.bgClass}`}
-                    >
-                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--focus-work-surface-muted)] border border-[var(--focus-work-border)] ${action.iconColor}`}>
-                        <Icon className="h-5.5 w-5.5" />
-                      </div>
-                      <div>
-                        <div className="text-base font-semibold text-[var(--focus-work-text)] flex items-center gap-2">
-                          <span>{action.label}</span>
-                          <span className="inline-flex h-4.5 w-4.5 items-center justify-center rounded bg-[var(--focus-work-surface-muted)] border border-[var(--focus-work-border)] text-[10px] font-mono text-[var(--focus-work-text-faint)]">
-                            {action.shortcut}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 text-xs text-[var(--focus-work-text-muted)] leading-tight">{action.hint}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null
-        ) : (
-          <>
+        <>
             <p className="text-sm leading-6 text-[var(--focus-work-text-muted)] text-center">
-              {session.isBatchReview ? '上一批先简单回顾一下，再继续今天的词。' : '先完成今天这一个词，再进入下一步。'}
+              {isExtraRun
+                ? '这是一轮额外专注，只记录内容进度，不计入任务完成。'
+                : session.isBatchReview
+                  ? '上一批先简单回顾一下，再继续今天的词。'
+                  : '先完成今天这一个词，再进入下一步。'}
             </p>
 
-            {session.loading ? <p className="text-sm text-[var(--focus-work-text-muted)] text-center">今日单词加载中…</p> : null}
-            {session.error ? <p className="text-sm text-rose-200 text-center">{session.error}</p> : null}
+            {displayLoading ? <p className="text-sm text-[var(--focus-work-text-muted)] text-center">今日单词加载中…</p> : null}
+            {displayError ? <p className="text-sm text-rose-200 text-center">{displayError}</p> : null}
 
-            {session.isBatchReview ? (
+            {isExtraRun && !displayLoading && !displayError && extraLoadedRunId === run.id && !displayCurrentItem && extraCompletedCount === 0 ? (
+              <section className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-6 text-center">
+                <div className="text-lg font-semibold text-[var(--focus-work-text)]">本轮暂无可练词卡</div>
+                <p className="mt-2 text-sm leading-6 text-[var(--focus-work-text-muted)]">
+                  当前词书没有可用于额外轮次的内容。你可以结束本轮内容，让工作台继续处理阶段。
+                </p>
+                <button
+                  type="button"
+                  disabled={isPaused}
+                  onClick={completeEmptyExtraRun}
+                  className="mt-5 rounded-full border border-[var(--focus-work-border)] bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  结束本轮内容
+                </button>
+              </section>
+            ) : !isExtraRun && session.isBatchReview ? (
               <section className="rounded-[1.75rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-muted)] p-5">
                 <div className="text-sm text-[var(--focus-work-text-muted)]">{`上一批已完成 ${session.batchReviewCount} 个单词。`}</div>
                 <div className="mt-4 flex justify-end">
@@ -387,14 +436,14 @@ export default function VocabTodayFocusWork({
                   </button>
                 </div>
               </section>
-            ) : session.currentItem ? (
+            ) : displayCurrentItem ? (
               <div className="space-y-6">
-                {session.currentMode === 'review' ? (
-                  <QuizRenderer item={session.currentItem} />
+                {displayCurrentMode === 'review' ? (
+                  <QuizRenderer item={displayCurrentItem} />
                 ) : (
                   <StudyCard
-                    key={session.currentItem.id}
-                    item={session.currentItem}
+                    key={displayCurrentItem.id}
+                    item={displayCurrentItem}
                     revealed={revealed}
                     onToggleRevealed={() => setRevealed((r) => !r)}
                   />
@@ -406,7 +455,7 @@ export default function VocabTodayFocusWork({
                       <button
                         key={action.value}
                         type="button"
-                        disabled={isPaused || session.submitting}
+                        disabled={isPaused || displaySubmitting}
                         onClick={() => void handleRatingSubmit(action.value)}
                         className={`flex items-center gap-4 rounded-[1.5rem] border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 disabled:pointer-events-none disabled:opacity-50 ${action.bgClass}`}
                       >
@@ -428,8 +477,7 @@ export default function VocabTodayFocusWork({
                 </div>
               </div>
             ) : null}
-          </>
-        )}
+        </>
 
         {/* Premium Shortcuts Info Footer */}
         <footer className="mt-8 flex items-center justify-center border-t border-[var(--focus-work-border)] pt-4 text-xs text-[var(--focus-work-text-faint)]">

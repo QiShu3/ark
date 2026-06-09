@@ -37,6 +37,7 @@ from .service import (
     list_overview_completed_decks,
     list_overview_current_words,
     list_overview_mastered_words,
+    submit_content_review,
     submit_review,
     update_today_plan,
 )
@@ -195,6 +196,25 @@ async def route_submit_review(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> VocabReviewSubmitOut:
     result = await submit_review(
+        _pool_from_request(request),
+        user_id=int(user.id),
+        deck_id=payload.deck_id,
+        word_id=payload.word_id,
+        result=payload.result,
+        review_mode=payload.review_mode,
+        prompt_type=payload.prompt_type,
+        response_ms=payload.response_ms,
+    )
+    return VocabReviewSubmitOut(**result)
+
+
+@router.post("/content-reviews", response_model=VocabReviewSubmitOut)
+async def route_submit_content_review(
+    payload: VocabReviewSubmitIn,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> VocabReviewSubmitOut:
+    result = await submit_content_review(
         _pool_from_request(request),
         user_id=int(user.id),
         deck_id=payload.deck_id,

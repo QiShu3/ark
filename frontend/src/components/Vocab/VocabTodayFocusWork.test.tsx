@@ -1,17 +1,21 @@
-import { render, waitFor, screen, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import VocabTodayFocusWork from './VocabTodayFocusWork';
+import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
-const { useVocabDeck, useVocabTodaySession, apiJson } = vi.hoisted(() => ({
+const { fetchVocabOverviewCurrentWords, submitVocabContentReview, useVocabDeck, useVocabTodaySession } = vi.hoisted(() => ({
+  fetchVocabOverviewCurrentWords: vi.fn(),
+  submitVocabContentReview: vi.fn(),
   useVocabDeck: vi.fn(),
   useVocabTodaySession: vi.fn(),
-  apiJson: vi.fn(),
 }));
 
-vi.mock('../../lib/api', () => ({
-  apiJson,
+vi.mock('../../lib/vocab/api', () => ({
+  fetchVocabOverviewCurrentWords,
+  submitVocabContentReview,
 }));
 
 vi.mock('../../hooks/vocab/useVocabDeck', () => ({
@@ -64,34 +68,73 @@ function mockReadyCompletedSession() {
   });
 }
 
+function focusRun(configSnapshot: Record<string, unknown> = {}): FocusWorkRunSummary {
+  return {
+    id: 'run-1',
+    workflow_id: 'workflow-1',
+    phase_index: 0,
+    focus_work_type: 'vocab_today',
+    counts_for_task_completion: true,
+    status: 'running',
+    config_snapshot: configSnapshot,
+  };
+}
+
+function extraRun(configSnapshot: Record<string, unknown> = {}): FocusWorkRunSummary {
+  return {
+    ...focusRun(configSnapshot),
+    id: 'run-extra',
+    counts_for_task_completion: false,
+  };
+}
+
 describe('VocabTodayFocusWork', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    fetchVocabOverviewCurrentWords.mockResolvedValue([]);
+    submitVocabContentReview.mockResolvedValue({
+      mastery_score: 10,
+      next_review_at: '2026-06-10T00:00:00Z',
+      wrong_count: 0,
+      correct_count: 1,
+      interval_days: 1,
+      result: 'good',
+      should_repeat_today: false,
+    });
     mockReadyCompletedSession();
-    apiJson.mockReset();
   });
 
-  it('does not auto-complete the app task while focus work is paused', async () => {
-    const complete = vi.fn();
+  it('does not emit content completion while focus work is paused', async () => {
+    useVocabTodaySession.mockReturnValue({
+      ready: true,
+      loading: false,
+      error: null,
+      isBatchReview: false,
+      currentItem: null,
+      currentBatchNumber: 0,
+      totalBatchCount: 0,
+      memorizedCount: 10,
+      currentMode: 'study',
+      submitting: false,
+      batchReviewCount: 0,
+      batchReviewGroups: [],
+      batchReviewActionLabel: '继续',
+      continueBatchReview: vi.fn(),
+      submit: vi.fn(),
+      lastResult: null,
+    });
+    const onContentCompleted = vi.fn();
 
     render(
       <VocabTodayFocusWork
-        workflow={{
-          state: 'focus',
-          active_focus_work_type: 'vocab_today',
-          focus_work_display_state: 'fullscreen',
-          is_paused: true,
-        }}
-        recordFocus
-        onCompleteTaskAndFinish={complete}
-        onComplete={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={focusRun({ target_word_count: 100 })}
+        disabled
+        onContentCompleted={onContentCompleted}
       />,
     );
 
-    useVocabDeck.mockReturnValue({
-      activeDeck: { id: 'deck-1', name: 'CET4' },
-      activeDeckVersion: 1,
+    await waitFor(() => {
+      expect(onContentCompleted).not.toHaveBeenCalled();
     });
   });
 
@@ -128,16 +171,9 @@ describe('VocabTodayFocusWork', () => {
 
     const { getByText, queryByText } = render(
       <VocabTodayFocusWork
-        workflow={{
-          state: 'focus',
-          active_focus_work_type: 'vocab_today',
-          focus_work_display_state: 'fullscreen',
-          is_paused: false,
-        }}
-        recordFocus
-        onCompleteTaskAndFinish={vi.fn()}
-        onComplete={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={focusRun()}
+        disabled={false}
+        onContentCompleted={vi.fn()}
       />,
     );
 
@@ -147,7 +183,7 @@ describe('VocabTodayFocusWork', () => {
     expect(queryByText('切换词书')).not.toBeInTheDocument();
   });
 
-  it('calls onFinished when no words are left', async () => {
+  it('emits content completion when no words are left', async () => {
     useVocabTodaySession.mockReturnValue({
       ready: true,
       loading: false,
@@ -167,36 +203,34 @@ describe('VocabTodayFocusWork', () => {
       lastResult: null,
     });
 
-    const onFinishedMock = vi.fn();
+    const onContentCompleted = vi.fn();
 
     render(
       <VocabTodayFocusWork
-        workflow={{
-          state: 'focus',
-          active_focus_work_type: 'vocab_today',
-          focus_work_display_state: 'fullscreen',
-          is_paused: false,
-        }}
-        recordFocus
-        onFinished={onFinishedMock}
-        onComplete={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={focusRun({ target_word_count: 100 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
       />,
     );
 
-    expect(onFinishedMock).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onContentCompleted).toHaveBeenCalledWith({
+        completed_word_count: 0,
+        target_word_count: 100,
+      });
+    });
   });
 
-  it('supports extra practice flow via registerResetCommand', async () => {
+  it('uses the daily target count when a counted run has no explicit target word count', async () => {
     useVocabTodaySession.mockReturnValue({
       ready: true,
       loading: false,
       error: null,
-      currentItem: null,
       isBatchReview: false,
+      currentItem: null,
       currentBatchNumber: 0,
       totalBatchCount: 0,
-      memorizedCount: 0,
+      memorizedCount: 20,
       currentMode: 'study',
       submitting: false,
       batchReviewCount: 0,
@@ -206,63 +240,192 @@ describe('VocabTodayFocusWork', () => {
       submit: vi.fn(),
       lastResult: null,
     });
-
-    const userEvent = (await import('@testing-library/user-event')).default.setup();
-
-    apiJson.mockImplementation(async (url) => {
-      if (url.includes('/overview/current-words')) {
-        return [{ id: 'word-extra-1', word: 'banana' }];
-      }
-      if (url.includes('/words/word-extra-1')) {
-        return {
-          id: 'word-extra-1',
-          deck_id: 'deck-1',
-          word: 'banana',
-          us_pronunciation: 'bəˈnænə',
-          uk_pronunciation: 'bəˈnænə',
-          translations: [{ pos: 'n.', translation: '香蕉' }],
-          phrases: [],
-          sentences: [],
-        };
-      }
-      return null;
-    });
-
-    let resetFn: (() => void) | undefined;
-    const registerResetCommandMock = vi.fn((fn) => {
-      resetFn = fn;
-    });
-    const onFinishedMock = vi.fn();
+    const onContentCompleted = vi.fn();
 
     render(
       <VocabTodayFocusWork
-        workflow={{
-          state: 'focus',
-          active_focus_work_type: 'vocab_today',
-          focus_work_display_state: 'fullscreen',
-          is_paused: false,
-        }}
-        recordFocus
-        registerResetCommand={registerResetCommandMock}
-        onFinished={onFinishedMock}
-        onComplete={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={focusRun({ daily_target_count: 24 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
       />,
     );
 
-    expect(registerResetCommandMock).toHaveBeenCalled();
-    expect(resetFn).toBeDefined();
-
-    await act(async () => {
-      resetFn!();
+    await waitFor(() => {
+      expect(onContentCompleted).toHaveBeenCalledWith({
+        completed_word_count: 20,
+        target_word_count: 24,
+      });
     });
+  });
 
-    expect(await screen.findByText('banana')).toBeInTheDocument();
-    expect(screen.getByText('加练进度：第 1 个 / 共 1 个')).toBeInTheDocument();
+  it('loads deck words for extra runs when the today queue is already empty', async () => {
+    useVocabTodaySession.mockReturnValue({
+      ready: true,
+      loading: false,
+      error: null,
+      isBatchReview: false,
+      currentItem: null,
+      currentBatchNumber: 0,
+      totalBatchCount: 0,
+      memorizedCount: 10,
+      currentMode: 'study',
+      submitting: false,
+      batchReviewCount: 0,
+      batchReviewGroups: [],
+      batchReviewActionLabel: '继续',
+      continueBatchReview: vi.fn(),
+      submit: vi.fn(),
+      lastResult: null,
+    });
+    fetchVocabOverviewCurrentWords.mockResolvedValue([
+      {
+        id: 'word-extra',
+        deck_id: 'deck-1',
+        deck_name: 'Default',
+        word: 'brave',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'unstarted',
+        translations: [{ pos: 'adj.', translation: '勇敢的' }],
+      },
+    ]);
+    const onContentCompleted = vi.fn();
 
-    const rateBtn = screen.getByRole('button', { name: /记住了/ });
-    await userEvent.click(rateBtn);
+    render(
+      <VocabTodayFocusWork
+        run={extraRun({ target_word_count: 10 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
+      />,
+    );
 
-    expect(onFinishedMock).toHaveBeenCalled();
+    expect(await screen.findByText('brave')).toBeInTheDocument();
+    expect(screen.getByText('额外轮次：已完成 0 / 1')).toBeInTheDocument();
+    expect(onContentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('uses the daily target count for extra run word selection', async () => {
+    useVocabTodaySession.mockReturnValue({
+      ready: true,
+      loading: false,
+      error: null,
+      isBatchReview: false,
+      currentItem: null,
+      currentBatchNumber: 0,
+      totalBatchCount: 0,
+      memorizedCount: 10,
+      currentMode: 'study',
+      submitting: false,
+      batchReviewCount: 0,
+      batchReviewGroups: [],
+      batchReviewActionLabel: '继续',
+      continueBatchReview: vi.fn(),
+      submit: vi.fn(),
+      lastResult: null,
+    });
+    fetchVocabOverviewCurrentWords.mockResolvedValue([
+      {
+        id: 'word-extra-1',
+        deck_id: 'deck-1',
+        deck_name: 'Default',
+        word: 'brave',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'unstarted',
+        translations: [{ pos: 'adj.', translation: '勇敢的' }],
+      },
+      {
+        id: 'word-extra-2',
+        deck_id: 'deck-1',
+        deck_name: 'Default',
+        word: 'clear',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'learning',
+        translations: [{ pos: 'adj.', translation: '清楚的' }],
+      },
+      {
+        id: 'word-extra-3',
+        deck_id: 'deck-1',
+        deck_name: 'Default',
+        word: 'distant',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'mastered',
+        translations: [{ pos: 'adj.', translation: '遥远的' }],
+      },
+    ]);
+
+    render(
+      <VocabTodayFocusWork
+        run={extraRun({ daily_target_count: 2 })}
+        disabled={false}
+        onContentCompleted={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('brave')).toBeInTheDocument();
+    expect(screen.getByText('额外轮次：已完成 0 / 2')).toBeInTheDocument();
+  });
+
+  it('completes an extra run after the extra deck words are submitted', async () => {
+    const user = userEvent.setup();
+    useVocabTodaySession.mockReturnValue({
+      ready: true,
+      loading: false,
+      error: null,
+      isBatchReview: false,
+      currentItem: null,
+      currentBatchNumber: 0,
+      totalBatchCount: 0,
+      memorizedCount: 10,
+      currentMode: 'study',
+      submitting: false,
+      batchReviewCount: 0,
+      batchReviewGroups: [],
+      batchReviewActionLabel: '继续',
+      continueBatchReview: vi.fn(),
+      submit: vi.fn(),
+      lastResult: null,
+    });
+    fetchVocabOverviewCurrentWords.mockResolvedValue([
+      {
+        id: 'word-extra',
+        deck_id: 'deck-1',
+        deck_name: 'Default',
+        word: 'brave',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'unstarted',
+        translations: [{ pos: 'adj.', translation: '勇敢的' }],
+      },
+    ]);
+    const onContentCompleted = vi.fn();
+
+    render(
+      <VocabTodayFocusWork
+        run={extraRun({ target_word_count: 10 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
+      />,
+    );
+
+    await screen.findByText('brave');
+    await user.click(screen.getByRole('button', { name: '记住了3 进入正常间隔' }));
+
+    await waitFor(() => {
+      expect(submitVocabContentReview).toHaveBeenCalledWith({
+        deck_id: 'deck-1',
+        word_id: 'word-extra',
+        result: 'good',
+        review_mode: 'study',
+        prompt_type: 'en_to_zh',
+      });
+      expect(onContentCompleted).toHaveBeenCalledWith({
+        completed_word_count: 1,
+        target_word_count: 1,
+        extra_round: true,
+      });
+    });
   });
 });

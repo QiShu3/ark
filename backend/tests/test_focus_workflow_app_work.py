@@ -102,6 +102,62 @@ def test_focus_workflow_out_exposes_paused_runtime_fields():
     assert payload.is_paused is True
 
 
+def test_focus_workflow_out_exposes_run_runtime_fields():
+    payload = FocusWorkflowOut(
+        state="focus",
+        phase_runtime_state="running_run",
+        active_run_id="00000000-0000-0000-0000-000000000001",
+        active_run={
+            "id": "00000000-0000-0000-0000-000000000001",
+            "workflow_id": "00000000-0000-0000-0000-000000000002",
+            "phase_index": 0,
+            "focus_work_type": "vocab_today",
+            "counts_for_task_completion": True,
+            "status": "running",
+            "progress_snapshot": None,
+        },
+    )
+
+    assert payload.phase_runtime_state == "running_run"
+    assert str(payload.active_run_id) == "00000000-0000-0000-0000-000000000001"
+    assert payload.active_run is not None
+    assert payload.active_run.status == "running"
+
+
+def test_row_to_focus_workflow_reads_phase_runtime_state_and_active_run_id():
+    row = Row(
+        id="00000000-0000-0000-0000-000000000001",
+        user_id=1,
+        task_id=None,
+        runtime_task_id=None,
+        workflow_name="Vocabulary Loop",
+        phases=[{"phase_type": "focus", "duration": 900, "timer_mode": "countdown"}],
+        current_phase_index=0,
+        focus_duration=900,
+        break_duration=300,
+        current_phase="focus",
+        phase_started_at=datetime.now(UTC),
+        phase_planned_duration=900,
+        pending_confirmation=False,
+        pending_task_selection=False,
+        active_focus_work_type=None,
+        focus_work_display_state=None,
+        focus_work_result=None,
+        focus_work_progress_snapshot=None,
+        phase_runtime_state="running_run",
+        phase_runtime_state_before_timeout_prompt=None,
+        active_run_id="00000000-0000-0000-0000-000000000101",
+        is_paused=False,
+        paused_at=None,
+        record_focus=True,
+    )
+
+    out = _row_to_focus_workflow(row)
+
+    assert out.phase_runtime_state == "running_run"
+    assert str(out.active_run_id) == "00000000-0000-0000-0000-000000000101"
+
+
 def test_normalize_workflow_phases_preserves_focus_work_type():
     phases = _normalize_workflow_phases(
         [{"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "vocab_today"}],
@@ -140,7 +196,7 @@ def test_bind_first_focus_phase_to_task_clears_stale_preset_work_binding():
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_activates_first_bound_focus_work():
+async def test_create_workflow_activates_first_bound_focus_work_without_starting_run_log():
     conn = FakeWorkflowConn()
     task_id = uuid4()
     phases = [
@@ -170,11 +226,11 @@ async def test_create_workflow_activates_first_bound_focus_work():
     assert "focus_work_display_state" in workflow_insert_query
     assert "erc_review" in workflow_insert_args
     assert "fullscreen" in workflow_insert_args
-    assert any("focus_app_work_logs" in query and args[2] == "erc_review" for query, args in conn.execute_calls)
+    assert not any("focus_app_work_logs" in query for query, _args in conn.execute_calls)
 
 
 @pytest.mark.asyncio
-async def test_create_workflow_activates_app_managed_task_adapter():
+async def test_create_workflow_activates_app_managed_task_adapter_without_starting_run_log():
     conn = FakeWorkflowConn()
     task_id = uuid4()
     phases = [
@@ -196,7 +252,7 @@ async def test_create_workflow_activates_app_managed_task_adapter():
     workflow_insert_query, workflow_insert_args = conn.fetchrow_calls[0]
     assert "active_focus_work_type" in workflow_insert_query
     assert "vocab_today" in workflow_insert_args
-    assert any("focus_app_work_logs" in query and args[2] == "vocab_today" for query, args in conn.execute_calls)
+    assert not any("focus_app_work_logs" in query for query, _args in conn.execute_calls)
 
 
 def test_focus_work_type_for_task_row_maps_app_managed_tasks():

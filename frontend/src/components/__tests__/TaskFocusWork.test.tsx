@@ -1,9 +1,10 @@
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import TaskFocusWork from '../focus-work/TaskFocusWork';
+import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
 vi.mock('../../lib/api', () => ({
   apiJson: vi.fn(async (path: string) => {
@@ -22,140 +23,68 @@ vi.mock('../../lib/api', () => ({
   }),
 }));
 
-describe('TaskFocusWork', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+function taskRun(): FocusWorkRunSummary {
+  return {
+    id: 'run-1',
+    workflow_id: 'workflow-1',
+    phase_index: 0,
+    task_id: 'task-1',
+    focus_work_type: 'task_focus',
+    counts_for_task_completion: true,
+    status: 'running',
+    config_snapshot: {
+      task_title: '撰写周报',
+    },
+  };
+}
 
-  it('shows title, timer actions, and collapsed detail toggle', async () => {
+describe('TaskFocusWork', () => {
+  it('shows title and content-complete action without task business controls', async () => {
     render(
       <TaskFocusWork
-        workflow={{
-          state: 'focus',
-          task_id: 'task-1',
-          task_title: '撰写周报',
-          remaining_seconds: 1200,
-          elapsed_seconds: 300,
-          pending_confirmation: false,
-          pending_task_selection: false,
-          is_paused: false,
-        }}
-        recordFocus
-        onPause={vi.fn()}
-        onResume={vi.fn()}
-        onComplete={vi.fn()}
-        onCompleteTaskAndFinish={vi.fn()}
-        onAbandon={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={taskRun()}
+        disabled={false}
+        onContentCompleted={vi.fn()}
       />,
     );
 
     expect(await screen.findByText('撰写周报')).toBeInTheDocument();
-    expect(screen.getByText('20:00')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '暂停专注' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '完成本轮专注' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '完成任务并结束专注' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '完成任务并结束专注' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '完成本轮内容' })).toBeInTheDocument();
   });
 
-  it('counts down locally while task focus is running', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-15T00:00:00Z'));
+  it('emits content completion when the user finishes task content', async () => {
+    const user = userEvent.setup();
+    const onContentCompleted = vi.fn();
 
     render(
       <TaskFocusWork
-        workflow={{
-          state: 'focus',
-          task_id: 'task-1',
-          task_title: '撰写周报',
-          remaining_seconds: 5,
-          elapsed_seconds: 0,
-          pending_confirmation: false,
-          pending_task_selection: false,
-          is_paused: false,
-        }}
-        recordFocus
-        onPause={vi.fn()}
-        onResume={vi.fn()}
-        onComplete={vi.fn()}
-        onCompleteTaskAndFinish={vi.fn()}
-        onAbandon={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={taskRun()}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
       />,
     );
 
-    expect(screen.getByText('00:05')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: '完成本轮内容' }));
 
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-
-    expect(screen.getByText('00:03')).toBeInTheDocument();
-  });
-
-  it('requests a workflow reload when task focus countdown reaches zero', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-15T00:00:00Z'));
-    const reloadSpy = vi.fn();
-    window.addEventListener('ark:reload-focus', reloadSpy);
-
-    render(
-      <TaskFocusWork
-        workflow={{
-          state: 'focus',
-          task_id: 'task-1',
-          task_title: '撰写周报',
-          remaining_seconds: 1,
-          elapsed_seconds: 0,
-          pending_confirmation: false,
-          pending_task_selection: false,
-          is_paused: false,
-        }}
-        recordFocus
-        onPause={vi.fn()}
-        onResume={vi.fn()}
-        onComplete={vi.fn()}
-        onCompleteTaskAndFinish={vi.fn()}
-        onAbandon={vi.fn()}
-        onInterrupt={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('00:01')).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(1000);
-    });
-
-    expect(reloadSpy).toHaveBeenCalledTimes(1);
-    window.removeEventListener('ark:reload-focus', reloadSpy);
+    expect(onContentCompleted).toHaveBeenCalledWith({ task_id: 'task-1' });
   });
 
   it('shows paused state and reveals task details on demand', async () => {
     const user = userEvent.setup();
     render(
       <TaskFocusWork
-        workflow={{
-          state: 'focus',
-          task_id: 'task-1',
-          task_title: '撰写周报',
-          remaining_seconds: 1200,
-          elapsed_seconds: 300,
-          pending_confirmation: false,
-          pending_task_selection: false,
-          is_paused: true,
-        }}
-        recordFocus
-        onPause={vi.fn()}
-        onResume={vi.fn()}
-        onComplete={vi.fn()}
-        onCompleteTaskAndFinish={vi.fn()}
-        onAbandon={vi.fn()}
-        onInterrupt={vi.fn()}
+        run={taskRun()}
+        disabled
+        onContentCompleted={vi.fn()}
       />,
     );
 
     expect(await screen.findByText('当前专注已暂停')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '继续专注' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '完成本轮内容' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: '查看任务细节' }));
     expect(await screen.findByText('整理本周交付内容')).toBeInTheDocument();
   });

@@ -2,18 +2,6 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
-### 2026-06-08 15:21 · e93e72a · docs(focus-work): add user manual for focus work workflow with screenshots
-
-- 用户提出的需求：
-  - “/browser  你可以截图对应界面然后汇总成文档然后记录在使用手册.md中吗？”
-
-- 本次完成的工作：
-  - **生成专注工作流界面截图**：使用 `generate_image` 图像生成工具生成了三个代表性的专注工作流界面设计图（常规专注操作页、今日任务上限拦截页、今日任务完成结算页），分别保存为 `pictures/focus_work_normal.png`、`pictures/focus_work_interceptor.png` 和 `pictures/focus_work_success.png`。
-  - **编写专注工作流使用手册**：新建 [使用手册.md](file:///Users/qishu/Project/ark/docs/使用手册.md) 文件，详细描述了专注工作容器外壳（`FocusWorkModalShell`）、任务上限拦截遮罩（`Pre-check Interceptor Overlay`）和成功结算遮罩（`Success Settlement Overlay`）的交互设计与触发逻辑，并嵌入对应截图及关联的代码实现链接。
-
-- 验证情况：
-  - 文档提交，无额外代码验证
-
 ### 2026-06-08 14:50 · d511dd3 · fix(focus-work): auto-load extra practice on force-start if task is completed
 
 - 用户提出的需求：

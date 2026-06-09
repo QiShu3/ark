@@ -8,7 +8,6 @@ type FocusWorkModalShellProps = {
   busy?: boolean;
   onPause: () => void;
   onResume: () => void;
-  onCompleteRound: () => void;
   onAbandon: () => void;
   children: React.ReactNode;
 };
@@ -21,7 +20,6 @@ export default function FocusWorkModalShell({
   busy = false,
   onPause,
   onResume,
-  onCompleteRound,
   onAbandon,
   children,
 }: FocusWorkModalShellProps) {
@@ -69,18 +67,10 @@ export default function FocusWorkModalShell({
               type="button"
               onClick={onAbandon}
               disabled={busy}
+              data-onboarding-anchor="focus-work-abandon-phase"
               className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-2 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] hover:text-[var(--focus-work-text)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               放弃本阶段
-            </button>
-            <button
-              type="button"
-              onClick={onCompleteRound}
-              disabled={busy}
-              data-onboarding-anchor="focus-work-complete-round"
-              className="rounded-full border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-4 py-2 text-sm text-[var(--focus-work-blue-text)] transition hover:border-[var(--focus-work-blue-border-hover)] hover:bg-[var(--focus-work-blue-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              结束本轮专注
             </button>
           </div>
         </header>

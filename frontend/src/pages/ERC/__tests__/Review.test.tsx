@@ -5,18 +5,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Review from '../Review';
 
-const { fetchERCReviewNext, submitERCReview } = vi.hoisted(() => ({
+const { fetchERCArticle, fetchERCArticles, fetchERCMistakes, fetchERCReviewNext, submitERCReview } = vi.hoisted(() => ({
+  fetchERCArticle: vi.fn(),
+  fetchERCArticles: vi.fn(),
+  fetchERCMistakes: vi.fn(),
   fetchERCReviewNext: vi.fn(),
   submitERCReview: vi.fn(),
 }));
 
 vi.mock('../../../lib/erc/api', () => ({
+  fetchERCArticle,
+  fetchERCArticles,
+  fetchERCMistakes,
   fetchERCReviewNext,
   submitERCReview,
 }));
 
 describe('ERC review page', () => {
   beforeEach(() => {
+    fetchERCArticle.mockReset();
+    fetchERCArticles.mockReset();
+    fetchERCMistakes.mockReset();
     fetchERCReviewNext.mockReset();
     submitERCReview.mockReset();
   });
@@ -29,6 +38,8 @@ describe('ERC review page', () => {
       paragraphs: [],
       question: null,
     });
+    fetchERCMistakes.mockResolvedValue([]);
+    fetchERCArticles.mockResolvedValue([]);
 
     render(
       <MemoryRouter>
@@ -36,7 +47,7 @@ describe('ERC review page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('暂无到期复习')).toBeInTheDocument();
+    expect(await screen.findByText('暂无可复习内容')).toBeInTheDocument();
   });
 
   it('renders due question context on a frosted reading surface', async () => {

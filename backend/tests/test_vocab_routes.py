@@ -272,6 +272,47 @@ def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:
     assert response.json()["should_repeat_today"] is False
 
 
+def test_vocab_submit_content_review_route_returns_progress(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+    seen_payloads: list[dict] = []
+
+    async def fake_submit_content_review(*_args, **kwargs):
+        seen_payloads.append(kwargs)
+        return {
+            "mastery_score": 5,
+            "next_review_at": datetime(2026, 5, 6, tzinfo=UTC),
+            "wrong_count": 1,
+            "correct_count": 2,
+            "interval_days": 1,
+            "result": "hard",
+            "should_repeat_today": False,
+        }
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "submit_content_review", fake_submit_content_review)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/vocab/content-reviews",
+        json={
+            "deck_id": "deck-1",
+            "word_id": "word-extra",
+            "result": "hard",
+            "review_mode": "study",
+            "prompt_type": "en_to_zh",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["mastery_score"] == 5
+    assert seen_payloads[0]["word_id"] == "word-extra"
+    assert seen_payloads[0]["result"] == "hard"
+
+
 def test_vocab_word_detail_route_returns_nested_content(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(vocab_router)

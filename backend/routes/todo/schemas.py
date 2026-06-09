@@ -33,6 +33,17 @@ FocusTimerMode = Literal["countdown", "countup"]
 FocusWorkType = Literal["vocab_today", "erc_review", "erc_practice", "task_focus"]
 FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
 FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
+FocusWorkRunStatus = Literal["running", "paused", "content_completed", "completed", "abandoned"]
+FocusWorkRunMode = Literal["counted", "extra"]
+FocusPhaseRuntimeState = Literal[
+    "running_run",
+    "counted_run_completed_confirming",
+    "extra_run_completed",
+    "task_already_completed",
+    "phase_time_expired_prompt",
+    "pending_task_selection",
+    "break_running",
+]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
 
 
@@ -507,6 +518,22 @@ class FocusWorkflowPhase(BaseModel):
     record_focus: bool = True
 
 
+class FocusWorkRunSummaryOut(BaseModel):
+    id: UUID
+    workflow_id: UUID
+    phase_index: int
+    task_id: UUID | None = None
+    focus_work_type: FocusWorkType
+    app_id: AppTaskId | None = None
+    app_task_type: AppTaskType | None = None
+    counts_for_task_completion: bool
+    status: FocusWorkRunStatus
+    progress_snapshot: dict[str, Any] | None = None
+    config_snapshot: dict[str, Any] | None = None
+    completion_reason: str | None = None
+    source_run_id: UUID | None = None
+
+
 class FocusWorkflowOut(BaseModel):
     state: Literal["normal", "focus", "break"]
     workflow_name: str | None = None
@@ -539,6 +566,10 @@ class FocusWorkflowOut(BaseModel):
     active_task_app_config_id: UUID | None = None
     is_task_completed_today: bool = False
     task_blocked_reason: str | None = None
+    phase_runtime_state: FocusPhaseRuntimeState | None = None
+    phase_runtime_state_before_timeout_prompt: FocusPhaseRuntimeState | None = None
+    active_run_id: UUID | None = None
+    active_run: FocusWorkRunSummaryOut | None = None
 
 
 class FocusWorkflowPresetCreateRequest(BaseModel):
@@ -590,3 +621,15 @@ class FocusWorkflowResultRequest(BaseModel):
     focus_work_type: FocusWorkType
     result: FocusWorkResult
     progress_snapshot: dict[str, object] = Field(default_factory=dict)
+
+
+class FocusWorkRunCreateRequest(BaseModel):
+    mode: FocusWorkRunMode
+
+
+class FocusWorkRunContentCompleteRequest(BaseModel):
+    progress_snapshot: dict[str, Any] = Field(default_factory=dict)
+
+
+class FocusWorkflowExtendPhaseRequest(BaseModel):
+    extend_seconds: int = Field(default=300, ge=60, le=24 * 60 * 60)

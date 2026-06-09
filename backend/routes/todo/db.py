@@ -617,6 +617,11 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS record_focus BOOLEAN NOT NULL DEFAULT TRUE;"
         )
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS active_run_id UUID NULL;")
+        await conn.execute("ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS phase_runtime_state VARCHAR(80) NULL;")
+        await conn.execute(
+            "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS phase_runtime_state_before_timeout_prompt VARCHAR(80) NULL;"
+        )
         await conn.execute(
             "ALTER TABLE focus_workflows ADD COLUMN IF NOT EXISTS workflow_name VARCHAR(100) NOT NULL DEFAULT '默认工作流';"
         )
@@ -668,6 +673,92 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS icon VARCHAR(50) NULL;"
+        )
+
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS focus_work_runs (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              workflow_id UUID NOT NULL REFERENCES focus_workflows(id) ON DELETE CASCADE,
+              phase_index INTEGER NOT NULL,
+              task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL,
+              focus_work_type VARCHAR(80) NOT NULL,
+              app_id VARCHAR(40) NULL,
+              app_task_type VARCHAR(80) NULL,
+              counts_for_task_completion BOOLEAN NOT NULL DEFAULT TRUE,
+              status VARCHAR(40) NOT NULL,
+              record_focus BOOLEAN NOT NULL DEFAULT TRUE,
+              config_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+              progress_snapshot JSONB NULL,
+              completion_reason VARCHAR(80) NULL,
+              source_run_id UUID NULL REFERENCES focus_work_runs(id) ON DELETE SET NULL,
+              started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              paused_at TIMESTAMPTZ NULL,
+              ended_at TIMESTAMPTZ NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_focus_work_runs_status CHECK (status IN ('running', 'paused', 'content_completed', 'completed', 'abandoned')),
+              CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus')),
+              CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
+              CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'))
+            );
+            """
+        )
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS user_id BIGINT;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS workflow_id UUID;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS phase_index INTEGER NOT NULL DEFAULT 0;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS task_id UUID NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS focus_work_type VARCHAR(80);")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS counts_for_task_completion BOOLEAN NOT NULL DEFAULT TRUE;"
+        )
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS status VARCHAR(40) NOT NULL DEFAULT 'running';"
+        )
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS record_focus BOOLEAN NOT NULL DEFAULT TRUE;"
+        )
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS config_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb;"
+        )
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS progress_snapshot JSONB NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS completion_reason VARCHAR(80) NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS source_run_id UUID NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS app_id VARCHAR(40) NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS app_task_type VARCHAR(80) NULL;")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+        )
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ NULL;")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+        )
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"
+        )
+        await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_status;")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_status CHECK (status IN ('running', 'paused', 'content_completed', 'completed', 'abandoned'));"
+        )
+        await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_type;")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus'));"
+        )
+        await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_id;")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));"
+        )
+        await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_task_type;")
+        await conn.execute(
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_focus_work_runs_workflow_phase
+            ON focus_work_runs(workflow_id, phase_index, created_at ASC);
+            """
         )
 
         await conn.execute(

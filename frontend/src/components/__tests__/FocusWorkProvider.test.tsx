@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FocusWorkProvider from '../focus-work/FocusWorkProvider';
-import { ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
 
 const { apiJson } = vi.hoisted(() => ({
   apiJson: vi.fn(),
@@ -21,8 +20,13 @@ vi.mock('../focus-work/focusWorkRegistry', () => ({
         type: 'vocab_today',
         title: '今日单词',
         subtitle: '背单词',
-        render: ({ onCompleteTaskAndFinish }: { onCompleteTaskAndFinish?: () => void }) => (
-          <button type="button" onClick={onCompleteTaskAndFinish}>完成今日单词</button>
+        render: ({ disabled, onContentCompleted }: {
+          disabled: boolean;
+          onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
+        }) => (
+          <button type="button" disabled={disabled} onClick={() => onContentCompleted({ completed_word_count: 100 })}>
+            完成今日单词
+          </button>
         ),
       };
     }
@@ -31,16 +35,16 @@ vi.mock('../focus-work/focusWorkRegistry', () => ({
         type: 'task_focus',
         title: '任务专注',
         subtitle: '任务',
-        render: ({
-          workflow,
-          onCompleteTaskAndFinish,
-        }: {
-          workflow: { task_title?: string | null };
-          onCompleteTaskAndFinish?: () => void;
+        render: ({ run, disabled, onContentCompleted }: {
+          run: { task_id?: string | null; config_snapshot?: Record<string, unknown> | null };
+          disabled: boolean;
+          onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
         }) => (
           <div>
-            <div>{workflow.task_title}</div>
-            <button type="button" onClick={onCompleteTaskAndFinish}>完成任务并结束专注</button>
+            <div>{String(run.config_snapshot?.task_title ?? '未命名任务')}</div>
+            <button type="button" disabled={disabled} onClick={() => onContentCompleted({ task_id: run.task_id })}>
+              完成任务内容
+            </button>
           </div>
         ),
       };
@@ -49,36 +53,122 @@ vi.mock('../focus-work/focusWorkRegistry', () => ({
   },
 }));
 
-function mockCurrentWorkflow(overrides: Record<string, unknown> = {}) {
-  apiJson.mockImplementation(async (path: string) => {
+function makeRun(overrides: Record<string, unknown> = {}) {
+  const focusWorkType = String(overrides.focus_work_type ?? 'task_focus');
+  return {
+    id: 'run-1',
+    workflow_id: 'workflow-1',
+    phase_index: 0,
+    task_id: 'task-1',
+    focus_work_type: focusWorkType,
+    app_id: focusWorkType === 'vocab_today' ? 'vocab' : null,
+    app_task_type: focusWorkType === 'vocab_today' ? 'vocab_today' : null,
+    counts_for_task_completion: true,
+    status: 'running',
+    progress_snapshot: null,
+    config_snapshot: {
+      task_title: focusWorkType === 'vocab_today' ? '今日单词' : '撰写周报',
+    },
+    completion_reason: null,
+    source_run_id: null,
+    ...overrides,
+  };
+}
+
+function makeWorkflow(overrides: Record<string, unknown> = {}, runOverrides: Record<string, unknown> = {}) {
+  const activeRun = makeRun(runOverrides);
+  return {
+    state: 'focus',
+    current_phase_index: 0,
+    phases: [{ phase_type: 'focus', duration: 1500, task_id: activeRun.task_id }],
+    task_id: activeRun.task_id,
+    runtime_task_id: activeRun.task_id,
+    task_title: String(activeRun.config_snapshot?.task_title ?? '撰写周报'),
+    pending_confirmation: false,
+    pending_task_selection: false,
+    remaining_seconds: 1200,
+    elapsed_seconds: 300,
+    active_focus_work_type: activeRun.focus_work_type,
+    focus_work_display_state: 'fullscreen',
+    phase_runtime_state: 'running_run',
+    phase_runtime_state_before_timeout_prompt: null,
+    active_run_id: activeRun.id,
+    active_run: activeRun,
+    is_paused: false,
+    record_focus: true,
+    ...overrides,
+  };
+}
+
+function mockCurrentWorkflow(overrides: Record<string, unknown> = {}, runOverrides: Record<string, unknown> = {}) {
+  let currentSnapshot = makeWorkflow(overrides, runOverrides);
+  apiJson.mockImplementation(async (path: string, options?: { body?: string; method?: string }) => {
     if (path === '/todo/focus/workflow/current') {
-      return {
-        state: 'focus',
-        current_phase_index: 0,
-        phases: [{ phase_type: 'focus', duration: 1500, task_id: 'task-1' }],
-        task_id: 'task-1',
-        task_title: '撰写周报',
-        pending_confirmation: false,
-        pending_task_selection: false,
-        remaining_seconds: 1200,
-        elapsed_seconds: 300,
-        active_focus_work_type: 'task_focus',
-        focus_work_display_state: 'fullscreen',
-        is_paused: false,
-        record_focus: true,
-        ...overrides,
-      };
+      return currentSnapshot;
     }
-    if (path === '/todo/tasks/task-1') {
-      return {
-        id: 'task-1',
-        title: '撰写周报',
-        content: '整理本周交付内容',
-        status: 'todo',
-        actual_duration: 600,
-        current_cycle_count: 0,
-        target_cycle_count: 0,
+    if (path === '/todo/focus/workflow/pause') {
+      currentSnapshot = {
+        ...currentSnapshot,
+        is_paused: true,
+        active_run: { ...currentSnapshot.active_run, status: 'paused' },
       };
+      return currentSnapshot;
+    }
+    if (path === '/todo/focus/workflow/resume') {
+      currentSnapshot = {
+        ...currentSnapshot,
+        is_paused: false,
+        active_run: { ...currentSnapshot.active_run, status: 'running' },
+      };
+      return currentSnapshot;
+    }
+    if (path === `/todo/focus/workflow/runs/${currentSnapshot.active_run.id}/content-complete`) {
+      currentSnapshot = {
+        ...currentSnapshot,
+        phase_runtime_state: currentSnapshot.active_run.counts_for_task_completion
+          ? 'counted_run_completed_confirming'
+          : 'extra_run_completed',
+        active_run: {
+          ...currentSnapshot.active_run,
+          status: 'content_completed',
+          progress_snapshot: options?.body ? JSON.parse(options.body).progress_snapshot : {},
+        },
+      };
+      return currentSnapshot;
+    }
+    if (path === `/todo/focus/workflow/runs/${currentSnapshot.active_run.id}/complete-task-and-end-phase`) {
+      currentSnapshot = { ...currentSnapshot, state: 'break', phase_runtime_state: 'break_running', active_run: null, active_run_id: null };
+      return currentSnapshot;
+    }
+    if (path === '/todo/focus/workflow/runs') {
+      currentSnapshot = {
+        ...currentSnapshot,
+        phase_runtime_state: 'running_run',
+        active_run_id: 'run-extra',
+        active_run: {
+          ...currentSnapshot.active_run,
+          id: 'run-extra',
+          counts_for_task_completion: JSON.parse(options?.body ?? '{}').mode !== 'extra',
+          status: 'running',
+          source_run_id: currentSnapshot.active_run.id,
+        },
+      };
+      return currentSnapshot;
+    }
+    if (path === '/todo/focus/workflow/end-phase') {
+      currentSnapshot = { ...currentSnapshot, state: 'break', phase_runtime_state: 'break_running', active_run: null, active_run_id: null };
+      return currentSnapshot;
+    }
+    if (path === '/todo/focus/workflow/extend-phase') {
+      currentSnapshot = {
+        ...currentSnapshot,
+        phase_runtime_state: currentSnapshot.phase_runtime_state_before_timeout_prompt ?? 'running_run',
+      };
+      return currentSnapshot;
+    }
+    if (path === '/todo/focus/workflow/skip_phase') {
+      currentSnapshot = { ...currentSnapshot, state: 'break', phase_runtime_state: 'break_running', active_run: null, active_run_id: null };
+      return currentSnapshot;
     }
     return { state: 'normal' };
   });
@@ -90,7 +180,7 @@ describe('FocusWorkProvider', () => {
     mockCurrentWorkflow();
   });
 
-  it('renders fullscreen task focus when current workflow exposes task_focus', async () => {
+  it('renders active task content without task-business completion controls inside the child work', async () => {
     render(
       <FocusWorkProvider>
         <div>Page</div>
@@ -99,26 +189,19 @@ describe('FocusWorkProvider', () => {
 
     expect(await screen.findByText('撰写周报')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '暂停专注' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '完成任务并结束专注' })).toBeInTheDocument();
-    const abandonButton = screen.getByRole('button', { name: '放弃本阶段' });
-    const completeRoundButton = screen.getByRole('button', { name: '结束本轮专注' });
-    expect(
-      abandonButton.compareDocumentPosition(completeRoundButton) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: '放弃本阶段' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '完成任务内容' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '结束本轮专注' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '完成任务并结束专注' })).not.toBeInTheDocument();
   });
 
-  it('renders vocab adapter for app-managed task focus', async () => {
-    mockCurrentWorkflow({
+  it('renders app focus work as content-only child work', async () => {
+    mockCurrentWorkflow({}, {
       task_id: 'task-vocab',
-      task_title: '今日单词',
-      active_focus_work_type: 'vocab_today',
-      active_task_source_type: 'app',
-      active_task_app_id: 'vocab',
-      active_task_app_task_type: 'vocab_today',
-      focus_work_display_state: 'fullscreen',
-      pending_confirmation: false,
-      pending_task_selection: false,
-      remaining_seconds: 1500,
+      focus_work_type: 'vocab_today',
+      app_id: 'vocab',
+      app_task_type: 'vocab_today',
+      config_snapshot: { task_title: '今日单词' },
     });
 
     render(
@@ -130,108 +213,42 @@ describe('FocusWorkProvider', () => {
     expect(await screen.findByRole('button', { name: '完成今日单词' })).toBeInTheDocument();
   });
 
-  it('pauses app-managed focus work from the modal shell', async () => {
+  it('pauses active focus work from the modal shell', async () => {
     const user = userEvent.setup();
-    mockCurrentWorkflow({
-      task_id: 'task-vocab',
-      task_title: '今日单词',
-      active_focus_work_type: 'vocab_today',
-      active_task_source_type: 'app',
-      active_task_app_id: 'vocab',
-      active_task_app_task_type: 'vocab_today',
-      focus_work_display_state: 'fullscreen',
-      pending_confirmation: false,
-      pending_task_selection: false,
-    });
-
     render(
       <FocusWorkProvider>
         <div>App</div>
       </FocusWorkProvider>,
     );
+
     await user.click(await screen.findByRole('button', { name: '暂停专注' }));
 
     expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/pause', { method: 'POST' });
   });
 
-  it('ends an app-managed focus round and completes the app task', async () => {
+  it('resumes paused focus work from the modal shell', async () => {
     const user = userEvent.setup();
-    mockCurrentWorkflow({
-      task_id: 'task-vocab',
-      task_title: '今日单词',
-      active_focus_work_type: 'vocab_today',
-      active_task_source_type: 'app',
-      active_task_app_id: 'vocab',
-      active_task_app_task_type: 'vocab_today',
-      focus_work_display_state: 'fullscreen',
-      pending_confirmation: false,
-      pending_task_selection: false,
-    });
+    mockCurrentWorkflow({ is_paused: true }, { status: 'paused' });
 
     render(
       <FocusWorkProvider>
         <div>App</div>
       </FocusWorkProvider>,
     );
-    const completeRoundButton = await screen.findByRole('button', { name: '结束本轮专注' });
-    expect(completeRoundButton).toHaveAttribute('data-onboarding-anchor', 'focus-work-complete-round');
-    await user.click(completeRoundButton);
 
-    expect(apiJson).toHaveBeenCalledWith(
-      '/todo/focus/workflow/focus-work-result',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          focus_work_type: 'vocab_today',
-          result: 'completed',
-          progress_snapshot: {
-            taskId: 'task-vocab',
-            completedTask: true,
-            appTaskType: 'vocab_today',
-          },
-        }),
-      }),
-    );
-    expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
-  });
-
-  it('resumes paused app-managed focus work from the modal shell', async () => {
-    const user = userEvent.setup();
-    mockCurrentWorkflow({
-      task_id: 'task-erc',
-      task_title: 'ERC 复习',
-      active_focus_work_type: 'vocab_today',
-      active_task_source_type: 'app',
-      active_task_app_id: 'vocab',
-      active_task_app_task_type: 'vocab_today',
-      focus_work_display_state: 'fullscreen',
-      pending_confirmation: false,
-      pending_task_selection: false,
-      is_paused: true,
-    });
-
-    render(
-      <FocusWorkProvider>
-        <div>App</div>
-      </FocusWorkProvider>,
-    );
     await user.click(await screen.findByRole('button', { name: '继续专注' }));
 
     expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/resume', { method: 'POST' });
   });
 
-  it('submits completed result for app-managed vocab completion without direct task complete', async () => {
+  it('moves from content completion to workbench task-confirmation actions', async () => {
     const user = userEvent.setup();
-    mockCurrentWorkflow({
+    mockCurrentWorkflow({}, {
       task_id: 'task-vocab',
-      task_title: '今日单词',
-      active_focus_work_type: 'vocab_today',
-      active_task_source_type: 'app',
-      active_task_app_id: 'vocab',
-      active_task_app_task_type: 'vocab_today',
-      focus_work_display_state: 'fullscreen',
-      pending_confirmation: false,
-      pending_task_selection: false,
+      focus_work_type: 'vocab_today',
+      app_id: 'vocab',
+      app_task_type: 'vocab_today',
+      config_snapshot: { task_title: '今日单词' },
     });
 
     render(
@@ -239,24 +256,98 @@ describe('FocusWorkProvider', () => {
         <div>App</div>
       </FocusWorkProvider>,
     );
+
     await user.click(await screen.findByRole('button', { name: '完成今日单词' }));
 
     expect(apiJson).toHaveBeenCalledWith(
-      '/todo/focus/workflow/focus-work-result',
+      '/todo/focus/workflow/runs/run-1/content-complete',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({
-          focus_work_type: 'vocab_today',
-          result: 'completed',
-          progress_snapshot: {
-            taskId: 'task-vocab',
-            completedTask: true,
-            appTaskType: 'vocab_today',
-          },
-        }),
+        body: JSON.stringify({ progress_snapshot: { completed_word_count: 100 } }),
       }),
     );
-    expect(apiJson).not.toHaveBeenCalledWith('/todo/focus/stop', expect.anything());
+    expect(await screen.findByRole('button', { name: '完成任务并结束阶段' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '再来一轮' })).toBeInTheDocument();
     expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-vocab/complete', expect.anything());
+
+    await user.click(screen.getByRole('button', { name: '完成任务并结束阶段' }));
+
+    expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/runs/run-1/complete-task-and-end-phase', {
+      method: 'POST',
+    });
+  });
+
+  it('starts an extra run from counted completion without completing the task', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({ phase_runtime_state: 'counted_run_completed_confirming' }, {
+      status: 'content_completed',
+      progress_snapshot: { completed_word_count: 100 },
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '再来一轮' }));
+
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/focus/workflow/runs',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ mode: 'extra' }),
+      }),
+    );
+    expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-1/complete', expect.anything());
+  });
+
+  it('lets extra completion end the phase or start another extra run', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({ phase_runtime_state: 'extra_run_completed' }, {
+      counts_for_task_completion: false,
+      status: 'content_completed',
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: '结束阶段' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '再来一轮' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '结束阶段' }));
+
+    expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/end-phase', { method: 'POST' });
+  });
+
+  it('lets expired phase extend time or end without task auto-completion', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({
+      phase_runtime_state: 'phase_time_expired_prompt',
+      phase_runtime_state_before_timeout_prompt: 'running_run',
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: '延长时间' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '结束该阶段' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '延长时间' }));
+
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/focus/workflow/extend-phase',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ extend_seconds: 300 }),
+      }),
+    );
+    expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-1/complete', expect.anything());
   });
 });

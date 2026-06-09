@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson, checkIn, getCheckInStatus, CheckInStatus } from '../lib/api';
+import { fetchCurrentFocusWorkflow } from '../lib/focusWorkflow';
 import confetti from 'canvas-confetti';
 import { Bell, BookOpen, CalendarDays, LayoutDashboard, LogOut, Monitor, Moon, Palette, Settings, Sun } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
@@ -48,7 +49,7 @@ const Navigation: React.FC = () => {
    */
   async function _loadWorkflowSnapshot(): Promise<void> {
     try {
-      const res = await apiJson('/todo/focus/workflow/current');
+      const res = await fetchCurrentFocusWorkflow<WorkflowSnapshot>();
       const snapshot = res as WorkflowSnapshot;
       if (!snapshot || typeof snapshot !== 'object') {
         setWorkflowSnapshot(null);

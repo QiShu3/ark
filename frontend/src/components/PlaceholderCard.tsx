@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
+import { fetchCurrentFocusWorkflow } from '../lib/focusWorkflow';
 import FocusStats from './FocusStats';
 import Button from './Button';
 import AppModalFrame from './AppModalFrame';
@@ -55,6 +56,7 @@ interface FocusWorkflow {
   phase_timer_mode?: 'countdown' | 'countup' | null;
   elapsed_seconds?: number | null;
   is_paused?: boolean;
+  phase_runtime_state?: string | null;
   runtime_task_id?: string | null;
   completed_workflow_name?: string | null;
 }
@@ -316,6 +318,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   // Calculate a stable end time to prevent countdown jitter/flashback
   const targetEndTimeRef = React.useRef<number | null>(null);
   const isFetchingRef = React.useRef(false);
+  const expiredWorkflowReloadRef = React.useRef<string | null>(null);
 
   const primaryEvent = React.useMemo(() => {
     return arrangementEvents.find((event) => event.is_primary) ?? null;
@@ -342,6 +345,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       || focusWorkflow.state === 'normal'
       || focusWorkflow.pending_task_selection
       || focusWorkflow.is_paused
+      || focusWorkflow.phase_runtime_state === 'phase_time_expired_prompt'
       || focusWorkflow.phase_timer_mode === 'countup'
       || focusWorkflow.remaining_seconds === null
       || focusWorkflow.remaining_seconds === undefined
@@ -354,6 +358,9 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       return;
     }
     const newEnd = Date.now() + focusWorkflow.remaining_seconds * 1000;
+    if (focusWorkflow.remaining_seconds > 0) {
+      expiredWorkflowReloadRef.current = null;
+    }
     if (targetEndTimeRef.current === null) {
       targetEndTimeRef.current = newEnd;
     } else {
@@ -401,7 +408,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       }
 
       if (targetEndTimeRef.current === null) {
-        if (focusWorkflow?.state !== 'normal' && focusWorkflow?.pending_confirmation) {
+        if (
+          focusWorkflow?.state !== 'normal'
+          && (focusWorkflow?.pending_confirmation || focusWorkflow?.phase_runtime_state === 'phase_time_expired_prompt')
+        ) {
           setFocusDurationStr('00:00');
         } else if (focusWorkflow?.pending_task_selection) {
           setFocusDurationStr('待选');
@@ -419,7 +429,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       const left = Math.round((targetEndTimeRef.current - now) / 1000);
       if (left <= 0) {
         setFocusDurationStr(formatClockTime(0));
-        if (!isFetchingRef.current) {
+        const expiredWorkflowKey = [
+          focusWorkflow?.state ?? 'unknown-state',
+          focusWorkflow?.current_phase_index ?? 'unknown-index',
+          focusWorkflow?.phase_started_at ?? 'unknown-start',
+        ].join(':');
+        if (!isFetchingRef.current && expiredWorkflowReloadRef.current !== expiredWorkflowKey) {
+          expiredWorkflowReloadRef.current = expiredWorkflowKey;
           isFetchingRef.current = true;
           _loadFocusWorkflow().finally(() => {
             isFetchingRef.current = false;
@@ -964,7 +980,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   async function _loadFocusWorkflow() {
     try {
-      const res = await apiJson('/todo/focus/workflow/current');
+      const res = await fetchCurrentFocusWorkflow<FocusWorkflow>();
       const workflow = res as FocusWorkflow;
       setFocusWorkflow(workflow);
       if (workflow.state !== 'focus' || workflow.pending_confirmation || workflow.pending_task_selection) {
@@ -1201,6 +1217,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       alert('阶段确认失败');
     } finally {
       setConfirmingFocusPhase(false);
+    }
+  }
+
+  async function _showActiveFocusWorkbench() {
+    try {
+      await apiJson('/todo/focus/workflow/focus-workbench/show', { method: 'POST' });
+      await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow()]);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to show focus workbench', err);
     }
   }
 
@@ -1769,6 +1795,8 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       }
       if (focusWorkflow.pending_confirmation) {
         await _confirmFocusWorkflowPhase();
+      } else if (focusWorkflow.state === 'focus') {
+        await _showActiveFocusWorkbench();
       } else {
         try {
           await apiJson('/todo/focus/workflow/skip_phase', { method: 'POST' });
@@ -1940,7 +1968,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       displayTaskTitle = tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务';
     }
     const primaryActionLabel = isWorkflowActive
-      ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : '结束本轮阶段'))
+      ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : (isBreakPhase ? '结束休息' : '查看工作台')))
       : (isFocusing ? '结束专注' : (effectiveSelectedWorkflow ? '开始工作流' : '新建工作流'));
     const primaryActionSubtext = isFocusing || isWorkflowActive
       ? `${isWorkflowActive && isBreakPhase ? '' : '正在专注于：'}${displayTaskTitle}`

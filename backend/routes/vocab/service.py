@@ -774,6 +774,71 @@ async def list_mistakes(pool: asyncpg.Pool, *, user_id: int, deck_id: str, limit
     return items
 
 
+async def _record_review_progress(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_group: dict,
+    word_id: str,
+    result: str,
+    review_mode: str,
+    prompt_type: str,
+    response_ms: int | None,
+) -> dict:
+    word_row = await get_word_detail_row(conn, word_id=word_id)
+    if word_row is None:
+        raise HTTPException(status_code=404, detail="单词不存在")
+
+    actual_deck_id = str(word_row["deck_id"])
+    if actual_deck_id not in deck_group["member_deck_ids"]:
+        raise HTTPException(status_code=400, detail="单词不属于当前词书")
+
+    progress_row = await get_user_word_progress(conn, user_id=user_id, deck_id=actual_deck_id, word_id=word_id)
+    current_progress = dict(progress_row) if progress_row is not None else {}
+    updated = _schedule_fsrs_review(current_progress, result=result, now=datetime.now(UTC))
+    await upsert_user_word_progress(
+        conn,
+        user_id=user_id,
+        deck_id=actual_deck_id,
+        word_id=word_id,
+        mastery_score=int(updated["mastery_score"]),
+        correct_count=int(updated["correct_count"]),
+        wrong_count=int(updated["wrong_count"]),
+        lapse_count=int(updated["lapse_count"]),
+        interval_days=int(updated["interval_days"]),
+        next_review_at=updated["next_review_at"],
+        fsrs_card_json=updated["card_json"],
+        last_result=str(updated["result"]),
+    )
+    await insert_review_log(
+        conn,
+        user_id=user_id,
+        deck_id=actual_deck_id,
+        word_id=word_id,
+        review_mode=review_mode,
+        prompt_type=prompt_type,
+        result=str(updated["result"]),
+        response_ms=response_ms,
+    )
+    await upsert_mistake_bucket(
+        conn,
+        user_id=user_id,
+        deck_id=actual_deck_id,
+        word_id=word_id,
+        is_active=str(updated["result"]) == "again",
+    )
+    should_repeat_today = str(updated["result"]) == "again"
+    return {
+        "mastery_score": int(updated["mastery_score"]),
+        "next_review_at": updated["next_review_at"],
+        "wrong_count": int(updated["wrong_count"]),
+        "correct_count": int(updated["correct_count"]),
+        "interval_days": int(updated["interval_days"]),
+        "result": str(updated["result"]),
+        "should_repeat_today": should_repeat_today,
+    }
+
+
 async def submit_review(
     pool: asyncpg.Pool,
     *,
@@ -793,62 +858,47 @@ async def submit_review(
         if plan_item is None:
             raise HTTPException(status_code=400, detail="单词不在今日计划中")
 
-        word_row = await get_word_detail_row(conn, word_id=word_id)
-        if word_row is None:
-            raise HTTPException(status_code=404, detail="单词不存在")
-
-        actual_deck_id = str(word_row["deck_id"])
-        if actual_deck_id not in deck_group["member_deck_ids"]:
-            raise HTTPException(status_code=400, detail="单词不属于当前词书")
-
-        progress_row = await get_user_word_progress(conn, user_id=user_id, deck_id=actual_deck_id, word_id=word_id)
-        current_progress = dict(progress_row) if progress_row is not None else {}
-        updated = _schedule_fsrs_review(current_progress, result=result, now=datetime.now(UTC))
-        await upsert_user_word_progress(
+        payload = await _record_review_progress(
             conn,
             user_id=user_id,
-            deck_id=actual_deck_id,
             word_id=word_id,
-            mastery_score=int(updated["mastery_score"]),
-            correct_count=int(updated["correct_count"]),
-            wrong_count=int(updated["wrong_count"]),
-            lapse_count=int(updated["lapse_count"]),
-            interval_days=int(updated["interval_days"]),
-            next_review_at=updated["next_review_at"],
-            fsrs_card_json=updated["card_json"],
-            last_result=str(updated["result"]),
-        )
-        await insert_review_log(
-            conn,
-            user_id=user_id,
-            deck_id=actual_deck_id,
-            word_id=word_id,
+            deck_group=deck_group,
+            result=result,
             review_mode=review_mode,
             prompt_type=prompt_type,
-            result=str(updated["result"]),
             response_ms=response_ms,
         )
-        await upsert_mistake_bucket(
-            conn,
-            user_id=user_id,
-            deck_id=actual_deck_id,
-            word_id=word_id,
-            is_active=str(updated["result"]) == "again",
-        )
-        should_repeat_today = str(updated["result"]) == "again"
         await update_daily_plan_item(
             conn,
             plan_id=str(plan["id"]),
             word_id=word_id,
-            status="pending" if should_repeat_today else "done",
-            last_result=str(updated["result"]),
+            status="pending" if payload["should_repeat_today"] else "done",
+            last_result=str(payload["result"]),
         )
-    return {
-        "mastery_score": int(updated["mastery_score"]),
-        "next_review_at": updated["next_review_at"],
-        "wrong_count": int(updated["wrong_count"]),
-        "correct_count": int(updated["correct_count"]),
-        "interval_days": int(updated["interval_days"]),
-        "result": str(updated["result"]),
-        "should_repeat_today": should_repeat_today,
-    }
+    return payload
+
+
+async def submit_content_review(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    deck_id: str,
+    word_id: str,
+    result: str,
+    review_mode: str,
+    prompt_type: str,
+    response_ms: int | None,
+) -> dict:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        return await _record_review_progress(
+            conn,
+            user_id=user_id,
+            deck_group=deck_group,
+            word_id=word_id,
+            result=result,
+            review_mode=review_mode,
+            prompt_type=prompt_type,
+            response_ms=response_ms,
+        )

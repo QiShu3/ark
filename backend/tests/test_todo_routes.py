@@ -3500,6 +3500,11 @@ class _WorkflowConn:
             return self.workflow
         if "FROM focus_workflows" in sql and "status = 'active'" in sql:
             return self.workflow
+        if "UPDATE focus_workflows" in sql and "SET phase_planned_duration = $1" in sql:
+            self.workflow["phase_planned_duration"] = int(args[0])
+            self.workflow["phase_runtime_state"] = args[1]
+            self.workflow["phase_runtime_state_before_timeout_prompt"] = None
+            return self.workflow
         if "SELECT id, start_time" in sql and "FROM focus_logs" in sql:
             return self.open_focus_log
         if "UPDATE focus_logs" in sql and "RETURNING task_id" in sql:
@@ -3708,6 +3713,28 @@ def test_confirm_focus_workflow_fallbacks_when_index_invalid(monkeypatch) -> Non
     assert data["current_phase_index"] == 1
 
 
+def test_extend_focus_workflow_phase_extends_from_current_elapsed_time(monkeypatch) -> None:
+    conn = _WorkflowConn()
+    conn.workflow["pending_confirmation"] = False
+    conn.workflow["phase_started_at"] = datetime.now(UTC) - timedelta(seconds=900)
+    conn.workflow["phase_planned_duration"] = 300
+    conn.workflow["phase_runtime_state"] = "phase_time_expired_prompt"
+    conn.workflow["phase_runtime_state_before_timeout_prompt"] = "extra_run_completed"
+    conn.workflow["active_run_id"] = None
+    pool = _WorkflowPool(conn)
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _: pool)
+
+    app = _build_app()
+    client = TestClient(app)
+    resp = client.post("/todo/focus/workflow/extend-phase", json={"extend_seconds": 300})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["phase_runtime_state"] == "extra_run_completed"
+    assert data["phase_planned_duration"] >= 1200
+    assert data["remaining_seconds"] > 0
+
+
 def test_get_focus_workflow_current_marks_pending_task_selection_for_unbound_focus(monkeypatch) -> None:
     conn = _WorkflowConn()
     conn.workflow["pending_confirmation"] = False
@@ -3840,7 +3867,7 @@ def test_select_focus_workflow_task_starts_pending_phase(monkeypatch) -> None:
     assert conn.inserted_focus_task_id == next_task_id
 
 
-def test_focus_work_result_completed_records_app_managed_task_completion(monkeypatch) -> None:
+def test_focus_work_result_completed_does_not_record_app_managed_task_completion(monkeypatch) -> None:
     conn = _WorkflowConn()
     conn.tasks[0].update(
         {
@@ -3883,8 +3910,7 @@ def test_focus_work_result_completed_records_app_managed_task_completion(monkeyp
 
     assert resp.status_code == 200
     assert resp.json()["state"] == "normal"
-    assert len(conn.completion_records) == 1
-    assert conn.completion_records[0]["subject_id"] == conn.task_id
+    assert conn.completion_records == []
 
 
 def test_focus_work_result_completed_round_does_not_record_app_managed_task_completion(monkeypatch) -> None:

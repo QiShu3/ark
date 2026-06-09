@@ -1,123 +1,70 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { BarChart3, BookOpen, Clock, Sparkles, ChevronRight, Trophy } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BarChart3, BookOpen, Clock, ChevronRight, Trophy } from 'lucide-react';
 
-import { fetchERCReviewNext, submitERCReview, fetchERCArticles, fetchERCArticle } from '../../lib/erc/api';
-import type { ERCReviewNext, ERCReviewSubmitResult } from '../../lib/erc/types';
+import { fetchERCArticle, fetchERCArticles, fetchERCMistakes, fetchERCReviewNext, submitERCReview } from '../../lib/erc/api';
+import type { ERCArticleDetail, ERCArticleListItem, ERCQuestion, ERCReviewNext, ERCReviewSubmitResult } from '../../lib/erc/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
-import AppModalFrame from '../AppModalFrame';
-import { apiJson } from '../../lib/api';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
-type ERCReviewFocusWorkProps = Partial<FocusWorkRendererProps>;
+type ERCReviewFocusWorkProps = FocusWorkRendererProps;
 
 export default function ERCReviewFocusWork({
-  workflow,
-  onCompleteTaskAndFinish,
-  onFinished,
-  registerResetCommand,
+  run,
+  disabled,
+  onContentCompleted,
 }: ERCReviewFocusWorkProps) {
+  const targetQuestionCount = questionTargetCountFromRun(run);
   const [item, setItem] = useState<ERCReviewNext | null>(null);
   const [selected, setSelected] = useState<OptionKey | null>(null);
   const [result, setResult] = useState<ERCReviewSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isPaused = workflow?.is_paused === true;
+  const completedRef = useRef(false);
+  const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
+  const isPaused = disabled;
 
-  const [isExtraPractice, setIsExtraPractice] = useState(() => {
-    return workflow?.is_task_completed_today === true;
-  });
-  const [loadingAgain, setLoadingAgain] = useState(false);
   const [answeredCount, setAnsweredCount] = useState(0);
 
   useEffect(() => {
-    registerResetCommand?.(() => {
-      setItem(null);
-      setSelected(null);
-      setResult(null);
-      setError(null);
-      setIsExtraPractice(true);
-      void handlePracticeAgain();
-    });
-  }, [registerResetCommand]);
+    if (completedRef.current) return;
+    if (answeredCount >= targetQuestionCount) {
+      completedRef.current = true;
+      onContentCompleted({ answered_count: answeredCount, target_question_count: targetQuestionCount });
+    }
+  }, [answeredCount, onContentCompleted, targetQuestionCount]);
 
   useEffect(() => {
-    if (isExtraPractice) return;
+    if (completedRef.current) return;
     if (item && !item.has_item) {
-      onFinished?.();
+      completedRef.current = true;
+      onContentCompleted({
+        answered_count: answeredCount,
+        target_question_count: targetQuestionCount,
+        no_available_content: answeredCount === 0,
+      });
     }
-  }, [item, onFinished, isExtraPractice]);
+  }, [answeredCount, item, onContentCompleted, targetQuestionCount]);
 
   useEffect(() => {
-    if (workflow?.is_task_completed_today) {
-      void handlePracticeAgain();
-      return;
-    }
-
     let cancelled = false;
 
-    fetchERCReviewNext()
-      .then((payload) => {
-        if (cancelled) return;
-        setItem(payload);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : '复习题加载失败');
-      });
+    void loadNextReviewItem(() => !cancelled);
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const loadNext = () => {
+  const loadNextReviewItem = async (active: () => boolean = () => true) => {
     setSelected(null);
     setResult(null);
-    fetchERCReviewNext()
-      .then((payload) => {
-        setItem(payload);
-        setError(null);
-      })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : '复习题加载失败'));
-  };
-
-  const handlePracticeAgain = async () => {
-    if (isPaused) return;
-    setLoadingAgain(true);
-    setError(null);
     try {
-      const articlesList = await fetchERCArticles();
-      if (!articlesList || articlesList.length === 0) {
-        throw new Error('没有找到可复习的真题文章');
-      }
-      const randomIndex = Math.floor(Math.random() * articlesList.length);
-      const selectedArticle = articlesList[randomIndex];
-      const articleData = await fetchERCArticle(selectedArticle.article_id);
-      if (!articleData.questions || articleData.questions.length === 0) {
-        throw new Error('该文章没有任何题目');
-      }
-      const randomQuestion = articleData.questions[Math.floor(Math.random() * articleData.questions.length)];
-      
-      setItem({
-        has_item: true,
-        next_due_at: null,
-        article: {
-          article_id: articleData.article_id,
-          year: articleData.year,
-          text_no: articleData.text_no,
-          title: articleData.title,
-        },
-        paragraphs: articleData.paragraphs,
-        question: randomQuestion,
-      });
-      setIsExtraPractice(true);
-      setSelected(null);
-      setResult(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载真题文章失败');
-    } finally {
-      setLoadingAgain(false);
+      const payload = await resolveReviewItem(run, answeredQuestionIdsRef.current);
+      if (!active()) return;
+      setItem(payload);
+      setError(null);
+    } catch (err: unknown) {
+      if (!active()) return;
+      setError(err instanceof Error ? err.message : '复习题加载失败');
     }
   };
 
@@ -128,6 +75,7 @@ export default function ERCReviewFocusWork({
       const nextResult = await submitERCReview(item.question.question_id, selected);
       setResult(nextResult);
       setError(null);
+      answeredQuestionIdsRef.current.add(item.question.question_id);
       setAnsweredCount((c) => c + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败');
@@ -154,14 +102,14 @@ export default function ERCReviewFocusWork({
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-3 py-1 text-xs font-medium text-[var(--focus-work-text)]">
                   <BarChart3 className="h-3.5 w-3.5 text-[var(--focus-work-text-muted)]" />
-                  模式：{isExtraPractice ? '加练复习' : '今日复习'}
+                  错题复习
                 </span>
               </div>
             ) : (
               <div className="mt-2.5 flex flex-wrap items-center gap-3 text-sm text-[var(--focus-work-text-muted)]">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-3 py-1 text-xs font-medium text-[var(--focus-work-text)]">
                   <BarChart3 className="h-3.5 w-3.5 text-[var(--focus-work-text-muted)]" />
-                  模式：{isExtraPractice ? '加练复习' : '今日复习'}
+                  错题复习
                 </span>
               </div>
             )}
@@ -170,26 +118,16 @@ export default function ERCReviewFocusWork({
 
         {error ? <p className="mb-4 text-sm text-rose-200">{error}</p> : null}
 
-        {item && !item.has_item && !onFinished ? (
+        {item && !item.has_item ? (
           <div className="flex h-full w-full items-center justify-center p-8">
             <div className="text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
                 <Trophy className="h-8 w-8" />
               </div>
-              <h2 className="mt-6 text-2xl font-bold text-[var(--focus-work-text)]">暂无到期复习</h2>
+              <h2 className="mt-6 text-2xl font-bold text-[var(--focus-work-text)]">暂无可复习内容</h2>
               <p className="mt-2 text-sm text-[var(--focus-work-text-muted)]">
-                太棒了！您所有的真题错题都已复习完毕。
+                当前没有可用的 ERC 复习内容。
               </p>
-              <div className="mt-8 flex justify-center gap-3">
-                <button
-                  type="button"
-                  disabled={loadingAgain}
-                  onClick={handlePracticeAgain}
-                  className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-50"
-                >
-                  {loadingAgain ? '正在加载...' : '再来一次'}
-                </button>
-              </div>
             </div>
           </div>
         ) : null}
@@ -232,7 +170,7 @@ export default function ERCReviewFocusWork({
                         <h2 className="text-base font-bold text-[var(--focus-work-text)] font-serif">Current Question</h2>
                       </div>
                       <div className="mt-1 text-xs text-[var(--focus-work-text-muted)] font-medium">
-                        {isExtraPractice ? '加练复习题' : '复习题'}
+                        复习题
                       </div>
                     </div>
                   </div>
@@ -255,7 +193,7 @@ export default function ERCReviewFocusWork({
                       <button
                         type="button"
                         disabled={isPaused}
-                        onClick={isExtraPractice ? handlePracticeAgain : loadNext}
+                        onClick={() => void loadNextReviewItem()}
                         className="inline-flex items-center gap-1 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-blue-text)] hover:bg-[var(--focus-work-blue-bg)] transition disabled:opacity-30 disabled:pointer-events-none"
                       >
                         下一题
@@ -280,10 +218,10 @@ export default function ERCReviewFocusWork({
                       if (result) {
                         if (isCorrect) {
                           btnStyle = 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)] shadow-sm';
-                          badgeStyle = 'bg-[var(--focus-work-emerald-text)] text-white border-transparent';
+                          badgeStyle = 'bg-[var(--focus-work-emerald-text)] text-[var(--focus-work-primary-button-text)] border-transparent';
                         } else if (isSelected) {
                           btnStyle = 'border-[var(--focus-work-rose-border)] bg-[var(--focus-work-rose-bg)] text-[var(--focus-work-rose-text)] shadow-sm';
-                          badgeStyle = 'bg-[var(--focus-work-rose-text)] text-white border-transparent';
+                          badgeStyle = 'bg-[var(--focus-work-rose-text)] text-[var(--focus-work-primary-button-text)] border-transparent';
                         } else {
                           btnStyle = 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)]/40 text-[var(--focus-work-text-faint)] opacity-60';
                           badgeStyle = 'bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text-faint)] border-[var(--focus-work-border)]';
@@ -323,4 +261,92 @@ export default function ERCReviewFocusWork({
 
     </div>
   );
+}
+
+function questionTargetCountFromRun(run: FocusWorkRendererProps['run']) {
+  const rawTarget = Number(run.config_snapshot?.target_question_count ?? run.config_snapshot?.daily_question_target ?? 10);
+  if (!Number.isFinite(rawTarget)) return 10;
+  return Math.max(1, Math.min(200, Math.floor(rawTarget)));
+}
+
+async function resolveReviewItem(run: FocusWorkRendererProps['run'], answeredQuestionIds: Set<string>): Promise<ERCReviewNext> {
+  const dueItem = await fetchERCReviewNext();
+  if (run.counts_for_task_completion || dueItem.has_item) {
+    if (!dueItem.question || !answeredQuestionIds.has(dueItem.question.question_id)) return dueItem;
+  }
+  return resolveExtraReviewItem(run, answeredQuestionIds);
+}
+
+async function resolveExtraReviewItem(run: FocusWorkRendererProps['run'], answeredQuestionIds: Set<string>): Promise<ERCReviewNext> {
+  const mistakeItem = await resolveMistakeReviewItem(answeredQuestionIds);
+  if (mistakeItem) return mistakeItem;
+
+  const articles = sortReviewArticles(await fetchERCArticles(articleFiltersFromRun(run)));
+  for (const article of articles) {
+    const detail = await fetchERCArticle(article.article_id);
+    const question = selectQuestion(detail.questions, answeredQuestionIds);
+    if (question) return reviewItemFromArticle(detail, question);
+  }
+
+  return emptyReviewItem();
+}
+
+async function resolveMistakeReviewItem(answeredQuestionIds: Set<string>) {
+  const mistakes = await fetchERCMistakes();
+  const mistake = mistakes.find((item) => !answeredQuestionIds.has(item.question_id)) ?? mistakes[0];
+  if (!mistake) return null;
+  const detail = await fetchERCArticle(mistake.article_id);
+  const question = detail.questions.find((item) => item.question_id === mistake.question_id) ?? selectQuestion(detail.questions, answeredQuestionIds);
+  return question ? reviewItemFromArticle(detail, question) : null;
+}
+
+function sortReviewArticles(articles: ERCArticleListItem[]) {
+  const rank: Record<ERCArticleListItem['status'], number> = {
+    has_due_review: 0,
+    practiced: 1,
+    unstarted: 2,
+  };
+  return [...articles].sort((a, b) => rank[a.status] - rank[b.status]);
+}
+
+function selectQuestion(questions: ERCQuestion[], answeredQuestionIds: Set<string>) {
+  return questions.find((question) => !answeredQuestionIds.has(question.question_id)) ?? questions[0] ?? null;
+}
+
+function reviewItemFromArticle(article: ERCArticleDetail, question: ERCQuestion): ERCReviewNext {
+  return {
+    has_item: true,
+    next_due_at: null,
+    article: {
+      article_id: article.article_id,
+      year: article.year,
+      text_no: article.text_no,
+      title: article.title,
+    },
+    paragraphs: article.paragraphs,
+    question,
+  };
+}
+
+function emptyReviewItem(): ERCReviewNext {
+  return {
+    has_item: false,
+    next_due_at: null,
+    article: null,
+    paragraphs: [],
+    question: null,
+  };
+}
+
+function articleFiltersFromRun(run: FocusWorkRendererProps['run']) {
+  const setId = stringConfig(run.config_snapshot?.set_id ?? run.config_snapshot?.article_set_id);
+  const exam = stringConfig(run.config_snapshot?.exam);
+  return {
+    ...(setId ? { setId } : {}),
+    ...(exam ? { exam } : {}),
+  };
+}
+
+function stringConfig(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }

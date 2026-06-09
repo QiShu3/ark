@@ -1,39 +1,35 @@
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ERCPracticeFocusWork from './ERCPracticeFocusWork';
+import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
 const {
+  fetchERCArticles,
   fetchERCOverview,
   fetchERCArticle,
   fetchERCVocabularyPreheat,
   submitERCVocabularyPreheat,
   submitERCArticle,
-  fetchERCArticles,
-  apiJson,
 } = vi.hoisted(() => ({
+  fetchERCArticles: vi.fn(),
   fetchERCOverview: vi.fn(),
   fetchERCArticle: vi.fn(),
   fetchERCVocabularyPreheat: vi.fn(),
   submitERCVocabularyPreheat: vi.fn(),
   submitERCArticle: vi.fn(),
-  fetchERCArticles: vi.fn(),
-  apiJson: vi.fn(),
-}));
-
-vi.mock('../../lib/api', () => ({
-  apiJson,
 }));
 
 vi.mock('../../lib/erc/api', () => ({
+  fetchERCArticles,
   fetchERCOverview,
   fetchERCArticle,
   fetchERCVocabularyPreheat,
   submitERCVocabularyPreheat,
   submitERCArticle,
-  fetchERCArticles,
 }));
 
 function mockArticleDetail() {
@@ -54,18 +50,27 @@ function mockArticleDetail() {
   };
 }
 
+const practiceRun: FocusWorkRunSummary = {
+  id: 'run-1',
+  workflow_id: 'workflow-1',
+  phase_index: 0,
+  focus_work_type: 'erc_practice',
+  counts_for_task_completion: true,
+  status: 'running',
+  config_snapshot: {},
+};
+
 describe('ERCPracticeFocusWork', () => {
   beforeEach(() => {
     if (!HTMLDivElement.prototype.scrollTo) {
       HTMLDivElement.prototype.scrollTo = vi.fn();
     }
+    fetchERCArticles.mockReset();
     fetchERCOverview.mockReset();
     fetchERCArticle.mockReset();
     fetchERCVocabularyPreheat.mockReset();
     submitERCVocabularyPreheat.mockReset();
     submitERCArticle.mockReset();
-    fetchERCArticles.mockReset();
-    apiJson.mockReset();
   });
 
   it('renders preheat words first if any exist', async () => {
@@ -88,11 +93,9 @@ describe('ERCPracticeFocusWork', () => {
     render(
       <MemoryRouter>
         <ERCPracticeFocusWork
-          workflow={{
-            state: 'focus',
-            active_focus_work_type: 'erc_practice',
-            focus_work_display_state: 'fullscreen',
-          }}
+          run={practiceRun}
+          disabled={false}
+          onContentCompleted={vi.fn()}
         />
       </MemoryRouter>,
     );
@@ -101,51 +104,103 @@ describe('ERCPracticeFocusWork', () => {
     expect(screen.getByText('benevolent')).toBeInTheDocument();
   });
 
-  it('calls onFinished when recommended_article is null, and supports resetting for extra practice', async () => {
+  it('emits content completion when no recommended article is available', async () => {
     fetchERCOverview.mockResolvedValue({
       recommended_article: null,
     });
 
-    let resetFn: (() => void) | undefined;
-    const registerResetCommandMock = vi.fn((fn) => {
-      resetFn = fn;
-    });
-    const onFinishedMock = vi.fn();
+    const onContentCompleted = vi.fn();
 
     render(
       <MemoryRouter>
         <ERCPracticeFocusWork
-          workflow={{
-            state: 'focus',
-            active_focus_work_type: 'erc_practice',
-            focus_work_display_state: 'fullscreen',
-          }}
-          registerResetCommand={registerResetCommandMock}
-          onFinished={onFinishedMock}
+          run={practiceRun}
+          disabled={false}
+          onContentCompleted={onContentCompleted}
         />
       </MemoryRouter>,
     );
 
     await waitFor(() => {
-      expect(onFinishedMock).toHaveBeenCalled();
+      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ article_count: 0, no_available_content: true }));
     });
-    expect(registerResetCommandMock).toHaveBeenCalled();
-    expect(resetFn).toBeDefined();
+  });
 
-    // Mock articles list and detail to check reset function
+  it('loads library article content for an extra run even when no daily recommendation is available', async () => {
     fetchERCArticles.mockResolvedValue([
-      { article_id: 'kaoyan2_2025_text2', title: 'Passage Two' }
+      {
+        article_id: 'kaoyan2_2025_text2',
+        set_id: 'set-1',
+        year: 2025,
+        text_no: 2,
+        title: 'Passage Two',
+        status: 'unstarted',
+        question_count: 1,
+        mistake_count: 0,
+        last_attempt_at: null,
+      },
     ]);
     fetchERCArticle.mockResolvedValue(mockArticleDetail());
     fetchERCVocabularyPreheat.mockResolvedValue([]);
+    const onContentCompleted = vi.fn();
 
-    const { act } = await import('@testing-library/react');
-    await act(async () => {
-      resetFn!();
+    render(
+      <MemoryRouter>
+        <ERCPracticeFocusWork
+          run={{ ...practiceRun, counts_for_task_completion: false }}
+          disabled={false}
+          onContentCompleted={onContentCompleted}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Question 26?')).toBeInTheDocument();
+    expect(fetchERCOverview).not.toHaveBeenCalled();
+    expect(onContentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('continues article content until the configured article target is reached', async () => {
+    const user = userEvent.setup();
+    fetchERCOverview.mockResolvedValue({
+      recommended_article: { article_id: 'kaoyan2_2025_text2', year: 2025, text_no: 2, title: 'Passage Two' },
     });
+    fetchERCArticle.mockResolvedValue(mockArticleDetail());
+    fetchERCVocabularyPreheat.mockResolvedValue([]);
+    submitERCArticle.mockResolvedValue({
+      attempt_id: 'attempt-1',
+      article_id: 'kaoyan2_2025_text2',
+      correct_count: 1,
+      question_count: 1,
+      items: [
+        {
+          question_id: 'kaoyan2_2025_text2_q26',
+          question_no: 26,
+          chosen_option: 'A',
+          correct_option: 'A',
+          is_correct: true,
+          rating: 'good',
+          next_review_at: null,
+          entered_mistakes: false,
+        },
+      ],
+    });
+    const onContentCompleted = vi.fn();
 
-    expect(fetchERCArticles).toHaveBeenCalledTimes(1);
-    expect(fetchERCArticle).toHaveBeenCalledWith('kaoyan2_2025_text2');
-    expect(await screen.findByText('Passage Two', { exact: false })).toBeInTheDocument();
+    render(
+      <MemoryRouter>
+        <ERCPracticeFocusWork
+          run={{ ...practiceRun, config_snapshot: { daily_article_target: 2 } }}
+          disabled={false}
+          onContentCompleted={onContentCompleted}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Question 26?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'AOption A' }));
+    await user.click(screen.getByRole('button', { name: '提交答案' }));
+
+    expect(await screen.findByRole('button', { name: '继续下一篇' })).toBeInTheDocument();
+    expect(onContentCompleted).not.toHaveBeenCalled();
   });
 });

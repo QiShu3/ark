@@ -27,6 +27,7 @@ from .schemas import (
     FocusWorkflowOut,
     FocusWorkflowPhase,
     FocusWorkflowPresetOut,
+    FocusWorkRunSummaryOut,
     FocusWorkType,
     PhaseType,
     TaskOut,
@@ -1287,6 +1288,241 @@ def _record_get(row: Any, key: str, default: Any = None) -> Any:
         return default
 
 
+def _row_to_focus_work_run_summary(row: asyncpg.Record | dict[str, Any]) -> FocusWorkRunSummaryOut:
+    progress_snapshot = _record_get(row, "progress_snapshot")
+    if isinstance(progress_snapshot, str):
+        try:
+            progress_snapshot = json.loads(progress_snapshot)
+        except json.JSONDecodeError:
+            progress_snapshot = None
+    if not isinstance(progress_snapshot, dict):
+        progress_snapshot = None
+    config_snapshot = _record_get(row, "config_snapshot")
+    if isinstance(config_snapshot, str):
+        try:
+            config_snapshot = json.loads(config_snapshot)
+        except json.JSONDecodeError:
+            config_snapshot = None
+    if not isinstance(config_snapshot, dict):
+        config_snapshot = None
+    return FocusWorkRunSummaryOut(
+        id=_record_get(row, "id"),
+        workflow_id=_record_get(row, "workflow_id"),
+        phase_index=_safe_int(_record_get(row, "phase_index"), 0),
+        task_id=_record_get(row, "task_id"),
+        focus_work_type=_normalize_focus_work_type(_record_get(row, "focus_work_type")) or "task_focus",
+        app_id=_record_get(row, "app_id"),
+        app_task_type=_record_get(row, "app_task_type"),
+        counts_for_task_completion=bool(_record_get(row, "counts_for_task_completion", True)),
+        status=_record_get(row, "status"),
+        progress_snapshot=progress_snapshot,
+        config_snapshot=config_snapshot,
+        completion_reason=_record_get(row, "completion_reason"),
+        source_run_id=_record_get(row, "source_run_id"),
+    )
+
+
+async def _fetch_focus_work_run_summary(
+    conn: Any,
+    *,
+    user_id: int,
+    run_id: UUID,
+) -> FocusWorkRunSummaryOut | None:
+    row = await conn.fetchrow(
+        """
+        SELECT id, workflow_id, phase_index, task_id, focus_work_type, app_id, app_task_type,
+               counts_for_task_completion, status, progress_snapshot, config_snapshot,
+               completion_reason, source_run_id
+        FROM focus_work_runs
+        WHERE id = $1 AND user_id = $2
+        """,
+        run_id,
+        user_id,
+    )
+    return _row_to_focus_work_run_summary(row) if row is not None else None
+
+
+async def _fetch_active_focus_work_run(
+    conn: Any,
+    *,
+    user_id: int,
+    workflow_id: UUID,
+) -> FocusWorkRunSummaryOut | None:
+    row = await conn.fetchrow(
+        """
+        SELECT id, workflow_id, phase_index, task_id, focus_work_type, app_id, app_task_type,
+               counts_for_task_completion, status, progress_snapshot, config_snapshot,
+               completion_reason, source_run_id
+        FROM focus_work_runs
+        WHERE user_id = $1
+          AND workflow_id = $2
+          AND status IN ('running', 'paused', 'content_completed')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        user_id,
+        workflow_id,
+    )
+    return _row_to_focus_work_run_summary(row) if row is not None else None
+
+
+async def _create_focus_work_run(
+    conn: Any,
+    *,
+    user_id: int,
+    workflow_id: UUID,
+    phase_index: int,
+    task_id: UUID | None,
+    focus_work_type: FocusWorkType,
+    app_id: str | None,
+    app_task_type: str | None,
+    counts_for_task_completion: bool,
+    record_focus: bool,
+    config_snapshot: dict[str, Any],
+    source_run_id: UUID | None = None,
+) -> FocusWorkRunSummaryOut:
+    row = await conn.fetchrow(
+        """
+        INSERT INTO focus_work_runs(
+            user_id, workflow_id, phase_index, task_id, focus_work_type, app_id, app_task_type,
+            counts_for_task_completion, status, record_focus, config_snapshot, source_run_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'running', $9, $10::jsonb, $11)
+        RETURNING id, workflow_id, phase_index, task_id, focus_work_type, app_id, app_task_type,
+                  counts_for_task_completion, status, progress_snapshot, config_snapshot,
+                  completion_reason, source_run_id
+        """,
+        user_id,
+        workflow_id,
+        phase_index,
+        task_id,
+        focus_work_type,
+        app_id,
+        app_task_type,
+        counts_for_task_completion,
+        record_focus,
+        _to_jsonb_param(config_snapshot),
+        source_run_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=500, detail="创建专注工作轮次失败")
+    return _row_to_focus_work_run_summary(row)
+
+
+async def _set_workflow_active_run(
+    conn: Any,
+    *,
+    workflow_id: UUID,
+    run_id: UUID | None,
+    phase_runtime_state: str | None,
+    before_timeout_state: str | None = None,
+) -> asyncpg.Record | None:
+    return await conn.fetchrow(
+        """
+        UPDATE focus_workflows
+        SET active_run_id = $1,
+            phase_runtime_state = $2,
+            phase_runtime_state_before_timeout_prompt = $3,
+            updated_at = NOW()
+        WHERE id = $4
+        RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                  focus_duration, break_duration, current_phase, phase_started_at,
+                  phase_planned_duration, pending_confirmation, pending_task_selection,
+                  active_focus_work_type, focus_work_display_state, focus_work_result,
+                  focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                  active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
+        """,
+        run_id,
+        phase_runtime_state,
+        before_timeout_state,
+        workflow_id,
+    )
+
+
+async def _mark_focus_work_run_content_completed(
+    conn: Any,
+    *,
+    user_id: int,
+    run_id: UUID,
+    progress_snapshot: dict[str, Any],
+) -> FocusWorkRunSummaryOut:
+    row = await conn.fetchrow(
+        """
+        UPDATE focus_work_runs
+        SET status = 'content_completed',
+            progress_snapshot = $1::jsonb,
+            paused_at = NULL,
+            updated_at = NOW()
+        WHERE id = $2
+          AND user_id = $3
+          AND status IN ('running', 'paused')
+        RETURNING id, workflow_id, phase_index, task_id, focus_work_type, app_id, app_task_type,
+                  counts_for_task_completion, status, progress_snapshot, config_snapshot,
+                  completion_reason, source_run_id
+        """,
+        _to_jsonb_param(progress_snapshot),
+        run_id,
+        user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次无法标记为内容完成")
+    return _row_to_focus_work_run_summary(row)
+
+
+async def _complete_focus_work_run(
+    conn: Any,
+    *,
+    user_id: int,
+    run_id: UUID,
+    completion_reason: str,
+) -> FocusWorkRunSummaryOut:
+    row = await conn.fetchrow(
+        """
+        UPDATE focus_work_runs
+        SET status = 'completed',
+            completion_reason = $1,
+            ended_at = COALESCE(ended_at, NOW()),
+            paused_at = NULL,
+            updated_at = NOW()
+        WHERE id = $2
+          AND user_id = $3
+          AND status IN ('running', 'paused', 'content_completed')
+        RETURNING id, workflow_id, phase_index, task_id, focus_work_type, app_id, app_task_type,
+                  counts_for_task_completion, status, progress_snapshot, config_snapshot,
+                  completion_reason, source_run_id
+        """,
+        completion_reason,
+        run_id,
+        user_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次无法正常完成")
+    return _row_to_focus_work_run_summary(row)
+
+
+async def _abandon_active_focus_work_run(
+    conn: Any,
+    *,
+    user_id: int,
+    workflow_id: UUID,
+) -> None:
+    await conn.execute(
+        """
+        UPDATE focus_work_runs
+        SET status = 'abandoned',
+            completion_reason = 'phase_abandoned',
+            ended_at = COALESCE(ended_at, NOW()),
+            paused_at = NULL,
+            updated_at = NOW()
+        WHERE user_id = $1
+          AND workflow_id = $2
+          AND status IN ('running', 'paused', 'content_completed')
+        """,
+        user_id,
+        workflow_id,
+    )
+
+
 def _validate_appointment_times(starts_at: datetime | None, ends_at: datetime) -> None:
     if starts_at is not None and starts_at > ends_at:
         raise HTTPException(
@@ -1530,6 +1766,7 @@ def _row_to_focus_workflow(
     completed_workflow_name: str | None = None,
     is_task_completed_today: bool = False,
     task_blocked_reason: str | None = None,
+    active_run: FocusWorkRunSummaryOut | None = None,
 ) -> FocusWorkflowOut:
     """将工作流行数据转换为返回模型。"""
     if row is None:
@@ -1556,6 +1793,9 @@ def _row_to_focus_workflow(
     )
     runtime_task_id = _record_get(row, "runtime_task_id")
     task_id = _record_get(row, "task_id")
+    phase_runtime_state = _record_get(row, "phase_runtime_state")
+    phase_runtime_state_before_timeout_prompt = _record_get(row, "phase_runtime_state_before_timeout_prompt")
+    active_run_id = _record_get(row, "active_run_id")
     active_focus_work_type = _normalize_focus_work_type(_record_get(row, "active_focus_work_type"))
     focus_work_display_state = _record_get(row, "focus_work_display_state")
     if focus_work_display_state not in {"fullscreen", "minimized", "closed"}:
@@ -1619,6 +1859,10 @@ def _row_to_focus_workflow(
         active_task_app_config_id=task_app_config_id,
         is_task_completed_today=is_task_completed_today,
         task_blocked_reason=task_blocked_reason,
+        phase_runtime_state=phase_runtime_state,
+        phase_runtime_state_before_timeout_prompt=phase_runtime_state_before_timeout_prompt,
+        active_run_id=active_run_id,
+        active_run=active_run,
     )
 
 
@@ -1836,6 +2080,9 @@ async def _set_workflow_waiting_for_task(
             focus_work_display_state = NULL,
             focus_work_result = NULL,
             focus_work_progress_snapshot = NULL,
+            active_run_id = NULL,
+            phase_runtime_state = 'pending_task_selection',
+            phase_runtime_state_before_timeout_prompt = NULL,
             updated_at = NOW()
         WHERE id = $4
         """,
@@ -1850,7 +2097,8 @@ async def _set_workflow_waiting_for_task(
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, is_paused, paused_at, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+               active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
         FROM focus_workflows
         WHERE id = $1
         """,
@@ -1872,7 +2120,14 @@ async def _set_workflow_current_phase(
     focus_work_result: str | None = None,
     focus_work_progress_snapshot: dict[str, Any] | None = None,
     record_focus: bool = True,
+    phase_runtime_state: str | None = None,
 ) -> asyncpg.Record | None:
+    next_phase_runtime_state = phase_runtime_state
+    if next_phase_runtime_state is None:
+        if pending_task_selection:
+            next_phase_runtime_state = "pending_task_selection"
+        elif str(phase["phase_type"]) == "break":
+            next_phase_runtime_state = "break_running"
     await conn.execute(
         """
         UPDATE focus_workflows
@@ -1891,8 +2146,11 @@ async def _set_workflow_current_phase(
             focus_work_result = $9,
             focus_work_progress_snapshot = $10::jsonb,
             record_focus = $11,
+            active_run_id = NULL,
+            phase_runtime_state = $12,
+            phase_runtime_state_before_timeout_prompt = NULL,
             updated_at = NOW()
-        WHERE id = $12
+        WHERE id = $13
         """,
         str(phase["phase_type"]),
         int(phase_index),
@@ -1905,6 +2163,7 @@ async def _set_workflow_current_phase(
         focus_work_result,
         _to_jsonb_param(focus_work_progress_snapshot) if focus_work_progress_snapshot is not None else None,
         bool(record_focus),
+        next_phase_runtime_state,
         workflow_id,
     )
     return await conn.fetchrow(
@@ -1913,7 +2172,8 @@ async def _set_workflow_current_phase(
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, is_paused, paused_at, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+               active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
         FROM focus_workflows
         WHERE id = $1
         """,
@@ -2014,7 +2274,6 @@ async def _advance_focus_workflow_to_next_phase(
                 focus_work_progress_snapshot=None,
                 record_focus=record_focus,
             )
-            await _start_focus_app_work_log(conn, user_id, workflow_id, phase_focus_work_type, record_focus)
             return _row_to_focus_workflow(next_row, task_title=None)
         phase_task_id = _phase_task_id_value(phase)
         task_row = await _get_bindable_task(conn, user_id, phase_task_id)
@@ -2039,7 +2298,6 @@ async def _advance_focus_workflow_to_next_phase(
             focus_work_result=None,
             focus_work_progress_snapshot=None,
         )
-        await _start_focus_app_work_log(conn, user_id, workflow_id, focus_work_type, True)
         await _start_focus_log_for_task(conn, user_id, task_row["id"])
         is_task_completed_today, task_blocked_reason = await _check_task_completion_status(
             conn, user_id, task_row["id"]
@@ -2065,7 +2323,8 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
                active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, is_paused, paused_at, record_focus
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+               active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
         FROM focus_workflows
         WHERE user_id = $1 AND status = 'active'
         """,
@@ -2149,6 +2408,32 @@ async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record
     if current_phase_type == "focus" and timer_mode == "countdown":
         if elapsed < phase_planned_duration:
             return row
+        phase_runtime_state = _record_get(row, "phase_runtime_state")
+        if phase_runtime_state == "phase_time_expired_prompt":
+            return row
+        if phase_runtime_state in {
+            "running_run",
+            "counted_run_completed_confirming",
+            "extra_run_completed",
+            "task_already_completed",
+        }:
+            return await conn.fetchrow(
+                """
+                UPDATE focus_workflows
+                SET phase_runtime_state = 'phase_time_expired_prompt',
+                    phase_runtime_state_before_timeout_prompt = $1,
+                    updated_at = NOW()
+                WHERE id = $2
+                RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                          focus_duration, break_duration, current_phase, phase_started_at,
+                          phase_planned_duration, pending_confirmation, pending_task_selection,
+                          active_focus_work_type, focus_work_display_state, focus_work_result,
+                          focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                          active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
+                """,
+                phase_runtime_state,
+                row["id"],
+            )
         await _close_open_focus_log(conn, int(user_id))
         await _close_open_focus_app_work_log(conn, int(user_id), result="interrupted", progress_snapshot={})
         advanced = await _advance_focus_workflow_to_next_phase(conn, row, int(user_id), skip_breaks=False)
@@ -2315,8 +2600,6 @@ async def _create_workflow_with_focus_phase(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有活动工作流")
     if workflow_row is None:
         raise HTTPException(status_code=500, detail="开始工作流失败")
-    if first_focus_work_type is not None:
-        await _start_focus_app_work_log(conn, int(user_id), workflow_row["id"], first_focus_work_type, first_record_focus)
     row = await conn.fetchrow(
         """
         INSERT INTO focus_logs(user_id, task_id, duration, start_time, end_at)

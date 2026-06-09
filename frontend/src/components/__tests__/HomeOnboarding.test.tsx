@@ -27,7 +27,7 @@ function renderAnchors() {
       <button data-onboarding-anchor="workflow-settings-button">工作流设置</button>
       <button data-onboarding-anchor="workflow-settings-close">关闭工作流预设</button>
       <button data-onboarding-anchor="workflow-start-button">开始工作流</button>
-      <button data-onboarding-anchor="focus-work-complete-round">结束本轮专注</button>
+      <button data-onboarding-anchor="focus-work-abandon-phase">放弃本阶段</button>
       <button data-onboarding-anchor="workflow-stop-button">结束工作流</button>
     </>
   );
@@ -120,7 +120,7 @@ describe('HomeOnboarding', () => {
     expect(await screen.findByText('从一次专注开始推进')).toBeInTheDocument();
 
     dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowStarted);
-    expect(await screen.findByText('完成本轮专注')).toBeInTheDocument();
+    expect(await screen.findByText('结束这个体验阶段')).toBeInTheDocument();
 
     dispatchGuideEvent(FIRST_GUIDE_EVENTS.workflowPhaseEnded);
     expect(await screen.findByText('随时可以结束工作流')).toBeInTheDocument();

@@ -770,6 +770,94 @@ async def test_submit_review_updates_today_plan_item_status(
 
 
 @pytest.mark.asyncio
+async def test_submit_content_review_records_progress_without_today_plan(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        stamp = datetime(2026, 5, 5, tzinfo=UTC)
+        return [
+            {"id": "deck-1", "key": "cet6_1", "name": "CET6_1", "description": "", "word_count": 10, "created_at": stamp, "updated_at": stamp},
+        ]
+
+    async def fail_today_plan_call(*_args, **_kwargs):
+        raise AssertionError("content review must not touch today plan")
+
+    async def fake_get_word_detail_row(_conn, *, word_id: str):
+        assert word_id == "word-extra"
+        return {"id": word_id, "deck_id": "deck-1", "word": "address", "us_pronunciation": None, "uk_pronunciation": None}
+
+    async def fake_get_user_word_progress(_conn, *, user_id: int, deck_id: str, word_id: str):
+        assert user_id == 1
+        assert deck_id == "deck-1"
+        assert word_id == "word-extra"
+        return None
+
+    def fake_schedule_fsrs_review(progress: dict, *, result: str, now: datetime) -> dict:
+        assert progress == {}
+        assert result == "hard"
+        assert now.tzinfo == UTC
+        return {
+            "card_json": {"due": "2026-05-06T00:00:00+00:00", "state": "review"},
+            "mastery_score": 5,
+            "wrong_count": 0,
+            "correct_count": 1,
+            "lapse_count": 0,
+            "interval_days": 1,
+            "next_review_at": datetime(2026, 5, 6, tzinfo=UTC),
+            "result": result,
+        }
+
+    seen_progress_payloads: list[dict] = []
+    seen_review_logs: list[dict] = []
+
+    async def fake_upsert_user_word_progress(_conn, **kwargs):
+        seen_progress_payloads.append(kwargs)
+
+    async def fake_insert_review_log(_conn, **kwargs):
+        seen_review_logs.append(kwargs)
+
+    async def fake_upsert_mistake_bucket(_conn, **kwargs):
+        assert kwargs["word_id"] == "word-extra"
+        assert kwargs["is_active"] is False
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "_ensure_today_plan", fail_today_plan_call)
+    monkeypatch.setattr(vocab_service, "get_daily_plan_item", fail_today_plan_call)
+    monkeypatch.setattr(vocab_service, "update_daily_plan_item", fail_today_plan_call)
+    monkeypatch.setattr(vocab_service, "get_word_detail_row", fake_get_word_detail_row)
+    monkeypatch.setattr(vocab_service, "get_user_word_progress", fake_get_user_word_progress)
+    monkeypatch.setattr(vocab_service, "_schedule_fsrs_review", fake_schedule_fsrs_review)
+    monkeypatch.setattr(vocab_service, "upsert_user_word_progress", fake_upsert_user_word_progress)
+    monkeypatch.setattr(vocab_service, "insert_review_log", fake_insert_review_log)
+    monkeypatch.setattr(vocab_service, "upsert_mistake_bucket", fake_upsert_mistake_bucket)
+
+    result = await vocab_service.submit_content_review(
+        _Pool(),
+        user_id=1,
+        deck_id="cet6",
+        word_id="word-extra",
+        result="hard",
+        review_mode="study",
+        prompt_type="en_to_zh",
+        response_ms=None,
+    )
+
+    assert result["mastery_score"] == 5
+    assert result["should_repeat_today"] is False
+    assert seen_progress_payloads[0]["word_id"] == "word-extra"
+    assert seen_review_logs[0]["word_id"] == "word-extra"
+
+
+@pytest.mark.asyncio
 async def test_list_decks_groups_serial_parts_but_keeps_luan_separate(monkeypatch) -> None:
     class _PoolAcquire:
         async def __aenter__(self):

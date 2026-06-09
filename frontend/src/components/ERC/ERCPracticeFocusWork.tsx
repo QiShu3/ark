@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   BarChart3,
   BookOpen,
@@ -8,25 +7,23 @@ import {
   ChevronRight,
   Clock,
   FileText,
-  Sparkles,
 } from 'lucide-react';
 
-import { apiJson } from '../../lib/api';
 import {
+  fetchERCArticles,
   fetchERCOverview,
   fetchERCArticle,
   fetchERCVocabularyPreheat,
   submitERCVocabularyPreheat,
   submitERCArticle,
-  fetchERCArticles,
 } from '../../lib/erc/api';
-import type { ERCArticleDetail, ERCArticleSubmitResult } from '../../lib/erc/types';
+import type { ERCArticleDetail, ERCArticleListItem, ERCArticleSubmitResult } from '../../lib/erc/types';
 import type { VocabReviewItem } from '../../lib/vocab/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import WordMetaPanel from '../Vocab/WordMetaPanel';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
-type ERCPracticeFocusWorkProps = Partial<FocusWorkRendererProps>;
+type ERCPracticeFocusWorkProps = FocusWorkRendererProps;
 
 const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'good' | 'easy' }> = [
   { label: '没记住', hint: '再次学习', value: 'again' },
@@ -36,11 +33,11 @@ const actions: Array<{ label: string; hint: string; value: 'again' | 'hard' | 'g
 ];
 
 export default function ERCPracticeFocusWork({
-  workflow,
-  onCompleteTaskAndFinish,
-  onFinished,
-  registerResetCommand,
+  run,
+  disabled,
+  onContentCompleted,
 }: ERCPracticeFocusWorkProps) {
+  const targetArticleCount = articleTargetCountFromRun(run);
   const [phase, setPhase] = useState<'loading' | 'preheat' | 'reading' | 'result' | 'empty'>('loading');
   const [article, setArticle] = useState<ERCArticleDetail | null>(null);
   const [preheatWords, setPreheatWords] = useState<VocabReviewItem[]>([]);
@@ -52,15 +49,26 @@ export default function ERCPracticeFocusWork({
   const [submitResult, setSubmitResult] = useState<ERCArticleSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [completedArticleCount, setCompletedArticleCount] = useState(0);
+  const [completedCorrectCount, setCompletedCorrectCount] = useState(0);
+  const [completedQuestionCount, setCompletedQuestionCount] = useState(0);
+  const completedArticleIdsRef = useRef<Set<string>>(new Set());
   const passageScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [isExtraPractice, setIsExtraPractice] = useState(() => {
-    return workflow?.is_task_completed_today === true;
-  });
-  const [loadingAgain, setLoadingAgain] = useState(false);
-
   useEffect(() => {
-    registerResetCommand?.(() => {
+    if (phase === 'empty') {
+      onContentCompleted({
+        article_count: completedArticleCount,
+        target_article_count: targetArticleCount,
+        no_available_content: completedArticleCount === 0,
+      });
+    }
+  }, [completedArticleCount, onContentCompleted, phase, targetArticleCount]);
+
+  const isPaused = disabled;
+
+  const loadPractice = async (active: () => boolean) => {
+    try {
       setPhase('loading');
       setArticle(null);
       setPreheatWords([]);
@@ -70,102 +78,41 @@ export default function ERCPracticeFocusWork({
       setSelectedAnswers({});
       setSubmitResult(null);
       setError(null);
-      setIsExtraPractice(true);
-      void handlePracticeAgain();
-    });
-  }, [registerResetCommand]);
-
-  useEffect(() => {
-    if (isExtraPractice) return;
-    if (phase === 'empty') {
-      onFinished?.();
-    }
-  }, [phase, onFinished, isExtraPractice]);
-
-  const handlePracticeAgain = async () => {
-    if (isPaused) return;
-    setLoadingAgain(true);
-    setError(null);
-    try {
-      const articlesList = await fetchERCArticles();
-      if (!articlesList || articlesList.length === 0) {
-        throw new Error('没有找到可练习的真题文章');
+      const articleId = await resolvePracticeArticleId(run, completedArticleIdsRef.current);
+      if (!active()) return;
+      if (!articleId) {
+        setPhase('empty');
+        return;
       }
-      
-      const randomIndex = Math.floor(Math.random() * articlesList.length);
-      const selectedArticle = articlesList[randomIndex];
-      
+
       const [articleData, preheatData] = await Promise.all([
-        fetchERCArticle(selectedArticle.article_id),
-        fetchERCVocabularyPreheat(selectedArticle.article_id),
+        fetchERCArticle(articleId),
+        fetchERCVocabularyPreheat(articleId),
       ]);
-      
+
+      if (!active()) return;
       setArticle(articleData);
       setPreheatWords(preheatData);
-      setIsExtraPractice(true);
-      setPreheatIndex(0);
-      setRevealed(false);
-      setCurrentQuestionIndex(0);
-      setSelectedAnswers({});
-      setSubmitResult(null);
-      
+
       if (preheatData.length > 0) {
         setPhase('preheat');
       } else {
         setPhase('reading');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载真题文章失败');
-    } finally {
-      setLoadingAgain(false);
+      if (!active()) return;
+      setError(err instanceof Error ? err.message : '真题练习加载失败');
+      setPhase('empty');
     }
   };
 
-  const isPaused = workflow?.is_paused === true;
-
   useEffect(() => {
-    if (workflow?.is_task_completed_today) {
-      void handlePracticeAgain();
-      return;
-    }
-
     let active = true;
-    const loadPractice = async () => {
-      try {
-        const overview = await fetchERCOverview();
-        if (!active) return;
-        if (!overview.recommended_article) {
-          setPhase('empty');
-          return;
-        }
-
-        const articleId = overview.recommended_article.article_id;
-        const [articleData, preheatData] = await Promise.all([
-          fetchERCArticle(articleId),
-          fetchERCVocabularyPreheat(articleId),
-        ]);
-
-        if (!active) return;
-        setArticle(articleData);
-        setPreheatWords(preheatData);
-
-        if (preheatData.length > 0) {
-          setPhase('preheat');
-        } else {
-          setPhase('reading');
-        }
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : '真题练习加载失败');
-        setPhase('empty');
-      }
-    };
-
-    void loadPractice();
+    void loadPractice(() => active);
     return () => {
       active = false;
     };
-  }, [workflow?.is_task_completed_today]);
+  }, []);
 
   useEffect(() => {
     passageScrollRef.current?.scrollTo({ top: 0 });
@@ -220,6 +167,10 @@ export default function ERCPracticeFocusWork({
       }));
       const result = await submitERCArticle(article.article_id, answers);
       setSubmitResult(result);
+      completedArticleIdsRef.current.add(article.article_id);
+      setCompletedArticleCount((prev) => prev + 1);
+      setCompletedCorrectCount((prev) => prev + result.items.filter((item) => item.is_correct).length);
+      setCompletedQuestionCount((prev) => prev + result.items.length);
       setPhase('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交答案失败');
@@ -233,7 +184,7 @@ export default function ERCPracticeFocusWork({
       <div className="flex h-full w-full items-center justify-center p-8">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--focus-work-border)] border-t-white" />
-          <p className="mt-4 text-sm text-[var(--focus-work-text-muted)]">正在为您加载今日推荐真题与单词预热…</p>
+          <p className="mt-4 text-sm text-[var(--focus-work-text-muted)]">正在为您加载真题与单词预热…</p>
         </div>
       </div>
     );
@@ -549,11 +500,23 @@ export default function ERCPracticeFocusWork({
                   <div className="mt-6 pt-5 border-t border-[var(--focus-work-border)] flex flex-col gap-3 shrink-0">
                     <button
                       type="button"
-                      onClick={() => onFinished?.()}
+                      onClick={() => {
+                        if (completedArticleCount < targetArticleCount) {
+                          void loadPractice(() => true);
+                          return;
+                        }
+                        onContentCompleted({
+                          article_count: completedArticleCount,
+                          target_article_count: targetArticleCount,
+                          last_article_id: article.article_id,
+                          correct_count: completedCorrectCount,
+                          question_count: completedQuestionCount,
+                        });
+                      }}
                       disabled={isPaused}
                       className="w-full rounded-full bg-white py-4 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-50"
                     >
-                      完成并结束
+                      {completedArticleCount < targetArticleCount ? '继续下一篇' : '完成本轮内容'}
                     </button>
                   </div>
                 </section>
@@ -563,4 +526,45 @@ export default function ERCPracticeFocusWork({
       </div>
     </div>
   );
+}
+
+function articleTargetCountFromRun(run: FocusWorkRendererProps['run']) {
+  const rawTarget = Number(run.config_snapshot?.target_article_count ?? run.config_snapshot?.daily_article_target ?? 1);
+  if (!Number.isFinite(rawTarget)) return 1;
+  return Math.max(1, Math.min(10, Math.floor(rawTarget)));
+}
+
+async function resolvePracticeArticleId(run: FocusWorkRendererProps['run'], completedArticleIds: Set<string>) {
+  if (run.counts_for_task_completion) {
+    const overview = await fetchERCOverview();
+    return overview.recommended_article?.article_id ?? null;
+  }
+
+  const articles = await fetchERCArticles(articleFiltersFromRun(run));
+  return selectExtraPracticeArticle(articles, completedArticleIds)?.article_id ?? null;
+}
+
+function selectExtraPracticeArticle(articles: ERCArticleListItem[], completedArticleIds: Set<string>) {
+  const candidates = articles.filter((item) => !completedArticleIds.has(item.article_id));
+  const pool = candidates.length > 0 ? candidates : articles;
+  return (
+    pool.find((item) => item.status === 'unstarted')
+    ?? pool.find((item) => item.status === 'has_due_review')
+    ?? pool.find((item) => item.status === 'practiced')
+    ?? pool[0]
+    ?? null
+  );
+}
+
+function articleFiltersFromRun(run: FocusWorkRendererProps['run']) {
+  const setId = stringConfig(run.config_snapshot?.set_id ?? run.config_snapshot?.article_set_id);
+  const exam = stringConfig(run.config_snapshot?.exam);
+  return {
+    ...(setId ? { setId } : {}),
+    ...(exam ? { exam } : {}),
+  };
+}
+
+function stringConfig(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }

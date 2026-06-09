@@ -250,10 +250,8 @@ describe('PlaceholderCard workflow UI', () => {
     }
   });
 
-  it('dispatches onboarding progress when ending the current workflow phase', async () => {
+  it('opens the focus workbench instead of skipping an active focus phase', async () => {
     const user = userEvent.setup();
-    const workflowPhaseEnded = vi.fn();
-    window.addEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, workflowPhaseEnded);
 
     mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
       if (path === '/todo/focus/workflow/current') {
@@ -270,14 +268,65 @@ describe('PlaceholderCard workflow UI', () => {
           phase_timer_mode: 'countdown',
         });
       }
-      if (path === '/todo/focus/workflow/skip_phase' && init?.method === 'POST') {
+      if (path === '/todo/focus/workflow/focus-workbench/show' && init?.method === 'POST') {
+        return Promise.resolve({
+          state: 'focus',
+          workflow_name: '深度工作流',
+          current_phase_index: 0,
+          phases: [{ phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null }],
+          task_id: 'task-1',
+          task_title: '任务 A',
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: 1500,
+          active_focus_work_type: 'task_focus',
+          focus_work_display_state: 'fullscreen',
+        });
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    await user.click(await screen.findByRole('button', { name: /查看工作台 任务 A/ }));
+
+    await waitFor(() => {
+      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflow/focus-workbench/show', { method: 'POST' });
+      expect(mockApiJson).not.toHaveBeenCalledWith('/todo/focus/workflow/skip_phase', { method: 'POST' });
+    });
+  });
+
+  it('dispatches onboarding progress when ending a break phase', async () => {
+    const user = userEvent.setup();
+    const workflowPhaseEnded = vi.fn();
+    window.addEventListener(ONBOARDING_EVENTS.workflowPhaseEnded, workflowPhaseEnded);
+
+    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/todo/focus/workflow/current') {
         return Promise.resolve({
           state: 'break',
+          workflow_name: '深度工作流',
+          current_phase_index: 1,
+          phases: [
+            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null },
+            { phase_type: 'break', duration: 300, timer_mode: null, task_id: null },
+          ],
           task_id: null,
           task_title: null,
           pending_confirmation: false,
           pending_task_selection: false,
           remaining_seconds: 300,
+          phase_timer_mode: null,
+        });
+      }
+      if (path === '/todo/focus/workflow/skip_phase' && init?.method === 'POST') {
+        return Promise.resolve({
+          state: 'normal',
+          task_id: null,
+          task_title: null,
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: null,
         });
       }
       return defaultApiResponse(path);
@@ -286,7 +335,7 @@ describe('PlaceholderCard workflow UI', () => {
     try {
       renderCard();
 
-      await user.click(await screen.findByRole('button', { name: /结束本轮阶段 任务 A/ }));
+      await user.click(await screen.findByRole('button', { name: /结束休息 休息中/ }));
 
       await waitFor(() => {
         expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflow/skip_phase', { method: 'POST' });
@@ -852,5 +901,41 @@ describe('PlaceholderCard workflow UI', () => {
     await new Promise((resolve) => setTimeout(resolve, 1200));
 
     expect(screen.getAllByText('12:34').length).toBeGreaterThan(0);
+  });
+
+  it('does not repeatedly refetch the workflow after the phase time-expired prompt is reached', async () => {
+    let workflowRequestCount = 0;
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflow/current') {
+        workflowRequestCount += 1;
+        return Promise.resolve({
+          state: 'focus',
+          workflow_name: '自定义工作流',
+          current_phase_index: 0,
+          phases: [
+            { phase_type: 'focus', duration: 300, task_id: 'task-a', focus_work_type: null },
+            { phase_type: 'break', duration: 300 },
+          ],
+          task_id: 'task-a',
+          task_title: '待办任务',
+          active_focus_work_type: 'task_focus',
+          focus_work_display_state: 'fullscreen',
+          pending_confirmation: false,
+          pending_task_selection: false,
+          remaining_seconds: 0,
+          is_paused: false,
+          phase_runtime_state: 'phase_time_expired_prompt',
+        });
+      }
+      return defaultApiResponse(path);
+    });
+
+    renderCard();
+
+    expect(await screen.findByText('00:00')).toBeInTheDocument();
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    expect(workflowRequestCount).toBe(1);
   });
 });

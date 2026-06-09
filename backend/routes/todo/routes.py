@@ -32,6 +32,9 @@ from .helpers import (
     _close_open_focus_app_work_log,
     _close_open_focus_log,
     _completion_records_for_user,
+    _abandon_active_focus_work_run,
+    _complete_focus_work_run,
+    _create_focus_work_run,
     _create_or_update_managed_app_task,
     _create_workflow_with_focus_phase,
     _delivery_eve_completed,
@@ -39,7 +42,9 @@ from .helpers import (
     _event_confirmed_appointment_occurrence_count,
     _event_focus_seconds,
     _focus_activity_dates,
+    _fetch_active_focus_work_run,
     _focus_work_type_for_task_row,
+    _fetch_focus_work_run_summary,
     _get_active_app_task_config,
     _get_bindable_task,
     _get_default_focus_workflow_preset,
@@ -47,6 +52,7 @@ from .helpers import (
     _global_focus_seconds,
     _insert_completion_record,
     _max_consecutive_day_count,
+    _mark_focus_work_run_content_completed,
     _next_task_window_after_today,
     _normalize_completion_settings,
     _normalize_focus_end_at,
@@ -65,6 +71,7 @@ from .helpers import (
     _safe_int,
     _section_from_items,
     _set_workflow_current_phase,
+    _set_workflow_active_run,
     _start_focus_app_work_log,
     _start_focus_log_for_task,
     _stop_active_focus,
@@ -106,6 +113,7 @@ from .schemas import (
     FocusStatsOut,
     FocusTodayOut,
     FocusWorkflowCreateRequest,
+    FocusWorkflowExtendPhaseRequest,
     FocusWorkflowOut,
     FocusWorkflowPresetCreateRequest,
     FocusWorkflowPresetOut,
@@ -113,6 +121,8 @@ from .schemas import (
     FocusWorkflowResultRequest,
     FocusWorkflowSelectTaskRequest,
     FocusWorkflowStartAppWorkRequest,
+    FocusWorkRunContentCompleteRequest,
+    FocusWorkRunCreateRequest,
     TaskCreateRequest,
     TaskFocusStats,
     TaskOut,
@@ -142,6 +152,22 @@ def _row_value(row: Any, key: str, default: Any = None) -> Any:
         return row[key]
     except KeyError:
         return default
+
+
+async def _fetch_active_workflow_row(conn: Any, user_id: int) -> Any | None:
+    return await conn.fetchrow(
+        """
+        SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+               focus_duration, break_duration, current_phase, phase_started_at,
+               phase_planned_duration, pending_confirmation, pending_task_selection,
+               active_focus_work_type, focus_work_display_state, focus_work_result,
+               focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+               active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
+        FROM focus_workflows
+        WHERE user_id = $1 AND status = 'active'
+        """,
+        user_id,
+    )
 
 
 def _row_to_event_plan_template_item(row: Any) -> EventPlanTemplateItemOut:
@@ -373,12 +399,17 @@ async def _row_to_focus_workflow_with_task_check(
     task_kwargs = _focus_workflow_task_kwargs(task_row)
     if task_title is not None:
         task_kwargs["task_title"] = task_title
+    active_run = None
+    active_run_id = _row_value(row, "active_run_id")
+    if active_run_id is not None:
+        active_run = await _fetch_focus_work_run_summary(conn, user_id=user_id, run_id=active_run_id)
 
     return _row_to_focus_workflow(
         row,
         completed_workflow_name=completed_workflow_name,
         is_task_completed_today=is_task_completed_today,
         task_blocked_reason=task_blocked_reason,
+        active_run=active_run,
         **task_kwargs
     )
 
@@ -2988,12 +3019,10 @@ async def start_focus_workflow_preset(
             if row is None:
                 raise HTTPException(status_code=500, detail="开始工作流失败")
 
-            if active_focus_work_type is not None:
-                await _start_focus_app_work_log(conn, int(user.id), row["id"], active_focus_work_type, record_focus)
             if task_row is not None and task_id is not None:
                 await _start_focus_log_for_task(conn, int(user.id), task_id)
 
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), row, task_row=task_row)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), row, task_row=task_row)
 
 
 @router.post("/tasks/{task_id}/focus/start", response_model=FocusLogOut)
@@ -3098,7 +3127,7 @@ async def create_focus_workflow(
                 """,
                 int(user.id),
             )
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), row, task_row=task_row)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), row, task_row=task_row)
 
 
 @router.post("/focus/workflow/ai-create", response_model=FocusWorkflowOut)
@@ -3126,7 +3155,60 @@ async def get_focus_workflow_current(
             row = await _sync_active_focus_workflow(conn, int(user.id))
             if row is None:
                 return FocusWorkflowOut(state="normal")
-            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), row)
+            current_row = await _fetch_active_workflow_row(conn, int(user.id))
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), current_row or row)
+
+
+@router.post("/focus/workflow/focus-workbench/show", response_model=FocusWorkflowOut)
+async def show_focus_workflow_workbench(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """重新显示当前专注阶段的全屏专注工作台。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _sync_active_focus_workflow(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if str(_row_value(row, "current_phase")) != "focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
+            if bool(_row_value(row, "pending_task_selection", False)):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段需要先选择任务")
+
+            active_focus_work_type = _row_value(row, "active_focus_work_type")
+            if active_focus_work_type is None and _row_value(row, "runtime_task_id") is not None:
+                active_focus_work_type = "task_focus"
+            if active_focus_work_type is None:
+                phases = _normalize_workflow_phases(
+                    _row_value(row, "phases"),
+                    fallback_focus_duration=int(_row_value(row, "focus_duration", 1500) or 1500),
+                    fallback_break_duration=int(_row_value(row, "break_duration", 300) or 300),
+                )
+                current_index = _safe_int(_row_value(row, "current_phase_index", 0), 0)
+                if 0 <= current_index < len(phases):
+                    active_focus_work_type = _phase_focus_work_type_value(phases[current_index])
+            if active_focus_work_type is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段没有可显示的专注工作台")
+
+            updated = await conn.fetchrow(
+                """
+                UPDATE focus_workflows
+                SET active_focus_work_type = $1,
+                    focus_work_display_state = 'fullscreen',
+                    updated_at = NOW()
+                WHERE id = $2
+                RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                          focus_duration, break_duration, current_phase, phase_started_at,
+                          phase_planned_duration, pending_confirmation, pending_task_selection,
+                          active_focus_work_type, focus_work_display_state, focus_work_result,
+                          focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                          active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
+                """,
+                active_focus_work_type,
+                row["id"],
+            )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), updated)
 
 
 @router.post("/focus/workflow/start-app-work", response_model=FocusWorkflowOut)
@@ -3191,9 +3273,6 @@ async def start_focus_workflow_app_work(
                     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有活动工作流") from exc
                 if created is None:
                     raise HTTPException(status_code=500, detail="开始专注工作失败")
-                await _start_focus_app_work_log(
-                    conn, int(user.id), created["id"], body.focus_work_type, bool(body.record_focus)
-                )
                 return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)
 
             if str(row["current_phase"]) == "focus":
@@ -3230,10 +3309,369 @@ async def start_focus_workflow_app_work(
                 focus_work_progress_snapshot=None,
                 record_focus=bool(body.record_focus),
             )
-            await _start_focus_app_work_log(
-                conn, int(user.id), row["id"], body.focus_work_type, bool(body.record_focus)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+
+
+def _runtime_state_for_completed_run(counts_for_task_completion: bool) -> str:
+    return "counted_run_completed_confirming" if counts_for_task_completion else "extra_run_completed"
+
+
+async def _build_run_metadata(
+    conn: Any,
+    *,
+    user_id: int,
+    workflow_row: Any,
+) -> tuple[UUID | None, str, str | None, str | None, dict[str, Any]]:
+    phases = _normalize_workflow_phases(
+        _row_value(workflow_row, "phases"),
+        fallback_focus_duration=int(workflow_row["focus_duration"]),
+        fallback_break_duration=int(workflow_row["break_duration"]),
+    )
+    current_index = _safe_int(_row_value(workflow_row, "current_phase_index", 0), 0)
+    current_phase = phases[current_index] if 0 <= current_index < len(phases) else None
+    task_id = _row_value(workflow_row, "runtime_task_id") or _row_value(workflow_row, "task_id")
+    focus_work_type = _row_value(workflow_row, "active_focus_work_type")
+    app_id = None
+    app_task_type = None
+    config_snapshot: dict[str, Any] = {}
+
+    task_row = await _get_bindable_task(conn, user_id, task_id) if task_id is not None else None
+    if task_row is not None:
+        focus_work_type = _focus_work_type_for_task_row(task_row)
+        app_id = _row_value(task_row, "app_id")
+        app_task_type = _row_value(task_row, "app_task_type")
+        config_snapshot["task_id"] = str(task_row["id"])
+        config_snapshot["task_title"] = str(task_row["title"])
+        if _row_value(task_row, "app_config_id") is not None:
+            config_row = await conn.fetchrow(
+                """
+                SELECT config
+                FROM app_task_configs
+                WHERE id = $1 AND user_id = $2
+                """,
+                _row_value(task_row, "app_config_id"),
+                user_id,
             )
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+            if config_row is not None:
+                config_snapshot.update(_config_payload(config_row["config"]))
+    elif current_phase is not None:
+        focus_work_type = focus_work_type or _phase_focus_work_type_value(current_phase)
+        config_snapshot["phase_index"] = current_index
+
+    if focus_work_type is None:
+        focus_work_type = "task_focus"
+    return task_id, focus_work_type, app_id, app_task_type, config_snapshot
+
+
+@router.post("/focus/workflow/runs", response_model=FocusWorkflowOut)
+async def create_focus_workflow_run(
+    request: Request,
+    body: FocusWorkRunCreateRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            synced = await _sync_active_focus_workflow(conn, int(user.id))
+            if synced is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if str(row["current_phase"]) != "focus":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
+            if bool(_row_value(row, "pending_task_selection", False)):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段需要先选择任务")
+            if bool(_row_value(row, "is_paused", False)):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前专注已暂停")
+
+            existing_run = await _fetch_active_focus_work_run(conn, user_id=int(user.id), workflow_id=row["id"])
+            source_run_id = None
+            if existing_run is not None:
+                if existing_run.status == "content_completed" and body.mode == "extra":
+                    completed_existing = await _complete_focus_work_run(
+                        conn,
+                        user_id=int(user.id),
+                        run_id=existing_run.id,
+                        completion_reason="run_again",
+                    )
+                    source_run_id = completed_existing.id
+                else:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前已有进行中的专注轮次")
+
+            task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
+                conn,
+                user_id=int(user.id),
+                workflow_row=row,
+            )
+            if body.mode == "counted" and task_id is not None:
+                task_completed, _reason = await _check_task_completion_status(conn, int(user.id), task_id)
+                if task_completed:
+                    next_row = await _set_workflow_active_run(
+                        conn,
+                        workflow_id=row["id"],
+                        run_id=None,
+                        phase_runtime_state="task_already_completed",
+                    )
+                    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+
+            run = await _create_focus_work_run(
+                conn,
+                user_id=int(user.id),
+                workflow_id=row["id"],
+                phase_index=_safe_int(_row_value(row, "current_phase_index", 0), 0),
+                task_id=task_id,
+                focus_work_type=focus_work_type,
+                app_id=app_id,
+                app_task_type=app_task_type,
+                counts_for_task_completion=body.mode == "counted",
+                record_focus=bool(_row_value(row, "record_focus", True)),
+                config_snapshot=config_snapshot,
+                source_run_id=source_run_id,
+            )
+            next_row = await _set_workflow_active_run(
+                conn,
+                workflow_id=row["id"],
+                run_id=run.id,
+                phase_runtime_state="running_run",
+            )
+            await _start_focus_app_work_log(
+                conn,
+                int(user.id),
+                row["id"],
+                focus_work_type,
+                bool(_row_value(row, "record_focus", True)),
+            )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+
+
+@router.post("/focus/workflow/runs/{run_id}/content-complete", response_model=FocusWorkflowOut)
+async def complete_focus_workflow_run_content(
+    request: Request,
+    run_id: UUID,
+    body: FocusWorkRunContentCompleteRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if _row_value(row, "active_run_id") != run_id:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="专注轮次不匹配")
+            run = await _mark_focus_work_run_content_completed(
+                conn,
+                user_id=int(user.id),
+                run_id=run_id,
+                progress_snapshot=dict(body.progress_snapshot),
+            )
+            await _close_open_focus_app_work_log(
+                conn,
+                int(user.id),
+                result="completed",
+                progress_snapshot=dict(body.progress_snapshot),
+            )
+            next_row = await _set_workflow_active_run(
+                conn,
+                workflow_id=row["id"],
+                run_id=run.id,
+                phase_runtime_state=_runtime_state_for_completed_run(run.counts_for_task_completion),
+            )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+
+
+async def _record_task_completion_from_run(
+    conn: Any,
+    *,
+    user_id: int,
+    task_id: UUID,
+    completed_at: datetime,
+) -> None:
+    task_row = await conn.fetchrow(
+        """
+        SELECT id, user_id, status, is_recurring, period_type, custom_period_days,
+               max_completions_per_period, weekday_only
+        FROM tasks
+        WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+        """,
+        task_id,
+        user_id,
+    )
+    if task_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    completion_state = await _build_completion_state(
+        conn,
+        user_id=user_id,
+        subject_type="task",
+        subject_id=task_id,
+        is_recurring=bool(task_row["is_recurring"]),
+        period_type=task_row["period_type"],
+        custom_period_days=task_row["custom_period_days"],
+        max_completions_per_period=int(task_row["max_completions_per_period"]),
+        weekday_only=bool(task_row["weekday_only"]),
+        permanent_done=str(task_row["status"]) == "done",
+        now=completed_at,
+    )
+    _raise_if_completion_blocked(completion_state, noun="任务")
+    await _insert_completion_record(
+        conn,
+        user_id=user_id,
+        subject_type="task",
+        subject_id=task_id,
+        completed_at=completed_at,
+        counted_period_start=completion_state.current_period_start,
+        counted_period_end=completion_state.current_period_end,
+    )
+    if not bool(task_row["is_recurring"]) or task_row["period_type"] == "once":
+        await conn.execute(
+            """
+            UPDATE tasks
+            SET status = 'done', updated_at = NOW()
+            WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
+            """,
+            task_id,
+            user_id,
+        )
+
+
+@router.post("/focus/workflow/runs/{run_id}/complete-task-and-end-phase", response_model=FocusWorkflowOut)
+async def complete_focus_workflow_run_task_and_end_phase(
+    request: Request,
+    run_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            run = await _fetch_focus_work_run_summary(conn, user_id=int(user.id), run_id=run_id)
+            if run is None or run.workflow_id != row["id"]:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="专注轮次不存在")
+            if not run.counts_for_task_completion or run.task_id is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次不计入任务完成")
+            if run.status != "content_completed":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次尚未自然完成")
+            await _record_task_completion_from_run(
+                conn,
+                user_id=int(user.id),
+                task_id=run.task_id,
+                completed_at=datetime.now(UTC),
+            )
+            await _complete_focus_work_run(
+                conn,
+                user_id=int(user.id),
+                run_id=run.id,
+                completion_reason="task_confirmed",
+            )
+            await _close_open_focus_log(conn, int(user.id))
+            await _close_open_focus_app_work_log(
+                conn,
+                int(user.id),
+                result="completed",
+                progress_snapshot=run.progress_snapshot or {},
+            )
+            next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+    return next_out
+
+
+@router.post("/focus/workflow/end-phase", response_model=FocusWorkflowOut)
+async def end_focus_workflow_phase(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            active_run = None
+            active_run_id = _row_value(row, "active_run_id")
+            if active_run_id is not None:
+                active_run = await _fetch_focus_work_run_summary(conn, user_id=int(user.id), run_id=active_run_id)
+            app_work_result = "abandoned"
+            app_work_progress_snapshot: dict[str, Any] = {}
+            if active_run is not None and active_run.status == "content_completed":
+                reason = (
+                    "phase_time_expired_ended"
+                    if _row_value(row, "phase_runtime_state") == "phase_time_expired_prompt"
+                    else "extra_phase_ended"
+                )
+                await _complete_focus_work_run(
+                    conn,
+                    user_id=int(user.id),
+                    run_id=active_run.id,
+                    completion_reason=reason,
+                )
+                app_work_result = "completed"
+                app_work_progress_snapshot = active_run.progress_snapshot or {}
+            elif active_run is not None and active_run.status in {"running", "paused"}:
+                if _row_value(row, "phase_runtime_state") == "phase_time_expired_prompt":
+                    await _complete_focus_work_run(
+                        conn,
+                        user_id=int(user.id),
+                        run_id=active_run.id,
+                        completion_reason="phase_time_expired_ended",
+                    )
+                    app_work_result = "completed"
+                    app_work_progress_snapshot = active_run.progress_snapshot or {}
+                else:
+                    await _abandon_active_focus_work_run(conn, user_id=int(user.id), workflow_id=row["id"])
+            await _close_open_focus_log(conn, int(user.id))
+            await _close_open_focus_app_work_log(
+                conn,
+                int(user.id),
+                result=app_work_result,
+                progress_snapshot=app_work_progress_snapshot,
+            )
+            next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+    return next_out
+
+
+@router.post("/focus/workflow/extend-phase", response_model=FocusWorkflowOut)
+async def extend_focus_workflow_phase(
+    request: Request,
+    body: FocusWorkflowExtendPhaseRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            previous_state = _row_value(row, "phase_runtime_state_before_timeout_prompt")
+            if _row_value(row, "phase_runtime_state") != "phase_time_expired_prompt" or previous_state is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段未进入时间到提示")
+            phase_started_at = _row_value(row, "phase_started_at")
+            planned_duration = _safe_int(_row_value(row, "phase_planned_duration"), 0)
+            elapsed_seconds = planned_duration
+            if isinstance(phase_started_at, datetime):
+                elapsed_seconds = max(0, int((datetime.now(UTC) - phase_started_at).total_seconds()))
+            next_planned_duration = max(planned_duration, elapsed_seconds) + int(body.extend_seconds)
+            updated = await conn.fetchrow(
+                """
+                UPDATE focus_workflows
+                SET phase_planned_duration = $1,
+                    phase_runtime_state = $2,
+                    phase_runtime_state_before_timeout_prompt = NULL,
+                    updated_at = NOW()
+                WHERE id = $3
+                RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                          focus_duration, break_duration, current_phase, phase_started_at,
+                          phase_planned_duration, pending_confirmation, pending_task_selection,
+                          active_focus_work_type, focus_work_display_state, focus_work_result,
+                          focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                          active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
+                """,
+                next_planned_duration,
+                previous_state,
+                row["id"],
+            )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), updated)
 
 
 @router.post("/focus/workflow/focus-work-result", response_model=FocusWorkflowOut)
@@ -3272,47 +3710,6 @@ async def submit_focus_work_result(
                 result=body.result,
                 progress_snapshot=dict(body.progress_snapshot),
             )
-            workflow_task_id = (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) or (
-                row.get("task_id") if hasattr(row, "get") else row["task_id"]
-            )
-            completed_task = body.progress_snapshot.get("completedTask") is True
-            if body.result == "completed" and completed_task and workflow_task_id is not None:
-                task_row = await conn.fetchrow(
-                    """
-                    SELECT id, user_id, status, is_recurring, period_type, custom_period_days,
-                           max_completions_per_period, weekday_only, source_type, app_id, app_task_type
-                    FROM tasks
-                    WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE
-                    """,
-                    workflow_task_id,
-                    int(user.id),
-                )
-                if task_row is not None and task_row["source_type"] == "app":
-                    completed_at = datetime.now(UTC)
-                    completion_state = await _build_completion_state(
-                        conn,
-                        user_id=int(user.id),
-                        subject_type="task",
-                        subject_id=task_row["id"],
-                        is_recurring=bool(task_row["is_recurring"]),
-                        period_type=task_row["period_type"],
-                        custom_period_days=task_row["custom_period_days"],
-                        max_completions_per_period=int(task_row["max_completions_per_period"]),
-                        weekday_only=bool(task_row["weekday_only"]),
-                        permanent_done=str(task_row["status"]) == "done",
-                        now=completed_at,
-                    )
-                    if completion_state.is_completable_now:
-                        await _insert_completion_record(
-                            conn,
-                            user_id=int(user.id),
-                            subject_type="task",
-                            subject_id=task_row["id"],
-                            completed_at=completed_at,
-                            counted_period_start=completion_state.current_period_start,
-                            counted_period_end=completion_state.current_period_end,
-                        )
-
             phases = _normalize_workflow_phases(
                 row.get("phases") if hasattr(row, "get") else row["phases"],
                 fallback_focus_duration=int(row["focus_duration"]),
@@ -3348,7 +3745,7 @@ async def submit_focus_work_result(
                 focus_work_progress_snapshot=dict(body.progress_snapshot),
                 record_focus=bool(row.get("record_focus", True) if hasattr(row, "get") else row["record_focus"]),
             )
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
 
 
 @router.post("/focus/workflow/skip_phase", response_model=FocusWorkflowOut)
@@ -3381,6 +3778,7 @@ async def skip_focus_workflow_phase(
 
             current_phase_type = str(row["current_phase"])
             if current_phase_type == "focus":
+                await _abandon_active_focus_work_run(conn, user_id=int(user.id), workflow_id=row["id"])
                 await _close_open_focus_log(conn, int(user.id))
                 await _close_open_focus_app_work_log(
                     conn,
@@ -3437,19 +3835,31 @@ async def pause_focus_workflow(
                 """,
                 row["id"],
             )
+            await conn.execute(
+                """
+                UPDATE focus_work_runs
+                SET status = 'paused', paused_at = NOW(), updated_at = NOW()
+                WHERE user_id = $1
+                  AND workflow_id = $2
+                  AND status = 'running'
+                """,
+                int(user.id),
+                row["id"],
+            )
             updated_row = await conn.fetchrow(
                 """
                 SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                        focus_duration, break_duration, current_phase, phase_started_at,
                        phase_planned_duration, pending_confirmation, pending_task_selection,
                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                       active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
                 FROM focus_workflows
                 WHERE id = $1
                 """,
                 row["id"],
             )
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), updated_row)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), updated_row)
 
 
 @router.post("/focus/workflow/resume", response_model=FocusWorkflowOut)
@@ -3500,19 +3910,33 @@ async def resume_focus_workflow(
                 int(user.id),
                 paused_at,
             )
+            await conn.execute(
+                """
+                UPDATE focus_work_runs
+                SET status = CASE WHEN status = 'paused' THEN 'running' ELSE status END,
+                    paused_at = NULL,
+                    updated_at = NOW()
+                WHERE user_id = $1
+                  AND workflow_id = $2
+                  AND status = 'paused'
+                """,
+                int(user.id),
+                row["id"],
+            )
             updated_row = await conn.fetchrow(
                 """
                 SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                        focus_duration, break_duration, current_phase, phase_started_at,
                        phase_planned_duration, pending_confirmation, pending_task_selection,
                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                       focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                       focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                       active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
                 FROM focus_workflows
                 WHERE id = $1
                 """,
                 row["id"],
             )
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), updated_row)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), updated_row)
 
 
 @router.post("/focus/workflow/select-task", response_model=FocusWorkflowOut)
@@ -3568,9 +3992,8 @@ async def select_focus_workflow_task(
                 focus_work_result=None,
                 focus_work_progress_snapshot=None,
             )
-            await _start_focus_app_work_log(conn, int(user.id), row["id"], focus_work_type, True)
             await _start_focus_log_for_task(conn, int(user.id), task_row["id"])
-    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row, task_row=task_row)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row, task_row=task_row)
 
 
 @router.post("/focus/stop", response_model=Any)

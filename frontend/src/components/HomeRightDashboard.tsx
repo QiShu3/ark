@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy, X } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
+import { fetchCurrentFocusWorkflow } from '../lib/focusWorkflow';
 import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
@@ -187,7 +188,7 @@ export default function HomeRightDashboard() {
 
   async function loadDashboard() {
     const [workflowRes, todayFocusRes, tasksRes, appointmentsRes, achievementRes, presetsRes] = await Promise.allSettled([
-      apiJson<FocusWorkflow>('/todo/focus/workflow/current'),
+      fetchCurrentFocusWorkflow<FocusWorkflow>(),
       apiJson<TodayFocusSummary>('/todo/focus/today'),
       apiJson<Task[]>('/todo/tasks?limit=100'),
       apiJson<Appointment[]>('/todo/appointments'),

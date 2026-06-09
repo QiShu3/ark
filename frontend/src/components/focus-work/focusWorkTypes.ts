@@ -9,17 +9,36 @@ export type FocusWorkStartDetail = {
   focusWorkType: FocusWorkType;
 };
 
+export type FocusWorkRunStatus = 'running' | 'paused' | 'content_completed' | 'completed' | 'abandoned';
+export type FocusPhaseRuntimeState =
+  | 'running_run'
+  | 'counted_run_completed_confirming'
+  | 'extra_run_completed'
+  | 'task_already_completed'
+  | 'phase_time_expired_prompt'
+  | 'pending_task_selection'
+  | 'break_running';
+
+export type FocusWorkRunSummary = {
+  id: string;
+  workflow_id: string;
+  phase_index: number;
+  task_id?: string | null;
+  focus_work_type: FocusWorkType;
+  app_id?: AppTaskId | null;
+  app_task_type?: AppTaskType | null;
+  counts_for_task_completion: boolean;
+  status: FocusWorkRunStatus;
+  progress_snapshot?: Record<string, unknown> | null;
+  config_snapshot?: Record<string, unknown> | null;
+  completion_reason?: string | null;
+  source_run_id?: string | null;
+};
+
 export type FocusWorkRendererProps = {
-  workflow: FocusWorkSnapshot;
-  recordFocus: boolean;
-  onComplete: (progressSnapshot?: Record<string, unknown>) => void;
-  onCompleteTaskAndFinish?: () => void;
-  onPause?: () => void;
-  onResume?: () => void;
-  onInterrupt: (progressSnapshot?: Record<string, unknown>) => void;
-  onAbandon?: (progressSnapshot?: Record<string, unknown>) => void;
-  onFinished?: (progressSnapshot?: Record<string, unknown>) => void;
-  registerResetCommand?: (resetFn: () => void) => void;
+  run: FocusWorkRunSummary;
+  disabled: boolean;
+  onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
 };
 
 export type FocusWorkDefinition = {
@@ -32,6 +51,7 @@ export type FocusWorkDefinition = {
 export type FocusWorkSnapshot = {
   state: 'normal' | 'focus' | 'break';
   task_id?: string | null;
+  runtime_task_id?: string | null;
   task_title?: string | null;
   current_phase_index?: number | null;
   phases?: Array<Record<string, unknown>>;
@@ -49,6 +69,10 @@ export type FocusWorkSnapshot = {
   active_task_app_config_id?: string | null;
   is_task_completed_today?: boolean;
   task_blocked_reason?: string | null;
+  phase_runtime_state?: FocusPhaseRuntimeState | null;
+  phase_runtime_state_before_timeout_prompt?: FocusPhaseRuntimeState | null;
+  active_run_id?: string | null;
+  active_run?: FocusWorkRunSummary | null;
 };
 
 export const FOCUS_WORK_LABELS: Record<FocusWorkType, string> = {

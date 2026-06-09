@@ -134,9 +134,9 @@ const STEPS: OnboardingStep[] = [
   },
   {
     id: 'end-phase',
-    anchor: 'focus-work-complete-round',
-    title: '完成本轮专注',
-    body: '在专注工作弹窗里点击“结束本轮专注”，这会结束当前阶段并回到工作流节奏。',
+    anchor: 'focus-work-abandon-phase',
+    title: '结束这个体验阶段',
+    body: '首次引导里可以点击“放弃本阶段”快速回到工作流节奏；正式使用时，内容自然完成后再由工作台确认任务完成。',
     waitFor: FIRST_GUIDE_EVENTS.workflowPhaseEnded,
     placement: 'bottom',
   },
