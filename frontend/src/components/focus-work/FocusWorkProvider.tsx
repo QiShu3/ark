@@ -243,7 +243,6 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     if (snapshot.state !== 'focus' || !activeDefinition) return;
     if (snapshot.pending_task_selection || snapshot.is_paused) return;
     if (activeRun || derivedPhaseRuntimeState) return;
-    if (snapshot.is_task_completed_today) return;
     const mode = snapshot.task_id || snapshot.runtime_task_id ? 'counted' : 'extra';
     void createRun(mode);
   }, [
@@ -252,7 +251,6 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     busy,
     derivedPhaseRuntimeState,
     snapshot?.is_paused,
-    snapshot?.is_task_completed_today,
     snapshot?.pending_task_selection,
     snapshot?.runtime_task_id,
     snapshot?.state,

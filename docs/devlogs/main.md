@@ -2,7 +2,7 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
-### 2026-06-14 · e41de1f / 20a88ab / 2b31e28 · 专注工作重构收尾
+### 2026-06-14 · e41de1f / 20a88ab / 2b31e28 / f443385 · 专注工作重构收尾
 
 - 用户提出的需求：
   - "现在继续 专注工作的重构"
@@ -10,6 +10,7 @@
 
 - 本次完成的工作：
   - **前端**：清理 `FocusWorkSnapshot` 和 `WorkflowSnapshot` 类型中 11 个已定义但从无读取的字段（`task_blocked_reason`、`active_task_source_type`、`active_task_app_id`、`active_task_app_task_type`、`active_task_app_config_id`、`focus_work_result`、`focus_work_progress_snapshot`），消除与后端 run 模型的死角。
+  - **前端**：移除 `FocusWorkProvider` 中 auto-create-run 效应里冗余的 `is_task_completed_today` 守卫 — `derivedPhaseRuntimeState` 已通过 fallback 将同一情况映射为 `task_already_completed` 并由上层守卫拦截。
   - **后端**：将旧 `POST /todo/focus/workflow/focus-work-result` 标记为 410 Gone，彻底废弃该端点。前端的任务提交已完全通过 run 级接口 (`POST /runs/{id}/content-complete` 等) 完成。
   - **文档**：在 `docs/frontend-ui-unification.md` 中注册 `FlashcardFocusTemplate` 和 `FocusWorkPhaseTemplate`（`ChoiceQuestionFocusTemplate` 已于 6/13 注册），确立三个可复用专注工作模板。
 
