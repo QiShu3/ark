@@ -2,6 +2,22 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-14 · 2dfd909 / 503c21bd / c2fd9efa · 专注工作重构：消除前端回退 + 清理旧列 + 统一类型 + 抽取面板
+
+- 本次完成的工作：
+  - **后端**：在 `_row_to_focus_workflow_with_task_check` 中计算有效 `phase_runtime_state`，当绑定任务已完成时返回 `task_already_completed`，彻底消除「后端有 is_task_completed_today 但无 phase_runtime_state」的一致性问题。
+  - **后端**：从 `_set_workflow_current_phase` 移除 `focus_work_result` / `focus_work_progress_snapshot` 参数（所有调用者原已传 None），DB 写入改为 NULL；同时从 `FocusWorkflowOut` 模型中删除这两个字段。
+  - **前端**：移除 `FocusWorkProvider` 的 `is_task_completed_today` 回退逻辑，后端的 `phase_runtime_state` 现在可靠携带此信息。
+  - **前端**：统一 `WorkflowSnapshot`（workflowProgress.ts）和 `FocusWorkSnapshot`（focusWorkTypes.ts），后者现在作为前者的交集类型，消除 14 个字段的重复定义。
+  - **前端**：从 `FocusWorkProvider` 中抽取 `FocusWorkbenchPanel` 组件，封装全部 4 种运行时操作面板 + 活跃 run 渲染 + 加载回退状态，将 Provider 精简约 90 行。
+  - **前端**：从 `FocusWorkSnapshot` / `WorkflowSnapshot` 类型中移除 11 个无用字段；废弃后端 `focus-work-result` 端点（返回 410）。
+
+- 验证情况：
+  - `cd backend && uv run ruff check .` — 通过 ✅
+  - `cd backend && uv run pytest tests/test_todo_routes.py tests/test_focus_workflow_app_work.py -q` — 117 个测试全部通过 ✅
+  - `cd frontend && pnpm check` — TypeScript 无错误 ✅
+  - `cd frontend && npx vitest run` — 53 个测试文件、254 个测试用例全部通过 ✅
+
 ### 2026-06-14 · e41de1f / 20a88ab / 2b31e28 / f443385 · 专注工作重构收尾
 
 - 用户提出的需求：
