@@ -4,6 +4,7 @@ import { apiJson } from '../../lib/api';
 import { fetchCurrentFocusWorkflow } from '../../lib/focusWorkflow';
 import AppModalFrame from '../AppModalFrame';
 import FocusWorkModalShell from './FocusWorkModalShell';
+import FocusWorkbenchPanel from './FocusWorkbenchPanel';
 import { getFocusWorkDefinition } from './focusWorkRegistry';
 import {
   START_FOCUS_WORK_EVENT,
@@ -256,99 +257,6 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     snapshot?.task_id,
   ]);
 
-  function renderWorkbenchPanel() {
-    const primaryButtonClass = 'rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
-    const secondaryButtonClass = 'rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50';
-
-    if (derivedPhaseRuntimeState === 'counted_run_completed_confirming') {
-      return (
-        <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center p-8 text-center">
-          <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Round Complete</div>
-          <h3 className="mt-4 text-xl font-semibold text-[var(--focus-work-text)]">本轮专注工作已完成</h3>
-          <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">本轮计入当前任务。确认后会记录任务完成并结束当前阶段。</p>
-          <div className="mt-8 flex w-full flex-col justify-center gap-4 sm:flex-row">
-            <button type="button" disabled={busy || !activeRun} onClick={() => void completeTaskAndEndPhase()} className={primaryButtonClass}>
-              完成任务并结束阶段
-            </button>
-            <button type="button" disabled={busy} onClick={() => void createRun('extra')} className={secondaryButtonClass}>
-              再来一轮
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (derivedPhaseRuntimeState === 'extra_run_completed') {
-      return (
-        <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center p-8 text-center">
-          <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Extra Round</div>
-          <h3 className="mt-4 text-xl font-semibold text-[var(--focus-work-text)]">本轮额外专注已完成</h3>
-          <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">本轮不计入任务完成。你可以结束当前阶段，或在同一阶段再来一轮。</p>
-          <div className="mt-8 flex w-full flex-col justify-center gap-4 sm:flex-row">
-            <button type="button" disabled={busy} onClick={() => void endPhase()} className={primaryButtonClass}>
-              结束阶段
-            </button>
-            <button type="button" disabled={busy} onClick={() => void createRun('extra')} className={secondaryButtonClass}>
-              再来一轮
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (derivedPhaseRuntimeState === 'task_already_completed') {
-      return (
-        <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center p-8 text-center">
-          <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Task Complete</div>
-          <h3 className="mt-4 text-xl font-semibold text-[var(--focus-work-text)]">当前任务今日已完成</h3>
-          <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">可以结束当前阶段，也可以再进行一轮额外专注。额外轮次会保存内容进度，但不计入任务完成。</p>
-          <div className="mt-8 flex w-full flex-col justify-center gap-4 sm:flex-row">
-            <button type="button" disabled={busy} onClick={() => void endPhase()} className={primaryButtonClass}>
-              结束阶段
-            </button>
-            <button type="button" disabled={busy} onClick={() => void createRun('extra')} className={secondaryButtonClass}>
-              再来一轮
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (derivedPhaseRuntimeState === 'phase_time_expired_prompt') {
-      return (
-        <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center p-8 text-center">
-          <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Time Is Up</div>
-          <h3 className="mt-4 text-xl font-semibold text-[var(--focus-work-text)]">本阶段时间已到</h3>
-          <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">可以延长 5 分钟，或结束该阶段。结束阶段会正常记录已完成的专注工作，但不会自动完成任务。</p>
-          <div className="mt-8 flex w-full flex-col justify-center gap-4 sm:flex-row">
-            <button type="button" disabled={busy} onClick={() => void extendPhase()} className={primaryButtonClass}>
-              延长时间
-            </button>
-            <button type="button" disabled={busy} onClick={() => void endPhase()} className={secondaryButtonClass}>
-              结束该阶段
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (activeRun && activeDefinition) {
-      return activeDefinition.render({
-        run: activeRun,
-        disabled: snapshot?.is_paused === true,
-        onContentCompleted: (progressSnapshot) => void completeRunContent(progressSnapshot),
-      });
-    }
-
-    return (
-      <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center p-8 text-center">
-        <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Preparing</div>
-        <h3 className="mt-4 text-xl font-semibold text-[var(--focus-work-text)]">正在准备本轮专注工作</h3>
-        <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">工作台正在识别当前任务并创建对应的专注轮次。</p>
-      </div>
-    );
-  }
-
   return (
     <>
       {children}
@@ -400,7 +308,18 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           onResume={() => void resumeFocusWork()}
           onAbandon={abandonCurrentWork}
         >
-          {renderWorkbenchPanel()}
+          <FocusWorkbenchPanel
+            phaseRuntimeState={derivedPhaseRuntimeState}
+            activeRun={activeRun}
+            activeDefinition={activeDefinition}
+            busy={busy}
+            isPaused={snapshot?.is_paused === true}
+            onCompleteTaskAndEndPhase={() => void completeTaskAndEndPhase()}
+            onEndPhase={() => void endPhase()}
+            onExtendPhase={() => void extendPhase()}
+            onCreateExtraRun={() => void createRun('extra')}
+            onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
+          />
         </FocusWorkModalShell>
       ) : null}
     </>
