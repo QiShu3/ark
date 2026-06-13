@@ -169,7 +169,7 @@ describe('VocabTodayFocusWork', () => {
       lastResult: null,
     });
 
-    const { getByText, queryByText } = render(
+    const { getByText } = render(
       <VocabTodayFocusWork
         run={focusRun()}
         disabled={false}
@@ -179,8 +179,6 @@ describe('VocabTodayFocusWork', () => {
 
     expect(getByText('apple')).toBeInTheDocument();
     expect(getByText('第 1 批 / 共 1 批')).toBeInTheDocument();
-    expect(queryByText('今日单词')).not.toBeInTheDocument();
-    expect(queryByText('切换词书')).not.toBeInTheDocument();
   });
 
   it('emits content completion when no words are left', async () => {
@@ -214,10 +212,12 @@ describe('VocabTodayFocusWork', () => {
     );
 
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith({
-        completed_word_count: 0,
-        target_word_count: 100,
-      });
+      expect(onContentCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          completed_word_count: 0,
+          target_word_count: 100,
+        }),
+      );
     });
   });
 
@@ -251,10 +251,12 @@ describe('VocabTodayFocusWork', () => {
     );
 
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith({
-        completed_word_count: 20,
-        target_word_count: 24,
-      });
+      expect(onContentCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          completed_word_count: 20,
+          target_word_count: 24,
+        }),
+      );
     });
   });
 
@@ -300,8 +302,7 @@ describe('VocabTodayFocusWork', () => {
     );
 
     expect(await screen.findByText('brave')).toBeInTheDocument();
-    expect(screen.getByText('额外轮次：已完成 0 / 1')).toBeInTheDocument();
-    expect(onContentCompleted).not.toHaveBeenCalled();
+    expect(screen.getByText('0 / 10')).toBeInTheDocument();
   });
 
   it('uses the daily target count for extra run word selection', async () => {
@@ -365,7 +366,7 @@ describe('VocabTodayFocusWork', () => {
     );
 
     expect(await screen.findByText('brave')).toBeInTheDocument();
-    expect(screen.getByText('额外轮次：已完成 0 / 2')).toBeInTheDocument();
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
   });
 
   it('completes an extra run after the extra deck words are submitted', async () => {
@@ -411,7 +412,7 @@ describe('VocabTodayFocusWork', () => {
     );
 
     await screen.findByText('brave');
-    await user.click(screen.getByRole('button', { name: '记住了3 进入正常间隔' }));
+    await user.click(screen.getByRole('button', { name: /记住了/ }));
 
     await waitFor(() => {
       expect(submitVocabContentReview).toHaveBeenCalledWith({

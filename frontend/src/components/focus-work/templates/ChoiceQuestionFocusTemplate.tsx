@@ -55,7 +55,7 @@ export default function ChoiceQuestionFocusTemplate({
 
   React.useEffect(() => {
     if (completedRef.current) return;
-    if (answeredCount >= targetCount) {
+    if (answeredCount >= targetCount && targetCount > 0) {
       completedRef.current = true;
       onContentCompleted(progressSnapshot(answeredCount, targetCount));
     }

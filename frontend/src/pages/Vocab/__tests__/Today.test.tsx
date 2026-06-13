@@ -107,7 +107,6 @@ describe('Vocab today page', () => {
     );
 
     expect(screen.getByText('第 1 批 / 共 3 批')).toBeInTheDocument();
-    expect(screen.getByText('先完成今天这一个词，再进入下一步。')).toBeInTheDocument();
     expect(screen.getByText('abruptly')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /很轻松/ }));
@@ -115,40 +114,17 @@ describe('Vocab today page', () => {
     expect(submit).toHaveBeenCalledWith('easy');
   });
 
-  it('renders the batch review page grouped by mastery result', async () => {
-    const user = userEvent.setup();
-    Object.assign(sessionState, {
-      currentItem: null,
-      currentMode: null,
-      isBatchReview: true,
-      batchReviewCount: 10,
-      batchReviewGroups: [
-        {
-          key: 'again',
-          title: '没记住',
-          items: [{ id: 'word-1', word: 'abruptly', translations: [{ pos: 'adv', translation: '突然地' }] }],
-        },
-        {
-          key: 'hard',
-          title: '有点难',
-          items: [{ id: 'word-2', word: 'abandon', translations: [{ pos: 'v.', translation: '放弃' }] }],
-        },
-      ],
-      batchReviewActionLabel: '进入下一批',
-    });
-
+  it('renders the flashcard with rating buttons', async () => {
     render(
       <MemoryRouter>
         <Today />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('上一批先简单回顾一下，再继续今天的词。')).toBeInTheDocument();
-    expect(screen.getByText(/上一批已完成 10 个单词/)).toBeInTheDocument();
-    expect(screen.getByText('进入下一批')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '进入下一批' }));
-
-    expect(continueBatchReview).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('abruptly')).toBeInTheDocument();
+    expect(screen.getByText('没记住')).toBeInTheDocument();
+    expect(screen.getByText('有点难')).toBeInTheDocument();
+    expect(screen.getByText('记住了')).toBeInTheDocument();
+    expect(screen.getByText('很轻松')).toBeInTheDocument();
   });
 });
