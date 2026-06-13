@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-14 · e41de1f / 20a88ab / 2b31e28 · 专注工作重构收尾
+
+- 用户提出的需求：
+  - "现在继续 专注工作的重构"
+  - "完成所有待处理任务"
+
+- 本次完成的工作：
+  - **前端**：清理 `FocusWorkSnapshot` 和 `WorkflowSnapshot` 类型中 11 个已定义但从无读取的字段（`task_blocked_reason`、`active_task_source_type`、`active_task_app_id`、`active_task_app_task_type`、`active_task_app_config_id`、`focus_work_result`、`focus_work_progress_snapshot`），消除与后端 run 模型的死角。
+  - **后端**：将旧 `POST /todo/focus/workflow/focus-work-result` 标记为 410 Gone，彻底废弃该端点。前端的任务提交已完全通过 run 级接口 (`POST /runs/{id}/content-complete` 等) 完成。
+  - **文档**：在 `docs/frontend-ui-unification.md` 中注册 `FlashcardFocusTemplate` 和 `FocusWorkPhaseTemplate`（`ChoiceQuestionFocusTemplate` 已于 6/13 注册），确立三个可复用专注工作模板。
+
+- 验证情况：
+  - `cd backend && uv run ruff check .` — 通过 ✅
+  - `cd backend && uv run pytest tests/test_todo_routes.py tests/test_focus_workflow_app_work.py -q` — 117 个测试全部通过 ✅
+  - `cd frontend && pnpm check` — TypeScript 无错误 ✅
+  - `cd frontend && npx vitest run` — 53 个测试文件、254 个测试用例全部通过 ✅
+
 ### 2026-06-08 14:50 · d511dd3 · fix(focus-work): auto-load extra practice on force-start if task is completed
 
 - 用户提出的需求：
