@@ -3309,8 +3309,6 @@ async def start_focus_workflow_app_work(
                 pending_task_selection=False,
                 active_focus_work_type=body.focus_work_type,
                 focus_work_display_state="fullscreen",
-                focus_work_result=None,
-                focus_work_progress_snapshot=None,
                 record_focus=bool(body.record_focus),
             )
             return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
@@ -3932,8 +3930,6 @@ async def select_focus_workflow_task(
                 pending_task_selection=False,
                 active_focus_work_type=focus_work_type,
                 focus_work_display_state="fullscreen",
-                focus_work_result=None,
-                focus_work_progress_snapshot=None,
             )
             await _start_focus_log_for_task(conn, int(user.id), task_row["id"])
             return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row, task_row=task_row)

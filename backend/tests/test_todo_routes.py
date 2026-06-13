@@ -3550,11 +3550,7 @@ class _WorkflowConn:
             if len(args) > 7:
                 self.workflow["focus_work_display_state"] = args[7]
             if len(args) > 8:
-                self.workflow["focus_work_result"] = args[8]
-            if len(args) > 9:
-                self.workflow["focus_work_progress_snapshot"] = args[9]
-            if len(args) > 10:
-                self.workflow["record_focus"] = bool(args[10])
+                self.workflow["record_focus"] = bool(args[8])
             self.workflow["is_paused"] = False
             self.workflow["paused_at"] = None
         if "SET pending_task_selection = TRUE" in sql:

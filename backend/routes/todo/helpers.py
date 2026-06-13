@@ -1801,12 +1801,6 @@ def _row_to_focus_workflow(
     focus_work_display_state = _record_get(row, "focus_work_display_state")
     if focus_work_display_state not in {"fullscreen", "minimized", "closed"}:
         focus_work_display_state = None
-    focus_work_result = _record_get(row, "focus_work_result")
-    if focus_work_result not in {"completed", "interrupted", "abandoned"}:
-        focus_work_result = None
-    focus_work_progress_snapshot = _record_get(row, "focus_work_progress_snapshot")
-    if not isinstance(focus_work_progress_snapshot, dict):
-        focus_work_progress_snapshot = None
     if _should_use_task_focus_runtime(
         state=str(row["current_phase"]),
         current_phase=current_phase,
@@ -1848,8 +1842,6 @@ def _row_to_focus_workflow(
         completed_workflow_name=completed_workflow_name,
         active_focus_work_type=active_focus_work_type,
         focus_work_display_state=focus_work_display_state,
-        focus_work_result=focus_work_result,
-        focus_work_progress_snapshot=focus_work_progress_snapshot,
         next_focus_work_type=next_focus_work_type,
         has_minimized_work=has_minimized_work,
         is_paused=is_paused,
@@ -2118,8 +2110,6 @@ async def _set_workflow_current_phase(
     pending_task_selection: bool,
     active_focus_work_type: FocusWorkType | None = None,
     focus_work_display_state: str | None = None,
-    focus_work_result: str | None = None,
-    focus_work_progress_snapshot: dict[str, Any] | None = None,
     record_focus: bool = True,
     phase_runtime_state: str | None = None,
 ) -> asyncpg.Record | None:
@@ -2144,14 +2134,14 @@ async def _set_workflow_current_phase(
             paused_at = NULL,
             active_focus_work_type = $7,
             focus_work_display_state = $8,
-            focus_work_result = $9,
-            focus_work_progress_snapshot = $10::jsonb,
-            record_focus = $11,
+            focus_work_result = NULL,
+            focus_work_progress_snapshot = NULL,
+            record_focus = $9,
             active_run_id = NULL,
-            phase_runtime_state = $12,
+            phase_runtime_state = $10,
             phase_runtime_state_before_timeout_prompt = NULL,
             updated_at = NOW()
-        WHERE id = $13
+        WHERE id = $11
         """,
         str(phase["phase_type"]),
         int(phase_index),
@@ -2161,8 +2151,6 @@ async def _set_workflow_current_phase(
         pending_task_selection,
         active_focus_work_type,
         focus_work_display_state,
-        focus_work_result,
-        _to_jsonb_param(focus_work_progress_snapshot) if focus_work_progress_snapshot is not None else None,
         bool(record_focus),
         next_phase_runtime_state,
         workflow_id,
@@ -2172,8 +2160,8 @@ async def _set_workflow_current_phase(
         SELECT id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
                focus_duration, break_duration, current_phase, phase_started_at,
                phase_planned_duration, pending_confirmation, pending_task_selection,
-               active_focus_work_type, focus_work_display_state, focus_work_result,
-               focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+               active_focus_work_type, focus_work_display_state,
+               is_paused, paused_at, record_focus,
                active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
         FROM focus_workflows
         WHERE id = $1
@@ -2271,8 +2259,6 @@ async def _advance_focus_workflow_to_next_phase(
                 pending_task_selection=False,
                 active_focus_work_type=phase_focus_work_type,
                 focus_work_display_state="fullscreen",
-                focus_work_result=None,
-                focus_work_progress_snapshot=None,
                 record_focus=record_focus,
             )
             return _row_to_focus_workflow(next_row, task_title=None)
@@ -2296,8 +2282,6 @@ async def _advance_focus_workflow_to_next_phase(
             pending_task_selection=False,
             active_focus_work_type=focus_work_type,
             focus_work_display_state="fullscreen",
-            focus_work_result=None,
-            focus_work_progress_snapshot=None,
         )
         await _start_focus_log_for_task(conn, user_id, task_row["id"])
         is_task_completed_today, task_blocked_reason = await _check_task_completion_status(

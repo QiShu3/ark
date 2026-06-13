@@ -75,15 +75,14 @@ def test_focus_workflow_out_exposes_focus_work_runtime_fields():
         state="focus",
         active_focus_work_type="erc_review",
         focus_work_display_state="fullscreen",
-        focus_work_result=None,
-        focus_work_progress_snapshot={"answered": 1},
         next_focus_work_type=None,
         has_minimized_work=False,
+        phase_runtime_state="running_run",
     )
 
     assert payload.active_focus_work_type == "erc_review"
     assert payload.focus_work_display_state == "fullscreen"
-    assert payload.focus_work_progress_snapshot == {"answered": 1}
+    assert payload.phase_runtime_state == "running_run"
 
 
 def test_focus_workflow_out_exposes_paused_runtime_fields():
@@ -91,8 +90,6 @@ def test_focus_workflow_out_exposes_paused_runtime_fields():
         state="focus",
         active_focus_work_type="task_focus",
         focus_work_display_state="fullscreen",
-        focus_work_result=None,
-        focus_work_progress_snapshot=None,
         next_focus_work_type=None,
         has_minimized_work=False,
         is_paused=True,

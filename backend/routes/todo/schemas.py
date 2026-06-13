@@ -554,8 +554,6 @@ class FocusWorkflowOut(BaseModel):
     completed_workflow_name: str | None = None
     active_focus_work_type: FocusWorkType | None = None
     focus_work_display_state: FocusWorkDisplayState | None = None
-    focus_work_result: FocusWorkResult | None = None
-    focus_work_progress_snapshot: dict[str, object] | None = None
     next_focus_work_type: FocusWorkType | None = None
     has_minimized_work: bool = False
     is_paused: bool = False
