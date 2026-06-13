@@ -231,10 +231,7 @@ export default function ERCPracticeFocusWork({
       return { correctOptionKey: undefined };
     }
 
-    const answers = article.questions.map((q) => ({
-      question_id: q.question_id,
-      chosen_option: q.question_id === item.id ? (optionKey as OptionKey) : undefined,
-    }));
+    const answers = [{ question_id: question.question_id, chosen_option: optionKey as OptionKey }];
 
     try {
       const result = await submitERCArticle(article.article_id, answers);
