@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { AppTaskId, AppTaskType } from '../taskTypes';
+import type { WorkflowSnapshot } from '../workflowProgress';
 
 export type FocusWorkType = 'vocab_today' | 'erc_review' | 'erc_practice' | 'task_focus';
 export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
@@ -48,21 +49,7 @@ export type FocusWorkDefinition = {
   render: (props: FocusWorkRendererProps) => React.ReactNode;
 };
 
-export type FocusWorkSnapshot = {
-  state: 'normal' | 'focus' | 'break';
-  task_id?: string | null;
-  runtime_task_id?: string | null;
-  task_title?: string | null;
-  current_phase_index?: number | null;
-  phases?: Array<Record<string, unknown>>;
-  pending_confirmation?: boolean;
-  pending_task_selection?: boolean;
-  remaining_seconds?: number | null;
-  elapsed_seconds?: number | null;
-  active_focus_work_type?: FocusWorkType | null;
-  focus_work_display_state?: FocusWorkDisplayState | null;
-  is_paused?: boolean;
-  record_focus?: boolean;
+export type FocusWorkSnapshot = WorkflowSnapshot & {
   phase_runtime_state?: FocusPhaseRuntimeState | null;
   phase_runtime_state_before_timeout_prompt?: FocusPhaseRuntimeState | null;
   active_run_id?: string | null;
