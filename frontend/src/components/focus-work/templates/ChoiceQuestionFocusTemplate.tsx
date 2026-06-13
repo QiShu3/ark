@@ -62,10 +62,10 @@ export default function ChoiceQuestionFocusTemplate({
   }, [answeredCount, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
-    if (completedRef.current || loading || currentItem) return;
+    if (completedRef.current || loading || item || currentItem) return;
     completedRef.current = true;
     onContentCompleted(progressSnapshot(answeredCount, targetCount, true));
-  }, [answeredCount, currentItem, loading, onContentCompleted, targetCount]);
+  }, [answeredCount, currentItem, item, loading, onContentCompleted, targetCount]);
 
   async function handleSubmit() {
     if (disabled || submitting || !currentItem || !selected || result) return;

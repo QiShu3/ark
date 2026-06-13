@@ -163,6 +163,38 @@ describe('ERCReviewFocusWork', () => {
     expect(onContentCompleted).not.toHaveBeenCalled();
   });
 
+  it('submits through ERC API and shows the next-question action after feedback', async () => {
+    const user = userEvent.setup();
+    fetchERCReviewNext.mockResolvedValue(dueQuestion());
+    submitERCReview.mockResolvedValue({
+      question_id: 'kaoyan2_2025_text2_q26',
+      chosen_option: 'A',
+      correct_option: 'B',
+      is_correct: false,
+      rating: 'again',
+      next_review_at: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <ERCReviewFocusWork
+          run={reviewRun}
+          disabled={false}
+          onContentCompleted={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Context paragraph.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'AA1' }));
+    await user.click(screen.getByRole('button', { name: '提交答案' }));
+
+    await waitFor(() => {
+      expect(submitERCReview).toHaveBeenCalledWith('kaoyan2_2025_text2_q26', 'A');
+    });
+    expect(await screen.findByRole('button', { name: '下一题' })).toBeInTheDocument();
+  });
+
   it('emits content completion after the configured question target is answered', async () => {
     const user = userEvent.setup();
     fetchERCReviewNext.mockResolvedValue(dueQuestion());
