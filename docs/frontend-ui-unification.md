@@ -28,6 +28,8 @@ This document is the long-running record for frontend UI unification work. Its j
 | `WorkflowPhaseChips` | `frontend/src/components/WorkflowPhaseChips.tsx` | Workflow phase previews, active workflow phase chains, and event workflow draft cards. | Rebuilding blue/green phase capsules, arrows, task labels, or truncation rules per page. |
 | `SubAppHomeTemplate` | `frontend/src/components/SubAppHomeTemplate.tsx` | Sub-application landing pages with shared hero/metrics structure. | Designing each sub-app home as a separate bespoke layout. |
 | `ChoiceQuestionFocusTemplate` | `frontend/src/components/focus-work/templates/ChoiceQuestionFocusTemplate.tsx` | Sub-application focus-work surfaces that need a reading/material area plus one current choice question with submit/feedback/next flow. | Rebuilding option state, submit locking, or focus-work question card styling inside each sub-app. |
+| `FlashcardFocusTemplate` | `frontend/src/components/focus-work/templates/FlashcardFocusTemplate.tsx` | Focus-work surfaces using FSRS-style flashcard with reveal/rate/next flow (vocab study, ERC vocab preheat). | Reimplementing flashcard reveal, rating buttons (again/hard/good/easy), or keyboard shortcuts per sub-app. |
+| `FocusWorkPhaseTemplate` | `frontend/src/components/focus-work/templates/FocusWorkPhaseTemplate.tsx` | Multi-phase focus-work flows that need phase progress indicators and skip controls. | Hard-coding phase progress chips or skip-to-next-phase buttons inside individual focus-work components. |
 | `CalendarWidget` | `frontend/src/components/CalendarWidget.tsx` | Compact home calendar entry. | Copying calendar grid styling into unrelated components. |
 
 ## Token Rules
@@ -48,6 +50,7 @@ This document is the long-running record for frontend UI unification work. Its j
 
 | Date | Scope | Completed | Follow-up |
 | --- | --- | --- | --- |
+| 2026-06-14 | Focus-work templates & type cleanup | Registered `FlashcardFocusTemplate` and `FocusWorkPhaseTemplate`. Removed 11 unused fields (`task_blocked_reason`, `active_task_source_type`, `active_task_app_id`, `active_task_app_task_type`, `active_task_app_config_id`, `focus_work_result`, `focus_work_progress_snapshot`) from `FocusWorkSnapshot` and `WorkflowSnapshot` types. | Continue pruning stale `active_focus_work_type`/`is_task_completed_today` fallback paths once backend stops populating them. |
 | 2026-06-13 | Focus-work choice template | Registered `ChoiceQuestionFocusTemplate` as the shared option-question focus-work surface after migrating ERC review. | Reuse this template before adding fill-in or solution templates with separate interaction contracts. |
 | 2026-06-04 | Workflow phase chips | Registered `WorkflowPhaseChips` in the admin UI library and reused it for the home dashboard active workflow chain. | Consider moving remaining hardcoded chip colors into semantic workflow tokens. |
 | 2026-06-03 | Home timer entry | Polished the timer card toward the prototype, kept original height, and reduced odd bottom shadow. | Move remaining hardcoded hero colors into home hero tokens. |
