@@ -63,7 +63,6 @@ export type FocusWorkSnapshot = {
   focus_work_display_state?: FocusWorkDisplayState | null;
   is_paused?: boolean;
   record_focus?: boolean;
-  is_task_completed_today?: boolean;
   phase_runtime_state?: FocusPhaseRuntimeState | null;
   phase_runtime_state_before_timeout_prompt?: FocusPhaseRuntimeState | null;
   active_run_id?: string | null;

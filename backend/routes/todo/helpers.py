@@ -1767,6 +1767,7 @@ def _row_to_focus_workflow(
     is_task_completed_today: bool = False,
     task_blocked_reason: str | None = None,
     active_run: FocusWorkRunSummaryOut | None = None,
+    effective_phase_runtime_state: str | None = None,
 ) -> FocusWorkflowOut:
     """将工作流行数据转换为返回模型。"""
     if row is None:
@@ -1793,7 +1794,7 @@ def _row_to_focus_workflow(
     )
     runtime_task_id = _record_get(row, "runtime_task_id")
     task_id = _record_get(row, "task_id")
-    phase_runtime_state = _record_get(row, "phase_runtime_state")
+    phase_runtime_state = effective_phase_runtime_state if effective_phase_runtime_state is not None else _record_get(row, "phase_runtime_state")
     phase_runtime_state_before_timeout_prompt = _record_get(row, "phase_runtime_state_before_timeout_prompt")
     active_run_id = _record_get(row, "active_run_id")
     active_focus_work_type = _normalize_focus_work_type(_record_get(row, "active_focus_work_type"))

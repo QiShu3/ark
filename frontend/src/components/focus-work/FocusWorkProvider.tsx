@@ -35,7 +35,6 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   const activeFocusWorkType = activeRun?.focus_work_type ?? snapshot?.active_focus_work_type ?? null;
   const activeDefinition = getFocusWorkDefinition(activeFocusWorkType);
   const derivedPhaseRuntimeState: FocusPhaseRuntimeState | null = snapshot?.phase_runtime_state
-    ?? (snapshot?.is_task_completed_today && !activeRun ? 'task_already_completed' : null)
     ?? (activeRun?.status === 'content_completed'
       ? activeRun.counts_for_task_completion
         ? 'counted_run_completed_confirming'

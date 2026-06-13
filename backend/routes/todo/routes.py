@@ -380,10 +380,13 @@ async def _row_to_focus_workflow_with_task_check(
 
     is_task_completed_today = False
     task_blocked_reason = None
+    effective_phase_runtime_state = None
     if task_id is not None:
         is_task_completed_today, task_blocked_reason = await _check_task_completion_status(
             conn, user_id, task_id
         )
+        if is_task_completed_today and not _row_value(row, "phase_runtime_state"):
+            effective_phase_runtime_state = "task_already_completed"
 
     if task_row is None and task_id is not None:
         task_row = await conn.fetchrow(
@@ -410,6 +413,7 @@ async def _row_to_focus_workflow_with_task_check(
         is_task_completed_today=is_task_completed_today,
         task_blocked_reason=task_blocked_reason,
         active_run=active_run,
+        effective_phase_runtime_state=effective_phase_runtime_state,
         **task_kwargs
     )
 
