@@ -20,6 +20,7 @@ from .event_store import (
 )
 from .helpers import (
     UTC,
+    _abandon_active_focus_work_run,
     _achievement_item,
     _advance_focus_workflow_to_next_phase,
     _appointment_occurrence_bounds,
@@ -31,9 +32,8 @@ from .helpers import (
     _check_task_completion_status,
     _close_open_focus_app_work_log,
     _close_open_focus_log,
-    _completion_records_for_user,
-    _abandon_active_focus_work_run,
     _complete_focus_work_run,
+    _completion_records_for_user,
     _create_focus_work_run,
     _create_or_update_managed_app_task,
     _create_workflow_with_focus_phase,
@@ -41,18 +41,18 @@ from .helpers import (
     _event_completion_records,
     _event_confirmed_appointment_occurrence_count,
     _event_focus_seconds,
-    _focus_activity_dates,
     _fetch_active_focus_work_run,
-    _focus_work_type_for_task_row,
     _fetch_focus_work_run_summary,
+    _focus_activity_dates,
+    _focus_work_type_for_task_row,
     _get_active_app_task_config,
     _get_bindable_task,
     _get_default_focus_workflow_preset,
     _get_event_for_user,
     _global_focus_seconds,
     _insert_completion_record,
-    _max_consecutive_day_count,
     _mark_focus_work_run_content_completed,
+    _max_consecutive_day_count,
     _next_task_window_after_today,
     _normalize_completion_settings,
     _normalize_focus_end_at,
@@ -70,8 +70,8 @@ from .helpers import (
     _row_to_focus_workflow_preset,
     _safe_int,
     _section_from_items,
-    _set_workflow_current_phase,
     _set_workflow_active_run,
+    _set_workflow_current_phase,
     _start_focus_app_work_log,
     _start_focus_log_for_task,
     _stop_active_focus,
@@ -3680,72 +3680,11 @@ async def submit_focus_work_result(
     body: FocusWorkflowResultRequest,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
-    """提交页面级专注工作对当前阶段的结果。"""
-    pool = _pool_from_request(request)
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            row = await _sync_active_focus_workflow(conn, int(user.id))
-            if row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
-            if str(row["current_phase"]) != "focus":
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
-            active_focus_work_type = (
-                row.get("active_focus_work_type") if hasattr(row, "get") else row["active_focus_work_type"]
-            )
-            if (
-                active_focus_work_type is None
-                and (row.get("task_id") if hasattr(row, "get") else row["task_id"]) is not None
-                and (row.get("runtime_task_id") if hasattr(row, "get") else row["runtime_task_id"]) is not None
-                and not bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False)
-                and not bool(row["pending_confirmation"])
-            ):
-                active_focus_work_type = "task_focus"
-            if active_focus_work_type != body.focus_work_type:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="专注工作类型不匹配")
-
-            await _close_open_focus_log(conn, int(user.id))
-            await _close_open_focus_app_work_log(
-                conn,
-                int(user.id),
-                result=body.result,
-                progress_snapshot=dict(body.progress_snapshot),
-            )
-            phases = _normalize_workflow_phases(
-                row.get("phases") if hasattr(row, "get") else row["phases"],
-                fallback_focus_duration=int(row["focus_duration"]),
-                fallback_break_duration=int(row["break_duration"]),
-            )
-            current_index = _safe_int(
-                row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"], 0
-            )
-            next_index = current_index + 1
-            if next_index >= len(phases):
-                return await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
-            next_phase = phases[next_index]
-            should_minimize = False
-            if str(next_phase["phase_type"]) == "break":
-                next_focus_index = next_index + 1
-                if next_focus_index < len(phases):
-                    next_focus_phase = phases[next_focus_index]
-                    should_minimize = (
-                        str(next_focus_phase.get("phase_type")) == "focus"
-                        and next_focus_phase.get("focus_work_type") == body.focus_work_type
-                    )
-            next_row = await _set_workflow_current_phase(
-                conn,
-                row["id"],
-                phase_index=next_index,
-                phase=next_phase,
-                task_id=None,
-                runtime_task_id=None,
-                pending_task_selection=False,
-                active_focus_work_type=body.focus_work_type if should_minimize else None,
-                focus_work_display_state="minimized" if should_minimize else "closed",
-                focus_work_result=body.result,
-                focus_work_progress_snapshot=dict(body.progress_snapshot),
-                record_focus=bool(row.get("record_focus", True) if hasattr(row, "get") else row["record_focus"]),
-            )
-            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+    """已废弃：请使用 run 级接口 (POST /runs/{id}/content-complete 等)。"""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="focus-work-result 已废弃，请使用 run 级接口",
+    )
 
 
 @router.post("/focus/workflow/skip_phase", response_model=FocusWorkflowOut)

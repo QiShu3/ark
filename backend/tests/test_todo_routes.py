@@ -3908,9 +3908,7 @@ def test_focus_work_result_completed_does_not_record_app_managed_task_completion
         },
     )
 
-    assert resp.status_code == 200
-    assert resp.json()["state"] == "normal"
-    assert conn.completion_records == []
+    assert resp.status_code == 410
 
 
 def test_focus_work_result_completed_round_does_not_record_app_managed_task_completion(monkeypatch) -> None:
@@ -3950,9 +3948,7 @@ def test_focus_work_result_completed_round_does_not_record_app_managed_task_comp
         json={"focus_work_type": "vocab_today", "result": "completed", "progress_snapshot": {"completedTask": False}},
     )
 
-    assert resp.status_code == 200
-    assert resp.json()["state"] == "normal"
-    assert conn.completion_records == []
+    assert resp.status_code == 410
 
 
 def test_pause_focus_workflow_marks_task_focus_as_paused(monkeypatch) -> None:
