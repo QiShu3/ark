@@ -1,9 +1,6 @@
-import type { AppTaskId, AppTaskType, TaskSourceType } from './taskTypes';
-
 export type FocusTimerMode = 'countdown' | 'countup';
 export type FocusWorkType = 'vocab_today' | 'erc_review' | 'task_focus';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
-export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
 
 export type WorkflowPhase = {
   phase_type: 'focus' | 'break';
@@ -31,16 +28,10 @@ export type WorkflowSnapshot = {
   runtime_task_id?: string | null;
   active_focus_work_type?: FocusWorkType | null;
   focus_work_display_state?: FocusWorkDisplayState | null;
-  focus_work_result?: FocusWorkResult | null;
-  focus_work_progress_snapshot?: Record<string, unknown> | null;
   next_focus_work_type?: FocusWorkType | null;
   has_minimized_work?: boolean;
   is_paused?: boolean;
   record_focus?: boolean;
-  active_task_source_type?: TaskSourceType | null;
-  active_task_app_id?: AppTaskId | null;
-  active_task_app_task_type?: AppTaskType | null;
-  active_task_app_config_id?: string | null;
 };
 
 export type WorkflowProgressMetrics = {
