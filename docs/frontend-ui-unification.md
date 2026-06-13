@@ -27,6 +27,7 @@ This document is the long-running record for frontend UI unification work. Its j
 | `HomeSectionHeader` | `frontend/src/components/HomeSectionHeader.tsx` | Home dashboard section titles with optional right action. | Repeating section title markup with drifting typography. |
 | `WorkflowPhaseChips` | `frontend/src/components/WorkflowPhaseChips.tsx` | Workflow phase previews, active workflow phase chains, and event workflow draft cards. | Rebuilding blue/green phase capsules, arrows, task labels, or truncation rules per page. |
 | `SubAppHomeTemplate` | `frontend/src/components/SubAppHomeTemplate.tsx` | Sub-application landing pages with shared hero/metrics structure. | Designing each sub-app home as a separate bespoke layout. |
+| `ChoiceQuestionFocusTemplate` | `frontend/src/components/focus-work/templates/ChoiceQuestionFocusTemplate.tsx` | Sub-application focus-work surfaces that need a reading/material area plus one current choice question with submit/feedback/next flow. | Rebuilding option state, submit locking, or focus-work question card styling inside each sub-app. |
 | `CalendarWidget` | `frontend/src/components/CalendarWidget.tsx` | Compact home calendar entry. | Copying calendar grid styling into unrelated components. |
 
 ## Token Rules
@@ -47,6 +48,7 @@ This document is the long-running record for frontend UI unification work. Its j
 
 | Date | Scope | Completed | Follow-up |
 | --- | --- | --- | --- |
+| 2026-06-13 | Focus-work choice template | Registered `ChoiceQuestionFocusTemplate` as the shared option-question focus-work surface after migrating ERC review. | Reuse this template before adding fill-in or solution templates with separate interaction contracts. |
 | 2026-06-04 | Workflow phase chips | Registered `WorkflowPhaseChips` in the admin UI library and reused it for the home dashboard active workflow chain. | Consider moving remaining hardcoded chip colors into semantic workflow tokens. |
 | 2026-06-03 | Home timer entry | Polished the timer card toward the prototype, kept original height, and reduced odd bottom shadow. | Move remaining hardcoded hero colors into home hero tokens. |
 | 2026-06-03 | UI governance | Added this document and the first admin-only React UI component library plan. | Keep this file updated when adding reusable UI primitives. |
