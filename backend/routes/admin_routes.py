@@ -477,8 +477,12 @@ async def create_app(
     content_bank_type: str = Form("article_set"),
     fw_type: str = Form(...),
     fw_label: str = Form(...),
+    admin_only: bool = Form(False),
 ):
     """Register a new sub-app, generate backend skeleton, and import question bank."""
+    if not id.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(status_code=400, detail="应用 ID 只能包含字母、数字、连字符和下划线")
+
     # parse question bank file
     file_bytes = await file.read()
     try:
@@ -499,7 +503,7 @@ async def create_app(
     )
     decl = SubAppDeclaration(
         id=id, name=name, description=description,
-        icon=icon, route=route, focus_works=[fw],
+        icon=icon, route=f"/{id}", admin_only=admin_only, focus_works=[fw],
     )
     register(decl)
     _generate_app_skeleton(decl)
@@ -514,8 +518,9 @@ async def create_app(
 
 async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]) -> None:
     """Import questions from a parsed JSON array into the app's question table."""
-    table = f"{app_id}_questions"
-    set_table = f"{app_id}_sets"
+    py_id = app_id.replace("-", "_")
+    table = f"{py_id}_questions"
+    set_table = f"{py_id}_sets"
 
     # ensure tables exist
     await conn.execute(f"""
@@ -581,7 +586,7 @@ async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]
 
     # ---- user progress tables ----
     await conn.execute(f"""
-        CREATE TABLE IF NOT EXISTS {app_id}_user_question_cards (
+        CREATE TABLE IF NOT EXISTS {py_id}_user_question_cards (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
             question_pk UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE,
@@ -598,7 +603,7 @@ async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]
         );
     """)
     await conn.execute(f"""
-        CREATE TABLE IF NOT EXISTS {app_id}_review_logs (
+        CREATE TABLE IF NOT EXISTS {py_id}_review_logs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
             question_pk UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE,
@@ -610,7 +615,7 @@ async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]
         );
     """)
     await conn.execute(f"""
-        CREATE TABLE IF NOT EXISTS {app_id}_mistake_bucket (
+        CREATE TABLE IF NOT EXISTS {py_id}_mistake_bucket (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
             question_pk UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE,
@@ -631,13 +636,14 @@ def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
     """Generate backend domain skeleton for a new sub-app."""
     app_id = decl.id
     app_name = decl.name
-    app_dir = os.path.join(os.path.dirname(__file__), "..", "routes", app_id)
+    py_id = app_id.replace("-", "_")  # sanitize for Python identifiers + directory names
+    app_dir = os.path.join(os.path.dirname(__file__), "..", "routes", py_id)
     os.makedirs(app_dir, exist_ok=True)
 
-    qt = f"{app_id}_questions"
-    cards = f"{app_id}_user_question_cards"
-    logs = f"{app_id}_review_logs"
-    mistakes = f"{app_id}_mistake_bucket"
+    qt = f"{py_id}_questions"
+    cards = f"{py_id}_user_question_cards"
+    logs = f"{py_id}_review_logs"
+    mistakes = f"{py_id}_mistake_bucket"
 
     # __init__.py
     with open(os.path.join(app_dir, "__init__.py"), "w") as f:
@@ -645,7 +651,7 @@ def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
 from .routes import router
 
 
-async def init_{app_id}(pool):
+async def init_{py_id}(pool):
     from .repository import init_tables
     await init_tables(pool)
 ''')

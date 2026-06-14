@@ -30,6 +30,7 @@ export interface SubAppDeclaration {
   description: string;
   icon: string;
   route: string;
+  adminOnly?: boolean;
   focusWorks: FocusWorkDeclaration[];
 }
 
@@ -133,6 +134,7 @@ function mapFromApi(raw: Record<string, unknown>): SubAppDeclaration {
     description: raw.description as string,
     icon: raw.icon as string,
     route: raw.route as string,
+    adminOnly: raw.admin_only as boolean | undefined,
     focusWorks: ((raw.focus_works || []) as Record<string, unknown>[]).map((fw) => ({
       type: fw.type as string,
       label: fw.label as string,

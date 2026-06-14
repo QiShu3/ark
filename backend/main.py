@@ -72,8 +72,9 @@ app.include_router(admin_router)
 for _decl in get_all():
     if _decl.id in ("vocab", "erc"):
         continue
+    _py_id = _decl.id.replace("-", "_")
     try:
-        _mod = importlib.import_module(f"routes.{_decl.id}")
+        _mod = importlib.import_module(f"routes.{_py_id}")
         app.include_router(_mod.router)
     except (ImportError, AttributeError):
         pass

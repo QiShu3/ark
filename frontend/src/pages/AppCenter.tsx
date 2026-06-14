@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../lib/auth';
 import { subAppList, getSubAppIcon, loadDynamicRegistry, type SubAppDeclaration } from '../lib/subAppRegistry';
 
 /** 应用中心页面，从 subAppRegistry + 后端 API 渲染子应用入口 */
 export default function AppCenter() {
   const navigate = useNavigate();
+  const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
   const [apps, setApps] = useState<SubAppDeclaration[]>(subAppList);
 
   useEffect(() => {
-    loadDynamicRegistry().then(setApps);
-  }, []);
+    loadDynamicRegistry().then((all) => setApps(all.filter((a) => !a.adminOnly || isAdmin)));
+  }, [isAdmin]);
 
   return (
     <main aria-label="应用中心" className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pt-32">

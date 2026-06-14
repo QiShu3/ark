@@ -36,6 +36,7 @@ class SubAppDeclaration:
     description: str
     icon: str             # lucide icon name, e.g. "book-open"
     route: str            # "/vocab" / "/erc"
+    admin_only: bool = False
     focus_works: list[FocusWorkDeclaration] = field(default_factory=list)
 
 
@@ -134,7 +135,9 @@ def _load_persisted() -> dict[str, SubAppDeclaration]:
                 ))
             result[item["id"]] = SubAppDeclaration(
                 id=item["id"], name=item["name"], description=item["description"],
-                icon=item["icon"], route=item["route"], focus_works=fws,
+                icon=item["icon"], route=item["route"],
+                admin_only=item.get("admin_only", False),
+                focus_works=fws,
             )
         return result
     except Exception:
@@ -150,7 +153,7 @@ def _persist() -> None:
     for decl in dynamic.values():
         items.append({
             "id": decl.id, "name": decl.name, "description": decl.description,
-            "icon": decl.icon, "route": decl.route,
+            "icon": decl.icon, "route": decl.route, "admin_only": decl.admin_only,
             "focus_works": [
                 {
                     "type": fw.type, "label": fw.label,
