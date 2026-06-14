@@ -15,13 +15,15 @@ SubAppHome (app-level)
   ├── config modal   — 统一配置所有 focusWork
   ├── feedback       — 子应用级提示
   │
-  └── per-focus-work (由声明驱动)
-        ├── metrics       — focusWork 专属的指标
-        └── assetContent  — focusWork 专属的长期积累资产
+  └── per-focus-work (由声明驱动，基于 contentBank)
+        ├── contentBank   — 题库选择 / 词书选择（状态 + 切换 UI）
+        ├── metrics       — 在选中 contentBank 上派生的指标
+        └── assetContent  — 在选中 contentBank 上派生的长期积累资产
 ```
 
 - **app-level**: 编排、聚合、配置。与模板类型无关。
-- **focus-work-level**: metrics + asset。由 `FocusWorkDeclaration.template` 决定。
+- **focus-work-level**: contentBank → metrics + assetContent。由 `FocusWorkDeclaration.template` 决定。
+- contentBank 是 focusWork 层的**私有数据**，子应用页面层不感知。配置弹窗需要它时从 adapter 取。
 
 ## Architecture
 
@@ -34,12 +36,14 @@ DynamicSubAppHome({ appId })
   │     │
   │     ├── for each focusWork:
   │     │     └── useFocusWorkAdapter(focusWork, app.id)
+  │     │           ├── contentBank    ← 题库/词书选择
   │     │           ├── metrics
   │     │           └── assetContent
   │     │
   │     └── 聚合
   │           ├── allMetrics = adapters.flatMap(a => a.metrics)
-  │           └── assetContent = adapters.map(a => a.assetContent)
+  │           ├── assetContent — 按 focusWork 分组，每组一个 label
+  │           └── contentBanks — 传给配置弹窗用
   │
   └── SubAppHomeTemplate
         ├── <HeroSection />              ← app-level
@@ -52,14 +56,21 @@ DynamicSubAppHome({ appId })
 ## Adapter Interface
 
 ```typescript
-// Per-focus-work — only asset + metrics
+interface ContentBankState {
+  type: 'article_set' | 'word_deck';
+  selected: string | null;          // active set/deck id
+  options: { id: string; name: string }[];  // available sets/decks
+  onChange: (id: string) => void;
+}
+
 interface FocusWorkAdapter {
+  contentBank: ContentBankState;
   metrics: SubAppHomeMetric[];
   assetContent: ReactNode | null;      // null = section hidden / loading
 }
 ```
 
-Focus work adapter 是纯数据层 hook，不渲染 UI。每个 focusWork 的 template 决定用哪个 hook：
+Focus work adapter 是纯数据层 hook。每个 focusWork 的 template 决定用哪个 hook：
 
 ```
 FocusWorkDeclaration.template → adapter hook
@@ -72,14 +83,16 @@ FocusWorkDeclaration.template → adapter hook
 ### useChoiceQuestionAdapter(fw, appId)
 
 - 覆盖：ERC 的 erc_practice、erc_review、动态 choice_question 的 focusWork
-- 取数：`apiJson(/api/{appId}/overview)` — 返回 practiced_count / correct_count / accuracy / due_count / mistake_count
+- contentBank：`fetchSets(appId)` 取题库列表，`activeSetId` 管理选择状态
+- 取数：基于 selected set 调 `apiJson(/api/{appId}/overview?set_id=...)`
 - metrics：待复习、已练习、正确率、错题
-- assetContent：题库进度卡 + 错题资产卡 + 今日推荐（每个 focusWork 独立渲染一组卡）
+- assetContent：题库进度卡 + 错题资产卡 + 今日推荐
 
 ### useFlashcardAdapter(fw, appId)
 
 - 覆盖：Vocab 的 vocab_today、动态 flashcard 的 focusWork
-- 取数：`useVocabDeck` + `fetchVocabToday(deckId)` + `fetchVocabOverview(deckId)`
+- contentBank：`useVocabDeck()` 管理词书列表、选择、继承提示
+- 取数：基于 selected deck 调 `fetchVocabToday(deckId)` + `fetchVocabOverview(deckId)`
 - metrics：今日进度、待完成、新词、复习
 - assetContent：词书完成度 / 累计掌握 / 当前词书掌握度 / 分段进度条
 
