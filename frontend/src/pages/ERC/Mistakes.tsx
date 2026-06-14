@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import SubAppPageShell from '../../components/SubAppPageShell';
+import SubAppPageHeader from '../../components/SubAppPageHeader';
 import { fetchERCMistakes } from '../../lib/erc/api';
 import type { ERCMistakeItem } from '../../lib/erc/types';
 
@@ -26,17 +28,14 @@ export default function ERCMistakes() {
   }, []);
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
-      <div className="mx-auto max-w-5xl">
-        <div className="flex items-end justify-between gap-4 border-b border-ark-border pb-6">
-          <div>
-            <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Mistakes</div>
-            <h1 className="mt-3 text-3xl font-semibold text-ark-text">错题本</h1>
-          </div>
-          <Link to="/erc" className="text-sm text-ark-text-muted hover:text-ark-text">
-            返回首页
-          </Link>
-        </div>
+    <SubAppPageShell>
+      <SubAppPageHeader
+        breadcrumb="Mistakes"
+        title="错题本"
+        backTo="/erc"
+        backLabel="返回首页"
+        borderBottom
+      />
 
         {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
         {!error && items.length === 0 ? <p className="mt-6 text-sm text-ark-text-muted">暂无错题。</p> : null}
@@ -63,7 +62,6 @@ export default function ERCMistakes() {
             </div>
           ))}
         </div>
-      </div>
-    </div>
+    </SubAppPageShell>
   );
 }

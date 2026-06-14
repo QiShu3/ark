@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import SubAppPageShell from '../../components/SubAppPageShell';
 import ReviewResultPanel from '../../components/Vocab/ReviewResultPanel';
 import StudyCard from '../../components/Vocab/StudyCard';
 import { fetchERCArticle, fetchERCVocabularyPreheat, submitERCArticle, submitERCVocabularyPreheat } from '../../lib/erc/api';
@@ -126,8 +127,7 @@ export default function ERCPractice() {
   const currentPreheatItem = preheatItems[0] ?? null;
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
-      <div className="mx-auto max-w-7xl">
+    <SubAppPageShell maxWidth="7xl" paddingX="6">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
             <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Practice</div>
@@ -291,7 +291,6 @@ export default function ERCPractice() {
         ) : (
           <p className="text-sm text-ark-text-muted">文章加载中...</p>
         )}
-      </div>
-    </div>
+    </SubAppPageShell>
   );
 }

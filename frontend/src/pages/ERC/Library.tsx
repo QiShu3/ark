@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import SubAppPageShell from '../../components/SubAppPageShell';
+import SubAppPageHeader from '../../components/SubAppPageHeader';
 import { fetchERCArticles, fetchERCSets } from '../../lib/erc/api';
 import type { ERCArticleListItem, ERCSet } from '../../lib/erc/types';
 
@@ -52,17 +54,14 @@ export default function ERCLibrary() {
   const examOptions = Array.from(new Set(sets.map((set) => set.exam).filter(Boolean)));
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
-      <div className="mx-auto max-w-6xl">
-        <div className="flex items-end justify-between gap-4 border-b border-ark-border pb-6">
-          <div>
-            <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Library</div>
-            <h1 className="mt-3 text-3xl font-semibold text-ark-text">阅读题库</h1>
-          </div>
-          <Link to="/erc" className="text-sm text-ark-text-muted hover:text-ark-text">
-            返回首页
-          </Link>
-        </div>
+    <SubAppPageShell maxWidth="6xl">
+      <SubAppPageHeader
+        breadcrumb="Library"
+        title="阅读题库"
+        backTo="/erc"
+        backLabel="返回首页"
+        borderBottom
+      />
 
         {error ? <p className="mt-6 text-sm text-rose-200">{error}</p> : null}
 
@@ -108,7 +107,6 @@ export default function ERCLibrary() {
             </Link>
           ))}
         </div>
-      </div>
-    </div>
+    </SubAppPageShell>
   );
 }

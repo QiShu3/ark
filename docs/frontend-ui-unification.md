@@ -31,6 +31,8 @@ This document is the long-running record for frontend UI unification work. Its j
 | `FlashcardFocusTemplate` | `frontend/src/components/focus-work/templates/FlashcardFocusTemplate.tsx` | Focus-work surfaces using FSRS-style flashcard with reveal/rate/next flow (vocab study, ERC vocab preheat). | Reimplementing flashcard reveal, rating buttons (again/hard/good/easy), or keyboard shortcuts per sub-app. |
 | `FocusWorkPhaseTemplate` | `frontend/src/components/focus-work/templates/FocusWorkPhaseTemplate.tsx` | Multi-phase focus-work flows that need phase progress indicators and skip controls. | Hard-coding phase progress chips or skip-to-next-phase buttons inside individual focus-work components. |
 | `CalendarWidget` | `frontend/src/components/CalendarWidget.tsx` | Compact home calendar entry. | Copying calendar grid styling into unrelated components. |
+| `SubAppPageShell` | `frontend/src/components/SubAppPageShell.tsx` | Outer container for every non-home sub-app page (fixed positioning, clip-path, scroll, max-width). | Repeating the `fixed inset-x-1 bottom-1 top-[7.5rem]` + `clipPath` + `mx-auto max-w-*` shell in each page. |
+| `SubAppPageHeader` | `frontend/src/components/SubAppPageHeader.tsx` | Page header with breadcrumb, title, optional description, and back link. | Hand-rolling title/description/back-link markup per sub-app page. |
 
 ## Token Rules
 
@@ -50,7 +52,8 @@ This document is the long-running record for frontend UI unification work. Its j
 
 | Date | Scope | Completed | Follow-up |
 | --- | --- | --- | --- |
-| 2026-06-14 | Focus-work templates & type cleanup | Registered `FlashcardFocusTemplate` and `FocusWorkPhaseTemplate`. Removed 11 unused fields (`task_blocked_reason`, `active_task_source_type`, `active_task_app_id`, `active_task_app_task_type`, `active_task_app_config_id`, `focus_work_result`, `focus_work_progress_snapshot`) from `FocusWorkSnapshot` and `WorkflowSnapshot` types. | Continue pruning stale `active_focus_work_type`/`is_task_completed_today` fallback paths once backend stops populating them. |
+| 2026-06-14 | Sub-app page shell & header templates | Created `SubAppPageShell` (10 pages migrated: ERC Library/Mistakes/Practice/PracticeResult/Review, Vocab Study/Review/Mistakes/Today/WordDetail) and `SubAppPageHeader` (7 pages with breadcrumb/title/back-link patterns). Eliminated ~90 lines of replicated outer-container + header JSX. | Apply to any new sub-app pages; consider `AsyncContent` wrapper for loading/error/empty states next. |
+| 2026-06-14 | Focus-work templates & type cleanup | Registered `FlashcardFocusTemplate` and `FocusWorkPhaseTemplate`. Removed 11 unused fields from `FocusWorkSnapshot` and `WorkflowSnapshot` types. | Continue pruning stale fields once backend stops populating legacy columns. |
 | 2026-06-13 | Focus-work choice template | Registered `ChoiceQuestionFocusTemplate` as the shared option-question focus-work surface after migrating ERC review. | Reuse this template before adding fill-in or solution templates with separate interaction contracts. |
 | 2026-06-04 | Workflow phase chips | Registered `WorkflowPhaseChips` in the admin UI library and reused it for the home dashboard active workflow chain. | Consider moving remaining hardcoded chip colors into semantic workflow tokens. |
 | 2026-06-03 | Home timer entry | Polished the timer card toward the prototype, kept original height, and reduced odd bottom shadow. | Move remaining hardcoded hero colors into home hero tokens. |

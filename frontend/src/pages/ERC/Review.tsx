@@ -1,5 +1,6 @@
 import ERCReviewFocusWork from '../../components/ERC/ERCReviewFocusWork';
 import type { FocusWorkRunSummary } from '../../components/focus-work/focusWorkTypes';
+import SubAppPageShell from '../../components/SubAppPageShell';
 
 const standaloneRun: FocusWorkRunSummary = {
   id: 'standalone-erc-review',
@@ -13,8 +14,8 @@ const standaloneRun: FocusWorkRunSummary = {
 
 export default function ERCReview() {
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-hidden rounded-[28px] px-6 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
+    <SubAppPageShell overflow="hidden" paddingX="6">
       <ERCReviewFocusWork run={standaloneRun} disabled={false} onContentCompleted={() => undefined} />
-    </div>
+    </SubAppPageShell>
   );
 }

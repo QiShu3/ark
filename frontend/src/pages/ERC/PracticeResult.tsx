@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 
+import SubAppPageShell from '../../components/SubAppPageShell';
 import type { ERCArticleDetail, ERCArticleSubmitResult } from '../../lib/erc/types';
 
 export default function ERCPracticeResult() {
@@ -10,21 +11,18 @@ export default function ERCPracticeResult() {
 
   if (!article || !result) {
     return (
-      <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
-        <div className="mx-auto max-w-4xl">
-          <h1 className="text-3xl font-semibold text-ark-text">练习结果</h1>
-          <p className="mt-4 text-ark-text-muted">没有可展示的练习结果。</p>
-          <Link to="/erc/library" className="mt-6 inline-flex rounded-full bg-white px-5 py-3 text-sm text-slate-950">
-            返回题库
-          </Link>
-        </div>
-      </div>
+      <SubAppPageShell maxWidth="4xl">
+        <h1 className="text-3xl font-semibold text-ark-text">练习结果</h1>
+        <p className="mt-4 text-ark-text-muted">没有可展示的练习结果。</p>
+        <Link to="/erc/library" className="mt-6 inline-flex rounded-full bg-white px-5 py-3 text-sm text-slate-950">
+          返回题库
+        </Link>
+      </SubAppPageShell>
     );
   }
 
   return (
-    <div className="fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-8 pb-10 pt-6" style={{ clipPath: "inset(10px round 28px)" }}>
-      <div className="mx-auto max-w-5xl">
+    <SubAppPageShell maxWidth="4xl">
         <div className="border-b border-ark-border pb-6">
           <div className="text-sm uppercase tracking-[0.28em] text-ark-text-faint">Result</div>
           <h1 className="mt-3 text-3xl font-semibold text-ark-text">
@@ -59,7 +57,6 @@ export default function ERCPracticeResult() {
             继续练习
           </Link>
         </div>
-      </div>
-    </div>
+    </SubAppPageShell>
   );
 }
