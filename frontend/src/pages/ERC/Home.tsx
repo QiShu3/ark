@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, RefreshCw } from 'lucide-react';
 
-import AppModalFrame from '../../components/AppModalFrame';
+import SubAppConfigModal from '../../components/SubAppConfigModal';
+import type { FocusWorkConfigFields } from '../../components/SubAppConfigModal';
 import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
 import SubAppHomeTemplate from '../../components/SubAppHomeTemplate';
 import { apiJson } from '../../lib/api';
@@ -457,191 +458,99 @@ export default function ERCHome() {
         </>
       )}
       modals={(
-        <AppModalFrame
+        <SubAppConfigModal
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
-          zIndexClassName="z-[80]"
-          ariaLabel="ERC 配置"
-          panelClassName="w-full max-w-2xl overflow-y-auto rounded-lg p-6 shadow-2xl shadow-black/20"
-        >
-          <div className="flex items-start justify-between gap-4 border-b border-ark-border pb-5">
-            <div>
-              <div className="text-xs uppercase tracking-[0.24em] text-[var(--ark-text-faint)]">Configuration</div>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ark-text)]">配置阅读训练</h2>
-              <p className="mt-2 text-xs text-[var(--ark-text-muted)]">
-                保存后会更新真题练习与错题复习的托管任务。
-              </p>
-              {appConfigNotice ? <p className="ark-annotation mt-3 rounded-lg px-3 py-2">{appConfigNotice}</p> : null}
-            </div>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(false)}
-              className="ark-button-secondary rounded-lg px-4 py-2 text-sm transition"
-            >
-              关闭
-            </button>
-          </div>
-
-          <div className="mt-6 space-y-5">
-            <div className="space-y-4 rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
-              <div className="flex items-center justify-between gap-4 border-b border-ark-border pb-3">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
-                  <h3 className="text-base font-semibold text-[var(--ark-text)]">真题练习</h3>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={practiceEnabled}
-                    onChange={(event) => setPracticeEnabled(event.target.checked)}
-                  />
-                  启用
-                </label>
-              </div>
-
-              <div className={`grid gap-4 sm:grid-cols-2 ${practiceEnabled ? '' : 'opacity-50'}`}>
-                <div>
-                  <label htmlFor="erc-practice-daily-article-target" className="mb-2 block text-xs text-[var(--ark-text-muted)]">每日目标 (文章篇数)</label>
-                  <input
-                    id="erc-practice-daily-article-target"
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={dailyArticleTarget}
-                    disabled={!practiceEnabled}
-                    onChange={(e) => setDailyArticleTarget(Math.max(1, Number(e.target.value)))}
-                    className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="erc-practice-duration" className="mb-2 block text-xs text-[var(--ark-text-muted)]">默认专注时长 (分钟)</label>
-                  <input
-                    id="erc-practice-duration"
-                    type="number"
-                    min={5}
-                    max={120}
-                    value={practiceDuration}
-                    disabled={!practiceEnabled}
-                    onChange={(e) => setPracticeDuration(Math.max(5, Number(e.target.value)))}
-                    className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)] sm:col-span-2">
-                  <input
-                    type="checkbox"
-                    checked={practiceAddToTodayPlan}
-                    disabled={!practiceEnabled}
-                    onChange={(event) => setPracticeAddToTodayPlan(event.target.checked)}
-                  />
-                  同步到今日安排
-                </label>
-              </div>
-            </div>
-
-            <div className="space-y-4 rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
-              <div className="flex items-center justify-between gap-4 border-b border-ark-border pb-3">
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="h-5 w-5 text-[var(--ark-accent)]" />
-                  <h3 className="text-base font-semibold text-[var(--ark-text)]">错题复习</h3>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={reviewEnabled}
-                    onChange={(event) => setReviewEnabled(event.target.checked)}
-                  />
-                  启用
-                </label>
-              </div>
-
-              <div className={`space-y-4 ${reviewEnabled ? '' : 'opacity-50'}`}>
-                <div className="grid gap-4 sm:grid-cols-2">
+          onSave={handleSaveSettings}
+          isSaving={settingsSaving}
+          appName="阅读训练"
+          eventName={currentEventName}
+          description="保存后会更新真题练习与错题复习的托管任务。"
+          saveError={appTaskError}
+          focusWorks={[
+            {
+              id: 'erc_practice',
+              label: '真题练习',
+              enabled: practiceEnabled,
+              onEnabledChange: (v) => setPracticeEnabled(v),
+              contentConfig: (
+                <div className="grid gap-4 sm:grid-cols-1">
                   <div>
-                    <label htmlFor="erc-review-daily-question-target" className="mb-2 block text-xs text-[var(--ark-text-muted)]">每日目标 (复习题数)</label>
+                    <label htmlFor="erc-practice-daily-article-target" className="mb-2 block text-xs text-ark-text-muted">
+                      每日目标 (文章篇数)
+                    </label>
+                    <input
+                      id="erc-practice-daily-article-target"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={dailyArticleTarget}
+                      onChange={(e) => setDailyArticleTarget(Math.max(1, Number(e.target.value)))}
+                      className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-ark-text outline-none transition focus:border-[var(--ark-border-strong)]"
+                    />
+                  </div>
+                </div>
+              ),
+              defaultFocusDuration: practiceDuration,
+              onFocusDurationChange: setPracticeDuration,
+              addToTodayPlan: practiceAddToTodayPlan,
+              onAddToTodayPlanChange: setPracticeAddToTodayPlan,
+            } as FocusWorkConfigFields,
+            {
+              id: 'erc_review',
+              label: '错题复习',
+              enabled: reviewEnabled,
+              onEnabledChange: (v) => setReviewEnabled(v),
+              contentConfig: (
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="erc-review-daily-question-target" className="mb-2 block text-xs text-ark-text-muted">
+                      每日目标 (复习题数)
+                    </label>
                     <input
                       id="erc-review-daily-question-target"
                       type="number"
                       min={1}
                       max={100}
                       value={dailyQuestionTarget}
-                      disabled={!reviewEnabled}
                       onChange={(e) => setDailyQuestionTarget(Math.max(1, Number(e.target.value)))}
-                      className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
+                      className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-ark-text outline-none transition focus:border-[var(--ark-border-strong)]"
                     />
                   </div>
                   <div>
-                    <label htmlFor="erc-review-duration" className="mb-2 block text-xs text-[var(--ark-text-muted)]">默认专注时长 (分钟)</label>
-                    <input
-                      id="erc-review-duration"
-                      type="number"
-                      min={5}
-                      max={120}
-                      value={reviewDuration}
-                      disabled={!reviewEnabled}
-                      onChange={(e) => setReviewDuration(Math.max(5, Number(e.target.value)))}
-                      className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-[var(--ark-text)] outline-none transition focus:border-[var(--ark-border-strong)] disabled:opacity-60"
-                    />
+                    <label className="mb-2 block text-xs text-ark-text-muted">错题复习范围</label>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {(['due', 'mistakes', 'all'] as ReviewScope[]).map((scope) => {
+                        const isSelected = reviewScope === scope;
+                        const label = reviewScopeLabel(scope);
+                        const desc = scope === 'due' ? '按记忆遗忘算法智能调度' : scope === 'all' ? '随机挑选所有做错题目' : '过滤已熟练掌握的题目';
+                        return (
+                          <button
+                            key={scope}
+                            type="button"
+                            onClick={() => setReviewScope(scope)}
+                            className={`rounded-lg border p-4 text-left transition ${
+                              isSelected
+                                ? 'border-[var(--ark-accent)] bg-ark-surface-subtle text-[var(--ark-text)]'
+                                : 'border-ark-border bg-[var(--ark-surface)] text-[var(--ark-text-muted)] hover:border-[var(--ark-border-strong)]'
+                            }`}
+                          >
+                            <div className="text-sm font-semibold">{label}</div>
+                            <div className="mt-1 text-[10px] leading-normal text-[var(--ark-text-faint)]">{desc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <label className="mb-2 block text-xs text-[var(--ark-text-muted)]">错题复习范围</label>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {(['due', 'mistakes', 'all'] as const).map((scope) => {
-                      const isSelected = reviewScope === scope;
-                      const label = reviewScopeLabel(scope);
-                      const desc = scope === 'due' ? '按记忆遗忘算法智能调度' : scope === 'all' ? '随机挑选所有做错题目' : '过滤已熟练掌握的题目';
-                      return (
-                        <button
-                          key={scope}
-                          type="button"
-                          disabled={!reviewEnabled}
-                          onClick={() => setReviewScope(scope)}
-                          className={`rounded-lg border p-4 text-left transition disabled:opacity-60 ${
-                            isSelected
-                              ? 'border-[var(--ark-accent)] bg-ark-surface-subtle text-[var(--ark-text)]'
-                              : 'border-ark-border bg-[var(--ark-surface)] text-[var(--ark-text-muted)] hover:border-[var(--ark-border-strong)]'
-                          }`}
-                        >
-                          <div className="text-sm font-semibold">{label}</div>
-                          <div className="mt-1 text-[10px] leading-normal text-[var(--ark-text-faint)]">{desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-2 text-xs text-[var(--ark-text-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={reviewAddToTodayPlan}
-                    disabled={!reviewEnabled}
-                    onChange={(event) => setReviewAddToTodayPlan(event.target.checked)}
-                  />
-                  同步到今日安排
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 flex justify-end gap-3 border-t border-ark-border pt-5">
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(false)}
-              className="ark-button-secondary rounded-lg px-5 py-3 text-sm transition"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              disabled={settingsSaving}
-              onClick={handleSaveSettings}
-              className="rounded-lg border border-ark-border bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:opacity-60"
-            >
-              {settingsSaving ? '保存中…' : '保存配置'}
-            </button>
-          </div>
-        </AppModalFrame>
+              ),
+              defaultFocusDuration: reviewDuration,
+              onFocusDurationChange: setReviewDuration,
+              addToTodayPlan: reviewAddToTodayPlan,
+              onAddToTodayPlanChange: setReviewAddToTodayPlan,
+            } as FocusWorkConfigFields,
+          ]}
+        />
       )}
     />
   );

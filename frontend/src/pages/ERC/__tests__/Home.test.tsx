@@ -173,7 +173,7 @@ describe('ERC home page', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: '配置' }));
-    const dialog = await screen.findByRole('dialog', { name: 'ERC 配置' });
+    const dialog = await screen.findByRole('dialog', { name: '配置阅读训练' });
     fireEvent.change(within(dialog).getByLabelText('每日目标 (文章篇数)'), { target: { value: '2' } });
     fireEvent.change(within(dialog).getByLabelText('每日目标 (复习题数)'), { target: { value: '12' } });
     await user.click(within(dialog).getByRole('button', { name: '全部做错题目 随机挑选所有做错题目' }));

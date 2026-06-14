@@ -125,14 +125,14 @@ describe('Vocab home page', () => {
     expect(screen.queryByRole('button', { name: '切换词书' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '配置' }));
-    expect(screen.getByRole('dialog', { name: '配置今日单词' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '配置背单词' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '切换词书' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'CET6luan' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '切换词书' }));
 
     expect(screen.getByRole('button', { name: 'CET6luan' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '关闭配置今日单词弹窗' }));
+    fireEvent.click(screen.getByRole('button', { name: '关闭配置背单词弹窗' }));
 
     const reloadFocusSpy = vi.fn();
     window.addEventListener('ark:reload-focus', reloadFocusSpy);
@@ -419,9 +419,8 @@ describe('Vocab home page', () => {
     await screen.findByText('今日单词任务');
     await user.click(screen.getByRole('button', { name: '配置' }));
 
-    expect(screen.getByRole('dialog', { name: '配置今日单词' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '配置背单词' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '切换词书' })).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: '同步到今日安排' })).not.toBeInTheDocument();
     expect(screen.getByDisplayValue('20')).toBeInTheDocument();
     expect(screen.queryByText('单词黄金配比方案')).not.toBeInTheDocument();
 
@@ -483,7 +482,7 @@ describe('Vocab home page', () => {
     const configButtons = screen.getAllByRole('button', { name: '配置' });
     await user.click(configButtons[1]);
 
-    expect(screen.getByRole('dialog', { name: '配置今日单词' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '配置背单词' })).toBeInTheDocument();
     expect(screen.getByText('今天这本词书已经完成，可调整目标继续再来一轮。')).toBeInTheDocument();
     expect(screen.getByDisplayValue('48')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存并继续' })).toBeInTheDocument();

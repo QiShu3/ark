@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import OverviewDetailModal, { type OverviewDetailTab } from '../../components/Vocab/OverviewDetailModal';
-import TodayPlanModal from '../../components/Vocab/TodayPlanModal';
+import DeckSwitcher from '../../components/Vocab/DeckSwitcher';
+import SubAppConfigModal from '../../components/SubAppConfigModal';
+import type { FocusWorkConfigFields } from '../../components/SubAppConfigModal';
 import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
 import SubAppHomeTemplate from '../../components/SubAppHomeTemplate';
 import type { AppTaskRuntimeState, AppTaskStatus } from '../../components/taskTypes';
@@ -10,6 +12,7 @@ import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { apiJson } from '../../lib/api';
 import { fetchVocabAppTaskStatus, fetchVocabOverview, fetchVocabToday, initializeVocabAppTask, updateVocabTodaySettings } from '../../lib/vocab/api';
 import type { VocabOverview, VocabTodaySummary } from '../../lib/vocab/types';
+import { BookOpen, Clock } from 'lucide-react';
 
 function stateToArrangementState(state: AppTaskRuntimeState | undefined, isTodayComplete: boolean): SubAppTaskItemState {
   if (state === 'completed_today' || isTodayComplete) return 'completed';
@@ -62,6 +65,11 @@ export default function VocabHome() {
   const [overviewDetailOpen, setOverviewDetailOpen] = useState(false);
   const [overviewDetailTab, setOverviewDetailTab] = useState<OverviewDetailTab>('completed');
   const [overviewDetailDeckId, setOverviewDetailDeckId] = useState<string | null>(null);
+
+  // config modal local state (was in TodayPlanModal)
+  const [targetCountValue, setTargetCountValue] = useState('');
+  const [vocabFocusDuration, setVocabFocusDuration] = useState(25); // minutes
+  const [vocabAddToTodayPlan, setVocabAddToTodayPlan] = useState(true);
   const isTodayComplete = !!summary && summary.total_count > 0 && summary.pending_count === 0;
   const modalInitialTarget = summary ? (isTodayComplete ? summary.total_count + summary.daily_target_count : summary.daily_target_count) : 20;
   const hasEventAppConfig = appTaskStatus
@@ -123,7 +131,29 @@ export default function VocabHome() {
     };
   }, []);
 
-  const handleSaveSettings = async (totalTargetCount: number, _addToTodayPlan: boolean, focusDuration: number) => {
+  // sync config modal state from backend
+  useEffect(() => {
+    if (appTaskStatus?.config) {
+      const cfg = appTaskStatus.config as Record<string, unknown>;
+      if (typeof cfg.default_focus_duration === 'number') {
+        setVocabFocusDuration(Math.round(cfg.default_focus_duration / 60));
+      }
+      if (typeof cfg.add_to_today_plan === 'boolean') {
+        setVocabAddToTodayPlan(cfg.add_to_today_plan);
+      }
+    }
+    const target = summary ? (isTodayComplete ? summary.total_count + summary.daily_target_count : summary.daily_target_count) : 20;
+    setTargetCountValue(String(target));
+  }, [appTaskStatus?.config, summary?.daily_target_count, isTodayComplete]);
+
+  const vocabTotalTargetCount = (() => {
+    const parsed = Number(targetCountValue);
+    return targetCountValue === '' || !Number.isFinite(parsed) ? 0 : Math.max(1, parsed);
+  })();
+
+  const handleSaveSettings = async () => {
+    const totalTargetCount = vocabTotalTargetCount || 20;
+    const focusDuration = vocabFocusDuration * 60;
     if (!activeDeck) return;
     setSettingsSaving(true);
     try {
@@ -384,23 +414,65 @@ export default function VocabHome() {
       )}
       modals={(
         <>
-          {settingsOpen ? (
-        <TodayPlanModal
-          initialTargetCount={modalInitialTarget}
-          initialFocusDuration={typeof appTaskStatus?.config?.default_focus_duration === 'number' ? appTaskStatus.config.default_focus_duration : 1500}
-          isCompleted={isTodayComplete}
-          isSaving={settingsSaving}
-          syncNotice={appConfigNotice}
-          decks={decks}
-          activeDeck={activeDeck}
-          inheritancePrompt={inheritancePrompt}
-          onDeckChange={setActiveDeck}
-          onConfirmInheritance={confirmInheritance}
-          onDismissInheritance={dismissInheritance}
-          onClose={() => setSettingsOpen(false)}
-          onSave={handleSaveSettings}
-        />
-          ) : null}
+          <SubAppConfigModal
+            open={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            onSave={handleSaveSettings}
+            isSaving={settingsSaving}
+            appName="背单词"
+            eventName={currentEventName}
+            description={isTodayComplete ? '今天这本词书已经完成，可调整目标继续再来一轮。' : '配置词书上下文、今日目标和默认专注时长。'}
+            saveError={summaryError}
+            saveLabel={isTodayComplete ? '保存并继续' : undefined}
+            focusWorks={[
+              {
+                id: 'vocab_today',
+                label: '今日单词',
+                enabled: true,
+                onEnabledChange: () => {},
+                showEnableToggle: false,
+                contentConfig: (
+                  <div className="space-y-4">
+                    {decks && activeDeck ? (
+                      <div>
+                        <div className="mb-2 flex items-center gap-2">
+                          <BookOpen className="h-5 w-5 text-[var(--ark-accent)]" />
+                          <span className="text-sm font-medium text-ark-text">词书上下文</span>
+                        </div>
+                        <DeckSwitcher
+                          decks={decks}
+                          activeDeck={activeDeck}
+                          onChange={setActiveDeck}
+                          inheritancePrompt={inheritancePrompt}
+                          onConfirmInheritance={confirmInheritance}
+                          onDismissInheritance={dismissInheritance}
+                        />
+                      </div>
+                    ) : null}
+                    <div>
+                      <label htmlFor="vocab-today-target" className="mb-2 block text-xs text-ark-text-muted">
+                        今日总量
+                      </label>
+                      <input
+                        id="vocab-today-target"
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={targetCountValue}
+                        onChange={(e) => setTargetCountValue(e.target.value)}
+                        className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-ark-text outline-none transition focus:border-[var(--ark-border-strong)]"
+                      />
+                    </div>
+                  </div>
+                ),
+                defaultFocusDuration: vocabFocusDuration,
+                onFocusDurationChange: setVocabFocusDuration,
+                addToTodayPlan: vocabAddToTodayPlan,
+                onAddToTodayPlanChange: setVocabAddToTodayPlan,
+                showSyncToggle: false,
+              } as FocusWorkConfigFields,
+            ]}
+          />
           {activeDeck ? (
             <OverviewDetailModal
               isOpen={overviewDetailOpen}
