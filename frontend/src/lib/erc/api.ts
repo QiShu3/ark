@@ -16,8 +16,9 @@ import type {
   ERCSet,
 } from './types';
 
-export function fetchERCOverview() {
-  return apiJson<ERCOverview>('/api/erc/overview');
+export function fetchERCOverview(setId?: string | null) {
+  const query = setId ? `?set_id=${encodeURIComponent(setId)}` : '';
+  return apiJson<ERCOverview>(`/api/erc/overview${query}`);
 }
 
 export function fetchERCConfigStatus(eventId?: string | null) {
@@ -110,8 +111,9 @@ export function submitERCVocabularyPreheat(
   });
 }
 
-export function fetchERCReviewNext() {
-  return apiJson<ERCReviewNext>('/api/erc/review/next');
+export function fetchERCReviewNext(setId?: string | null) {
+  const query = setId ? `?set_id=${encodeURIComponent(setId)}` : '';
+  return apiJson<ERCReviewNext>(`/api/erc/review/next${query}`);
 }
 
 export function submitERCReview(questionId: string, chosenOption: 'A' | 'B' | 'C' | 'D', timeSpentMs?: number) {
@@ -122,6 +124,7 @@ export function submitERCReview(questionId: string, chosenOption: 'A' | 'B' | 'C
   });
 }
 
-export function fetchERCMistakes() {
-  return apiJson<ERCMistakeItem[]>('/api/erc/mistakes');
+export function fetchERCMistakes(setId?: string | null) {
+  const query = setId ? `?set_id=${encodeURIComponent(setId)}` : '';
+  return apiJson<ERCMistakeItem[]>(`/api/erc/mistakes${query}`);
 }

@@ -11,11 +11,13 @@ const {
   apiJson,
   fetchERCConfigStatus,
   fetchERCOverview,
+  fetchERCSets,
   saveERCConfig,
 } = vi.hoisted(() => ({
   apiJson: vi.fn(),
   fetchERCConfigStatus: vi.fn(),
   fetchERCOverview: vi.fn(),
+  fetchERCSets: vi.fn(),
   saveERCConfig: vi.fn(),
 }));
 
@@ -26,6 +28,7 @@ vi.mock('../../../lib/api', () => ({
 vi.mock('../../../lib/erc/api', () => ({
   fetchERCConfigStatus,
   fetchERCOverview,
+  fetchERCSets,
   saveERCConfig,
 }));
 
@@ -108,6 +111,8 @@ describe('ERC home page', () => {
     });
     saveERCConfig.mockReset();
     saveERCConfig.mockResolvedValue(buildERCConfigStatus());
+    fetchERCSets.mockReset();
+    fetchERCSets.mockResolvedValue([]);
   });
 
   it('renders the unified sub-app template and starts review focus work from managed arrangements', async () => {
@@ -187,6 +192,7 @@ describe('ERC home page', () => {
         daily_article_target: 2,
         default_focus_duration: 1500,
         add_to_today_plan: true,
+        set_id: null,
       },
       review: {
         review_scope: 'all',
@@ -251,6 +257,7 @@ describe('ERC home page', () => {
           daily_article_target: 1,
           default_focus_duration: 1500,
           add_to_today_plan: false,
+          set_id: null,
         },
         review: {
           review_scope: 'due',

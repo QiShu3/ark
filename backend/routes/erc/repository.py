@@ -776,9 +776,13 @@ async def upsert_mistake(
     )
 
 
-async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: int) -> list[asyncpg.Record]:
+async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: int, set_id: str | None = None) -> list[asyncpg.Record]:
+    set_filter = "AND a.set_id = $3::uuid" if set_id else ""
+    params: list[Any] = [user_id, limit]
+    if set_id:
+        params.append(set_id)
     return await conn.fetch(
-        """
+        f"""
         SELECT
           c.question_pk::text AS question_pk,
           c.due_at,
@@ -804,11 +808,11 @@ async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: i
         WHERE c.user_id = $1
           AND c.due_at IS NOT NULL
           AND c.due_at <= NOW()
+        {set_filter}
         ORDER BY COALESCE(m.is_active, FALSE) DESC, c.lapse_count DESC, c.due_at ASC
         LIMIT $2
         """,
-        user_id,
-        limit,
+        *params,
     )
 
 
@@ -854,37 +858,47 @@ async def get_user_settings(conn: asyncpg.Connection, *, user_id: int) -> asyncp
     )
 
 
-async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int) -> dict[str, Any]:
+async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> dict[str, Any]:
+    params: list[Any] = [user_id]
+    if set_id:
+        params.append(set_id)
     row = await conn.fetchrow(
-        """
+        f"""
         SELECT
           (
-            SELECT COUNT(DISTINCT article_pk)::int
-            FROM erc_user_article_attempts
-            WHERE user_id = $1
+            SELECT COUNT(DISTINCT attempt.article_pk)::int
+            FROM erc_user_article_attempts attempt
+            {'JOIN erc_articles a ON a.id = attempt.article_pk' if set_id else ''}
+            WHERE attempt.user_id = $1 {'AND a.set_id = $2::uuid' if set_id else ''}
           ) AS practiced_article_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_review_logs
-            WHERE user_id = $1
+            FROM erc_review_logs rl
+            {'JOIN erc_questions q_rl ON q_rl.id = rl.question_pk JOIN erc_articles a_rl ON a_rl.id = q_rl.article_pk' if set_id else ''}
+            WHERE rl.user_id = $1 {'AND a_rl.set_id = $2::uuid' if set_id else ''}
           ) AS practiced_question_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_review_logs
-            WHERE user_id = $1 AND is_correct = TRUE
+            FROM erc_review_logs rl2
+            {'JOIN erc_questions q_rl2 ON q_rl2.id = rl2.question_pk JOIN erc_articles a_rl2 ON a_rl2.id = q_rl2.article_pk' if set_id else ''}
+            WHERE rl2.user_id = $1 AND rl2.is_correct = TRUE {'AND a_rl2.set_id = $2::uuid' if set_id else ''}
           ) AS correct_log_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_user_question_cards
-            WHERE user_id = $1 AND due_at IS NOT NULL AND due_at <= NOW()
+            FROM erc_user_question_cards c
+            JOIN erc_questions q_c ON q_c.id = c.question_pk
+            JOIN erc_articles a_c ON a_c.id = q_c.article_pk
+            WHERE c.user_id = $1 AND c.due_at IS NOT NULL AND c.due_at <= NOW() {'AND a_c.set_id = $2::uuid' if set_id else ''}
           ) AS due_review_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_mistake_bucket
-            WHERE user_id = $1 AND is_active = TRUE
+            FROM erc_mistake_bucket mb
+            JOIN erc_questions q_mb ON q_mb.id = mb.question_pk
+            JOIN erc_articles a_mb ON a_mb.id = q_mb.article_pk
+            WHERE mb.user_id = $1 AND mb.is_active = TRUE {'AND a_mb.set_id = $2::uuid' if set_id else ''}
           ) AS mistake_count
         """,
-        user_id,
+        *params,
     )
     if row is None:
         return {
@@ -897,9 +911,13 @@ async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int) -> dict
     return dict(row)
 
 
-async def get_recommended_article(conn: asyncpg.Connection, *, user_id: int) -> asyncpg.Record | None:
+async def get_recommended_article(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> asyncpg.Record | None:
+    set_filter = "AND a.set_id = $2::uuid" if set_id else ""
+    params: list[Any] = [user_id]
+    if set_id:
+        params.append(set_id)
     return await conn.fetchrow(
-        """
+        f"""
         SELECT a.article_id, a.year, a.text_no, a.title
         FROM erc_articles a
         WHERE NOT EXISTS (
@@ -907,16 +925,21 @@ async def get_recommended_article(conn: asyncpg.Connection, *, user_id: int) -> 
           FROM erc_user_article_attempts attempt
           WHERE attempt.user_id = $1 AND attempt.article_pk = a.id
         )
+        {set_filter}
         ORDER BY a.year DESC, a.text_no ASC
         LIMIT 1
         """,
-        user_id,
+        *params,
     )
 
 
-async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int) -> list[asyncpg.Record]:
+async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> list[asyncpg.Record]:
+    set_filter = "AND a.set_id = $4::uuid" if set_id else ""
+    params: list[Any] = [user_id]
+    if set_id:
+        params.append(set_id)
     return await conn.fetch(
-        """
+        f"""
         SELECT
           a.article_id,
           a.year,
@@ -933,8 +956,8 @@ async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int) -> list[a
         JOIN erc_questions q ON q.id = m.question_pk
         JOIN erc_articles a ON a.id = m.article_pk
         LEFT JOIN erc_user_question_cards c ON c.user_id = m.user_id AND c.question_pk = m.question_pk
-        WHERE m.user_id = $1 AND m.is_active = TRUE
+        WHERE m.user_id = $1 AND m.is_active = TRUE {set_filter}
         ORDER BY m.last_wrong_at DESC, a.year DESC, a.text_no ASC, q.sort_order ASC
         """,
-        user_id,
+        *params,
     )

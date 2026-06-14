@@ -452,10 +452,12 @@ class VocabAppTaskInitRequest(AppTaskInitRequest):
 class ERCAppTaskInitRequest(AppTaskInitRequest):
     review_scope: Literal["due", "mistakes", "all"] = "due"
     daily_question_target: int = Field(default=10, ge=1, le=200)
+    set_id: str | None = None
 
 
 class ERCPracticeAppTaskInitRequest(AppTaskInitRequest):
     daily_article_target: int = Field(default=1, ge=1, le=50)
+    set_id: str | None = None
 
 
 class ERCModuleStatusOut(BaseModel):
@@ -480,6 +482,7 @@ class ERCPracticeModuleConfig(BaseModel):
     daily_article_target: int = Field(default=1, ge=1, le=50)
     default_focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
     add_to_today_plan: bool = True
+    set_id: str | None = None
 
 
 class ERCReviewModuleConfig(BaseModel):

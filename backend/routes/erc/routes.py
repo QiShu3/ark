@@ -50,8 +50,12 @@ async def health() -> dict[str, bool]:
 
 
 @router.get("/overview", response_model=ERCOverviewOut)
-async def route_get_overview(request: Request, user: Annotated[Any, Depends(get_current_user)]) -> ERCOverviewOut:
-    return ERCOverviewOut(**await get_overview(_pool_from_request(request), user_id=int(user.id)))
+async def route_get_overview(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    set_id: str | None = Query(default=None),
+) -> ERCOverviewOut:
+    return ERCOverviewOut(**await get_overview(_pool_from_request(request), user_id=int(user.id), set_id=set_id))
 
 
 @router.get("/sets", response_model=list[ERCSetOut])
@@ -132,8 +136,12 @@ async def route_submit_vocabulary_preheat(
 
 
 @router.get("/review/next", response_model=ERCReviewNextOut)
-async def route_get_next_review(request: Request, user: Annotated[Any, Depends(get_current_user)]) -> ERCReviewNextOut:
-    return ERCReviewNextOut(**await get_next_review(_pool_from_request(request), user_id=int(user.id)))
+async def route_get_next_review(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    set_id: str | None = Query(default=None),
+) -> ERCReviewNextOut:
+    return ERCReviewNextOut(**await get_next_review(_pool_from_request(request), user_id=int(user.id), set_id=set_id))
 
 
 @router.post("/review/submit", response_model=ERCReviewSubmitOut)
@@ -157,5 +165,6 @@ async def route_submit_review(
 async def route_list_mistakes(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
+    set_id: str | None = Query(default=None),
 ) -> list[ERCMistakeItemOut]:
-    return [ERCMistakeItemOut(**item) for item in await list_mistakes(_pool_from_request(request), user_id=int(user.id))]
+    return [ERCMistakeItemOut(**item) for item in await list_mistakes(_pool_from_request(request), user_id=int(user.id), set_id=set_id)]

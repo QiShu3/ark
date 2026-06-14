@@ -116,6 +116,7 @@ export interface ERCAppTaskInitPayload {
   default_focus_duration?: number;
   add_to_today_plan?: boolean;
   event_id?: string | null;
+  set_id?: string | null;
 }
 
 export interface ERCModuleStatus {
@@ -144,6 +145,7 @@ export interface ERCConfigSavePayload {
     daily_article_target: number;
     default_focus_duration: number;
     add_to_today_plan: boolean;
+    set_id?: string | null;
   };
   review: {
     review_scope: 'due' | 'mistakes' | 'all';

@@ -639,6 +639,8 @@ async def init_erc_app_task(
                 "add_to_today_plan": body.add_to_today_plan,
                 "event_id": str(event_row["id"]),
             }
+            if body.set_id is not None:
+                config["set_id"] = body.set_id
             await _create_or_update_managed_app_task(
                 conn,
                 user_id=int(user.id),
@@ -685,6 +687,8 @@ async def init_erc_practice_app_task(
                 "add_to_today_plan": body.add_to_today_plan,
                 "event_id": str(event_row["id"]),
             }
+            if body.set_id is not None:
+                config["set_id"] = body.set_id
             await _create_or_update_managed_app_task(
                 conn,
                 user_id=int(user.id),
@@ -924,6 +928,8 @@ async def save_erc_config(
                 "add_to_today_plan": body.practice.add_to_today_plan,
                 "event_id": str(event_row["id"]),
             }
+            if body.practice.set_id is not None:
+                practice_config["set_id"] = body.practice.set_id
             review_config = {
                 "review_scope": body.review.review_scope,
                 "daily_question_target": body.review.daily_question_target,

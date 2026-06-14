@@ -231,10 +231,10 @@ async def list_sets(pool: asyncpg.Pool) -> list[dict]:
         return [_as_dict(row) for row in await list_set_rows(conn)]
 
 
-async def get_overview(pool: asyncpg.Pool, *, user_id: int) -> dict:
+async def get_overview(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> dict:
     async with pool.acquire() as conn:
-        counts = await get_overview_counts(conn, user_id=user_id)
-        recommended = await get_recommended_article(conn, user_id=user_id)
+        counts = await get_overview_counts(conn, user_id=user_id, set_id=set_id)
+        recommended = await get_recommended_article(conn, user_id=user_id, set_id=set_id)
     practiced_question_count = int(counts.get("practiced_question_count") or 0)
     correct_log_count = int(counts.get("correct_log_count") or 0)
     return {
@@ -414,12 +414,12 @@ async def submit_article_practice(
     }
 
 
-async def get_next_review(pool: asyncpg.Pool, *, user_id: int) -> dict:
+async def get_next_review(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> dict:
     now = datetime.now(UTC)
     async with pool.acquire() as conn:
         settings = await get_user_settings(conn, user_id=user_id)
         cooldown_hours = int(settings["same_article_cooldown_hours"])
-        due_rows = [dict(row) for row in await list_due_card_rows(conn, user_id=user_id, limit=50)]
+        due_rows = [dict(row) for row in await list_due_card_rows(conn, user_id=user_id, limit=50, set_id=set_id)]
         recent_logs = [
             dict(row)
             for row in await list_recent_review_article_rows(
@@ -600,6 +600,6 @@ async def submit_review(
     }
 
 
-async def list_mistakes(pool: asyncpg.Pool, *, user_id: int) -> list[dict]:
+async def list_mistakes(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> list[dict]:
     async with pool.acquire() as conn:
-        return [dict(row) for row in await list_mistake_rows(conn, user_id=user_id)]
+        return [dict(row) for row in await list_mistake_rows(conn, user_id=user_id, set_id=set_id)]

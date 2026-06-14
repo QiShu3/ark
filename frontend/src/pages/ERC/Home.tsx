@@ -7,8 +7,8 @@ import type { FocusWorkConfigFields } from '../../components/SubAppConfigModal';
 import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
 import SubAppHomeTemplate from '../../components/SubAppHomeTemplate';
 import { apiJson } from '../../lib/api';
-import { fetchERCConfigStatus, fetchERCOverview, saveERCConfig } from '../../lib/erc/api';
-import type { ERCConfigStatus, ERCModuleStatus, ERCOverview } from '../../lib/erc/types';
+import { fetchERCConfigStatus, fetchERCOverview, fetchERCSets, saveERCConfig } from '../../lib/erc/api';
+import type { ERCConfigStatus, ERCModuleStatus, ERCOverview, ERCSet } from '../../lib/erc/types';
 
 type ReviewScope = 'due' | 'mistakes' | 'all';
 
@@ -114,6 +114,8 @@ export default function ERCHome() {
   const [reviewScope, setReviewScope] = useState<ReviewScope>('due');
   const [reviewDuration, setReviewDuration] = useState(25);
   const [reviewAddToTodayPlan, setReviewAddToTodayPlan] = useState(true);
+  const [sets, setSets] = useState<ERCSet[]>([]);
+  const [activeSetId, setActiveSetId] = useState<string | null>(null);
 
   const practiceTaskStatus = configStatus.practice;
   const reviewTaskStatus = configStatus.review;
@@ -133,7 +135,7 @@ export default function ERCHome() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchERCOverview()
+    fetchERCOverview(activeSetId)
       .then((payload) => {
         if (cancelled) return;
         setOverview(payload);
@@ -146,7 +148,7 @@ export default function ERCHome() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeSetId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +168,17 @@ export default function ERCHome() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    fetchERCSets()
+      .then((payload) => {
+        if (cancelled) return;
+        setSets(payload);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     setPracticeEnabled(practiceTaskStatus.enabled);
     setReviewEnabled(reviewTaskStatus.enabled);
     setDailyArticleTarget(numberConfig(practiceTaskStatus.config, 'daily_article_target', 1));
@@ -175,6 +188,8 @@ export default function ERCHome() {
     setReviewScope(reviewScopeConfig(reviewTaskStatus.config));
     setReviewDuration(Math.round(numberConfig(reviewTaskStatus.config, 'default_focus_duration', 1500) / 60));
     setReviewAddToTodayPlan(booleanConfig(reviewTaskStatus.config, 'add_to_today_plan', true));
+    const cfgSetId = practiceTaskStatus.config?.set_id;
+    setActiveSetId(typeof cfgSetId === 'string' ? cfgSetId : null);
   }, [practiceTaskStatus, reviewTaskStatus]);
 
   async function persistConfig(next?: {
@@ -191,6 +206,7 @@ export default function ERCHome() {
         daily_article_target: dailyArticleTarget,
         default_focus_duration: practiceDuration * 60,
         add_to_today_plan: next?.practiceAddToTodayPlan ?? practiceAddToTodayPlan,
+        set_id: activeSetId,
       },
       review: {
         review_scope: reviewScope,
@@ -475,6 +491,24 @@ export default function ERCHome() {
               onEnabledChange: (v) => setPracticeEnabled(v),
               contentConfig: (
                 <div className="grid gap-4 sm:grid-cols-1">
+                  {sets.length > 0 ? (
+                    <div>
+                      <label htmlFor="erc-practice-set" className="mb-2 block text-xs text-ark-text-muted">
+                        题库
+                      </label>
+                      <select
+                        id="erc-practice-set"
+                        value={activeSetId ?? ''}
+                        onChange={(e) => setActiveSetId(e.target.value || null)}
+                        className="w-full rounded-lg border border-ark-border bg-[var(--ark-surface)] px-4 py-3 text-sm text-ark-text outline-none transition focus:border-[var(--ark-border-strong)]"
+                      >
+                        <option value="">全部题库</option>
+                        {sets.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <div>
                     <label htmlFor="erc-practice-daily-article-target" className="mb-2 block text-xs text-ark-text-muted">
                       每日目标 (文章篇数)
