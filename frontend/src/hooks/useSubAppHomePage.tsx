@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useFocusWorkAdapter } from '../adapters/useFocusWorkAdapter';
 import { apiJson } from '../lib/api';
-import type { SubAppDeclaration } from '../lib/subAppRegistry';
+import type { SubAppDeclaration, TemplateSection } from '../lib/subAppRegistry';
 import type { SubAppHomeAction, SubAppHomeMetric } from '../components/SubAppHomeTemplate';
 
 export interface SubAppHomePageData {
-  sections: string[];
+  sections: TemplateSection[];
   // hero
   eyebrow: string;
   title: string;
