@@ -5,15 +5,17 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import secrets
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
+from lib.sub_app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
 
 # --- Import logger setup ---
@@ -388,6 +390,7 @@ async def delete_user(
 
 
 class SubApp(BaseModel):
+    id: str
     name: str
     icon: str
     description: str
@@ -399,35 +402,293 @@ class SubAppsResponse(BaseModel):
     apps: list[SubApp]
 
 
+ICON_EMOJI: dict[str, str] = {
+    "book-open": "📚",
+    "scroll-text": "📖",
+}
+
+
+async def _query_app_stats(conn: Any, app_id: str, bank_type: str) -> str:
+    """Query live stats for a registered sub-app based on its content bank type."""
+    if app_id == "vocab":
+        deck_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_decks")
+        word_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_words")
+        return f"{deck_count} 词库 / {word_count:,} 词"
+    if app_id == "erc":
+        set_count = await conn.fetchval("SELECT COUNT(*) FROM erc_sets")
+        article_count = await conn.fetchval("SELECT COUNT(*) FROM erc_articles")
+        return f"{set_count} 阅读集 / {article_count} 篇文章"
+    # generic fallback for new sub-apps
+    return "—"
+
+
 @router.get("/apps", response_model=SubAppsResponse)
 async def list_apps(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> SubAppsResponse:
+    declarations = get_all()
+    pool = _pool(request)
+    apps: list[SubApp] = []
+    async with pool.acquire() as conn:
+        for decl in declarations:
+            bank_type = decl.focus_works[0].content_bank_type if decl.focus_works else ""
+            stats = await _query_app_stats(conn, decl.id, bank_type)
+            apps.append(SubApp(
+                id=decl.id,
+                name=decl.name,
+                icon=ICON_EMOJI.get(decl.icon, "📦"),
+                description=decl.description,
+                url=f"apps-{decl.id}.html" if decl.id not in ("vocab", "erc") else f"apps-{decl.id}.html",
+                stats=stats,
+            ))
+    return SubAppsResponse(apps=apps)
+
+
+# ---- Register new sub-app ----
+
+class NewFocusWork(BaseModel):
+    type: str
+    label: str
+    template: str = "choice_question"
+    content_bank_type: str = "article_set"
+    content_fields: list[dict] = []
+
+class NewSubAppRequest(BaseModel):
+    id: str
+    name: str
+    description: str
+    icon: str = "book-open"
+    route: str
+    focus_works: list[NewFocusWork] = []
+
+
+@router.post("/apps")
+async def create_app(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    file: UploadFile = File(...),
+    id: str = Form(...),
+    name: str = Form(...),
+    description: str = Form(...),
+    icon: str = Form("book-open"),
+    route: str = Form(...),
+    template: str = Form("choice_question"),
+    content_bank_type: str = Form("article_set"),
+    fw_type: str = Form(...),
+    fw_label: str = Form(...),
+):
+    """Register a new sub-app, generate backend skeleton, and import question bank."""
+    # parse question bank file
+    file_bytes = await file.read()
+    try:
+        questions = json.loads(file_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="题库文件不是有效的 JSON")
+    if not isinstance(questions, list):
+        raise HTTPException(status_code=400, detail="题库文件应为一个 JSON 数组")
+
+    question_count = len(questions)
+
+    fw = FocusWorkDeclaration(
+        type=fw_type,
+        label=fw_label,
+        template=template,
+        content_bank_type=content_bank_type,
+        content_fields=[],
+    )
+    decl = SubAppDeclaration(
+        id=id, name=name, description=description,
+        icon=icon, route=route, focus_works=[fw],
+    )
+    register(decl)
+    _generate_app_skeleton(decl)
+
+    # import questions into DB
     pool = _pool(request)
     async with pool.acquire() as conn:
-        deck_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_decks")
-        word_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_words")
-        set_count = await conn.fetchval("SELECT COUNT(*) FROM erc_sets")
-        article_count = await conn.fetchval("SELECT COUNT(*) FROM erc_articles")
-    return SubAppsResponse(
-        apps=[
-            SubApp(
-                name="词汇",
-                icon="📚",
-                description="词汇库管理",
-                url="apps-vocab.html",
-                stats=f"{deck_count} 词库 / {word_count:,} 词",
-            ),
-            SubApp(
-                name="ERC 阅读",
-                icon="📖",
-                description="阅读理解管理",
-                url="apps-erc.html",
-                stats=f"{set_count} 阅读集 / {article_count} 篇文章",
-            ),
-        ]
+        await _import_question_bank(conn, app_id=id, questions=questions)
+
+    return {"status": "ok", "id": id, "question_count": question_count}
+
+
+async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]) -> None:
+    """Import questions from a parsed JSON array into the app's question table."""
+    table = f"{app_id}_questions"
+    set_table = f"{app_id}_sets"
+
+    # ensure tables exist
+    await conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {set_table} (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            key TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            is_published BOOLEAN NOT NULL DEFAULT true,
+            item_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    await conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table} (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            set_id UUID REFERENCES {set_table}(id) ON DELETE CASCADE,
+            question_id TEXT UNIQUE NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            stem TEXT NOT NULL,
+            options_json JSONB NOT NULL DEFAULT '[]',
+            answer TEXT NOT NULL DEFAULT '',
+            explanation TEXT DEFAULT '',
+            meta_json JSONB NOT NULL DEFAULT '{{}}',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+
+    # create a default set
+    set_key = f"{app_id}-default"
+    set_id_row = await conn.fetchrow(
+        f"SELECT id FROM {set_table} WHERE key = $1", set_key,
     )
+    if set_id_row is None:
+        set_id_row = await conn.fetchrow(
+            f"INSERT INTO {set_table} (key, name) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET updated_at = NOW() RETURNING id",
+            set_key, f"{app_id} 默认题库",
+        )
+    set_id = set_id_row["id"]
+
+    # import questions
+    for i, q in enumerate(questions):
+        stem = q.get("stem", "")
+        options = q.get("options", [])
+        answer = q.get("answer", "")
+        explanation = q.get("explanation", "")
+        qid = q.get("id", f"{app_id}-{i}")
+        # store year/subject/number as meta
+        meta = {k: v for k, v in q.items() if k not in ("id", "stem", "options", "answer", "explanation")}
+
+        await conn.execute(
+            f"INSERT INTO {table} (set_id, question_id, sort_order, stem, options_json, answer, explanation, meta_json) "
+            "VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8::jsonb) "
+            "ON CONFLICT (question_id) DO UPDATE SET stem=EXCLUDED.stem, options_json=EXCLUDED.options_json, answer=EXCLUDED.answer, explanation=EXCLUDED.explanation",
+            set_id, qid, i,
+            stem,
+            json.dumps(options, ensure_ascii=False),
+            answer,
+            explanation,
+            json.dumps(meta, ensure_ascii=False),
+        )
+
+    # update count
+    await conn.execute(f"UPDATE {set_table} SET item_count = (SELECT COUNT(*) FROM {table}) WHERE id = $1", set_id)
+    print(f"[sub_app_registry] Imported {len(questions)} questions into '{app_id}'")
+
+
+def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
+    """Generate minimal backend domain skeleton for a new sub-app."""
+    app_dir = os.path.join(os.path.dirname(__file__), "..", "routes", decl.id)
+    os.makedirs(app_dir, exist_ok=True)
+
+    # __init__.py
+    with open(os.path.join(app_dir, "__init__.py"), "w") as f:
+        f.write(f'''"""Sub-app: {decl.name}"""
+from .routes import router
+
+
+async def init_{decl.id}(pool):
+    from .repository import init_tables
+    await init_tables(pool)
+''')
+
+    # repository.py
+    with open(os.path.join(app_dir, "repository.py"), "w") as f:
+        f.write(f'''"""DB tables and queries for {decl.name}."""
+import asyncpg
+
+
+async def init_tables(pool: asyncpg.Pool) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS {decl.id}_sets (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                key TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                exam TEXT DEFAULT '',
+                is_published BOOLEAN NOT NULL DEFAULT true,
+                item_count INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """)
+        # TODO: customize — add question/article tables for your bank type
+
+
+async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        "SELECT id, key, name, item_count, is_published FROM {decl.id}_sets ORDER BY name"
+    )
+
+
+async def count_items(conn: asyncpg.Connection) -> int:
+    row = await conn.fetchrow("SELECT COUNT(*) FROM {decl.id}_sets")
+    return int(row["count"]) if row else 0
+''')
+
+    # schemas.py
+    with open(os.path.join(app_dir, "schemas.py"), "w") as f:
+        f.write(f'''"""Pydantic models for {decl.name}."""
+from pydantic import BaseModel
+
+
+class SetItem(BaseModel):
+    id: str
+    key: str
+    name: str
+    item_count: int
+    is_published: bool
+
+
+# TODO: customize — add question/article schemas
+''')
+
+    # service.py
+    with open(os.path.join(app_dir, "service.py"), "w") as f:
+        f.write(f'''"""Business logic for {decl.name}."""
+import asyncpg
+
+
+async def list_sets(pool: asyncpg.Pool) -> list[dict]:
+    from .repository import list_set_rows
+    async with pool.acquire() as conn:
+        rows = await list_set_rows(conn)
+    return [dict(row) for row in rows]
+
+
+# TODO: customize — add practice/review/mistakes logic
+''')
+
+    # routes.py
+    with open(os.path.join(app_dir, "routes.py"), "w") as f:
+        f.write(f'''"""API endpoints for {decl.name}."""
+from typing import Any, Annotated
+from fastapi import APIRouter, Depends, Request
+from ..auth_routes import get_current_user
+from lib.db import _pool_from_request
+from . import schemas, service
+
+router = APIRouter(prefix="/api/{decl.id}", tags=["{decl.id}"])
+
+
+@router.get("/sets", response_model=list[schemas.SetItem])
+async def route_list_sets(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[schemas.SetItem]:
+    return [schemas.SetItem(**item) for item in await service.list_sets(_pool_from_request(request))]
+''')
+
+    print(f"[sub_app_registry] Generated skeleton for '{decl.id}' at {{app_dir}}")
 
 
 class VocabStats(BaseModel):

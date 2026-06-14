@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新建子应用 · Ark Admin</title>
+<link rel="stylesheet" href="css/common.css">
+</head>
+<body>
+<aside class="sidebar">
+  <h1 style="font-size:24px;margin:0 0 32px;">Ark Admin</h1>
+  <div class="nav-group">
+    <div class="nav-label">主看板</div>
+    <a class="nav-item" href="index.html">用户概览</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">子应用</div>
+    <a class="nav-item active" href="apps.html">子应用</a>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">功能</div>
+    <a class="nav-item" href="users.html">用户管理</a>
+    <a class="nav-item" href="templates.html">事件模板</a>
+  </div>
+  <div class="nav-footer" style="margin-top:32px;">
+    <a href="/" style="color:var(--muted);font-size:14px;text-decoration:none;">← 返回主应用</a>
+  </div>
+</aside>
+
+<main class="main-content">
+  <header style="margin-bottom: 32px;">
+    <a href="apps.html" style="color:var(--muted);font-size:14px;text-decoration:none;">← 子应用</a>
+    <h2 style="font-size: 28px; margin: 8px 0;">新建子应用</h2>
+  </header>
+
+  <form id="new-app-form" class="admin-card" style="max-width:640px;padding:32px;" onsubmit="handleSubmit(event)">
+    <div class="form-group" style="margin-bottom:20px;">
+      <label for="app-id" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">应用 ID</label>
+      <input id="app-id" name="id" required pattern="[a-z0-9-]+" placeholder="exam408" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:14px;">
+      <p style="font-size:12px;color:var(--muted);margin-top:4px;">小写字母、数字、连字符。用于 URL 和路由。</p>
+    </div>
+
+    <div class="form-group" style="margin-bottom:20px;">
+      <label for="app-name" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">用户侧名称</label>
+      <input id="app-name" name="name" required placeholder="408考研" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:14px;">
+    </div>
+
+    <div class="form-group" style="margin-bottom:20px;">
+      <label for="app-desc" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">简介</label>
+      <input id="app-desc" name="description" required placeholder="408计算机考研真题练习" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:14px;">
+    </div>
+
+    <div class="form-group" style="margin-bottom:20px;">
+      <label for="app-icon" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">图标</label>
+      <select id="app-icon" name="icon" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:14px;">
+        <option value="book-open">📚 book-open</option>
+        <option value="scroll-text">📖 scroll-text</option>
+        <option value="graduation-cap">🎓 graduation-cap</option>
+        <option value="brain">🧠 brain</option>
+        <option value="code">💻 code</option>
+        <option value="flask">🧪 flask</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom:20px;">
+      <label for="app-template" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">专注工作模板</label>
+      <select id="app-template" name="template" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:14px;">
+        <option value="choice_question">选择题 (choice_question)</option>
+        <option value="flashcard">闪卡 (flashcard)</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom:20px;">
+      <label for="app-bank-type" style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">题库类型</label>
+      <select id="app-bank-type" name="content_bank_type" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--fg);font-size:14px;">
+        <option value="article_set">题库集 (article_set) — 文章/题目</option>
+        <option value="word_deck">词书 (word_deck) — 单词</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="margin-bottom:24px;">
+      <label style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">专注工作配置</label>
+      <div id="focus-works" style="border:1px solid var(--border);border-radius:8px;padding:16px;">
+        <div class="fw-item" data-fw-index="0" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+          <div style="display:flex;gap:12px;margin-bottom:8px;">
+            <input name="fw-type" placeholder="类型标识 (e.g. exam408_practice)" required style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--fg);font-size:13px;">
+            <input name="fw-label" placeholder="名称 (e.g. 真题练习)" required style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--fg);font-size:13px;">
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin:0;">默认 N=1。如需多专注工作，提交后可在详情页添加。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:24px;">
+      <label style="display:block;font-size:14px;font-weight:600;margin-bottom:6px;">上传题库</label>
+      <div id="upload-area" style="border:2px dashed var(--border);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.2s;">
+        <p id="upload-label" style="color:var(--muted);font-size:14px;margin:0;">点击选择 JSON 文件或拖拽到此处</p>
+        <p id="upload-info" style="color:var(--fg);font-size:13px;margin:8px 0 0;display:none;"></p>
+        <input type="file" id="file-input" name="file" accept=".json" required style="display:none;">
+      </div>
+    </div>
+
+    <p id="form-error" style="color:var(--danger);font-size:14px;display:none;margin-bottom:16px;"></p>
+
+    <div style="display:flex;gap:12px;">
+      <button type="submit" id="submit-btn" style="padding:10px 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">创建子应用</button>
+      <a href="apps.html" style="padding:10px 20px;border:1px solid var(--border);border-radius:8px;color:var(--fg);text-decoration:none;font-size:14px;">取消</a>
+    </div>
+  </form>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+// file upload drag-and-drop
+const uploadArea = document.getElementById('upload-area');
+const fileInput = document.getElementById('file-input');
+const uploadLabel = document.getElementById('upload-label');
+const uploadInfo = document.getElementById('upload-info');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor = 'var(--accent)'; });
+uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = 'var(--border)'; });
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.style.borderColor = 'var(--border)';
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    showFileInfo(e.dataTransfer.files[0]);
+  }
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) showFileInfo(fileInput.files[0]);
+});
+
+function showFileInfo(file) {
+  uploadLabel.textContent = '✓ ' + file.name;
+  uploadInfo.textContent = (file.size / 1024).toFixed(1) + ' KB';
+  uploadInfo.style.display = 'block';
+}
+
+async function handleSubmit(event) {
+  event.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('form-error');
+  const form = event.target;
+
+  if (!fileInput.files.length) {
+    errEl.textContent = '请上传题库文件';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '导入题库并创建...';
+  errEl.style.display = 'none';
+
+  const focusWork = {
+    type: form.querySelector('[name="fw-type"]').value,
+    label: form.querySelector('[name="fw-label"]').value,
+  };
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  formData.append('id', form.id.value);
+  formData.append('name', form.name.value);
+  formData.append('description', form.description.value);
+  formData.append('icon', form.icon.value);
+  formData.append('route', '/' + form.id.value);
+  formData.append('template', form.template.value);
+  formData.append('content_bank_type', form.content_bank_type.value);
+  formData.append('fw_type', focusWork.type);
+  formData.append('fw_label', focusWork.label);
+
+  try {
+    const resp = await fetch(API_BASE + '/apps', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+      body: formData,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || '创建失败');
+    }
+    window.location.href = 'apps.html';
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '创建子应用';
+  }
+}
+</script>
+</body>
+</html>
