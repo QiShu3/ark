@@ -4,6 +4,8 @@ Mirrors frontend/src/lib/subAppRegistry.ts.  New sub-apps are registered here
 and automatically appear in admin panel, frontend AppCenter, and route config.
 """
 
+import json as _json
+import os as _os
 from dataclasses import dataclass, field
 
 
@@ -98,10 +100,77 @@ ERC = SubAppDeclaration(
 
 # ---- Registry ----
 
+_REGISTRY_FILE = _os.path.join(_os.path.dirname(__file__), "sub_app_registry.json")
+
 _registry: dict[str, SubAppDeclaration] = {
     "vocab": VOCAB,
     "erc": ERC,
 }
+
+
+def _load_persisted() -> dict[str, SubAppDeclaration]:
+    """Load dynamically registered apps from JSON file."""
+    if not _os.path.exists(_REGISTRY_FILE):
+        return {}
+    try:
+        with open(_REGISTRY_FILE) as f:
+            raw = _json.load(f)
+        result = {}
+        for item in raw:
+            fws = []
+            for fw_data in item.get("focus_works", []):
+                cfs = []
+                for cf in fw_data.get("content_fields", []):
+                    cfs.append(ContentConfigField(
+                        key=cf["key"], label=cf["label"], type=cf["type"],
+                        default_value=cf.get("default_value"),
+                        options=cf.get("options"),
+                        min_val=cf.get("min_val"), max_val=cf.get("max_val"),
+                    ))
+                fws.append(FocusWorkDeclaration(
+                    type=fw_data["type"], label=fw_data["label"],
+                    template=fw_data["template"], content_bank_type=fw_data["content_bank_type"],
+                    content_fields=cfs,
+                ))
+            result[item["id"]] = SubAppDeclaration(
+                id=item["id"], name=item["name"], description=item["description"],
+                icon=item["icon"], route=item["route"], focus_works=fws,
+            )
+        return result
+    except Exception:
+        return {}
+
+
+def _persist() -> None:
+    """Save dynamically registered apps to JSON file."""
+    dynamic = {k: v for k, v in _registry.items() if k not in ("vocab", "erc")}
+    if not dynamic:
+        return
+    items = []
+    for decl in dynamic.values():
+        items.append({
+            "id": decl.id, "name": decl.name, "description": decl.description,
+            "icon": decl.icon, "route": decl.route,
+            "focus_works": [
+                {
+                    "type": fw.type, "label": fw.label,
+                    "template": fw.template, "content_bank_type": fw.content_bank_type,
+                    "content_fields": [
+                        {"key": cf.key, "label": cf.label, "type": cf.type,
+                         "default_value": cf.default_value, "options": cf.options,
+                         "min_val": cf.min_val, "max_val": cf.max_val}
+                        for cf in fw.content_fields
+                    ],
+                }
+                for fw in decl.focus_works
+            ],
+        })
+    with open(_REGISTRY_FILE, "w") as f:
+        _json.dump(items, f, ensure_ascii=False, indent=2)
+
+
+# Load persisted on startup
+_registry.update(_load_persisted())
 
 
 def get_all() -> list[SubAppDeclaration]:
@@ -115,5 +184,6 @@ def get_by_id(app_id: str) -> SubAppDeclaration | None:
 
 
 def register(app: SubAppDeclaration) -> None:
-    """Register a new sub-app declaration."""
+    """Register a new sub-app declaration and persist."""
     _registry[app.id] = app
+    _persist()
