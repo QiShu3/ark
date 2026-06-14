@@ -125,13 +125,40 @@ export function getRegisteredFocusWorkTypes(): RegisteredFocusWorkType[] {
 
 let _dynamicApps: SubAppDeclaration[] | null = null;
 
+/** Convert backend snake_case to frontend camelCase. */
+function mapFromApi(raw: Record<string, unknown>): SubAppDeclaration {
+  return {
+    id: raw.id as string,
+    name: raw.name as string,
+    description: raw.description as string,
+    icon: raw.icon as string,
+    route: raw.route as string,
+    focusWorks: ((raw.focus_works || []) as Record<string, unknown>[]).map((fw) => ({
+      type: fw.type as string,
+      label: fw.label as string,
+      template: (fw.template || 'choice_question') as FocusTemplate,
+      contentBankType: (fw.content_bank_type || 'article_set') as ContentBankType,
+      contentFields: ((fw.content_fields || []) as Record<string, unknown>[]).map((cf) => ({
+        key: cf.key as string,
+        label: cf.label as string,
+        type: (cf.type || 'number') as ContentConfigField['type'],
+        defaultValue: cf.default_value,
+        options: cf.options as { value: string; label: string }[] | undefined,
+        min: cf.min_val as number | undefined,
+        max: cf.max_val as number | undefined,
+      })),
+    })),
+  } as SubAppDeclaration;
+}
+
 /** Fetch registered sub-apps from the backend API, merge with built-in defaults. */
 export async function loadDynamicRegistry(): Promise<SubAppDeclaration[]> {
   if (_dynamicApps) return _dynamicApps;
   try {
     const resp = await fetch('/api/app-registry');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data: SubAppDeclaration[] = await resp.json();
+    const rawList: Record<string, unknown>[] = await resp.json();
+    const data = rawList.map(mapFromApi);
     // merge: backend entries that don't shadow built-in ids
     const builtInIds = new Set(Object.keys(subAppRegistry));
     const merged = [
