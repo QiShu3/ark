@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, RefreshCw } from 'lucide-react';
 
@@ -6,6 +6,7 @@ import SubAppConfigModal from '../../components/SubAppConfigModal';
 import type { FocusWorkConfigFields } from '../../components/SubAppConfigModal';
 import SubAppArrangements, { type SubAppTaskItemState } from '../../components/SubAppArrangements';
 import SubAppHomeTemplate from '../../components/SubAppHomeTemplate';
+import { useSubAppHome } from '../../hooks/useSubAppHome';
 import { apiJson } from '../../lib/api';
 import { fetchERCConfigStatus, fetchERCOverview, fetchERCSets, saveERCConfig } from '../../lib/erc/api';
 import type { ERCConfigStatus, ERCModuleStatus, ERCOverview, ERCSet } from '../../lib/erc/types';
@@ -97,13 +98,13 @@ function moduleDisabledReason(module: ERCModuleStatus): string | null {
 }
 
 export default function ERCHome() {
-  const [overview, setOverview] = useState<ERCOverview | null>(null);
-  const [configStatus, setConfigStatus] = useState<ERCConfigStatus>(DEFAULT_CONFIG);
-  const [error, setError] = useState<string | null>(null);
-  const [appTaskError, setAppTaskError] = useState<string | null>(null);
-  const [appTaskBusy, setAppTaskBusy] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsSaving, setSettingsSaving] = useState(false);
+  // shared home state via hook
+  const home = useSubAppHome<ERCOverview, ERCConfigStatus>({
+    fetchOverview: () => fetchERCOverview(activeSetId),
+    fetchConfig: () => fetchERCConfigStatus(),
+    saveConfig: () => persistConfig(),
+    initTask: () => persistConfig(),
+  });
 
   const [practiceEnabled, setPracticeEnabled] = useState(true);
   const [reviewEnabled, setReviewEnabled] = useState(true);
@@ -116,6 +117,9 @@ export default function ERCHome() {
   const [reviewAddToTodayPlan, setReviewAddToTodayPlan] = useState(true);
   const [sets, setSets] = useState<ERCSet[]>([]);
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
+
+  const overview = home.overview;
+  const configStatus = home.config ?? DEFAULT_CONFIG;
 
   const practiceTaskStatus = configStatus.practice;
   const reviewTaskStatus = configStatus.review;
@@ -133,39 +137,10 @@ export default function ERCHome() {
     ? `当前主事件「${currentEventName}」尚未配置阅读训练，请通过右上角“配置”完成初始化。`
     : '当前主事件尚未配置阅读训练，请通过右上角“配置”完成初始化。';
 
+  // re-fetch overview when set changes
   useEffect(() => {
-    let cancelled = false;
-    fetchERCOverview(activeSetId)
-      .then((payload) => {
-        if (cancelled) return;
-        setOverview(payload);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : '阅读训练加载失败');
-      });
-    return () => {
-      cancelled = true;
-    };
+    home.refresh();
   }, [activeSetId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchERCConfigStatus()
-      .then((payload) => {
-        if (cancelled) return;
-        setConfigStatus(payload);
-        setAppTaskError(null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setAppTaskError(err instanceof Error ? err.message : 'ERC 配置状态加载失败');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -192,6 +167,10 @@ export default function ERCHome() {
     setActiveSetId(typeof cfgSetId === 'string' ? cfgSetId : null);
   }, [practiceTaskStatus, reviewTaskStatus]);
 
+  const activeSetIdRef = useRef(activeSetId);
+  activeSetIdRef.current = activeSetId;
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+
   async function persistConfig(next?: {
     practiceEnabled?: boolean;
     reviewEnabled?: boolean;
@@ -206,7 +185,7 @@ export default function ERCHome() {
         daily_article_target: dailyArticleTarget,
         default_focus_duration: practiceDuration * 60,
         add_to_today_plan: next?.practiceAddToTodayPlan ?? practiceAddToTodayPlan,
-        set_id: activeSetId,
+        set_id: activeSetIdRef.current,
       },
       review: {
         review_scope: reviewScope,
@@ -215,83 +194,36 @@ export default function ERCHome() {
         add_to_today_plan: next?.reviewAddToTodayPlan ?? reviewAddToTodayPlan,
       },
     });
-    setConfigStatus(payload);
-    setAppTaskError(null);
     if (payload.practice.confirmation_needed || payload.review.confirmation_needed) {
       const modules = [
         payload.practice.confirmation_needed ? '真题练习' : null,
         payload.review.confirmation_needed ? '错题复习' : null,
       ].filter(Boolean).join('、');
-      setAppTaskError(`检测到${modules}已有手动今日安排，系统已保留该安排。`);
+      setConfirmMsg(`检测到${modules}已有手动今日安排，系统已保留该安排。`);
+    } else {
+      setConfirmMsg(null);
     }
     return payload;
   }
 
-  async function handleSaveSettings() {
-    setSettingsSaving(true);
-    setAppTaskError(null);
-    try {
-      await persistConfig();
-      setSettingsOpen(false);
-      const freshOverview = await fetchERCOverview();
-      setOverview(freshOverview);
-    } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '保存配置失败');
-    } finally {
-      setSettingsSaving(false);
-    }
-  }
-
   async function handleInitializePractice() {
-    setAppTaskBusy(true);
-    try {
-      setPracticeEnabled(true);
-      await persistConfig({ practiceEnabled: true });
-    } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '初始化真题练习失败');
-    } finally {
-      setAppTaskBusy(false);
-    }
+    setPracticeEnabled(true);
+    await persistConfig({ practiceEnabled: true });
+    home.refresh();
   }
 
   async function handleInitializeReview() {
-    setAppTaskBusy(true);
-    try {
-      setReviewEnabled(true);
-      await persistConfig({ reviewEnabled: true });
-    } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '初始化错题复习失败');
-    } finally {
-      setAppTaskBusy(false);
-    }
+    setReviewEnabled(true);
+    await persistConfig({ reviewEnabled: true });
+    home.refresh();
   }
 
-  async function startReviewFocusWork() {
-    if (!reviewTaskStatus.task_id) return;
-    setAppTaskBusy(true);
+  async function startFocusWork(taskId: string | null) {
+    if (!taskId) return;
     try {
-      await apiJson(`/todo/tasks/${reviewTaskStatus.task_id}/focus/start`, { method: 'POST' });
+      await apiJson(`/todo/tasks/${taskId}/focus/start`, { method: 'POST' });
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-      setAppTaskError(null);
-    } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '开始 ERC 复习失败');
-    } finally {
-      setAppTaskBusy(false);
-    }
-  }
-
-  async function startPracticeFocusWork() {
-    if (!practiceTaskStatus.task_id) return;
-    setAppTaskBusy(true);
-    try {
-      await apiJson(`/todo/tasks/${practiceTaskStatus.task_id}/focus/start`, { method: 'POST' });
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-      setAppTaskError(null);
-    } catch (err) {
-      setAppTaskError(err instanceof Error ? err.message : '开始 ERC 真题练习失败');
-    } finally {
-      setAppTaskBusy(false);
-    }
+    } catch { /* error shown in feedback */ }
   }
 
   function taskAction(module: ERCModuleStatus, onInitialize: () => Promise<void>, onStart: () => Promise<void>) {
@@ -302,17 +234,17 @@ export default function ERCHome() {
       return { label: undefined, disabled: true, action: undefined };
     }
     if (module.state === 'uninitialized') {
-      return { label: '初始化', disabled: appTaskBusy, action: onInitialize };
+      return { label: '初始化', disabled: home.busy, action: onInitialize };
     }
     return {
       label: module.completion_state?.completed_count_in_period ? '继续' : '开始',
-      disabled: !module.task_id || appTaskBusy,
+      disabled: !module.task_id || home.busy,
       action: onStart,
     };
   }
 
-  const practiceAction = taskAction(practiceTaskStatus, handleInitializePractice, startPracticeFocusWork);
-  const reviewAction = taskAction(reviewTaskStatus, handleInitializeReview, startReviewFocusWork);
+  const practiceAction = taskAction(practiceTaskStatus, handleInitializePractice, () => startFocusWork(practiceTaskStatus.task_id));
+  const reviewAction = taskAction(reviewTaskStatus, handleInitializeReview, () => startFocusWork(reviewTaskStatus.task_id));
   const overviewMetrics = [
     { label: '今日待复习', value: overview ? overview.due_review_count : '--', detail: 'due' },
     { label: '已练文章', value: overview ? overview.practiced_article_count : '--', detail: 'articles' },
@@ -380,8 +312,8 @@ export default function ERCHome() {
           }
         : {
             label: '配置阅读训练',
-            disabled: appTaskBusy,
-            onClick: () => setSettingsOpen(true),
+            disabled: home.busy,
+            onClick: home.openSettings,
           };
   const assetContent = overview ? (
     <div className="space-y-4">
@@ -447,7 +379,7 @@ export default function ERCHome() {
       title="阅读训练"
       statusLabel={eventStatusLabel(configStatus)}
       metaItems={[eventLabel, '托管任务：真题练习 / 错题复习']}
-      configureAction={{ label: '配置', onClick: () => setSettingsOpen(true) }}
+      configureAction={{ label: '配置', onClick: home.openSettings }}
       heroLabel="今日优先任务"
       heroValue={overview ? `${overview.due_review_count} 道` : '--'}
       heroDetail="先处理到期错题，再进入真题练习。"
@@ -459,11 +391,11 @@ export default function ERCHome() {
       assetTitle="长期积累"
       assetDescription="题库进度、错题资产和推荐练习都集中在这里。"
       assetContent={assetContent}
-      arrangements={<SubAppArrangements tasks={ercTasks} isBusy={appTaskBusy} />}
+      arrangements={<SubAppArrangements tasks={ercTasks} isBusy={home.busy} />}
       feedback={(
         <>
-          {error ? <p className="text-sm text-rose-200">{error}</p> : null}
-          {appTaskError ? <p className="ark-annotation rounded-lg px-3 py-2">{appTaskError}</p> : null}
+          {home.error ? <p className="text-sm text-rose-200">{home.error}</p> : null}
+          {confirmMsg ? <p className="ark-annotation rounded-lg px-3 py-2">{confirmMsg}</p> : null}
           {hasNoPrimaryEvent ? (
             <p className="ark-annotation rounded-lg px-3 py-2">请先创建或设置主事件，再配置阅读训练。</p>
           ) : hasNoConfig ? (
@@ -475,14 +407,14 @@ export default function ERCHome() {
       )}
       modals={(
         <SubAppConfigModal
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          onSave={handleSaveSettings}
-          isSaving={settingsSaving}
+          open={home.settingsOpen}
+          onClose={home.closeSettings}
+          onSave={home.save}
+          isSaving={home.isSaving}
           appName="阅读训练"
           eventName={currentEventName}
           description="保存后会更新真题练习与错题复习的托管任务。"
-          saveError={appTaskError}
+          saveError={home.error}
           focusWorks={[
             {
               id: 'erc_practice',
