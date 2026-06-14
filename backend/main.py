@@ -1,3 +1,4 @@
+import importlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from lib.sub_app_registry import get_all
 from routes.admin_routes import router as admin_router
 from routes.app_registry_routes import router as app_registry_router
 from routes.auth_routes import close_auth, init_auth
@@ -65,6 +67,16 @@ app.include_router(vocab_router)
 app.include_router(erc_router)
 app.include_router(app_registry_router)
 app.include_router(admin_router)
+
+# Auto-discover and register dynamic sub-app routers
+for _decl in get_all():
+    if _decl.id in ("vocab", "erc"):
+        continue
+    try:
+        _mod = importlib.import_module(f"routes.{_decl.id}")
+        app.include_router(_mod.router)
+    except (ImportError, AttributeError):
+        pass
 
 
 @app.get("/health")

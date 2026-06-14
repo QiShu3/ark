@@ -579,65 +579,209 @@ async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]
             json.dumps(meta, ensure_ascii=False),
         )
 
+    # ---- user progress tables ----
+    await conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {app_id}_user_question_cards (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+            question_pk UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE,
+            due_at TIMESTAMPTZ,
+            fsrs_card_json JSONB NOT NULL DEFAULT '{{}}',
+            wrong_count INTEGER NOT NULL DEFAULT 0,
+            right_count INTEGER NOT NULL DEFAULT 0,
+            lapse_count INTEGER NOT NULL DEFAULT 0,
+            last_review_at TIMESTAMPTZ,
+            last_answer_correct BOOLEAN,
+            last_chosen_option TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, question_pk)
+        );
+    """)
+    await conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {app_id}_review_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+            question_pk UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE,
+            chosen_option TEXT NOT NULL,
+            is_correct BOOLEAN NOT NULL,
+            time_spent_ms INTEGER,
+            rating TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    await conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {app_id}_mistake_bucket (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+            question_pk UUID NOT NULL REFERENCES {table}(id) ON DELETE CASCADE,
+            article_pk UUID,
+            wrong_count INTEGER NOT NULL DEFAULT 1,
+            last_wrong_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            UNIQUE(user_id, question_pk)
+        );
+    """)
+
     # update count
     await conn.execute(f"UPDATE {set_table} SET item_count = (SELECT COUNT(*) FROM {table}) WHERE id = $1", set_id)
-    print(f"[sub_app_registry] Imported {len(questions)} questions into '{app_id}'")
+    print(f"[sub_app_registry] Imported {len(questions)} questions into '{app_id}' with user progress tables")
 
 
 def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
-    """Generate minimal backend domain skeleton for a new sub-app."""
-    app_dir = os.path.join(os.path.dirname(__file__), "..", "routes", decl.id)
+    """Generate backend domain skeleton for a new sub-app."""
+    app_id = decl.id
+    app_name = decl.name
+    app_dir = os.path.join(os.path.dirname(__file__), "..", "routes", app_id)
     os.makedirs(app_dir, exist_ok=True)
+
+    qt = f"{app_id}_questions"
+    cards = f"{app_id}_user_question_cards"
+    logs = f"{app_id}_review_logs"
+    mistakes = f"{app_id}_mistake_bucket"
 
     # __init__.py
     with open(os.path.join(app_dir, "__init__.py"), "w") as f:
-        f.write(f'''"""Sub-app: {decl.name}"""
+        f.write(f'''"""Sub-app: {app_name}"""
 from .routes import router
 
 
-async def init_{decl.id}(pool):
+async def init_{app_id}(pool):
     from .repository import init_tables
     await init_tables(pool)
 ''')
 
     # repository.py
     with open(os.path.join(app_dir, "repository.py"), "w") as f:
-        f.write(f'''"""DB tables and queries for {decl.name}."""
+        f.write(f'''"""DB tables and queries for {app_name}."""
+import json
+from typing import Any
+from datetime import datetime, timedelta, timezone
+
 import asyncpg
+
+UTC = timezone.utc
 
 
 async def init_tables(pool: asyncpg.Pool) -> None:
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS {decl.id}_sets (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                key TEXT UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                exam TEXT DEFAULT '',
-                is_published BOOLEAN NOT NULL DEFAULT true,
-                item_count INTEGER NOT NULL DEFAULT 0,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-        """)
-        # TODO: customize — add question/article tables for your bank type
+    """Create tables if not exist (questions + progress tables created by admin import)."""
+    # tables created by admin import — this is a no-op placeholder
+    pass
 
+
+# ---- Sets ----
 
 async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     return await conn.fetch(
-        "SELECT id, key, name, item_count, is_published FROM {decl.id}_sets ORDER BY name"
+        f"SELECT id, key, name, item_count, is_published FROM {app_id}_sets WHERE is_published = TRUE ORDER BY name"
     )
 
 
-async def count_items(conn: asyncpg.Connection) -> int:
-    row = await conn.fetchrow("SELECT COUNT(*) FROM {decl.id}_sets")
-    return int(row["count"]) if row else 0
+# ---- Overview ----
+
+async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> dict[str, Any]:
+    row = await conn.fetchrow(
+        f"""
+        SELECT
+          (SELECT COUNT(*)::int FROM {logs} WHERE user_id = $1) AS practiced_count,
+          (SELECT COUNT(*)::int FROM {logs} WHERE user_id = $1 AND is_correct = TRUE) AS correct_count,
+          (SELECT COUNT(*)::int FROM {cards} WHERE user_id = $1 AND due_at IS NOT NULL AND due_at <= NOW()) AS due_count,
+          (SELECT COUNT(*)::int FROM {mistakes} WHERE user_id = $1 AND is_active = TRUE) AS mistake_count
+        """,
+        user_id,
+    )
+    return dict(row) if row else {{"practiced_count": 0, "correct_count": 0, "due_count": 0, "mistake_count": 0}}
+
+
+# ---- Review ----
+
+async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: int, set_id: str | None = None) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        f"""
+        SELECT c.question_pk::text, c.due_at, c.fsrs_card_json, c.wrong_count, c.right_count, c.lapse_count,
+               q.question_id, q.stem, q.options_json, q.answer, q.explanation, q.meta_json,
+               COALESCE(m.is_active, FALSE) AS is_mistake
+        FROM {cards} c
+        JOIN {qt} q ON q.id = c.question_pk
+        LEFT JOIN {mistakes} m ON m.user_id = c.user_id AND m.question_pk = c.question_pk
+        WHERE c.user_id = $1 AND c.due_at IS NOT NULL AND c.due_at <= NOW()
+        ORDER BY COALESCE(m.is_active, FALSE) DESC, c.lapse_count DESC, c.due_at ASC
+        LIMIT $2
+        """,
+        user_id, limit,
+    )
+
+
+async def get_next_due_at(conn: asyncpg.Connection, *, user_id: int) -> Any:
+    row = await conn.fetchrow(
+        f"SELECT MIN(due_at) AS next_due_at FROM {cards} WHERE user_id = $1 AND due_at > NOW()",
+        user_id,
+    )
+    return row["next_due_at"] if row else None
+
+
+# ---- Submit ----
+
+async def upsert_question_card(conn: asyncpg.Connection, *, user_id: int, question_pk: str, is_correct: bool, chosen_option: str, fsrs_json: dict, next_due: datetime) -> None:
+    await conn.execute(
+        f"""INSERT INTO {cards} (user_id, question_pk, due_at, fsrs_card_json, wrong_count, right_count, lapse_count, last_review_at, last_answer_correct, last_chosen_option)
+            VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, NOW(), $8, $9)
+            ON CONFLICT (user_id, question_pk) DO UPDATE SET
+              due_at=EXCLUDED.due_at, fsrs_card_json=EXCLUDED.fsrs_card_json,
+              wrong_count={cards}.wrong_count + EXCLUDED.wrong_count,
+              right_count={cards}.right_count + EXCLUDED.right_count,
+              lapse_count={cards}.lapse_count + EXCLUDED.lapse_count,
+              last_review_at=NOW(), last_answer_correct=EXCLUDED.last_answer_correct,
+              last_chosen_option=EXCLUDED.last_chosen_option""",
+        user_id, question_pk, next_due, json.dumps(fsrs_json, default=str),
+        1 if not is_correct else 0, 1 if is_correct else 0, 1 if not is_correct else 0,
+        is_correct, chosen_option,
+    )
+
+
+async def insert_review_log(conn: asyncpg.Connection, *, user_id: int, question_pk: str, chosen_option: str, is_correct: bool, rating: str | None = None) -> None:
+    await conn.execute(
+        f"INSERT INTO {logs} (user_id, question_pk, chosen_option, is_correct, rating) VALUES ($1, $2::uuid, $3, $4, $5)",
+        user_id, question_pk, chosen_option, is_correct, rating,
+    )
+
+
+async def upsert_mistake(conn: asyncpg.Connection, *, user_id: int, question_pk: str, is_correct: bool) -> None:
+    if is_correct:
+        await conn.execute(
+            f"UPDATE {mistakes} SET is_active = FALSE WHERE user_id = $1 AND question_pk = $2::uuid",
+            user_id, question_pk,
+        )
+    else:
+        await conn.execute(
+            f"""INSERT INTO {mistakes} (user_id, question_pk, wrong_count, last_wrong_at, is_active)
+                VALUES ($1, $2::uuid, 1, NOW(), TRUE)
+                ON CONFLICT (user_id, question_pk) DO UPDATE SET wrong_count = {mistakes}.wrong_count + 1, last_wrong_at = NOW(), is_active = TRUE""",
+            user_id, question_pk,
+        )
+
+
+# ---- Mistakes ----
+
+async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        f"""
+        SELECT q.question_id, q.stem, q.answer AS correct_option, c.last_chosen_option,
+               m.wrong_count, m.last_wrong_at, COALESCE(c.due_at <= NOW(), FALSE) AS is_due
+        FROM {mistakes} m
+        JOIN {qt} q ON q.id = m.question_pk
+        LEFT JOIN {cards} c ON c.user_id = m.user_id AND c.question_pk = m.question_pk
+        WHERE m.user_id = $1 AND m.is_active = TRUE
+        ORDER BY m.last_wrong_at DESC
+        """,
+        user_id,
+    )
 ''')
 
     # schemas.py
     with open(os.path.join(app_dir, "schemas.py"), "w") as f:
-        f.write(f'''"""Pydantic models for {decl.name}."""
+        f.write(f'''"""Pydantic models for {app_name}."""
+from __future__ import annotations
+from datetime import datetime
 from pydantic import BaseModel
 
 
@@ -649,46 +793,220 @@ class SetItem(BaseModel):
     is_published: bool
 
 
-# TODO: customize — add question/article schemas
+class OverviewOut(BaseModel):
+    practiced_count: int
+    correct_count: int
+    accuracy: float
+    due_count: int
+    mistake_count: int
+
+
+class QuestionItem(BaseModel):
+    question_id: str
+    stem: str
+    options: list[dict]
+    meta: dict | None = None
+
+
+class ReviewNextOut(BaseModel):
+    has_item: bool = False
+    next_due_at: datetime | None = None
+    question: QuestionItem | None = None
+
+
+class ReviewSubmitIn(BaseModel):
+    question_id: str
+    chosen_option: str
+    rating: str | None = None
+
+
+class ReviewSubmitOut(BaseModel):
+    is_correct: bool
+    next_due_at: datetime | None = None
+
+
+class MistakeItem(BaseModel):
+    question_id: str
+    stem: str
+    correct_option: str
+    last_chosen_option: str | None
+    wrong_count: int
+    last_wrong_at: datetime | None
+    is_due: bool
 ''')
 
     # service.py
     with open(os.path.join(app_dir, "service.py"), "w") as f:
-        f.write(f'''"""Business logic for {decl.name}."""
+        f.write(f'''"""Business logic for {app_name}."""
+import json
+from typing import Any
+from datetime import datetime, timezone
 import asyncpg
+
+from fsrs import Card, Rating, Scheduler
+
+UTC = timezone.utc
+_scheduler = Scheduler()
+
+
+def _fsrs_rating(label: str | None) -> Rating:
+    if label == "again": return Rating.Again
+    if label == "hard": return Rating.Hard
+    if label == "good": return Rating.Good
+    if label == "easy": return Rating.Easy
+    return Rating.Good
 
 
 async def list_sets(pool: asyncpg.Pool) -> list[dict]:
     from .repository import list_set_rows
     async with pool.acquire() as conn:
-        rows = await list_set_rows(conn)
-    return [dict(row) for row in rows]
+        return [dict(r) for r in await list_set_rows(conn)]
 
 
-# TODO: customize — add practice/review/mistakes logic
+async def get_overview(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> dict:
+    from .repository import get_overview_counts
+    async with pool.acquire() as conn:
+        counts = await get_overview_counts(conn, user_id=user_id, set_id=set_id)
+    practiced = int(counts.get("practiced_count") or 0)
+    correct = int(counts.get("correct_count") or 0)
+    return {{
+        "practiced_count": practiced,
+        "correct_count": correct,
+        "accuracy": correct / practiced if practiced else 0.0,
+        "due_count": int(counts.get("due_count") or 0),
+        "mistake_count": int(counts.get("mistake_count") or 0),
+    }}
+
+
+async def get_next_review(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> dict:
+    from .repository import list_due_card_rows, get_next_due_at
+    async with pool.acquire() as conn:
+        rows = await list_due_card_rows(conn, user_id=user_id, limit=1, set_id=set_id)
+    if not rows:
+        async with pool.acquire() as conn:
+            next_due = await get_next_due_at(conn, user_id=user_id)
+        return {{"has_item": False, "next_due_at": next_due}}
+    row = dict(rows[0])
+    options = json.loads(row.get("options_json") or "[]")
+    meta = json.loads(row.get("meta_json") or "{{}}")
+    return {{
+        "has_item": True,
+        "next_due_at": row["due_at"],
+        "question": {{
+            "question_id": row["question_id"],
+            "stem": row["stem"],
+            "options": options,
+            "meta": meta,
+        }},
+    }}
+
+
+async def submit_review(pool: asyncpg.Pool, *, user_id: int, question_id: str, chosen_option: str, rating: str | None = None) -> dict:
+    from .repository import upsert_question_card, insert_review_log, upsert_mistake
+    async with pool.acquire() as conn:
+        q = await conn.fetchrow(
+            f"SELECT id, answer FROM {app_id}_questions WHERE question_id = $1", question_id,
+        )
+        if not q:
+            raise ValueError(f"Question not found: {{question_id}}")
+
+        question_pk = str(q["id"])
+        correct_answer = q["answer"]
+        is_correct = (chosen_option == correct_answer)
+
+        # FSRS scheduling
+        old_card = await conn.fetchrow(
+            f"SELECT fsrs_card_json FROM {app_id}_user_question_cards WHERE user_id = $1 AND question_pk = $2::uuid",
+            user_id, question_pk,
+        )
+        old_fsrs = json.loads(old_card["fsrs_card_json"]) if old_card else {{}}
+        card = Card.from_dict(old_fsrs) if old_fsrs else Card()
+        fsrs_rating = _fsrs_rating(rating if is_correct else "again")
+        new_card, _ = _scheduler.review_card(card, fsrs_rating)
+        next_due = new_card.due
+
+        await upsert_question_card(
+            conn, user_id=user_id, question_pk=question_pk,
+            is_correct=is_correct, chosen_option=chosen_option,
+            fsrs_json=new_card.to_dict(), next_due=next_due,
+        )
+        await insert_review_log(conn, user_id=user_id, question_pk=question_pk, chosen_option=chosen_option, is_correct=is_correct, rating=rating)
+        await upsert_mistake(conn, user_id=user_id, question_pk=question_pk, is_correct=is_correct)
+
+    return {{"is_correct": is_correct, "next_due_at": next_due}}
+
+
+async def list_mistakes(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> list[dict]:
+    from .repository import list_mistake_rows
+    async with pool.acquire() as conn:
+        return [dict(r) for r in await list_mistake_rows(conn, user_id=user_id, set_id=set_id)]
 ''')
 
     # routes.py
     with open(os.path.join(app_dir, "routes.py"), "w") as f:
-        f.write(f'''"""API endpoints for {decl.name}."""
-from typing import Any, Annotated
-from fastapi import APIRouter, Depends, Request
+        f.write(f'''"""API endpoints for {app_name}."""
+from typing import Any
+from typing import Annotated
+from fastapi import APIRouter, Depends, Query, Request
 from ..auth_routes import get_current_user
-from lib.db import _pool_from_request
 from . import schemas, service
 
-router = APIRouter(prefix="/api/{decl.id}", tags=["{decl.id}"])
+router = APIRouter(prefix="/api/{app_id}", tags=["{app_id}"])
+
+
+def _pool(request: Request) -> Any:
+    pool = getattr(getattr(request.app, "state", None), "auth_pool", None)
+    if pool is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    return pool
 
 
 @router.get("/sets", response_model=list[schemas.SetItem])
-async def route_list_sets(
+async def route_list_sets(request: Request, user: Annotated[Any, Depends(get_current_user)]):
+    return [schemas.SetItem(**item) for item in await service.list_sets(_pool(request))]
+
+
+@router.get("/overview", response_model=schemas.OverviewOut)
+async def route_get_overview(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
-) -> list[schemas.SetItem]:
-    return [schemas.SetItem(**item) for item in await service.list_sets(_pool_from_request(request))]
+    set_id: str | None = Query(default=None),
+):
+    return schemas.OverviewOut(**await service.get_overview(_pool(request), user_id=int(user.id), set_id=set_id))
+
+
+@router.get("/review/next", response_model=schemas.ReviewNextOut)
+async def route_get_next_review(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    set_id: str | None = Query(default=None),
+):
+    return schemas.ReviewNextOut(**await service.get_next_review(_pool(request), user_id=int(user.id), set_id=set_id))
+
+
+@router.post("/review/submit", response_model=schemas.ReviewSubmitOut)
+async def route_submit_review(
+    payload: schemas.ReviewSubmitIn,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+):
+    return schemas.ReviewSubmitOut(**await service.submit_review(
+        _pool(request), user_id=int(user.id),
+        question_id=payload.question_id, chosen_option=payload.chosen_option, rating=payload.rating,
+    ))
+
+
+@router.get("/mistakes", response_model=list[schemas.MistakeItem])
+async def route_list_mistakes(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    set_id: str | None = Query(default=None),
+):
+    return [schemas.MistakeItem(**item) for item in await service.list_mistakes(_pool(request), user_id=int(user.id), set_id=set_id)]
 ''')
 
-    print(f"[sub_app_registry] Generated skeleton for '{decl.id}' at {{app_dir}}")
+    print(f"[sub_app_registry] Generated full domain skeleton for '{app_id}' at {{app_dir}}")
 
 
 class VocabStats(BaseModel):
