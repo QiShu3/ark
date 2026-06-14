@@ -66,3 +66,7 @@ backend/logs/
 
 # Xcode local build output
 ios/ArkMobile/.DerivedData/
+
+# Dynamic sub-app registry and generated routes
+backend/lib/sub_app_registry.json
+backend/routes/exam*/
