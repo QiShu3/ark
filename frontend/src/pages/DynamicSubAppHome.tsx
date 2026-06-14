@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import SubAppHomeTemplate from '../components/SubAppHomeTemplate';
 import { loadDynamicRegistry, type SubAppDeclaration } from '../lib/subAppRegistry';
 
 async function getBuiltInPage(appId: string): Promise<React.ComponentType | null> {
@@ -16,15 +17,11 @@ export default function DynamicSubAppHome() {
     let cancelled = false;
     (async () => {
       if (!appId) return;
-      // try built-in first
       const BuiltIn = await getBuiltInPage(appId);
       if (BuiltIn && !cancelled) { setPage(<BuiltIn />); return; }
-      // try dynamic registry
       const apps = await loadDynamicRegistry();
       const app = apps.find((a) => a.id === appId);
-      if (!cancelled) {
-        setPage(app ? <PlaceholderPage app={app} /> : null);
-      }
+      if (!cancelled) setPage(app ? <DynamicAppHome app={app} /> : null);
     })();
     return () => { cancelled = true; };
   }, [appId]);
@@ -32,27 +29,53 @@ export default function DynamicSubAppHome() {
   return <>{page}</>;
 }
 
-function PlaceholderPage({ app }: { app: SubAppDeclaration }) {
+function DynamicAppHome({ app }: { app: SubAppDeclaration }) {
+  const fw = app.focusWorks[0];
+  const templateLabel = fw?.template === 'flashcard' ? '闪卡' : '选择题';
+
   return (
-    <main className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pt-32">
-      <div className="mx-auto max-w-4xl pb-10 text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--ark-text)]">{app.name}</h1>
-        <p className="mt-4 text-[var(--ark-text-muted)]">{app.description}</p>
-        <div className="mt-8 rounded-xl border border-ark-border bg-ark-surface-subtle p-8">
-          <p className="text-[var(--ark-text-muted)]">
-            该子应用骨架已生成。完善以下内容即可上线：
-          </p>
-          <ul className="mt-4 space-y-2 text-left text-sm text-[var(--ark-text-muted)] max-w-md mx-auto">
-            <li>• 实现专注工作组件（{app.focusWorks.map((fw) => fw.label).join('、')}）</li>
-            <li>• 注册到 <code className="rounded bg-ark-surface px-1">focusWorkRegistry</code></li>
-            <li>• 创建首页替换本占位页</li>
-          </ul>
-          <div className="mt-6 text-xs text-[var(--ark-text-faint)]">
-            <p>专注工作类型：{app.focusWorks.map((fw) => fw.type).join(', ')}</p>
-            <p>题库类型：{app.focusWorks.map((fw) => fw.contentBankType).join(', ')}</p>
-          </div>
+    <SubAppHomeTemplate
+      eyebrow={app.id.toUpperCase()}
+      title={app.name}
+      statusLabel="骨架已就绪"
+      metaItems={[`专注模板: ${templateLabel}`, `题库: ${fw?.contentBankType === 'word_deck' ? '词书' : '文章题库'}`]}
+      configureAction={{ label: '配置', disabled: true }}
+      heroLabel={fw?.label ?? '专注工作'}
+      heroValue="—"
+      heroDetail={app.description}
+      heroProgressPercent={0}
+      heroProgressLabel="等待接入"
+      primaryAction={{ label: '后端接入后可用', disabled: true }}
+      metrics={[
+        { label: '专注工作', value: fw?.label ?? '—', detail: fw?.type ?? '—' },
+        { label: '模板', value: templateLabel, detail: fw?.template ?? '—' },
+        { label: '题库类型', value: fw?.contentBankType === 'word_deck' ? '词书' : '题库', detail: fw?.contentBankType ?? '—' },
+      ]}
+      assetEyebrow="待完善"
+      assetTitle="接入清单"
+      assetDescription="该子应用骨架已生成。完成以下步骤即可上线使用。"
+      arrangements={null}
+      feedback={null}
+      modals={null}
+      assetContent={(
+        <div className="space-y-3 rounded-lg border border-ark-border bg-ark-surface-subtle p-6">
+          <CheckItem done label="注册声明 + 后端 API + DB 建表 + 题库导入" />
+          <CheckItem label="生成用户进度表与 FSRS 复习端点" />
+          <CheckItem label="实现专注工作组件并注册到 focusWorkRegistry" />
+          <CheckItem label="创建首页组件替换本占位页（参考 Vocab/ERC Home）" />
         </div>
-      </div>
-    </main>
+      )}
+    />
+  );
+}
+
+function CheckItem({ label, done }: { label: string; done?: boolean }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-ark-surface-strong text-ark-text-faint'}`}>
+        {done ? '✓' : '·'}
+      </span>
+      <span className={`text-sm ${done ? 'text-ark-text' : 'text-ark-text-faint'}`}>{label}</span>
+    </div>
   );
 }
