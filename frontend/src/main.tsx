@@ -22,7 +22,14 @@ import VocabWordDetail from './pages/Vocab/WordDetail';
 import NotFound from './pages/NotFound';
 import RequireAdmin from './routes/RequireAdmin';
 import RequireAuth from './routes/RequireAuth';
+import { subAppList } from './lib/subAppRegistry';
 import './index.css';
+
+// 子应用首页映射（新增子应用时在此注册）
+const SUB_APP_HOME_PAGES: Record<string, React.ComponentType> = {
+  vocab: VocabHome,
+  erc: ERCHome,
+};
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -36,13 +43,17 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/admin/ui" element={<AdminUiLibraryPage />} />
           </Route>
           <Route path="/apps" element={<AppCenter />} />
-          <Route path="/erc" element={<ERCHome />} />
+          {subAppList.map((app) => {
+            const HomePage = SUB_APP_HOME_PAGES[app.id];
+            return HomePage ? <Route key={app.id} path={`/${app.id}`} element={<HomePage />} /> : null;
+          })}
+          {/* ERC sub-pages */}
           <Route path="/erc/library" element={<ERCLibrary />} />
           <Route path="/erc/articles/:articleId/practice" element={<ERCPractice />} />
           <Route path="/erc/articles/:articleId/result" element={<ERCPracticeResult />} />
           <Route path="/erc/review" element={<ERCReview />} />
           <Route path="/erc/mistakes" element={<ERCMistakes />} />
-          <Route path="/vocab" element={<VocabHome />} />
+          {/* Vocab sub-pages */}
           <Route path="/vocab/today" element={<VocabToday />} />
           <Route path="/vocab/study" element={<VocabStudy />} />
           <Route path="/vocab/review" element={<VocabReview />} />

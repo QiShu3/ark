@@ -56,11 +56,5 @@ export type FocusWorkSnapshot = WorkflowSnapshot & {
   active_run?: FocusWorkRunSummary | null;
 };
 
-export const FOCUS_WORK_LABELS: Record<FocusWorkType, string> = {
-  vocab_today: '背单词',
-  erc_review: 'ERC 复习',
-  erc_practice: 'ERC 真题练习',
-  task_focus: '任务专注',
-};
 
 export const START_FOCUS_WORK_EVENT = 'ark:start-focus-work';

@@ -1,26 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, ScrollText } from 'lucide-react';
+import { subAppList, getSubAppIcon } from '../lib/subAppRegistry';
 
-/** 应用中心页面，提供背单词、阅读训练等子应用入口 */
+/** 应用中心页面，从 subAppRegistry 渲染子应用入口 */
 export default function AppCenter() {
   const navigate = useNavigate();
-
-  const apps = [
-    {
-      id: 'vocab',
-      name: '背单词',
-      description: '切换词书并开始今日学习',
-      icon: BookOpen,
-      route: '/vocab',
-    },
-    {
-      id: 'erc',
-      name: '阅读训练',
-      description: '整篇练习并进入 FSRS 复习池',
-      icon: ScrollText,
-      route: '/erc',
-    },
-  ];
 
   return (
     <main aria-label="应用中心" className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pt-32">
@@ -30,8 +13,8 @@ export default function AppCenter() {
           <p className="mt-2 text-sm text-[var(--ark-text-faint)]">选择一个学习工具开始</p>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {apps.map((app) => {
-            const Icon = app.icon;
+          {subAppList.map((app) => {
+            const Icon = getSubAppIcon(app.icon);
             return (
               <button
                 key={app.id}
