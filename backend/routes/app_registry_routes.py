@@ -14,6 +14,7 @@ def _decl_to_dict(decl: SubAppDeclaration) -> dict:
         "icon": decl.icon,
         "admin_only": decl.admin_only,
         "route": decl.route,
+        "sections": decl.sections,
         "focus_works": [
             {
                 "type": fw.type,

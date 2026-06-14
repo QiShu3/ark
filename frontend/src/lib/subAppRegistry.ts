@@ -6,6 +6,8 @@ export type ContentBankType = 'word_deck' | 'article_set';
 
 export type FocusTemplate = 'flashcard' | 'choice_question';
 
+export type TemplateSection = 'hero' | 'asset' | 'arrangements' | 'feedback' | 'modals';
+
 export interface ContentConfigField {
   key: string;
   label: string;
@@ -32,6 +34,7 @@ export interface SubAppDeclaration {
   route: string;
   adminOnly?: boolean;
   focusWorks: FocusWorkDeclaration[];
+  sections: TemplateSection[];
 }
 
 // ---- 专注工作类型（从 registry 推导） ----
@@ -57,6 +60,7 @@ const vocabDeclaration: SubAppDeclaration = {
   description: '切换词书并开始今日学习',
   icon: 'book-open',
   route: '/vocab',
+  sections: ['hero', 'asset', 'arrangements', 'feedback', 'modals'],
   focusWorks: [
     {
       type: 'vocab_today',
@@ -77,6 +81,7 @@ const ercDeclaration: SubAppDeclaration = {
   description: '整篇练习并进入 FSRS 复习池',
   icon: 'scroll-text',
   route: '/erc',
+  sections: ['hero', 'asset', 'arrangements', 'feedback', 'modals'],
   focusWorks: [
     {
       type: 'erc_practice',
@@ -135,6 +140,7 @@ function mapFromApi(raw: Record<string, unknown>): SubAppDeclaration {
     icon: raw.icon as string,
     route: raw.route as string,
     adminOnly: raw.admin_only as boolean | undefined,
+    sections: (raw.sections as TemplateSection[] | undefined) ?? ['hero', 'asset', 'arrangements'],
     focusWorks: ((raw.focus_works || []) as Record<string, unknown>[]).map((fw) => ({
       type: fw.type as string,
       label: fw.label as string,

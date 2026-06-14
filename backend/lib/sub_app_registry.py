@@ -38,6 +38,7 @@ class SubAppDeclaration:
     route: str            # "/vocab" / "/erc"
     admin_only: bool = False
     focus_works: list[FocusWorkDeclaration] = field(default_factory=list)
+    sections: list[str] = field(default_factory=lambda: ["hero", "asset", "arrangements"])
 
 
 # ---- Built-in declarations ----
@@ -48,6 +49,7 @@ VOCAB = SubAppDeclaration(
     description="切换词书并开始今日学习",
     icon="book-open",
     route="/vocab",
+    sections=["hero", "asset", "arrangements", "feedback", "modals"],
     focus_works=[
         FocusWorkDeclaration(
             type="vocab_today",
@@ -68,6 +70,7 @@ ERC = SubAppDeclaration(
     description="整篇练习并进入 FSRS 复习池",
     icon="scroll-text",
     route="/erc",
+    sections=["hero", "asset", "arrangements", "feedback", "modals"],
     focus_works=[
         FocusWorkDeclaration(
             type="erc_practice",
@@ -138,6 +141,7 @@ def _load_persisted() -> dict[str, SubAppDeclaration]:
                 icon=item["icon"], route=item["route"],
                 admin_only=item.get("admin_only", False),
                 focus_works=fws,
+                sections=item.get("sections", ["hero", "asset", "arrangements"]),
             )
         return result
     except Exception:
@@ -154,6 +158,7 @@ def _persist() -> None:
         items.append({
             "id": decl.id, "name": decl.name, "description": decl.description,
             "icon": decl.icon, "route": decl.route, "admin_only": decl.admin_only,
+            "sections": decl.sections,
             "focus_works": [
                 {
                     "type": fw.type, "label": fw.label,

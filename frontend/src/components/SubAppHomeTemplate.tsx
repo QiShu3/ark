@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Settings } from 'lucide-react';
+import type { TemplateSection } from '../lib/subAppRegistry';
 
 export type SubAppHomeMetric = {
   label: string;
@@ -14,6 +15,7 @@ export type SubAppHomeAction = {
 };
 
 type SubAppHomeTemplateProps = {
+  sections?: TemplateSection[];
   eyebrow: string;
   title: string;
   statusLabel: string;
@@ -41,6 +43,7 @@ function clampProgress(value: number) {
 }
 
 export default function SubAppHomeTemplate({
+  sections = ['hero', 'asset', 'arrangements', 'feedback', 'modals'],
   eyebrow,
   title,
   statusLabel,
@@ -66,6 +69,7 @@ export default function SubAppHomeTemplate({
   return (
     <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: "inset(10px round 28px)" }}>
       <div className="mx-auto max-w-6xl space-y-6">
+        {sections.includes('hero') && (
         <section className="ark-panel-card ark-subapp-hero-card overflow-hidden rounded-lg">
           <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-stretch">
             <div className="min-w-0">
@@ -92,7 +96,7 @@ export default function SubAppHomeTemplate({
                   <span key={index} className="text-[var(--ark-text-muted)]">{item}</span>
                 ))}
               </div>
-              {feedback ? <div className="mt-5 space-y-2">{feedback}</div> : null}
+              {sections.includes('feedback') && feedback ? <div className="mt-5 space-y-2">{feedback}</div> : null}
             </div>
 
             <div className="ark-subapp-hero-side grid min-h-[210px] gap-5 border-t pt-5 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
@@ -140,7 +144,9 @@ export default function SubAppHomeTemplate({
             </div>
           </div>
         </section>
+        )}
 
+        {sections.includes('asset') && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3 px-1">
             <div className="ark-subapp-section-heading pl-4">
@@ -151,10 +157,11 @@ export default function SubAppHomeTemplate({
           </div>
           {assetContent}
         </section>
+        )}
 
-        {arrangements}
+        {sections.includes('arrangements') && arrangements}
       </div>
-      {modals}
+      {sections.includes('modals') && modals}
     </div>
   );
 }
