@@ -120,3 +120,28 @@ export const subAppList: SubAppDeclaration[] = Object.values(subAppRegistry);
 export function getRegisteredFocusWorkTypes(): RegisteredFocusWorkType[] {
   return subAppList.flatMap((app) => app.focusWorks.map((fw) => fw.type as RegisteredFocusWorkType));
 }
+
+// ---- Dynamic loading from backend ----
+
+let _dynamicApps: SubAppDeclaration[] | null = null;
+
+/** Fetch registered sub-apps from the backend API, merge with built-in defaults. */
+export async function loadDynamicRegistry(): Promise<SubAppDeclaration[]> {
+  if (_dynamicApps) return _dynamicApps;
+  try {
+    const resp = await fetch('/api/app-registry');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data: SubAppDeclaration[] = await resp.json();
+    // merge: backend entries that don't shadow built-in ids
+    const builtInIds = new Set(Object.keys(subAppRegistry));
+    const merged = [
+      ...Object.values(subAppRegistry),
+      ...data.filter((d) => !builtInIds.has(d.id)),
+    ];
+    _dynamicApps = merged;
+    return merged;
+  } catch {
+    _dynamicApps = subAppList;
+    return subAppList;
+  }
+}

@@ -1,9 +1,15 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { subAppList, getSubAppIcon } from '../lib/subAppRegistry';
+import { subAppList, getSubAppIcon, loadDynamicRegistry, type SubAppDeclaration } from '../lib/subAppRegistry';
 
-/** 应用中心页面，从 subAppRegistry 渲染子应用入口 */
+/** 应用中心页面，从 subAppRegistry + 后端 API 渲染子应用入口 */
 export default function AppCenter() {
   const navigate = useNavigate();
+  const [apps, setApps] = useState<SubAppDeclaration[]>(subAppList);
+
+  useEffect(() => {
+    loadDynamicRegistry().then(setApps);
+  }, []);
 
   return (
     <main aria-label="应用中心" className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pt-32">
@@ -13,7 +19,7 @@ export default function AppCenter() {
           <p className="mt-2 text-sm text-[var(--ark-text-faint)]">选择一个学习工具开始</p>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {subAppList.map((app) => {
+          {apps.map((app) => {
             const Icon = getSubAppIcon(app.icon);
             return (
               <button

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routes.admin_routes import router as admin_router
+from routes.app_registry_routes import router as app_registry_router
 from routes.auth_routes import close_auth, init_auth
 from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
@@ -62,6 +63,7 @@ app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(vocab_router)
 app.include_router(erc_router)
+app.include_router(app_registry_router)
 app.include_router(admin_router)
 
 
