@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-14 · b8b840eb · 子应用页面模板化
+
+- 用户提出的需求：
+  - "我想继续推进 子应用的模板化"
+
+- 本次完成的工作：
+  - **前端**：创建 `SubAppPageShell` 组件，封装固定定位外层容器 + clip-path + 内层 max-w 包裹器，消除 11 个子应用页面中重复的 ~60 行结构。
+  - **前端**：创建 `SubAppPageHeader` 组件，封装眉标 + h1 标题 + 可选描述 + 返回链接模式，消除 7 个页面中重复的头部结构。
+  - **前端**：迁移所有 ERC 页面（Library、Mistakes、Practice、PracticeResult、Review）和 Vocab 页面（Study、Review、Mistakes、Today、WordDetail）。
+  - **文档**：在 `docs/frontend-ui-unification.md` 中注册两个新组件。
+
+- 验证情况：
+  - `cd frontend && pnpm check` — TypeScript 无错误 ✅
+  - `cd frontend && npx vitest run` — 53 个测试文件、254 个测试用例全部通过 ✅
+
 ### 2026-06-14 · 2dfd909 / 503c21bd / c2fd9efa · 专注工作重构：消除前端回退 + 清理旧列 + 统一类型 + 抽取面板
 
 - 本次完成的工作：
