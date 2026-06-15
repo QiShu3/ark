@@ -11,6 +11,12 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
+import re
+import shutil
+import tempfile
+import zipfile
+from pathlib import Path as _Path
+
 import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -1995,6 +2001,87 @@ async def content_bank_detail(
     )
 
 
+
+
+_IMAGE_MD_PATTERN = re.compile(r'!\[.*?\]\(images/([^)]+)\)')
+
+_UPLOADS_DIR = _Path(__file__).resolve().parent.parent / "uploads"
+
+
+def _process_content_bank_file(file_bytes: bytes, filename: str, bank_id: str) -> list[dict]:
+    """Parse uploaded file (JSON or ZIP), handle image extraction for ZIP."""
+    if filename.lower().endswith(".zip"):
+        return _extract_zip(file_bytes, bank_id)
+    try:
+        raw = json.loads(file_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="题库文件不是有效的 JSON")
+    return raw
+
+
+def _extract_zip(zip_bytes: bytes, bank_id: str) -> list[dict]:
+    """Extract a ZIP file: find JSON, copy images, rewrite paths."""
+    json_data = None
+    image_files: dict[str, bytes] = {}
+
+    with zipfile.ZipFile(zipfile.BytesIO(zip_bytes)) as zf:
+        for name in zf.namelist():
+            if name.endswith("/") or name.startswith("__MACOSX"):
+                continue
+            basename = name.rsplit("/", 1)[-1] if "/" in name else name
+            if basename.startswith("."):
+                continue
+            content = zf.read(name)
+            if name.lower().endswith(".json"):
+                if json_data is None:
+                    json_data = content
+            elif basename.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")):
+                image_files[basename] = content
+
+    if json_data is None:
+        raise HTTPException(status_code=400, detail="ZIP 文件中没有找到 JSON 文件")
+
+    # Copy images
+    if image_files:
+        img_dir = _UPLOADS_DIR / "content-images" / bank_id
+        img_dir.mkdir(parents=True, exist_ok=True)
+        for img_name, img_bytes in image_files.items():
+            (img_dir / img_name).write_bytes(img_bytes)
+
+    try:
+        raw = json.loads(json_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="ZIP 中的 JSON 文件格式错误")
+
+    if not isinstance(raw, list) or len(raw) == 0:
+        raise HTTPException(status_code=400, detail="题库文件应为一个非空 JSON 数组")
+
+    # Rewrite image paths
+    if image_files:
+        _rewrite_image_urls(raw, bank_id)
+
+    return raw
+
+
+def _rewrite_image_urls(entries: list[dict], bank_id: str) -> None:
+    """Rewrite inline markdown image paths from images/xxx.jpg to /uploads/content-images/{bank_id}/xxx.jpg."""
+    prefix = f"/uploads/content-images/{bank_id}/"
+
+    def _replace(text: str) -> str:
+        if not text or not isinstance(text, str):
+            return text
+        return _IMAGE_MD_PATTERN.sub(rf"![]({prefix}\1)", text)
+
+    for entry in entries:
+        if "passage" in entry:
+            entry["passage"] = _replace(entry.get("passage", ""))
+        for q in entry.get("questions", []):
+            q["question_text"] = _replace(q.get("question_text", ""))
+            opts = q.get("options", {})
+            if isinstance(opts, dict):
+                for k in list(opts):
+                    opts[k] = _replace(opts.get(k, ""))
+
 @router.post("/content-banks", response_model=ContentBankImportOut)
 async def create_content_bank(
     request: Request,
@@ -2002,30 +2089,29 @@ async def create_content_bank(
     file: UploadFile = File(...),
     name: str = Form(...),
     item_type: str = Form(...),
-    fw_type: str = Form(...),
+    fw_type: str = Form(""),
     description: str = Form(""),
 ) -> ContentBankImportOut:
     if item_type not in ("word", "choice"):
         raise HTTPException(status_code=400, detail="item_type 必须是 word 或 choice")
 
     file_bytes = await file.read()
-    try:
-        raw = json.loads(file_bytes)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="题库文件不是有效的 JSON")
-    if not isinstance(raw, list) or len(raw) == 0:
-        raise HTTPException(status_code=400, detail="题库文件应为一个非空 JSON 数组")
+    filename = getattr(file, "filename", "unknown.json")
 
     pool = _pool(request)
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
+                # Create bank first to get its ID
                 bank_row = await conn.fetchrow(
                     """INSERT INTO content_banks (fw_type, name, description, item_type)
                        VALUES ($1, $2, $3, $4) RETURNING id::text""",
                     fw_type, name, description, item_type,
                 )
                 bank_id = bank_row["id"]
+
+                # Parse file (handles ZIP extraction with image copying)
+                raw = _process_content_bank_file(file_bytes, filename, bank_id)
 
                 item_count = 0
                 question_count = 0
@@ -2099,12 +2185,7 @@ async def append_content_bank_items(
     file: UploadFile = File(...),
 ) -> ContentBankAppendOut:
     file_bytes = await file.read()
-    try:
-        raw = json.loads(file_bytes)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="JSON 格式错误")
-    if not isinstance(raw, list) or len(raw) == 0:
-        raise HTTPException(status_code=400, detail="应为非空 JSON 数组")
+    filename = getattr(file, "filename", "unknown.json")
 
     pool = _pool(request)
     try:
@@ -2115,6 +2196,8 @@ async def append_content_bank_items(
                 )
                 if bank is None:
                     raise HTTPException(status_code=404, detail="题库不存在")
+
+                raw = _process_content_bank_file(file_bytes, filename, bank_id)
 
                 item_type = bank["item_type"]
                 max_sort = await conn.fetchval(
