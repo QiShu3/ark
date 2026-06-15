@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ark Admin · 题库详情</title>
+  <link rel="stylesheet" href="css/common.css" />
+  <style>
+    .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .toolbar .spacer { flex: 1; }
+    .search-input { padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; min-width: 200px; }
+    .search-input:focus { outline: none; border-color: var(--accent); }
+    .breadcrumb { margin-bottom: 24px; font-size: 14px; color: var(--muted); }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .pos-tag { display: inline-block; background: #e8f0fe; color: #1967d2; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-family: var(--font-mono); margin-right: 4px; }
+    .translation-tag { padding: 2px 4px; }
+    .sentence-container { display: flex; flex-direction: column; gap: 2px; }
+    .sentence-en { font-style: italic; color: var(--fg); }
+    .sentence-zh { font-size: 12px; color: var(--muted); }
+    .passage-preview { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+    .expanded-content { padding: 12px 16px; background: var(--surface-warm); border-radius: var(--radius-sm); margin: 0 0 8px; }
+    .modal-overlay { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); justify-content: center; align-items: center; }
+    .modal-overlay.active { display: flex; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 24px; width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto; }
+    .modal-box h3 { margin: 0 0 20px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div style="margin-bottom: 40px;">
+    <h1 style="font-size: 24px; color: var(--accent); margin: 0;">Ark Admin</h1>
+  </div>
+  <div class="nav-group">
+    <span class="nav-label">主看板</span>
+    <a href="index.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+      用户概览
+    </a>
+  </div>
+  <div class="nav-group">
+    <span class="nav-label">子应用</span>
+    <a href="apps.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      子应用
+    </a>
+    <a href="content-banks.html" class="nav-item active">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+      题库管理
+    </a>
+  </div>
+  <div class="nav-group">
+    <span class="nav-label">功能</span>
+    <a href="users.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      用户管理
+    </a>
+    <a href="templates.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+      事件模板
+    </a>
+  </div>
+  <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-soft);">
+    <a href="/" class="nav-item" style="font-size: 13px;">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      返回主应用
+    </a>
+  </div>
+</aside>
+
+<main class="main-content">
+  <div class="breadcrumb">
+    <a href="content-banks.html">题库管理</a> / <span id="bank-breadcrumb">—</span>
+  </div>
+
+  <header style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start;">
+    <div>
+      <h2 style="font-size: 28px; margin: 0;" id="bank-name">—</h2>
+      <p style="color: var(--muted); margin: 4px 0 0;">
+        <span id="bank-type-badge" style="font-family:var(--font-mono);font-size:12px;"></span>
+        <span style="margin-left:12px;font-family:var(--font-mono);font-size:12px;" id="bank-fw-type"></span>
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" id="btn-append-import">追加导入</button>
+      <button class="btn btn-secondary" id="btn-delete" style="color:var(--danger);">删除题库</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input class="search-input" type="text" id="item-search" placeholder="搜索内容..." />
+    <span class="spacer"></span>
+    <span style="font-size:13px;color:var(--muted);" id="item-count-info">—</span>
+  </div>
+
+  <div class="admin-card">
+    <table class="admin-table" id="content-table">
+      <thead id="content-thead"></thead>
+      <tbody id="content-tbody">
+        <tr><td style="text-align:center;color:var(--muted);padding:40px;">加载中...</td></tr>
+      </tbody>
+    </table>
+    <div id="pagination-controls" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;"></div>
+  </div>
+
+  <!-- Append import modal -->
+  <div class="modal-overlay" id="append-modal">
+    <div class="modal-box">
+      <h3>追加导入到 <span id="append-bank-name">—</span></h3>
+      <form id="append-form" onsubmit="handleAppendSubmit(event)">
+        <div class="form-group">
+          <label for="append-file">JSON 文件</label>
+          <input id="append-file" type="file" accept=".json" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeAppendModal()">取消</button>
+          <button type="submit" class="btn btn-primary" id="append-submit-btn">导入</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete confirm -->
+  <div class="modal-overlay" id="delete-confirm">
+    <div class="modal-box" style="max-width:400px;">
+      <h3>确认删除</h3>
+      <p style="color:var(--muted);">将删除 <strong id="delete-bank-name">—</strong> 及其所有内容和题目，不可恢复。</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('delete-confirm').classList.remove('active')">取消</button>
+        <button class="btn btn-primary" id="delete-confirm-ok" style="background:var(--danger);">确认删除</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  if (!initPage()) return;
+  loadDetail();
+});
+
+let _bankId = null;
+let _bank = null;
+let _currentPage = 1;
+let _totalPages = 1;
+let _searchQuery = '';
+let _searchTimeout = null;
+const _pageSize = 30;
+
+async function loadDetail() {
+  const params = new URLSearchParams(window.location.search);
+  _bankId = params.get('id');
+  if (!_bankId) { showToast('缺少题库 ID', 'error'); return; }
+  await fetchAndRender();
+  bindActions();
+  bindSearch();
+}
+
+async function fetchAndRender() {
+  try {
+    const searchParam = _searchQuery ? '&search=' + encodeURIComponent(_searchQuery) : '';
+    _bank = await api.get('/content-banks/' + _bankId + '?page=' + _currentPage + '&limit=' + _pageSize + searchParam);
+    _currentPage = _bank.page;
+    _totalPages = _bank.total_pages;
+
+    document.title = 'Ark Admin · ' + _bank.name;
+    document.getElementById('bank-breadcrumb').textContent = _bank.name;
+    document.getElementById('bank-name').textContent = _bank.name;
+    document.getElementById('bank-fw-type').textContent = 'fw_type: ' + _bank.fw_type;
+    document.getElementById('item-count-info').textContent =
+      '第 ' + _currentPage + ' / ' + _totalPages + ' 页（共 ' + _bank.total_items + ' 条）';
+
+    const typeLabel = _bank.item_type === 'word' ? '闪卡' : '选择题';
+    document.getElementById('bank-type-badge').textContent = '类型: ' + typeLabel;
+    document.getElementById('append-bank-name').textContent = _bank.name;
+    document.getElementById('delete-bank-name').textContent = _bank.name;
+
+    if (_bank.item_type === 'word') {
+      renderWordTable(_bank.items);
+    } else {
+      renderChoiceTable(_bank.items);
+    }
+    renderPagination();
+  } catch (e) {
+    showToast('加载题库详情失败: ' + e.message, 'error');
+  }
+}
+
+function renderWordTable(items) {
+  document.getElementById('content-thead').innerHTML =
+    '<tr><th>序号</th><th>单词</th><th>音标</th><th>释义</th><th>例句</th><th style="width:60px;">操作</th></tr>';
+  const tbody = document.getElementById('content-tbody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px;">暂无内容</td></tr>';
+    return;
+  }
+  let html = '';
+  items.forEach((w, i) => {
+    const pron = w.pronunciation || '—';
+    const pos = w.pos ? '<span class="pos-tag">' + w.pos + '</span>' : '';
+    const trans = pos + '<span class="translation-tag">' + (w.translation || '—') + '</span>';
+    const example = w.example
+      ? '<div class="sentence-container"><div class="sentence-en">' + w.example + '</div><div class="sentence-zh">' + (w.example_translation || '') + '</div></div>'
+      : '—';
+    html += '<tr>' +
+      '<td style="color:var(--muted);font-family:var(--font-mono);">' + ((_currentPage - 1) * _pageSize + (i + 1)) + '</td>' +
+      '<td style="font-weight:500;">' + w.word + '</td>' +
+      '<td style="color:var(--muted);">' + pron + '</td>' +
+      '<td>' + trans + '</td>' +
+      '<td>' + example + '</td>' +
+      '<td><button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" data-item-id="' + w.id + '" data-action="delete-item">删除</button></td>' +
+      '</tr>';
+  });
+  tbody.innerHTML = html;
+  bindItemActions();
+}
+
+function renderChoiceTable(items) {
+  document.getElementById('content-thead').innerHTML =
+    '<tr><th>序号</th><th>标题</th><th>内容预览</th><th>题目数</th><th style="width:120px;">操作</th></tr>';
+  const tbody = document.getElementById('content-tbody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:40px;">暂无内容</td></tr>';
+    return;
+  }
+  let html = '';
+  items.forEach((a, i) => {
+    const title = a.title || '(无标题)';
+    const preview = a.passage ? a.passage.substring(0, 80) + (a.passage.length > 80 ? '...' : '') : '—';
+    const qCount = (a.questions || []).length;
+    const tags = (a.tags || []).map(t => '<span class="pos-tag">' + t + '</span>').join(' ');
+    html += '<tr>' +
+      '<td style="color:var(--muted);font-family:var(--font-mono);">' + ((_currentPage - 1) * _pageSize + (i + 1)) + '</td>' +
+      '<td style="font-weight:500;">' + title + '</td>' +
+      '<td><div class="passage-preview">' + preview + '</div>' + (tags ? '<div style="margin-top:4px;">' + tags + '</div>' : '') + '</td>' +
+      '<td style="font-family:var(--font-mono);">' + qCount + '</td>' +
+      '<td style="display:flex;gap:4px;">' +
+        '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" data-item-id="' + a.id + '" data-action="toggle-expand">展开</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" data-item-id="' + a.id + '" data-action="delete-item">删除</button>' +
+      '</td>' +
+      '</tr>';
+  });
+  tbody.innerHTML = html;
+  bindItemActions();
+}
+
+function bindItemActions() {
+  document.querySelectorAll('[data-action="delete-item"]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const itemId = btn.dataset.itemId;
+      const ok = await showConfirm('删除内容', '确认删除此条内容？');
+      if (!ok) return;
+      try {
+        await api.delete('/content-banks/' + _bankId + '/items/' + itemId);
+        showToast('已删除', 'success');
+        fetchAndRender();
+      } catch (e) {
+        showToast('删除失败: ' + e.message, 'error');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-action="toggle-expand"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = btn.closest('tr');
+      const existing = row.nextElementSibling;
+      if (existing && existing.classList.contains('expanded-row')) {
+        existing.remove();
+        btn.textContent = '展开';
+        return;
+      }
+
+      const itemId = btn.dataset.itemId;
+      const item = _bank.items.find(it => it.id === itemId);
+      if (!item) return;
+
+      const detailRow = document.createElement('tr');
+      detailRow.className = 'expanded-row';
+      let qHtml = '';
+      (item.questions || []).forEach((q, qi) => {
+        const optsStr = typeof q.options === 'string' ? q.options : JSON.stringify(q.options);
+        qHtml += '<div style="margin-bottom:8px;padding:8px;background:var(--surface);border-radius:var(--radius-sm);">' +
+          '<div style="font-weight:500;margin-bottom:4px;">Q' + (qi + 1) + ': ' + q.question_text + '</div>' +
+          '<div style="font-size:13px;color:var(--muted);">选项: ' + optsStr + '</div>' +
+          '<div style="font-size:13px;color:var(--success);">答案: ' + q.correct_answer + '</div>' +
+          '</div>';
+      });
+
+      detailRow.innerHTML = '<td colspan="5">' +
+        '<div class="expanded-content">' +
+        '<div style="margin-bottom:8px;font-style:italic;max-height:120px;overflow-y:auto;white-space:pre-wrap;">' + (item.passage || '(无内容)') + '</div>' +
+        (qHtml || '<div style="color:var(--muted);">无题目</div>') +
+        '</div></td>';
+      row.after(detailRow);
+      btn.textContent = '收起';
+    });
+  });
+}
+
+function renderPagination() {
+  const container = document.getElementById('pagination-controls');
+  if (!container) return;
+  if (_totalPages <= 1) { container.innerHTML = ''; return; }
+
+  let html = '';
+  html += '<button class="btn btn-secondary" style="padding:6px 12px;font-size:13px;"' + (_currentPage === 1 ? ' disabled' : '') + ' data-page="' + (_currentPage - 1) + '">上一页</button>';
+
+  const range = 2;
+  let start = Math.max(1, _currentPage - range);
+  let end = Math.min(_totalPages, _currentPage + range);
+  if (start > 1) {
+    html += '<button class="btn btn-secondary" style="padding:6px 12px;font-size:13px;" data-page="1">1</button>';
+    if (start > 2) html += '<span style="padding:0 4px;color:var(--muted);">...</span>';
+  }
+  for (let p = start; p <= end; p++) {
+    html += '<button class="btn ' + (p === _currentPage ? 'btn-primary' : 'btn-secondary') + '" style="padding:6px 12px;font-size:13px;" data-page="' + p + '">' + p + '</button>';
+  }
+  if (end < _totalPages) {
+    if (end < _totalPages - 1) html += '<span style="padding:0 4px;color:var(--muted);">...</span>';
+    html += '<button class="btn btn-secondary" style="padding:6px 12px;font-size:13px;" data-page="' + _totalPages + '">' + _totalPages + '</button>';
+  }
+  html += '<button class="btn btn-secondary" style="padding:6px 12px;font-size:13px;"' + (_currentPage === _totalPages ? ' disabled' : '') + ' data-page="' + (_currentPage + 1) + '">下一页</button>';
+
+  container.innerHTML = html;
+  container.querySelectorAll('.btn[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = parseInt(btn.dataset.page, 10);
+      if (p && p >= 1 && p <= _totalPages && p !== _currentPage) {
+        _currentPage = p;
+        fetchAndRender();
+      }
+    });
+  });
+}
+
+function bindActions() {
+  document.getElementById('btn-append-import').addEventListener('click', () => {
+    document.getElementById('append-modal').classList.add('active');
+  });
+  document.getElementById('append-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeAppendModal();
+  });
+
+  document.getElementById('btn-delete').addEventListener('click', () => {
+    document.getElementById('delete-confirm').classList.add('active');
+  });
+  document.getElementById('delete-confirm').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) document.getElementById('delete-confirm').classList.remove('active');
+  });
+  document.getElementById('delete-confirm-ok').addEventListener('click', async () => {
+    const btn = document.getElementById('delete-confirm-ok');
+    btn.disabled = true; btn.textContent = '删除中...';
+    try {
+      await api.delete('/content-banks/' + _bankId);
+      showToast('已删除', 'success');
+      window.location.href = 'content-banks.html';
+    } catch (e) {
+      showToast('删除失败: ' + e.message, 'error');
+      btn.disabled = false; btn.textContent = '确认删除';
+    }
+  });
+}
+
+function bindSearch() {
+  const input = document.getElementById('item-search');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    clearTimeout(_searchTimeout);
+    _searchTimeout = setTimeout(() => {
+      _searchQuery = input.value.trim();
+      _currentPage = 1;
+      fetchAndRender();
+    }, 300);
+  });
+}
+
+async function handleAppendSubmit(e) {
+  e.preventDefault();
+  const file = document.getElementById('append-file').files[0];
+  if (!file) { showToast('请选择文件', 'error'); return; }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAuthToken();
+  if (!token) { window.location.href = '/#/login'; return; }
+
+  const btn = document.getElementById('append-submit-btn');
+  btn.disabled = true; btn.textContent = '导入中...';
+
+  try {
+    const resp = await fetch('/api/admin/content-banks/' + _bankId + '/items', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: formData,
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.detail || 'HTTP ' + resp.status);
+    }
+    const result = await resp.json();
+    const qInfo = result.question_count > 0 ? '，' + result.question_count + ' 题' : '';
+    showToast('追加成功: +' + result.added_count + ' 条' + qInfo, 'success');
+    closeAppendModal();
+    _currentPage = 1;
+    _searchQuery = '';
+    document.getElementById('item-search').value = '';
+    fetchAndRender();
+  } catch (e) {
+    showToast('导入失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '导入';
+  }
+}
+
+function closeAppendModal() {
+  document.getElementById('append-modal').classList.remove('active');
+  document.getElementById('append-form').reset();
+}
+</script>
+</body>
+</html>
