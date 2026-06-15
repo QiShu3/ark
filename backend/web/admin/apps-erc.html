@@ -144,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPage();
 });
 
-const ITEM_TYPE = 'choice';
 const FW_TYPES = ['erc_practice', 'erc_review'];
 
 let _linked = [];
@@ -152,7 +151,7 @@ let _unlinked = [];
 
 async function loadPage() {
   try {
-    const allBanks = await api.get('/content-banks?type=' + ITEM_TYPE);
+    const allBanks = await api.get('/content-banks');
     _linked = allBanks.filter(b => FW_TYPES.includes(b.fw_type));
     _unlinked = allBanks.filter(b => !FW_TYPES.includes(b.fw_type));
 
