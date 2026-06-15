@@ -9,48 +9,13 @@
     .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
     .breadcrumb a { color: var(--accent); text-decoration: none; }
     .breadcrumb a:hover { text-decoration: underline; }
-
     .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 40px; }
     @media (max-width: 920px) { .stats-row { grid-template-columns: 1fr; } }
-
     .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
     .toolbar .spacer { flex: 1; }
-
-    .toggle-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border-soft);
-      font-size: 13px; cursor: pointer; transition: all 0.2s;
-      background: var(--surface); color: var(--muted);
-    }
-    .toggle-btn.published { background: #dcfce7; border-color: #86efac; color: #166534; }
-    .toggle-btn.unpublished { background: var(--surface); border-color: var(--border-soft); color: var(--muted); }
-    .toggle-btn:hover { opacity: 0.85; }
-
-    .toggle-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: currentColor;
-    }
-
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; z-index: 1000;
-      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
-      justify-content: center; align-items: center;
-    }
-    .modal-overlay.active { display: flex; }
-    .modal-box {
-      background: var(--surface); border: 1px solid var(--border-soft);
-      border-radius: 12px; padding: 24px; max-width: 640px; width: 90%;
-      max-height: 80vh; overflow-y: auto;
-    }
-    .modal-box h3 { margin: 0 0 16px; font-size: 18px; }
-    .modal-box pre {
-      background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px;
-      font-size: 13px; line-height: 1.5; overflow-x: auto; white-space: pre;
-    }
-    .modal-box .modal-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
-
-    .file-input-wrap { position: relative; display: inline-block; }
-    .file-input-wrap input[type="file"] { display: none; }
+    .link-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    .link-row select, .link-row button { padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+    .link-row select { border: 1px solid var(--border); background: var(--surface); min-width: 240px; }
   </style>
 </head>
 <body>
@@ -107,69 +72,149 @@
     <span>词汇管理</span>
   </nav>
 
-  <header style="margin-bottom: 40px;">
-    <h2 style="font-size: 32px; margin: 0;">词汇库</h2>
-    <p style="color: var(--muted); margin: 4px 0 0;">查看并管理系统中的词汇库。</p>
+  <header style="margin-bottom: 32px;">
+    <h2 style="font-size: 32px; margin: 0;">词汇管理</h2>
+    <p style="color: var(--muted); margin: 4px 0 0;">关联并管理词汇题库。</p>
   </header>
 
   <div class="stats-row">
     <div class="stat-card">
-      <div class="label">总学习单词数</div>
-      <div class="val" data-vocab-stat>—</div>
+      <div class="label">已关联词库</div>
+      <div class="val" data-stat="linked">—</div>
     </div>
     <div class="stat-card">
-      <div class="label">今日复习量</div>
-      <div class="val" data-vocab-stat>—</div>
+      <div class="label">总词条数</div>
+      <div class="val" data-stat="total_words">—</div>
     </div>
     <div class="stat-card">
-      <div class="label">平均正确率</div>
-      <div class="val" data-vocab-stat>—</div>
+      <div class="label">可关联词库</div>
+      <div class="val" data-stat="unlinked">—</div>
     </div>
   </div>
 
-  <div class="toolbar">
-    <a href="apps-vocab-logs.html" class="btn btn-secondary" style="text-decoration:none;">导入日志</a>
-    <div class="spacer"></div>
+  <!-- Link bank -->
+  <div class="link-row">
+    <label style="font-weight:500;white-space:nowrap;">关联题库：</label>
+    <select id="link-select">
+      <option value="">选择要关联的词库...</option>
+    </select>
+    <button class="btn btn-primary" id="btn-link" style="font-size:13px;padding:8px 16px;">关联</button>
+    <a href="apps-vocab-logs.html" class="btn btn-secondary" style="text-decoration:none;margin-left:auto;">导入日志</a>
   </div>
 
   <div class="admin-card" style="padding: 0; overflow: hidden;">
     <table class="admin-table" style="border: 0; border-radius: 0;">
       <thead>
         <tr>
-          <th>词汇库名称</th>
-          <th>单词数</th>
-          <th>学习人数</th>
+          <th>词库名称</th>
+          <th>词条数</th>
           <th>上架状态</th>
+          <th style="width:80px;">操作</th>
         </tr>
       </thead>
-      <tbody data-vocab-decks></tbody>
+      <tbody data-banks-tbody>
+        <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:40px;">加载中...</td></tr>
+      </tbody>
     </table>
   </div>
-
 </main>
 
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
-<script src="js/apps.js"></script>
 <script>
-// Remove clickable links from deck table (post-process after apps.js renders)
-(function patchDeckLinks() {
-  const tbody = document.querySelector('[data-vocab-decks]');
-  if (!tbody) { setTimeout(patchDeckLinks, 200); return; }
-  const check = () => {
-    tbody.querySelectorAll('td:first-child a').forEach(a => {
-      const span = document.createElement('span');
-      span.style.fontWeight = '500';
-      span.style.color = 'var(--fg)';
-      span.textContent = a.textContent;
-      a.replaceWith(span);
+document.addEventListener('DOMContentLoaded', () => {
+  if (!initPage()) return;
+  loadPage();
+});
+
+const ITEM_TYPE = 'word';
+const FW_TYPES = ['vocab_today'];
+
+let _linked = [];
+let _unlinked = [];
+
+async function loadPage() {
+  try {
+    const allBanks = await api.get('/content-banks?type=' + ITEM_TYPE);
+    _linked = allBanks.filter(b => FW_TYPES.includes(b.fw_type));
+    _unlinked = allBanks.filter(b => !FW_TYPES.includes(b.fw_type));
+
+    document.querySelector('[data-stat="linked"]').textContent = _linked.length;
+    document.querySelector('[data-stat="total_words"]').textContent =
+      _linked.reduce((sum, b) => sum + b.item_count, 0).toLocaleString();
+    document.querySelector('[data-stat="unlinked"]').textContent = _unlinked.length;
+
+    renderBanks();
+    renderLinkSelect();
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function renderBanks() {
+  const tbody = document.querySelector('[data-banks-tbody]');
+  if (!_linked.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:40px;">暂无关联网库，请从上方下拉菜单中关联</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = _linked.map(b => {
+    const pubCls = b.is_published ? 'published' : 'unpublished';
+    const pubLabel = b.is_published ? '已上架' : '未上架';
+    return '<tr>' +
+      '<td style="font-weight:500;">' + b.name + '</td>' +
+      '<td style="font-family:var(--font-mono);">' + b.item_count.toLocaleString() + '</td>' +
+      '<td><button class="toggle-btn ' + pubCls + '" data-bank-id="' + b.id + '" data-action="toggle-publish"><span class="toggle-dot"></span>' + pubLabel + '</button></td>' +
+      '<td><button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" data-bank-id="' + b.id + '" data-action="unlink">取消关联</button></td>' +
+      '</tr>';
+  }).join('');
+
+  tbody.querySelectorAll('[data-action="toggle-publish"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const result = await api.patch('/content-banks/' + btn.dataset.bankId + '/publish');
+        const pub = result.is_published;
+        btn.className = 'toggle-btn ' + (pub ? 'published' : 'unpublished');
+        btn.innerHTML = '<span class="toggle-dot"></span>' + (pub ? '已上架' : '未上架');
+        showToast(pub ? '已上架' : '已下架', 'success');
+      } catch (e) {
+        showToast('操作失败: ' + e.message, 'error');
+      } finally { btn.disabled = false; }
     });
-  };
-  check();
-  // Observe for changes
-  const observer = new MutationObserver(() => { check(); });
-  observer.observe(tbody, { childList: true, subtree: true });
-})();
+  });
+
+  tbody.querySelectorAll('[data-action="unlink"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api.patch('/content-banks/' + btn.dataset.bankId, { fw_type: '' });
+        showToast('已取消关联', 'success');
+        loadPage();
+      } catch (e) {
+        showToast('操作失败: ' + e.message, 'error');
+      }
+    });
+  });
+}
+
+function renderLinkSelect() {
+  const sel = document.getElementById('link-select');
+  sel.innerHTML = '<option value="">选择要关联的词库...</option>' +
+    _unlinked.map(b => '<option value="' + b.id + '">' + b.name + ' (' + b.item_count.toLocaleString() + ' 词)</option>').join('');
+}
+
+document.getElementById('btn-link').addEventListener('click', async () => {
+  const sel = document.getElementById('link-select');
+  const bankId = sel.value;
+  if (!bankId) { showToast('请选择词库', 'error'); return; }
+  try {
+    await api.patch('/content-banks/' + bankId, { fw_type: FW_TYPES[0] });
+    showToast('已关联', 'success');
+    loadPage();
+  } catch (e) {
+    showToast('关联失败: ' + e.message, 'error');
+  }
+});
 </script>
 </body>
 </html>

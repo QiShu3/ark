@@ -2355,6 +2355,44 @@ async def append_content_bank_items(
     return ContentBankAppendOut(id=bank_id, name=bank["name"], added_count=added_count, question_count=question_count)
 
 
+class ContentBankUpdateIn(BaseModel):
+    fw_type: str | None = None
+    name: str | None = None
+
+
+@router.patch("/content-banks/{bank_id}")
+async def update_content_bank(
+    bank_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    payload: ContentBankUpdateIn = ContentBankUpdateIn(),
+) -> dict[str, str]:
+    pool = _pool(request)
+    updates: list[str] = []
+    params: list[Any] = []
+    idx = 1
+    if payload.fw_type is not None:
+        updates.append(f"fw_type = ${idx}")
+        params.append(payload.fw_type)
+        idx += 1
+    if payload.name is not None:
+        updates.append(f"name = ${idx}")
+        params.append(payload.name)
+        idx += 1
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    updates.append("updated_at = NOW()")
+    params.append(bank_id)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE content_banks SET {', '.join(updates)} WHERE id = ${idx}::uuid",
+            *params,
+        )
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="题库不存在")
+    return {"detail": "已更新"}
+
+
 @router.delete("/content-banks/{bank_id}")
 async def delete_content_bank(
     bank_id: str,
