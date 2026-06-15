@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
+import io
 import re
 import shutil
 import tempfile
@@ -2025,7 +2026,7 @@ def _extract_zip(zip_bytes: bytes, bank_id: str, *, skip_images: bool = False) -
     json_data = None
     image_files: dict[str, bytes] = {}
 
-    with zipfile.ZipFile(zipfile.BytesIO(zip_bytes)) as zf:
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         for name in zf.namelist():
             if name.endswith("/") or name.startswith("__MACOSX"):
                 continue
@@ -2136,7 +2137,14 @@ async def create_content_bank(
     filename = getattr(file, "filename", "unknown.json")
 
     # Pre-validate: parse file and check all entries before touching DB
-    raw = _process_content_bank_file(file_bytes, filename, bank_id="__validate__")
+    try:
+        raw = _process_content_bank_file(file_bytes, filename, bank_id="__validate__")
+    except HTTPException:
+        raise
+    except Exception as e:
+        _import_logger.exception("文件解析失败: bank_name=%s, file=%s", name, filename)
+        raise HTTPException(status_code=400, detail=f"文件解析失败: {e}")
+
     errors = _validate_entries(raw, item_type)
     if errors:
         max_show = 20
@@ -2250,7 +2258,14 @@ async def append_content_bank_items(
     item_type = bank["item_type"]
 
     # Pre-validate
-    raw = _process_content_bank_file(file_bytes, filename, bank_id="__validate__")
+    try:
+        raw = _process_content_bank_file(file_bytes, filename, bank_id="__validate__")
+    except HTTPException:
+        raise
+    except Exception as e:
+        _import_logger.exception("追加导入文件解析失败: bank_id=%s, file=%s", bank_id, filename)
+        raise HTTPException(status_code=400, detail=f"文件解析失败: {e}")
+
     errors = _validate_entries(raw, item_type)
     if errors:
         max_show = 20
