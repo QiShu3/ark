@@ -92,12 +92,14 @@
     </div>
   </div>
 
-  <div class="link-row">
+  <div class="link-row" style="flex-wrap:wrap;">
     <label style="font-weight:500;white-space:nowrap;">关联题库：</label>
-    <select id="link-select">
-      <option value="">选择要关联的题库...</option>
+    <select id="link-select" multiple style="min-height:80px;">
     </select>
-    <button class="btn btn-primary" id="btn-link" style="font-size:13px;padding:8px 16px;">关联</button>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <button class="btn btn-primary" id="btn-link" style="font-size:13px;padding:8px 16px;">关联选中</button>
+      <button class="btn btn-secondary" id="btn-link-all" style="font-size:12px;padding:6px 12px;">全部关联</button>
+    </div>
     <span class="spacer"></span>
   </div>
 
@@ -198,21 +200,37 @@ function renderBanks() {
 
 function renderLinkSelect() {
   const sel = document.getElementById('link-select');
-  sel.innerHTML = '<option value="">选择要关联的题库...</option>' +
-    _unlinked.map(b => '<option value="' + b.id + '">' + b.name + ' (' + b.item_count.toLocaleString() + ' 条)</option>').join('');
+  sel.innerHTML = _unlinked.map(b => '<option value="' + b.id + '">' + b.name + ' (' + b.item_count.toLocaleString() + ' 条)</option>').join('');
+  if (!_unlinked.length) {
+    sel.innerHTML = '<option value="" disabled>没有可关联的题库</option>';
+  }
 }
 
-document.getElementById('btn-link').addEventListener('click', async () => {
-  const sel = document.getElementById('link-select');
-  const bankId = sel.value;
-  if (!bankId) { showToast('请选择题库', 'error'); return; }
-  try {
-    await api.patch('/content-banks/' + bankId, { fw_type: FW_TYPES[0] });
-    showToast('已关联', 'success');
-    loadPage();
-  } catch (e) {
-    showToast('关联失败: ' + e.message, 'error');
+async function linkBanks(bankIds) {
+  if (!bankIds.length) { showToast('请选择题库', 'error'); return; }
+  let ok = 0, fail = 0;
+  for (const id of bankIds) {
+    try {
+      await api.patch('/content-banks/' + id, { fw_type: FW_TYPES[0] });
+      ok++;
+    } catch (e) {
+      fail++;
+    }
   }
+  showToast('关联完成: ' + ok + ' 成功' + (fail ? ', ' + fail + ' 失败' : ''), fail ? 'error' : 'success');
+  loadPage();
+}
+
+document.getElementById('btn-link').addEventListener('click', () => {
+  const sel = document.getElementById('link-select');
+  const ids = [...sel.selectedOptions].map(o => o.value);
+  linkBanks(ids);
+});
+
+document.getElementById('btn-link-all').addEventListener('click', () => {
+  const sel = document.getElementById('link-select');
+  const ids = [...sel.options].filter(o => !o.disabled).map(o => o.value);
+  linkBanks(ids);
 });
 </script>
 </body>
