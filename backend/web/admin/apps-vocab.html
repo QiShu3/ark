@@ -128,13 +128,8 @@
   </div>
 
   <div class="toolbar">
-    <button class="btn btn-secondary" id="btn-template" type="button">查看模板</button>
     <a href="apps-vocab-logs.html" class="btn btn-secondary" style="text-decoration:none;">导入日志</a>
     <div class="spacer"></div>
-    <div class="file-input-wrap">
-      <button class="btn btn-primary" id="btn-import" type="button">导入词书</button>
-      <input type="file" id="file-import" accept=".json" />
-    </div>
   </div>
 
   <div class="admin-card" style="padding: 0; overflow: hidden;">
@@ -151,44 +146,30 @@
     </table>
   </div>
 
-  <!-- Template Modal -->
-  <div class="modal-overlay" id="modal-template">
-    <div class="modal-box">
-      <h3>JSON 导入模板</h3>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">上传的 JSON 文件需为单词数组，每条至少包含 <code>word</code> 字段。文件名决定词书名称（如 <code>CET4_1.json</code> → CET4）。</p>
-      <pre>[
-  {
-    "word": "abruptly",
-    "us": "ə'brʌptli",
-    "uk": "ə'brʌptlɪ",
-    "translations": [
-      { "translation": "突然地", "type": "adv" }
-    ],
-    "phrases": [
-      { "phrase": "come to an abrupt end", "translation": "突然结束" }
-    ],
-    "sentences": [
-      { "sentence": "The road ends abruptly.", "translation": "这条路突然到头了。" }
-    ]
-  },
-  {
-    "word": "absorb",
-    "us": "əbˈzɔːrb",
-    "uk": "əbˈzɔːb",
-    "translations": [
-      { "translation": "吸收；吸引", "type": "v" }
-    ]
-  }
-]</pre>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" id="modal-template-close" type="button">关闭</button>
-      </div>
-    </div>
-  </div>
 </main>
 
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
 <script src="js/apps.js"></script>
+<script>
+// Remove clickable links from deck table (post-process after apps.js renders)
+(function patchDeckLinks() {
+  const tbody = document.querySelector('[data-vocab-decks]');
+  if (!tbody) { setTimeout(patchDeckLinks, 200); return; }
+  const check = () => {
+    tbody.querySelectorAll('td:first-child a').forEach(a => {
+      const span = document.createElement('span');
+      span.style.fontWeight = '500';
+      span.style.color = 'var(--fg)';
+      span.textContent = a.textContent;
+      a.replaceWith(span);
+    });
+  };
+  check();
+  // Observe for changes
+  const observer = new MutationObserver(() => { check(); });
+  observer.observe(tbody, { childList: true, subtree: true });
+})();
+</script>
 </body>
 </html>
