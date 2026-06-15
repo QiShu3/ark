@@ -33,6 +33,44 @@ async def _lifespan(app: FastAPI):
     await init_todo(app)
     await init_vocab(app)
     await init_erc(app)
+    # 通用题库表
+    async with app.state.auth_pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS content_banks (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                fw_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                item_type TEXT NOT NULL CHECK (item_type IN ('choice', 'word')),
+                is_published BOOLEAN NOT NULL DEFAULT true,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS content_items (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                bank_id UUID NOT NULL REFERENCES content_banks(id) ON DELETE CASCADE,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                title TEXT,
+                body JSONB NOT NULL DEFAULT '{}',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS content_questions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                paragraph_no INTEGER,
+                question_text TEXT NOT NULL,
+                options JSONB NOT NULL DEFAULT '{}',
+                correct_answer TEXT NOT NULL,
+                analysis TEXT,
+                image_url TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """)
     try:
         yield
     finally:
