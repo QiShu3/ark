@@ -42,7 +42,7 @@ async def _lifespan(app: FastAPI):
                 name TEXT NOT NULL,
                 description TEXT DEFAULT '',
                 item_type TEXT NOT NULL CHECK (item_type IN ('choice', 'word')),
-                is_published BOOLEAN NOT NULL DEFAULT true,
+                is_published BOOLEAN NOT NULL DEFAULT false,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );

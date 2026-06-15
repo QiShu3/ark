@@ -2163,8 +2163,8 @@ async def create_content_bank(
             async with conn.transaction():
                 # Create bank first to get its ID
                 bank_row = await conn.fetchrow(
-                    """INSERT INTO content_banks (fw_type, name, description, item_type)
-                       VALUES ($1, $2, $3, $4) RETURNING id::text""",
+                    """INSERT INTO content_banks (fw_type, name, description, item_type, is_published)
+                       VALUES ($1, $2, $3, $4, false) RETURNING id::text""",
                     fw_type, name, description, item_type,
                 )
                 bank_id = bank_row["id"]

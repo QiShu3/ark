@@ -244,7 +244,8 @@ function renderBanks(banks) {
     const pubCls = b.is_published ? 'published' : 'unpublished';
     const pubLabel = b.is_published ? '已上架' : '未上架';
     return '<tr>' +
-      '<td><a href="content-bank-detail.html?id=' + b.id + '" style="font-weight:500;color:var(--accent);text-decoration:none;">' + b.name + '</a></td>' +
+      '<td><a href="content-bank-detail.html?id=' + b.id + '" style="font-weight:500;color:var(--accent);text-decoration:none;">' + b.name + '</a>' +
+        '<button class="btn btn-ghost" style="padding:2px 6px;font-size:14px;" data-bank-id="' + b.id + '" data-bank-name="' + b.name + '" data-action="rename-bank" title="重命名">✎</button></td>' +
       '<td><span class="type-tag ' + typeCls + '">' + typeLabel + '</span></td>' +
       '<td style="font-family:var(--font-mono);font-size:12px;">' + b.fw_type + '</td>' +
       '<td style="font-family:var(--font-mono);">' + b.item_count.toLocaleString() + '</td>' +
@@ -279,6 +280,24 @@ function renderBanks(banks) {
         loadPage();
       } catch (e) {
         showToast('删除失败: ' + e.message, 'error');
+      }
+    });
+  });
+}
+
+  tbody.querySelectorAll('[data-action="rename-bank"]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const bankId = btn.dataset.bankId;
+      const oldName = btn.dataset.bankName;
+      const newName = prompt('编辑题库名称：', oldName);
+      if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+      try {
+        await api.patch('/content-banks/' + bankId, { name: newName.trim() });
+        showToast('已重命名', 'success');
+        loadPage();
+      } catch (e) {
+        showToast('重命名失败: ' + e.message, 'error');
       }
     });
   });
