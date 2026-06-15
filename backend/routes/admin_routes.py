@@ -15,6 +15,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 
+from lib.content_selector import derive_content_selector
 from lib.sub_app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
 
@@ -499,6 +500,7 @@ async def create_app(
         label=fw_label,
         template=template,
         content_bank_type=content_bank_type,
+        content_selector=derive_content_selector(template, fw_type),
         content_fields=[],
     )
     decl = SubAppDeclaration(
@@ -637,6 +639,7 @@ def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
     app_id = decl.id
     app_name = decl.name
     py_id = app_id.replace("-", "_")  # sanitize for Python identifiers + directory names
+    selector_name = decl.focus_works[0].content_selector
     app_dir = os.path.join(os.path.dirname(__file__), "..", "routes", py_id)
     os.makedirs(app_dir, exist_ok=True)
 
@@ -885,14 +888,16 @@ async def get_overview(pool: asyncpg.Pool, *, user_id: int, set_id: str | None =
 
 
 async def get_next_review(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> dict:
-    from .repository import list_due_card_rows, get_next_due_at
+    from .repository import get_next_due_at
+    from lib.content_selector import get_selector
+    selector = get_selector("{selector_name}", "{py_id}")
     async with pool.acquire() as conn:
-        rows = await list_due_card_rows(conn, user_id=user_id, limit=1, set_id=set_id)
-    if not rows:
+        row = await selector.select_next(conn, user_id=user_id, set_id=set_id,
+            config={{"daily_target": 50, "cooldown_hours": 24}})
+    if row is None:
         async with pool.acquire() as conn:
             next_due = await get_next_due_at(conn, user_id=user_id)
         return {{"has_item": False, "next_due_at": next_due}}
-    row = dict(rows[0])
     options = json.loads(row.get("options_json") or "[]")
     meta = json.loads(row.get("meta_json") or "{{}}")
     return {{
@@ -1727,6 +1732,513 @@ async def import_erc_articles(
     _import_logger.info("ERC 导入成功: filename=%s, set=%s, articles=%d, questions=%d",
                         filename, set_name, len(seeds), total_questions)
     return ErcImportOut(set_key=set_key, set_name=set_name, article_count=len(seeds), question_count=total_questions)
+
+
+# ---------------------------------------------------------------------------
+# Content bank management
+# ---------------------------------------------------------------------------
+
+
+class ContentBankStats(BaseModel):
+    total_banks: int
+    total_items: int
+    total_questions: int
+    by_type: dict[str, int]
+
+
+class ContentBankListItem(BaseModel):
+    id: str
+    name: str
+    fw_type: str
+    item_type: str
+    description: str
+    item_count: int
+    is_published: bool
+    created_at: str
+
+
+class ContentBankDetailOut(BaseModel):
+    id: str
+    name: str
+    fw_type: str
+    item_type: str
+    description: str
+    is_published: bool
+    page: int
+    limit: int
+    total_pages: int
+    total_items: int
+    items: list[dict]
+
+
+class ContentBankImportOut(BaseModel):
+    id: str
+    name: str
+    item_count: int
+    question_count: int
+
+
+class ContentBankAppendOut(BaseModel):
+    id: str
+    name: str
+    added_count: int
+    question_count: int
+
+
+class ContentBankPublishOut(BaseModel):
+    is_published: bool
+
+
+@router.get("/content-banks/stats", response_model=ContentBankStats)
+async def content_bank_stats(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ContentBankStats:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT
+                (SELECT COUNT(*) FROM content_banks) AS total_banks,
+                (SELECT COUNT(*) FROM content_items) AS total_items,
+                (SELECT COUNT(*) FROM content_questions) AS total_questions
+        """)
+        type_rows = await conn.fetch(
+            "SELECT item_type, COUNT(*)::int AS cnt FROM content_banks GROUP BY item_type"
+        )
+    by_type = {r["item_type"]: r["cnt"] for r in type_rows}
+    return ContentBankStats(
+        total_banks=row["total_banks"],
+        total_items=row["total_items"],
+        total_questions=row["total_questions"],
+        by_type=by_type,
+    )
+
+
+@router.get("/content-banks", response_model=list[ContentBankListItem])
+async def list_content_banks(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    type: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    fw_type: str | None = Query(default=None),
+) -> list[ContentBankListItem]:
+    pool = _pool(request)
+    conditions: list[str] = []
+    params: list[Any] = []
+    idx = 1
+
+    if type:
+        conditions.append(f"b.item_type = ${idx}")
+        params.append(type)
+        idx += 1
+    if fw_type:
+        conditions.append(f"b.fw_type = ${idx}")
+        params.append(fw_type)
+        idx += 1
+    if search:
+        conditions.append(f"b.name ILIKE ${idx}")
+        params.append(f"%{search}%")
+        idx += 1
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT b.id::text, b.name, b.fw_type, b.item_type, b.description,
+                   b.is_published, b.created_at,
+                   (SELECT COUNT(*) FROM content_items WHERE bank_id = b.id)::int AS item_count
+            FROM content_banks b
+            {where}
+            ORDER BY b.item_type, b.name
+            """,
+            *params,
+        )
+
+    return [
+        ContentBankListItem(
+            id=r["id"],
+            name=r["name"],
+            fw_type=r["fw_type"],
+            item_type=r["item_type"],
+            description=r["description"],
+            item_count=r["item_count"],
+            is_published=r["is_published"],
+            created_at=r["created_at"].isoformat() if r["created_at"] else "",
+        )
+        for r in rows
+    ]
+
+
+@router.get("/content-banks/{bank_id}", response_model=ContentBankDetailOut)
+async def content_bank_detail(
+    bank_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=30, ge=1, le=200),
+    search: str | None = Query(default=None),
+) -> ContentBankDetailOut:
+    import math
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        bank = await conn.fetchrow(
+            "SELECT id::text, name, fw_type, item_type, description, is_published "
+            "FROM content_banks WHERE id = $1::uuid",
+            bank_id,
+        )
+        if bank is None:
+            raise HTTPException(status_code=404, detail="题库不存在")
+
+        item_type = bank["item_type"]
+
+        count_params: list[Any] = [bank_id]
+        count_where = ""
+        if search:
+            if item_type == "word":
+                count_where = " AND (body->>'word' ILIKE $2 OR body->>'translation' ILIKE $2)"
+            else:
+                count_where = " AND (title ILIKE $2)"
+            count_params.append(f"%{search}%")
+
+        total = await conn.fetchval(
+            f"SELECT COUNT(*) FROM content_items WHERE bank_id = $1::uuid{count_where}",
+            *count_params,
+        )
+
+        total_pages = math.ceil(total / limit) if total > 0 else 1
+        offset = (page - 1) * limit
+
+        query_params: list[Any] = [bank_id, limit, offset]
+        search_filter = ""
+        if search:
+            if item_type == "word":
+                search_filter = " AND (i.body->>'word' ILIKE $4 OR i.body->>'translation' ILIKE $4)"
+            else:
+                search_filter = " AND (i.title ILIKE $4)"
+            query_params.append(f"%{search}%")
+
+        item_rows = await conn.fetch(
+            f"""
+            SELECT i.id::text, i.sort_order, i.title, i.body, i.created_at
+            FROM content_items i
+            WHERE i.bank_id = $1::uuid{search_filter}
+            ORDER BY i.sort_order, i.created_at
+            LIMIT $2 OFFSET $3
+            """,
+            *query_params,
+        )
+
+        items: list[dict] = []
+        if item_type == "word":
+            for ir in item_rows:
+                body = ir["body"] if isinstance(ir["body"], dict) else json.loads(str(ir["body"]))
+                items.append({
+                    "id": ir["id"],
+                    "sort_order": ir["sort_order"],
+                    "word": body.get("word", ""),
+                    "pronunciation": body.get("pronunciation", ""),
+                    "translation": body.get("translation", ""),
+                    "pos": body.get("pos", ""),
+                    "example": body.get("example", ""),
+                    "example_translation": body.get("example_translation", ""),
+                })
+        else:
+            item_ids = [ir["id"] for ir in item_rows]
+            q_by_item: dict[str, list[dict]] = {}
+            if item_ids:
+                q_rows = await conn.fetch(
+                    """
+                    SELECT item_id::text, id::text, sort_order, question_text, options, correct_answer
+                    FROM content_questions
+                    WHERE item_id = ANY($1::uuid[])
+                    ORDER BY sort_order
+                    """,
+                    item_ids,
+                )
+                for qr in q_rows:
+                    opts = qr["options"]
+                    if isinstance(opts, str):
+                        opts = json.loads(opts)
+                    q_by_item.setdefault(qr["item_id"], []).append({
+                        "id": qr["id"],
+                        "sort_order": qr["sort_order"],
+                        "question_text": qr["question_text"],
+                        "options": opts,
+                        "correct_answer": qr["correct_answer"],
+                    })
+
+            for ir in item_rows:
+                body = ir["body"] if isinstance(ir["body"], dict) else json.loads(str(ir["body"]))
+                items.append({
+                    "id": ir["id"],
+                    "sort_order": ir["sort_order"],
+                    "title": ir["title"] or "",
+                    "passage": body.get("passage", ""),
+                    "tags": body.get("tags", []),
+                    "questions": q_by_item.get(ir["id"], []),
+                })
+
+    return ContentBankDetailOut(
+        id=bank["id"],
+        name=bank["name"],
+        fw_type=bank["fw_type"],
+        item_type=bank["item_type"],
+        description=bank["description"],
+        is_published=bank["is_published"],
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+        total_items=total,
+        items=items,
+    )
+
+
+@router.post("/content-banks", response_model=ContentBankImportOut)
+async def create_content_bank(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    item_type: str = Form(...),
+    fw_type: str = Form(...),
+    description: str = Form(""),
+) -> ContentBankImportOut:
+    if item_type not in ("word", "choice"):
+        raise HTTPException(status_code=400, detail="item_type 必须是 word 或 choice")
+
+    file_bytes = await file.read()
+    try:
+        raw = json.loads(file_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="题库文件不是有效的 JSON")
+    if not isinstance(raw, list) or len(raw) == 0:
+        raise HTTPException(status_code=400, detail="题库文件应为一个非空 JSON 数组")
+
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                bank_row = await conn.fetchrow(
+                    """INSERT INTO content_banks (fw_type, name, description, item_type)
+                       VALUES ($1, $2, $3, $4) RETURNING id::text""",
+                    fw_type, name, description, item_type,
+                )
+                bank_id = bank_row["id"]
+
+                item_count = 0
+                question_count = 0
+                for i, entry in enumerate(raw):
+                    if not isinstance(entry, dict):
+                        raise HTTPException(status_code=400, detail=f"第 {i + 1} 条必须是对象")
+
+                    if item_type == "word":
+                        body = {
+                            "word": entry.get("word", ""),
+                            "pronunciation": entry.get("pronunciation", ""),
+                            "translation": entry.get("translation", ""),
+                            "pos": entry.get("pos", ""),
+                            "example": entry.get("example", ""),
+                            "example_translation": entry.get("example_translation", ""),
+                        }
+                        title = body["word"]
+                        await conn.execute(
+                            """INSERT INTO content_items (bank_id, sort_order, title, body)
+                               VALUES ($1::uuid, $2, $3, $4::jsonb)""",
+                            bank_id, i, title, json.dumps(body, ensure_ascii=False),
+                        )
+                        item_count += 1
+                    else:
+                        body = {
+                            "passage": entry.get("passage", ""),
+                            "tags": entry.get("tags", []),
+                            "examination": entry.get("examination", ""),
+                        }
+                        title = entry.get("title") or ""
+                        item_row = await conn.fetchrow(
+                            """INSERT INTO content_items (bank_id, sort_order, title, body)
+                               VALUES ($1::uuid, $2, $3, $4::jsonb) RETURNING id::text""",
+                            bank_id, i, title, json.dumps(body, ensure_ascii=False),
+                        )
+                        item_id = item_row["id"]
+                        item_count += 1
+
+                        questions = entry.get("questions", [])
+                        if not isinstance(questions, list):
+                            questions = []
+                        for qi, q in enumerate(questions):
+                            await conn.execute(
+                                """INSERT INTO content_questions
+                                   (item_id, sort_order, paragraph_no, question_text, options, correct_answer, analysis, image_url)
+                                   VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8)""",
+                                item_id, qi,
+                                q.get("paragraph_no"),
+                                q.get("question_text", ""),
+                                json.dumps(q.get("options", {}), ensure_ascii=False),
+                                q.get("correct_answer", ""),
+                                q.get("analysis", ""),
+                                q.get("image_url", ""),
+                            )
+                            question_count += 1
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导入失败: {e}")
+
+    _import_logger.info("创建题库: bank_id=%s, name=%s, item_type=%s, items=%d, questions=%d",
+                        bank_id, name, item_type, item_count, question_count)
+    return ContentBankImportOut(id=bank_id, name=name, item_count=item_count, question_count=question_count)
+
+
+@router.post("/content-banks/{bank_id}/items", response_model=ContentBankAppendOut)
+async def append_content_bank_items(
+    bank_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    file: UploadFile = File(...),
+) -> ContentBankAppendOut:
+    file_bytes = await file.read()
+    try:
+        raw = json.loads(file_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="JSON 格式错误")
+    if not isinstance(raw, list) or len(raw) == 0:
+        raise HTTPException(status_code=400, detail="应为非空 JSON 数组")
+
+    pool = _pool(request)
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                bank = await conn.fetchrow(
+                    "SELECT id::text, name, item_type FROM content_banks WHERE id = $1::uuid", bank_id,
+                )
+                if bank is None:
+                    raise HTTPException(status_code=404, detail="题库不存在")
+
+                item_type = bank["item_type"]
+                max_sort = await conn.fetchval(
+                    "SELECT COALESCE(MAX(sort_order), -1) FROM content_items WHERE bank_id = $1::uuid",
+                    bank_id,
+                )
+                start_order = max_sort + 1
+
+                added_count = 0
+                question_count = 0
+                for i, entry in enumerate(raw):
+                    if not isinstance(entry, dict):
+                        raise HTTPException(status_code=400, detail=f"第 {i + 1} 条必须是对象")
+
+                    if item_type == "word":
+                        body = {
+                            "word": entry.get("word", ""),
+                            "pronunciation": entry.get("pronunciation", ""),
+                            "translation": entry.get("translation", ""),
+                            "pos": entry.get("pos", ""),
+                            "example": entry.get("example", ""),
+                            "example_translation": entry.get("example_translation", ""),
+                        }
+                        title = body["word"]
+                        await conn.execute(
+                            """INSERT INTO content_items (bank_id, sort_order, title, body)
+                               VALUES ($1::uuid, $2, $3, $4::jsonb)""",
+                            bank_id, start_order + i, title, json.dumps(body, ensure_ascii=False),
+                        )
+                        added_count += 1
+                    else:
+                        body = {
+                            "passage": entry.get("passage", ""),
+                            "tags": entry.get("tags", []),
+                            "examination": entry.get("examination", ""),
+                        }
+                        title = entry.get("title") or ""
+                        item_row = await conn.fetchrow(
+                            """INSERT INTO content_items (bank_id, sort_order, title, body)
+                               VALUES ($1::uuid, $2, $3, $4::jsonb) RETURNING id::text""",
+                            bank_id, start_order + i, title, json.dumps(body, ensure_ascii=False),
+                        )
+                        item_id = item_row["id"]
+                        added_count += 1
+
+                        questions = entry.get("questions", [])
+                        if not isinstance(questions, list):
+                            questions = []
+                        for qi, q in enumerate(questions):
+                            await conn.execute(
+                                """INSERT INTO content_questions
+                                   (item_id, sort_order, paragraph_no, question_text, options, correct_answer, analysis, image_url)
+                                   VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8)""",
+                                item_id, qi,
+                                q.get("paragraph_no"),
+                                q.get("question_text", ""),
+                                json.dumps(q.get("options", {}), ensure_ascii=False),
+                                q.get("correct_answer", ""),
+                                q.get("analysis", ""),
+                                q.get("image_url", ""),
+                            )
+                            question_count += 1
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"追加导入失败: {e}")
+
+    _import_logger.info("追加导入: bank_id=%s, name=%s, added=%d, questions=%d",
+                        bank_id, bank["name"], added_count, question_count)
+    return ContentBankAppendOut(id=bank_id, name=bank["name"], added_count=added_count, question_count=question_count)
+
+
+@router.delete("/content-banks/{bank_id}")
+async def delete_content_bank(
+    bank_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, str]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        bank = await conn.fetchrow(
+            "SELECT name FROM content_banks WHERE id = $1::uuid", bank_id,
+        )
+        if bank is None:
+            raise HTTPException(status_code=404, detail="题库不存在")
+        await conn.execute("DELETE FROM content_banks WHERE id = $1::uuid", bank_id)
+    _import_logger.info("删除题库: bank_id=%s, name=%s", bank_id, bank["name"])
+    return {"detail": f"已删除: {bank['name']}"}
+
+
+@router.patch("/content-banks/{bank_id}/publish", response_model=ContentBankPublishOut)
+async def toggle_content_bank_publish(
+    bank_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> ContentBankPublishOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """UPDATE content_banks SET is_published = NOT is_published, updated_at = NOW()
+               WHERE id = $1::uuid RETURNING is_published""",
+            bank_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="题库不存在")
+    return ContentBankPublishOut(is_published=row["is_published"])
+
+
+@router.delete("/content-banks/{bank_id}/items/{item_id}")
+async def delete_content_bank_item(
+    bank_id: str,
+    item_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, str]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM content_items WHERE id = $1::uuid AND bank_id = $2::uuid",
+            item_id, bank_id,
+        )
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="内容项不存在")
+    return {"detail": "已删除"}
 
 
 # ---------------------------------------------------------------------------
