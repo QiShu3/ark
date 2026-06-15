@@ -2009,9 +2009,10 @@ _UPLOADS_DIR = _Path(__file__).resolve().parent.parent / "uploads"
 
 
 def _process_content_bank_file(file_bytes: bytes, filename: str, bank_id: str) -> list[dict]:
-    """Parse uploaded file (JSON or ZIP), handle image extraction for ZIP."""
+    """Parse uploaded file (JSON or ZIP), handle image extraction for ZIP.
+    When bank_id is '__validate__', skip image copying (pre-import validation pass)."""
     if filename.lower().endswith(".zip"):
-        return _extract_zip(file_bytes, bank_id)
+        return _extract_zip(file_bytes, bank_id, skip_images=(bank_id == "__validate__"))
     try:
         raw = json.loads(file_bytes)
     except json.JSONDecodeError:
@@ -2019,7 +2020,7 @@ def _process_content_bank_file(file_bytes: bytes, filename: str, bank_id: str) -
     return raw
 
 
-def _extract_zip(zip_bytes: bytes, bank_id: str) -> list[dict]:
+def _extract_zip(zip_bytes: bytes, bank_id: str, *, skip_images: bool = False) -> list[dict]:
     """Extract a ZIP file: find JSON, copy images, rewrite paths."""
     json_data = None
     image_files: dict[str, bytes] = {}
@@ -2041,8 +2042,8 @@ def _extract_zip(zip_bytes: bytes, bank_id: str) -> list[dict]:
     if json_data is None:
         raise HTTPException(status_code=400, detail="ZIP 文件中没有找到 JSON 文件")
 
-    # Copy images
-    if image_files:
+    # Copy images (skip during pre-import validation)
+    if image_files and not skip_images:
         img_dir = _UPLOADS_DIR / "content-images" / bank_id
         img_dir.mkdir(parents=True, exist_ok=True)
         for img_name, img_bytes in image_files.items():
@@ -2061,6 +2062,42 @@ def _extract_zip(zip_bytes: bytes, bank_id: str) -> list[dict]:
         _rewrite_image_urls(raw, bank_id)
 
     return raw
+
+
+def _validate_entries(raw: list[dict], item_type: str) -> list[str]:
+    """Validate all entries against the expected format. Returns a list of error messages (empty = valid)."""
+    errors: list[str] = []
+    for i, entry in enumerate(raw):
+        idx = i + 1
+        if not isinstance(entry, dict):
+            errors.append(f"第 {idx} 条: 不是对象")
+            continue
+
+        if item_type == "word":
+            word = (entry.get("word") or "").strip()
+            if not word:
+                errors.append(f"第 {idx} 条: 缺少 word 字段")
+        else:
+            questions = entry.get("questions")
+            if not isinstance(questions, list) or len(questions) == 0:
+                errors.append(f"第 {idx} 条: questions 应为非空数组")
+                continue
+            for qi, q in enumerate(questions):
+                if not isinstance(q, dict):
+                    errors.append(f"第 {idx} 条 第 {qi + 1} 题: 不是对象")
+                    continue
+                qtext = (q.get("question_text") or "").strip()
+                if not qtext:
+                    errors.append(f"第 {idx} 条 第 {qi + 1} 题: 缺少 question_text")
+                answer = (q.get("correct_answer") or "").strip()
+                if not answer:
+                    errors.append(f"第 {idx} 条 第 {qi + 1} 题: 缺少 correct_answer")
+                opts = q.get("options", {})
+                if not isinstance(opts, dict) or len(opts) == 0:
+                    errors.append(f"第 {idx} 条 第 {qi + 1} 题: options 应为非空对象")
+                elif answer and answer not in opts:
+                    errors.append(f"第 {idx} 条 第 {qi + 1} 题: correct_answer '{answer}' 不在 options 中")
+    return errors
 
 
 def _rewrite_image_urls(entries: list[dict], bank_id: str) -> None:
@@ -2098,6 +2135,20 @@ async def create_content_bank(
     file_bytes = await file.read()
     filename = getattr(file, "filename", "unknown.json")
 
+    # Pre-validate: parse file and check all entries before touching DB
+    raw = _process_content_bank_file(file_bytes, filename, bank_id="__validate__")
+    errors = _validate_entries(raw, item_type)
+    if errors:
+        max_show = 20
+        detail = f"验证失败，共 {len(errors)} 个错误:\n" + "\n".join(errors[:max_show])
+        if len(errors) > max_show:
+            detail += f"\n... 等 {len(errors)} 个错误"
+        _import_logger.error("导入验证失败: bank_name=%s, file=%s, errors=%d",
+                             name, filename, len(errors))
+        for e in errors[:max_show]:
+            _import_logger.error("  %s", e)
+        raise HTTPException(status_code=400, detail=detail)
+
     pool = _pool(request)
     try:
         async with pool.acquire() as conn:
@@ -2110,8 +2161,9 @@ async def create_content_bank(
                 )
                 bank_id = bank_row["id"]
 
-                # Parse file (handles ZIP extraction with image copying)
-                raw = _process_content_bank_file(file_bytes, filename, bank_id)
+                # Re-parse with real bank_id for ZIP image copying
+                if filename.lower().endswith(".zip"):
+                    raw = _process_content_bank_file(file_bytes, filename, bank_id)
 
                 item_count = 0
                 question_count = 0
@@ -2188,18 +2240,36 @@ async def append_content_bank_items(
     filename = getattr(file, "filename", "unknown.json")
 
     pool = _pool(request)
+    async with pool.acquire() as conn:
+        bank = await conn.fetchrow(
+            "SELECT id::text, name, item_type FROM content_banks WHERE id = $1::uuid", bank_id,
+        )
+        if bank is None:
+            raise HTTPException(status_code=404, detail="题库不存在")
+
+    item_type = bank["item_type"]
+
+    # Pre-validate
+    raw = _process_content_bank_file(file_bytes, filename, bank_id="__validate__")
+    errors = _validate_entries(raw, item_type)
+    if errors:
+        max_show = 20
+        detail = f"验证失败，共 {len(errors)} 个错误:\n" + "\n".join(errors[:max_show])
+        if len(errors) > max_show:
+            detail += f"\n... 等 {len(errors)} 个错误"
+        _import_logger.error("追加导入验证失败: bank_id=%s, file=%s, errors=%d",
+                             bank_id, filename, len(errors))
+        for e in errors[:max_show]:
+            _import_logger.error("  %s", e)
+        raise HTTPException(status_code=400, detail=detail)
+
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
-                bank = await conn.fetchrow(
-                    "SELECT id::text, name, item_type FROM content_banks WHERE id = $1::uuid", bank_id,
-                )
-                if bank is None:
-                    raise HTTPException(status_code=404, detail="题库不存在")
+                # Re-parse with real bank_id for ZIP image copying
+                if filename.lower().endswith(".zip"):
+                    raw = _process_content_bank_file(file_bytes, filename, bank_id)
 
-                raw = _process_content_bank_file(file_bytes, filename, bank_id)
-
-                item_type = bank["item_type"]
                 max_sort = await conn.fetchval(
                     "SELECT COALESCE(MAX(sort_order), -1) FROM content_items WHERE bank_id = $1::uuid",
                     bank_id,
