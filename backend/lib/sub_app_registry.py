@@ -26,6 +26,7 @@ class FocusWorkDeclaration:
     label: str            # "今日单词" / "错题复习"
     template: str         # "flashcard" / "choice_question"
     content_bank_type: str  # "word_deck" / "article_set"
+    content_selector: str = "sequential"  # "sequential" / "weighted_mistake" / "fsrs_mixed"
     content_fields: list[ContentConfigField] = field(default_factory=list)
 
 
@@ -56,6 +57,7 @@ VOCAB = SubAppDeclaration(
             label="今日单词",
             template="flashcard",
             content_bank_type="word_deck",
+            content_selector="fsrs_mixed",
             content_fields=[
                 ContentConfigField(key="deck_id", label="词书", type="deck_switcher"),
                 ContentConfigField(key="daily_target_count", label="每日目标", type="number", default_value=20, min_val=1, max_val=500),
@@ -77,6 +79,7 @@ ERC = SubAppDeclaration(
             label="真题练习",
             template="choice_question",
             content_bank_type="article_set",
+            content_selector="sequential",
             content_fields=[
                 ContentConfigField(key="set_id", label="题库", type="set_switcher"),
                 ContentConfigField(key="daily_article_target", label="每日目标", type="number", default_value=1, min_val=1, max_val=50),
@@ -87,6 +90,7 @@ ERC = SubAppDeclaration(
             label="错题复习",
             template="choice_question",
             content_bank_type="article_set",
+            content_selector="weighted_mistake",
             content_fields=[
                 ContentConfigField(key="daily_question_target", label="每日目标", type="number", default_value=10, min_val=1, max_val=200),
                 ContentConfigField(
@@ -134,6 +138,7 @@ def _load_persisted() -> dict[str, SubAppDeclaration]:
                 fws.append(FocusWorkDeclaration(
                     type=fw_data["type"], label=fw_data["label"],
                     template=fw_data["template"], content_bank_type=fw_data["content_bank_type"],
+                    content_selector=fw_data.get("content_selector", "sequential"),
                     content_fields=cfs,
                 ))
             result[item["id"]] = SubAppDeclaration(
@@ -163,6 +168,7 @@ def _persist() -> None:
                 {
                     "type": fw.type, "label": fw.label,
                     "template": fw.template, "content_bank_type": fw.content_bank_type,
+                    "content_selector": fw.content_selector,
                     "content_fields": [
                         {"key": cf.key, "label": cf.label, "type": cf.type,
                          "default_value": cf.default_value, "options": cf.options,

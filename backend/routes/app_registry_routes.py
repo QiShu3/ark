@@ -21,6 +21,7 @@ def _decl_to_dict(decl: SubAppDeclaration) -> dict:
                 "label": fw.label,
                 "template": fw.template,
                 "content_bank_type": fw.content_bank_type,
+                "content_selector": fw.content_selector,
                 "content_fields": [
                     {
                         "key": cf.key,

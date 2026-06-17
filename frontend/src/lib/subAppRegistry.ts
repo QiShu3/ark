@@ -23,6 +23,7 @@ export interface FocusWorkDeclaration {
   label: string;
   template: FocusTemplate;
   contentBankType: ContentBankType;
+  contentSelector: string;
   contentFields: ContentConfigField[];
 }
 
@@ -67,6 +68,7 @@ const vocabDeclaration: SubAppDeclaration = {
       label: '今日单词',
       template: 'flashcard',
       contentBankType: 'word_deck',
+      contentSelector: 'fsrs_mixed',
       contentFields: [
         { key: 'deck_id', label: '词书', type: 'deck_switcher', defaultValue: null },
         { key: 'daily_target_count', label: '每日目标', type: 'number', defaultValue: 20, min: 1, max: 500 },
@@ -88,6 +90,7 @@ const ercDeclaration: SubAppDeclaration = {
       label: '真题练习',
       template: 'choice_question',
       contentBankType: 'article_set',
+      contentSelector: 'sequential',
       contentFields: [
         { key: 'set_id', label: '题库', type: 'set_switcher', defaultValue: null },
         { key: 'daily_article_target', label: '每日目标', type: 'number', defaultValue: 1, min: 1, max: 50 },
@@ -98,6 +101,7 @@ const ercDeclaration: SubAppDeclaration = {
       label: '错题复习',
       template: 'choice_question',
       contentBankType: 'article_set',
+      contentSelector: 'weighted_mistake',
       contentFields: [
         { key: 'daily_question_target', label: '每日目标', type: 'number', defaultValue: 10, min: 1, max: 200 },
         { key: 'review_scope', label: '复习范围', type: 'select', defaultValue: 'due',
@@ -146,6 +150,7 @@ function mapFromApi(raw: Record<string, unknown>): SubAppDeclaration {
       label: fw.label as string,
       template: (fw.template || 'choice_question') as FocusTemplate,
       contentBankType: (fw.content_bank_type || 'article_set') as ContentBankType,
+      contentSelector: (fw.content_selector as string) || 'sequential',
       contentFields: ((fw.content_fields || []) as Record<string, unknown>[]).map((cf) => ({
         key: cf.key as string,
         label: cf.label as string,
