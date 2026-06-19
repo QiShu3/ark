@@ -2,6 +2,21 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-20 00:44 · 3b7eebd7 · chore: ignore local generated artifacts
+
+- 用户提出的需求：
+  - “minicode 和 docs 和 backend/uploads 都加入到git ignore中去吧”
+  - “那提交这个更改吧。”
+
+- 本次完成的工作：
+  - 在 `.gitignore` 中加入 `.mimocode/`，忽略本地 AI 工具生成目录。
+  - 在 `.gitignore` 中加入 `backend/uploads/`，忽略本地上传内容产物。
+  - 将本地 superpowers 草稿目录 `docs/superpowers/plans/` 和 `docs/superpowers/specs/` 纳入忽略范围，保留正式 `docs/` 文档继续受版本控制。
+
+- 验证情况：
+  - `git status --short` 确认提交前除 `.gitignore` 外无其他未忽略改动。
+  - 忽略规则提交，无额外代码验证。
+
 ### 2026-06-14 · b8b840eb · 子应用页面模板化
 
 - 用户提出的需求：
