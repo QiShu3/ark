@@ -304,12 +304,12 @@ async def init_todo(app: Any) -> None:
             "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));"
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
-        await conn.execute("UPDATE tasks SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
-        await conn.execute("UPDATE tasks SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
         await conn.execute("UPDATE app_task_configs SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
         await conn.execute("UPDATE app_task_configs SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
         await conn.execute("UPDATE focus_work_runs SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
         await conn.execute("UPDATE focus_work_runs SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
+        await conn.execute("UPDATE tasks SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
+        await conn.execute("UPDATE tasks SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
         await conn.execute(
             "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'));"
         )
