@@ -29,6 +29,17 @@ def _str(val: Any, default: str = "") -> str:
     return str(val).strip()
 
 
+_HAS_HTML_TAG = re.compile(r"<[a-zA-Z][^>]*>")
+
+
+def _explanation_blocks(text: str) -> list[ContentBlock]:
+    """Build explanation blocks, using 'html' type when text contains HTML tags."""
+    if not text:
+        return []
+    block_type = "html" if _HAS_HTML_TAG.search(text) else "paragraph"
+    return [ContentBlock(type=block_type, text=text)]
+
+
 def _int(val: Any, default: int = 0) -> int:
     try:
         return int(val)
@@ -239,7 +250,7 @@ async def list_choice_items(
             table_block = _detect_table_block(stem)
             stem_blocks = [table_block] if table_block else [ContentBlock(type="paragraph", text=stem)]
             explanation = _str(q["analysis"])
-            explanation_blocks = [ContentBlock(type="paragraph", text=explanation)] if explanation else []
+            explanation_blocks = _explanation_blocks(explanation)
             image_url = q.get("image_url")
             if image_url:
                 stem_blocks.append(ContentBlock(type="image", src=str(image_url), alt="题目图片"))
@@ -401,7 +412,7 @@ async def list_erc_as_choice_items(
             table_block = _detect_table_block(stem)
             stem_blocks = [table_block] if table_block else [ContentBlock(type="paragraph", text=stem)]
             explanation = _str(q.get("explanation", ""))
-            explanation_blocks = [ContentBlock(type="paragraph", text=explanation)] if explanation else []
+            explanation_blocks = _explanation_blocks(explanation)
             questions.append(ChoiceQuestionOut(
                 id=str(q["question_id"]),
                 question_no=_int(q["question_no"]),
