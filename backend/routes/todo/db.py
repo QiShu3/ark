@@ -752,6 +752,8 @@ async def init_todo(app: Any) -> None:
             "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_status CHECK (status IN ('running', 'paused', 'content_completed', 'completed', 'abandoned'));"
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_type;")
+        await conn.execute("UPDATE focus_work_runs SET focus_work_type = 'review' WHERE focus_work_type = 'erc_review'")
+        await conn.execute("UPDATE focus_work_runs SET focus_work_type = 'practice' WHERE focus_work_type = 'erc_practice'")
         await conn.execute(
             "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus'));"
         )
@@ -807,6 +809,8 @@ async def init_todo(app: Any) -> None:
             """
         )
         await conn.execute("ALTER TABLE focus_app_work_logs DROP CONSTRAINT IF EXISTS chk_focus_app_work_logs_type;")
+        await conn.execute("UPDATE focus_app_work_logs SET focus_work_type = 'review' WHERE focus_work_type = 'erc_review'")
+        await conn.execute("UPDATE focus_app_work_logs SET focus_work_type = 'practice' WHERE focus_work_type = 'erc_practice'")
         await conn.execute(
             """
             ALTER TABLE focus_app_work_logs
