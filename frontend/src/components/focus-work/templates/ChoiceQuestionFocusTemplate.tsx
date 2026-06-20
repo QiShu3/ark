@@ -165,9 +165,6 @@ export default function ChoiceQuestionFocusTemplate({
                       <h2 className="text-base font-bold text-[var(--focus-work-text)] font-serif">Current Question</h2>
                     </div>
                   </div>
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-1 text-sm font-semibold text-[var(--focus-work-text)]">
-                    {currentItem.numberLabel}
-                  </div>
                   <div className="z-10 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
