@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 
 from routes.auth_routes import get_current_user
 
@@ -4152,3 +4153,80 @@ async def get_focus_stats(
 
     total_duration = sum(t.duration for t in tasks_stats)
     return FocusStatsOut(total_duration=total_duration, tasks=tasks_stats)
+
+
+# ---- Test Focus Work ----
+
+class TestFocusWorkStartRequest(BaseModel):
+    focus_work_type: str
+    bank_id: str | None = None
+    target_count: int = 10
+
+
+@router.post("/focus/workflow/start-test-focus", response_model=FocusWorkflowOut)
+async def start_test_focus_work(
+    request: Request,
+    body: TestFocusWorkStartRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """启动测试专注工作（正计时模式）。"""
+    if body.focus_work_type not in ("vocab_today", "erc_review", "erc_practice"):
+        raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {body.focus_work_type}")
+    if body.target_count < 1 or body.target_count > 500:
+        raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            existing = await conn.fetchrow(
+                "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
+                int(user.id),
+            )
+            if existing is not None:
+                await conn.execute(
+                    "UPDATE focus_workflows SET status = 'stopped', ended_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND status = 'active'",
+                    int(user.id),
+                )
+
+            focus_phase = {
+                "phase_type": "focus",
+                "duration": 3600,
+                "timer_mode": "countup",
+                "task_id": None,
+                "focus_work_type": body.focus_work_type,
+                "is_temporary": True,
+                "record_focus": True,
+            }
+
+            phases = [focus_phase]
+            try:
+                created = await conn.fetchrow(
+                    """
+                    INSERT INTO focus_workflows(
+                        user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                        focus_duration, break_duration, current_phase, phase_started_at,
+                        phase_planned_duration, pending_confirmation, pending_task_selection, status,
+                        active_focus_work_type, focus_work_display_state, focus_work_result,
+                        focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                    )
+                    VALUES ($1, NULL, NULL, $2, $3::jsonb, 0, $4, $5, 'focus', NOW(), $4, FALSE, FALSE,
+                            'active', $6, 'fullscreen', NULL, NULL, FALSE, NULL, $7)
+                    RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                              focus_duration, break_duration, current_phase, phase_started_at,
+                              phase_planned_duration, pending_confirmation, pending_task_selection,
+                              active_focus_work_type, focus_work_display_state, focus_work_result,
+                              focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                    """,
+                    int(user.id),
+                    "测试专注工作",
+                    _to_jsonb_param(phases),
+                    60,
+                    60,
+                    body.focus_work_type,
+                    True,
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="启动测试专注工作失败") from exc
+            if created is None:
+                raise HTTPException(status_code=500, detail="启动测试专注工作失败")
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)

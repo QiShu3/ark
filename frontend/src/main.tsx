@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import AdminUiLibraryPage from './pages/AdminUiLibraryPage';
 import AppCenter from './pages/AppCenter';
+import TestFocusWork from './pages/TestFocusWork';
 import ERCLibrary from './pages/ERC/Library';
 import ERCMistakes from './pages/ERC/Mistakes';
 import ERCPractice from './pages/ERC/Practice';
@@ -33,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin/ui" element={<AdminUiLibraryPage />} />
+            <Route path="/test-focus" element={<TestFocusWork />} />
           </Route>
           <Route path="/apps" element={<AppCenter />} />
           <Route path="/:appId" element={<DynamicSubAppHome />} />

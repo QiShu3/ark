@@ -2,6 +2,36 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-20 · test-focus-work-admin · feat(admin): add test focus work admin tool
+
+- 用户提出的需求：
+  - "在应用中心我想添加一个测试专注工作，仅管理员可以看到和访问的测试子应用，用来测试专注工作和题库的互动"
+
+- 本次完成的工作：
+  - **后端**：添加 `test_focus_configs` 数据库表，用于持久化存储测试配置。
+  - **后端**：新增 API 端点：
+    - `GET /api/admin/content-banks-for-type` - 根据专注工作类型返回可用题库
+    - `GET /api/admin/test-focus-configs` - 获取用户测试配置列表
+    - `POST /api/admin/test-focus-configs` - 创建测试配置
+    - `DELETE /api/admin/test-focus-configs/{config_id}` - 删除测试配置
+    - `POST /api/todo/focus/workflow/start-test-focus` - 启动测试专注工作（正计时模式）
+  - **前端**：创建 `TestFocusWork.tsx` 管理员专用页面，支持创建配置、选择题库、启动专注工作。
+  - **前端**：在 `main.tsx` 添加 `/#/test-focus` 路由。
+  - **前端**：在 `AppCenter.tsx` 添加"测试专注工作"导航入口（仅管理员可见）。
+
+- 功能特性：
+  - 支持三种专注工作类型：vocab_today（今日单词）、erc_review（错题复习）、erc_practice（真题练习）
+  - 配置参数：专注类型、题库、目标数量
+  - 正计时模式：从 0 开始计时，手动结束
+  - 无休息阶段：只有专注阶段
+
+- 验证情况：
+  - `cd backend && uv run ruff check routes/todo/routes.py routes/todo/db.py` — 通过 ✅
+  - `cd backend && uv run pytest tests/test_todo_routes.py -q` — 102 个测试全部通过 ✅
+  - `cd frontend && pnpm check` — TypeScript 无错误 ✅
+  - `cd frontend && pnpm lint` — 无新增错误 ✅
+  - `cd frontend && pnpm test run` — 53 个测试文件、250 个测试用例全部通过 ✅
+
 ### 2026-06-20 00:44 · 3b7eebd7 · chore: ignore local generated artifacts
 
 - 用户提出的需求：

@@ -2846,3 +2846,138 @@ async def toggle_template_publish(
         if row is None:
             raise HTTPException(status_code=404, detail="模板不存在")
     return TemplateStorePublishOut(is_published=row["is_published"])
+
+
+# ---- Test Focus Work Configs ----
+
+class ContentBankItem(BaseModel):
+    id: str
+    name: str
+    count: int
+
+
+@router.get("/content-banks-for-type", response_model=list[ContentBankItem])
+async def list_content_banks_for_type(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    focus_work_type: str = Query(...),
+) -> list[ContentBankItem]:
+    """根据专注工作类型返回可用的题库列表。"""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        if focus_work_type == "vocab_today":
+            rows = await conn.fetch(
+                "SELECT id::text AS id, name, word_count AS count FROM vocab_decks ORDER BY name"
+            )
+        elif focus_work_type in ("erc_review", "erc_practice"):
+            rows = await conn.fetch(
+                "SELECT id::text AS id, name, article_count AS count FROM erc_sets ORDER BY name"
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
+    return [ContentBankItem(id=r["id"], name=r["name"], count=r["count"]) for r in rows]
+
+
+class TestFocusConfigOut(BaseModel):
+    id: str
+    name: str
+    focus_work_type: str
+    bank_id: str | None
+    target_count: int
+    created_at: str
+    updated_at: str
+
+
+@router.get("/test-focus-configs", response_model=list[TestFocusConfigOut])
+async def list_test_focus_configs(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> list[TestFocusConfigOut]:
+    """获取当前管理员的测试专注配置列表。"""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id::text AS id, name, focus_work_type, bank_id, target_count,
+                   created_at, updated_at
+            FROM test_focus_configs
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            """,
+            int(_admin.id),
+        )
+    return [
+        TestFocusConfigOut(
+            id=r["id"],
+            name=r["name"],
+            focus_work_type=r["focus_work_type"],
+            bank_id=r["bank_id"],
+            target_count=r["target_count"],
+            created_at=r["created_at"].isoformat() if r["created_at"] else "",
+            updated_at=r["updated_at"].isoformat() if r["updated_at"] else "",
+        )
+        for r in rows
+    ]
+
+
+@router.post("/test-focus-configs", response_model=TestFocusConfigOut)
+async def create_test_focus_config(
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+    name: str = Form(...),
+    focus_work_type: str = Form(...),
+    bank_id: str = Form(""),
+    target_count: int = Form(10),
+) -> TestFocusConfigOut:
+    """创建测试专注配置。"""
+    if focus_work_type not in ("vocab_today", "erc_review", "erc_practice"):
+        raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
+    if target_count < 1 or target_count > 500:
+        raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
+
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO test_focus_configs (user_id, name, focus_work_type, bank_id, target_count)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id::text AS id, name, focus_work_type, bank_id, target_count,
+                      created_at, updated_at
+            """,
+            int(_admin.id),
+            name,
+            focus_work_type,
+            bank_id or None,
+            target_count,
+        )
+    return TestFocusConfigOut(
+        id=row["id"],
+        name=row["name"],
+        focus_work_type=row["focus_work_type"],
+        bank_id=row["bank_id"],
+        target_count=row["target_count"],
+        created_at=row["created_at"].isoformat() if row["created_at"] else "",
+        updated_at=row["updated_at"].isoformat() if row["updated_at"] else "",
+    )
+
+
+@router.delete("/test-focus-configs/{config_id}")
+async def delete_test_focus_config(
+    config_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, str]:
+    """删除测试专注配置。"""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM test_focus_configs
+            WHERE id = $1::uuid AND user_id = $2
+            """,
+            config_id,
+            int(_admin.id),
+        )
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="配置不存在")
+    return {"detail": "配置已删除"}

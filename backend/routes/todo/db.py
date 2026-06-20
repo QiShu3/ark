@@ -995,5 +995,22 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "ALTER TABLE event_template_store_templates ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false"
         )
+
+        # Test focus work configs (admin-only)
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS test_focus_configs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                focus_work_type TEXT NOT NULL CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice')),
+                bank_id TEXT,
+                target_count INTEGER DEFAULT 10,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+
         await _clear_event_template_store(conn)
         await _seed_event_template_store(conn)

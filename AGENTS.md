@@ -60,3 +60,7 @@ Backend commands run from `backend/`:
 ## Configuration & Security Tips
 - Do not commit secrets. Use `backend/.env.example` as the template for local configuration.
 - Ignore generated artifacts such as `.venv/`, build output, caches, and local screenshots.
+
+## Default Test Account
+- Username: `qishuadmin`
+- Password: `12345678`
