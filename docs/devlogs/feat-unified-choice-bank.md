@@ -77,3 +77,19 @@ start-test-focus 生成的 choice_scope/choice_completion 必须被 focus work r
 - frontend tsc --noEmit: 通过
 - eslint: 通过
 - ruff: 通过
+
+### 2026-06-20 · `7d232bf7` · refactor: simplify ERC focus work, add MarkdownContent, clean up phase template
+
+**用户提出的需求：**
+提交代码。
+
+**本次完成的工作：**
+- 移除 ERCPracticeFocusWork 中的 flashcard/vocabulary preheat 阶段
+- 删除 FocusWorkPhaseTemplate 和 phaseTypes（不再需要）
+- 新增 MarkdownContent 组件用于 ContentBlockRenderer 富文本渲染
+- 清理未使用的 ERC service 方法和路由
+- 简化 Practice.tsx 页面结构
+
+**验证情况：**
+- backend pytest: 206 passed
+- frontend vitest: 255 passed
