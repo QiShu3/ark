@@ -8,7 +8,7 @@ import {
   submitERCVocabularyPreheat,
   submitERCArticle,
 } from '../../lib/erc/api';
-import type { ERCArticleDetail, ERCArticleListItem, ERCArticleSubmitResult } from '../../lib/erc/types';
+import type { ERCArticleDetail, ERCArticleListItem } from '../../lib/erc/types';
 import type { VocabReviewItem } from '../../lib/vocab/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import FlashcardFocusTemplate from '../focus-work/templates/FlashcardFocusTemplate';
@@ -18,6 +18,8 @@ import type { FocusWorkPhaseConfig } from '../focus-work/templates/phaseTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-work/templates/choiceQuestionTypes';
 import WordMetaPanel from '../Vocab/WordMetaPanel';
+import { fetchChoiceItems } from '../../lib/choice/api';
+import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceCompletion } from '../../lib/choice/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCPracticeFocusWorkProps = FocusWorkRendererProps;
@@ -27,10 +29,29 @@ const PHASES: FocusWorkPhaseConfig[] = [
   { type: 'choice_question', label: '真题练习' },
 ];
 
+function stringConfig(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
+  const raw = run.config_snapshot?.choice_scope;
+  if (raw && typeof raw === 'object' && 'bank_id' in raw) return raw as ChoiceScope;
+  return null;
+}
+
+function getChoiceCompletion(run: FocusWorkRendererProps['run']): ChoiceCompletion | null {
+  const raw = run.config_snapshot?.choice_completion;
+  if (raw && typeof raw === 'object' && 'mode' in raw) return raw as ChoiceCompletion;
+  return null;
+}
+
 function articleTargetCountFromRun(run: FocusWorkRendererProps['run']) {
+  const completion = getChoiceCompletion(run);
+  if (completion?.mode === 'exhaust_scope') return Infinity;
+  if (completion?.mode === 'question_count' && completion.question_count) return completion.question_count;
   const rawTarget = Number(run.config_snapshot?.target_article_count ?? run.config_snapshot?.daily_article_target ?? 1);
   if (!Number.isFinite(rawTarget)) return 1;
-  return Math.max(1, Math.min(10, Math.floor(rawTarget)));
+  return Math.max(1, Math.min(500, Math.floor(rawTarget)));
 }
 
 async function resolvePracticeArticleId(run: FocusWorkRendererProps['run'], completedArticleIds: Set<string>) {
@@ -39,7 +60,9 @@ async function resolvePracticeArticleId(run: FocusWorkRendererProps['run'], comp
     return overview.recommended_article?.article_id ?? null;
   }
 
-  const articles = await fetchERCArticles(articleFiltersFromRun(run));
+  const setId = stringConfig(run.config_snapshot?.set_id ?? run.config_snapshot?.article_set_id);
+  const exam = stringConfig(run.config_snapshot?.exam);
+  const articles = await fetchERCArticles({ ...(setId ? { setId } : {}), ...(exam ? { exam } : {}) });
   return selectExtraPracticeArticle(articles, completedArticleIds)?.article_id ?? null;
 }
 
@@ -53,19 +76,6 @@ function selectExtraPracticeArticle(articles: ERCArticleListItem[], completedArt
     ?? pool[0]
     ?? null
   );
-}
-
-function articleFiltersFromRun(run: FocusWorkRendererProps['run']) {
-  const setId = stringConfig(run.config_snapshot?.set_id ?? run.config_snapshot?.article_set_id);
-  const exam = stringConfig(run.config_snapshot?.exam);
-  return {
-    ...(setId ? { setId } : {}),
-    ...(exam ? { exam } : {}),
-  };
-}
-
-function stringConfig(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function vocabItemToFlashcardItem(word: VocabReviewItem): FlashcardItem {
@@ -84,6 +94,36 @@ function vocabItemToFlashcardItem(word: VocabReviewItem): FlashcardItem {
     meta: [
       { label: '词汇预热', tone: 'blue' },
     ],
+  };
+}
+
+function choiceItemToChoiceQuestion(
+  item: ChoiceItemDTO,
+  questionIndex: number,
+): ChoiceQuestionItem | null {
+  const q = item.questions[questionIndex];
+  if (!q) return null;
+
+  const material = item.material_blocks.length > 0
+    ? { title: item.title || '阅读材料', paragraphs: [{ id: 'main', text: '' }] }
+    : undefined;
+
+  const stemText = q.stem_blocks.map((b) => b.text || '').join('\n');
+
+  const meta: { label: string; tone?: 'blue' | 'amber' | 'emerald' }[] = [];
+  if (item.tags.length > 0) meta.push({ label: item.tags[0], tone: 'blue' });
+  meta.push({ label: `题目 ${questionIndex + 1} / ${item.question_count}` });
+
+  return {
+    id: q.id,
+    numberLabel: item.group_type === 'passage' ? `Q${questionIndex + 1}` : `#${item.sort_order || questionIndex + 1}`,
+    stem: stemText,
+    stemBlocks: q.stem_blocks.length > 0 ? q.stem_blocks : undefined,
+    options: q.options,
+    material: material as ChoiceQuestionItem['material'],
+    materialBlocks: item.material_blocks.length > 0 ? item.material_blocks : undefined,
+    explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,
+    meta,
   };
 }
 
@@ -122,6 +162,9 @@ export default function ERCPracticeFocusWork({
   disabled,
   onContentCompleted,
 }: ERCPracticeFocusWorkProps) {
+  const choiceScope = getChoiceScope(run);
+  const isChoiceMode = choiceScope !== null;
+
   const targetArticleCount = articleTargetCountFromRun(run);
   const [article, setArticle] = useState<ERCArticleDetail | null>(null);
   const [preheatWords, setPreheatWords] = useState<VocabReviewItem[]>([]);
@@ -130,11 +173,14 @@ export default function ERCPracticeFocusWork({
   const [completedQuestionCount, setCompletedQuestionCount] = useState(0);
   const [currentArticleAnsweredCount, setCurrentArticleAnsweredCount] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [submitResult, setSubmitResult] = useState<ERCArticleSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [preheatCompleted, setPreheatCompleted] = useState(false);
   const completedArticleIdsRef = useRef<Set<string>>(new Set());
+
+  const [choiceItems, setChoiceItems] = useState<ChoiceItemDTO[]>([]);
+  const [currentChoiceItemIndex, setCurrentChoiceItemIndex] = useState(0);
+  const [currentChoiceQuestionIndex, setCurrentChoiceQuestionIndex] = useState(0);
 
   const {
     currentPhaseIndex,
@@ -143,13 +189,12 @@ export default function ERCPracticeFocusWork({
   } = usePhaseManager(PHASES, () => {
     onContentCompleted({
       article_count: completedArticleCount,
-      target_article_count: targetArticleCount,
+      target_article_count: targetArticleCount === Infinity ? choiceItems.length : targetArticleCount,
       correct_count: completedCorrectCount,
       question_count: completedQuestionCount,
     });
   });
 
-  // Skip flashcard phase if no preheat words
   useEffect(() => {
     if (!loading && preheatWords.length === 0 && currentPhaseIndex === 0 && !preheatCompleted) {
       setPreheatCompleted(true);
@@ -161,30 +206,41 @@ export default function ERCPracticeFocusWork({
     setLoading(true);
     setError(null);
     try {
-      const articleId = await resolvePracticeArticleId(run, completedArticleIdsRef.current);
-      if (!articleId) {
-        setArticle(null);
-        setPreheatWords([]);
-        setLoading(false);
-        return;
+      if (isChoiceMode && choiceScope) {
+        const year = choiceScope.years?.[0];
+        const subject = choiceScope.subjects?.[0];
+        const items = await fetchChoiceItems(choiceScope.bank_id, {
+          year: year != null ? Number(year) : undefined,
+          subject: subject || undefined,
+          limit: 200,
+        });
+        setChoiceItems(items);
+        setCurrentChoiceItemIndex(0);
+        setCurrentChoiceQuestionIndex(0);
+        setCurrentArticleAnsweredCount(0);
+      } else {
+        const articleId = await resolvePracticeArticleId(run, completedArticleIdsRef.current);
+        if (!articleId) {
+          setArticle(null);
+          setPreheatWords([]);
+          setLoading(false);
+          return;
+        }
+        const [articleData, preheatData] = await Promise.all([
+          fetchERCArticle(articleId),
+          fetchERCVocabularyPreheat(articleId),
+        ]);
+        setArticle(articleData);
+        setPreheatWords(preheatData);
+        setCurrentQuestionIndex(0);
+        setCurrentArticleAnsweredCount(0);
       }
-
-      const [articleData, preheatData] = await Promise.all([
-        fetchERCArticle(articleId),
-        fetchERCVocabularyPreheat(articleId),
-      ]);
-
-      setArticle(articleData);
-      setPreheatWords(preheatData);
-      setCurrentQuestionIndex(0);
-      setCurrentArticleAnsweredCount(0);
-      setSubmitResult(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '真题练习加载失败');
     } finally {
       setLoading(false);
     }
-  }, [run]);
+  }, [run, isChoiceMode, choiceScope]);
 
   useEffect(() => {
     void loadArticle();
@@ -192,10 +248,8 @@ export default function ERCPracticeFocusWork({
 
   const handleFlashcardSubmit = useCallback(async (item: FlashcardItem, rating: FlashcardRating): Promise<FlashcardSubmitResult> => {
     if (!article) return { shouldRepeat: false };
-
     const word = preheatWords.find((w) => w.id === item.id);
     if (!word) return { shouldRepeat: false };
-
     try {
       await submitERCVocabularyPreheat(article.article_id, {
         deck_id: word.deck_id,
@@ -206,7 +260,6 @@ export default function ERCPracticeFocusWork({
     } catch (err) {
       console.error('Failed to submit preheat review', err);
     }
-
     return { shouldRepeat: false };
   }, [article, preheatWords]);
 
@@ -224,26 +277,32 @@ export default function ERCPracticeFocusWork({
   }, [handlePhaseComplete]);
 
   const handleChoiceQuestionSubmit = useCallback(async (item: ChoiceQuestionItem, optionKey: string): Promise<ChoiceQuestionSubmitResult> => {
-    if (!article) {
-      return { correctOptionKey: undefined };
+    if (isChoiceMode) {
+      const currentItem = choiceItems[currentChoiceItemIndex];
+      if (!currentItem) return { correctOptionKey: undefined };
+      const q = currentItem.questions.find((question) => question.id === item.id);
+      if (!q) return { correctOptionKey: undefined };
+      const isCorrect = q.answer.toUpperCase() === optionKey.toUpperCase();
+      setCompletedQuestionCount((prev) => prev + 1);
+      if (isCorrect) setCompletedCorrectCount((prev) => prev + 1);
+      setCurrentArticleAnsweredCount((prev) => prev + 1);
+      return {
+        correctOptionKey: isCorrect ? optionKey : q.answer,
+        explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,
+      };
     }
 
+    if (!article) return { correctOptionKey: undefined };
     const question = article.questions.find((q) => q.question_id === item.id);
-    if (!question) {
-      return { correctOptionKey: undefined };
-    }
-
+    if (!question) return { correctOptionKey: undefined };
     const answers = [{ question_id: question.question_id, chosen_option: optionKey as OptionKey }];
-
     try {
       const result = await submitERCArticle(article.article_id, answers);
-      setSubmitResult(result);
       completedArticleIdsRef.current.add(article.article_id);
       setCompletedArticleCount((prev) => prev + 1);
       setCompletedCorrectCount((prev) => prev + result.items.filter((i) => i.is_correct).length);
       setCompletedQuestionCount((prev) => prev + result.items.length);
       setCurrentArticleAnsweredCount((prev) => prev + result.items.length);
-
       const isCorrect = result.items.find((i) => i.question_id === item.id)?.is_correct ?? false;
       return {
         correctOptionKey: isCorrect ? optionKey : result.items.find((i) => i.question_id === item.id)?.correct_option,
@@ -252,24 +311,40 @@ export default function ERCPracticeFocusWork({
       setError(err instanceof Error ? err.message : '提交答案失败');
       return { correctOptionKey: undefined };
     }
-  }, [article]);
+  }, [article, isChoiceMode, choiceItems, currentChoiceItemIndex]);
 
   const handleChoiceQuestionLoadNext = useCallback(async (): Promise<ChoiceQuestionItem | null> => {
-    if (!article) return null;
+    if (isChoiceMode) {
+      const currentItem = choiceItems[currentChoiceItemIndex];
+      if (!currentItem) return null;
+      const nextQIndex = currentChoiceQuestionIndex + 1;
+      if (nextQIndex < currentItem.questions.length) {
+        setCurrentChoiceQuestionIndex(nextQIndex);
+        return choiceItemToChoiceQuestion(currentItem, nextQIndex);
+      }
+      const nextItemIndex = currentChoiceItemIndex + 1;
+      if (nextItemIndex < choiceItems.length) {
+        setCurrentChoiceItemIndex(nextItemIndex);
+        setCurrentChoiceQuestionIndex(0);
+        return choiceItemToChoiceQuestion(choiceItems[nextItemIndex], 0);
+      }
+      return null;
+    }
 
+    if (!article) return null;
     const nextIndex = currentQuestionIndex + 1;
     if (nextIndex < article.questions.length) {
       setCurrentQuestionIndex(nextIndex);
       return articleToChoiceQuestionItem(article, nextIndex);
     }
     return null;
-  }, [article, currentQuestionIndex]);
+  }, [article, currentQuestionIndex, isChoiceMode, choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex]);
 
   const handleChoiceQuestionComplete = useCallback((progressSnapshot?: Record<string, unknown>) => {
     if (progressSnapshot?.no_available_content === true) {
       onContentCompleted({
         article_count: completedArticleCount,
-        target_article_count: targetArticleCount,
+        target_article_count: targetArticleCount === Infinity ? choiceItems.length : targetArticleCount,
         correct_count: completedCorrectCount,
         question_count: completedQuestionCount,
         no_available_content: true,
@@ -289,10 +364,20 @@ export default function ERCPracticeFocusWork({
     loadArticle,
     onContentCompleted,
     targetArticleCount,
+    choiceItems.length,
   ]);
 
   const flashcardItem = preheatWords.length > 0 ? vocabItemToFlashcardItem(preheatWords[0]) : null;
-  const choiceQuestionItem = article ? articleToChoiceQuestionItem(article, currentQuestionIndex) : null;
+
+  let choiceQuestionItem: ChoiceQuestionItem | null = null;
+  if (isChoiceMode) {
+    const currentItem = choiceItems[currentChoiceItemIndex];
+    if (currentItem) {
+      choiceQuestionItem = choiceItemToChoiceQuestion(currentItem, currentChoiceQuestionIndex);
+    }
+  } else if (article) {
+    choiceQuestionItem = articleToChoiceQuestionItem(article, currentQuestionIndex);
+  }
 
   const renderFlashcardPhase = () => (
     <FlashcardFocusTemplate
@@ -315,8 +400,11 @@ export default function ERCPracticeFocusWork({
 
   const renderChoiceQuestionPhase = () => (
     <ChoiceQuestionFocusTemplate
-      title="ERC PRACTICE"
-      subtitle={article ? `${article.year} 年 Text ${article.text_no}` : undefined}
+      title="真题练习"
+      subtitle={isChoiceMode
+        ? (choiceScope?.subjects?.[0] || choiceScope?.years?.[0] ? `${choiceScope.years?.[0] ?? ''} ${choiceScope.subjects?.[0] ?? ''}`.trim() : undefined)
+        : article ? `${article.year} 年 Text ${article.text_no}` : undefined
+      }
       statusLabel="真题练习"
       item={choiceQuestionItem}
       loading={loading}
@@ -324,7 +412,7 @@ export default function ERCPracticeFocusWork({
       emptyTitle="暂无真题"
       emptyDescription="当前没有可用的真题练习。"
       answeredCount={currentArticleAnsweredCount}
-      targetCount={article?.questions.length ?? 0}
+      targetCount={isChoiceMode ? choiceItems.reduce((sum, it) => sum + it.question_count, 0) : (article?.questions.length ?? 0)}
       disabled={disabled}
       onSubmitAnswer={handleChoiceQuestionSubmit}
       onLoadNext={handleChoiceQuestionLoadNext}

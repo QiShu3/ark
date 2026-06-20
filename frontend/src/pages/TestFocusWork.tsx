@@ -19,12 +19,29 @@ type ChoiceFilters = {
   total_questions: number;
 };
 
+type ChoiceScope = {
+  bank_id: string;
+  years?: number[];
+  subjects?: string[];
+  tags?: string[];
+  status?: string;
+  mode?: string;
+};
+
+type ChoiceCompletion = {
+  mode: string;
+  question_count?: number;
+  duration_seconds?: number;
+};
+
 type TestFocusConfig = {
   id: string;
   name: string;
   focus_work_type: FocusWorkType;
   bank_id: string | null;
   target_count: number;
+  scope?: ChoiceScope | null;
+  completion?: ChoiceCompletion | null;
   created_at: string;
   updated_at: string;
 };
@@ -41,6 +58,18 @@ function getFocusWorkTypeLabel(type: FocusWorkType): string {
 
 function getCountLabel(type: FocusWorkType): string {
   return FOCUS_WORK_TYPES.find((t) => t.value === type)?.countLabel ?? '项';
+}
+
+function configDisplaySummary(config: TestFocusConfig): string {
+  const parts: string[] = [];
+  if (config.scope?.years?.length) parts.push(`${config.scope.years[0]} 年`);
+  if (config.scope?.subjects?.length) parts.push(config.scope.subjects[0]);
+  if (config.completion?.mode === 'exhaust_scope') {
+    parts.push('做完整个范围');
+  } else {
+    parts.push(`目标: ${config.target_count}`);
+  }
+  return parts.join(' · ');
 }
 
 export default function TestFocusWork() {
@@ -116,6 +145,25 @@ export default function TestFocusWork() {
     }
   }, [formType, formBankId, loadFilters]);
 
+  function buildScope(): ChoiceScope | null {
+    if (formType !== 'erc_practice' && formType !== 'erc_review') return null;
+    if (!formBankId) return null;
+    return {
+      bank_id: formBankId,
+      years: formYear !== '' ? [formYear] : undefined,
+      subjects: formSubject ? [formSubject] : undefined,
+      status: 'all',
+      mode: 'sequential',
+    };
+  }
+
+  function buildCompletion(): ChoiceCompletion {
+    if (formCompletionMode === 'exhaust_scope') {
+      return { mode: 'exhaust_scope' };
+    }
+    return { mode: 'question_count', question_count: formTargetCount };
+  }
+
   async function handleCreate() {
     if (!formName.trim()) {
       setError('请输入配置名称');
@@ -124,11 +172,15 @@ export default function TestFocusWork() {
     setCreating(true);
     setError(null);
     try {
+      const scope = buildScope();
+      const completion = buildCompletion();
       const formData = new FormData();
       formData.append('name', formName.trim());
       formData.append('focus_work_type', formType);
       formData.append('bank_id', formBankId);
       formData.append('target_count', String(formTargetCount));
+      if (scope) formData.append('scope_json', JSON.stringify(scope));
+      formData.append('completion_json', JSON.stringify(completion));
 
       const res = await apiFetch('/api/admin/test-focus-configs', {
         method: 'POST',
@@ -161,31 +213,12 @@ export default function TestFocusWork() {
     }
   }
 
-  function buildScope() {
-    if (formType !== 'erc_practice' && formType !== 'erc_review') return undefined;
-    if (!formBankId) return undefined;
-    return {
-      bank_id: formBankId,
-      years: formYear !== '' ? [formYear] : undefined,
-      subjects: formSubject ? [formSubject] : undefined,
-      status: 'all',
-      mode: 'sequential',
-    };
-  }
-
-  function buildCompletion() {
-    if (formCompletionMode === 'exhaust_scope') {
-      return { mode: 'exhaust_scope' };
-    }
-    return { mode: 'question_count', question_count: formTargetCount };
-  }
-
-  async function handleStart(config: TestFocusConfig & { scope?: Record<string, unknown>; completion?: Record<string, unknown> }) {
+  async function handleStart(config: TestFocusConfig) {
     setStarting(config.id);
     setError(null);
     try {
-      const scope = config.scope ?? buildScope();
-      const completion = config.completion ?? buildCompletion();
+      const scope = config.scope ?? null;
+      const completion = config.completion ?? { mode: 'question_count', question_count: config.target_count };
       await apiJson('/todo/focus/workflow/start-test-focus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -239,7 +272,7 @@ export default function TestFocusWork() {
                 type="text"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="例如：高考词汇复习"
+                placeholder="例如：2025年408真题"
                 className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] placeholder:text-[var(--ark-text-faint)] focus:border-ark-accent focus:outline-none"
               />
             </div>
@@ -373,7 +406,7 @@ export default function TestFocusWork() {
                       <span className="rounded-full border border-ark-border bg-ark-surface-strong px-2.5 py-0.5 text-xs">
                         {getFocusWorkTypeLabel(config.focus_work_type)}
                       </span>
-                      <span>目标: {config.target_count} {getCountLabel(config.focus_work_type)}</span>
+                      <span>{configDisplaySummary(config)}</span>
                     </div>
                   </div>
                   <div className="ml-4 flex items-center gap-2">

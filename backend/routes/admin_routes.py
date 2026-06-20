@@ -2896,6 +2896,8 @@ class TestFocusConfigOut(BaseModel):
     focus_work_type: str
     bank_id: str | None
     target_count: int
+    scope: dict[str, Any] | None = None
+    completion: dict[str, Any] | None = None
     created_at: str
     updated_at: str
 
@@ -2911,7 +2913,7 @@ async def list_test_focus_configs(
         rows = await conn.fetch(
             """
             SELECT id::text AS id, name, focus_work_type, bank_id, target_count,
-                   created_at, updated_at
+                   scope_json, completion_json, created_at, updated_at
             FROM test_focus_configs
             WHERE user_id = $1
             ORDER BY created_at DESC
@@ -2925,6 +2927,8 @@ async def list_test_focus_configs(
             focus_work_type=r["focus_work_type"],
             bank_id=r["bank_id"],
             target_count=r["target_count"],
+            scope=json.loads(r["scope_json"]) if r["scope_json"] else None,
+            completion=json.loads(r["completion_json"]) if r["completion_json"] else None,
             created_at=r["created_at"].isoformat() if r["created_at"] else "",
             updated_at=r["updated_at"].isoformat() if r["updated_at"] else "",
         )
@@ -2940,6 +2944,8 @@ async def create_test_focus_config(
     focus_work_type: str = Form(...),
     bank_id: str = Form(""),
     target_count: int = Form(10),
+    scope_json: str = Form(""),
+    completion_json: str = Form(""),
 ) -> TestFocusConfigOut:
     """创建测试专注配置。"""
     if focus_work_type not in ("vocab_today", "erc_review", "erc_practice"):
@@ -2947,20 +2953,35 @@ async def create_test_focus_config(
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
 
+    scope_parsed = None
+    if scope_json:
+        try:
+            scope_parsed = json.loads(scope_json)
+        except json.JSONDecodeError:
+            pass
+    completion_parsed = None
+    if completion_json:
+        try:
+            completion_parsed = json.loads(completion_json)
+        except json.JSONDecodeError:
+            pass
+
     pool = _pool(request)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO test_focus_configs (user_id, name, focus_work_type, bank_id, target_count)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO test_focus_configs (user_id, name, focus_work_type, bank_id, target_count, scope_json, completion_json)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
             RETURNING id::text AS id, name, focus_work_type, bank_id, target_count,
-                      created_at, updated_at
+                      scope_json, completion_json, created_at, updated_at
             """,
             int(_admin.id),
             name,
             focus_work_type,
             bank_id or None,
             target_count,
+            json.dumps(scope_parsed) if scope_parsed else None,
+            json.dumps(completion_parsed) if completion_parsed else None,
         )
     return TestFocusConfigOut(
         id=row["id"],
@@ -2968,6 +2989,8 @@ async def create_test_focus_config(
         focus_work_type=row["focus_work_type"],
         bank_id=row["bank_id"],
         target_count=row["target_count"],
+        scope=scope_parsed,
+        completion=completion_parsed,
         created_at=row["created_at"].isoformat() if row["created_at"] else "",
         updated_at=row["updated_at"].isoformat() if row["updated_at"] else "",
     )

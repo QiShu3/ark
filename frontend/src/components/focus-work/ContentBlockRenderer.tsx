@@ -8,44 +8,60 @@ export type ContentBlockData = {
   alt?: string;
 };
 
-function TableBlock({ content }: { content: unknown }) {
-  if (typeof content === 'string') {
-    return <div className="overflow-x-auto" dangerouslySetInnerHTML={{ __html: content }} />;
+function parseHtmlToRows(html: string): string[][] {
+  const rows: string[][] = [];
+  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const tdRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+  let trMatch: RegExpExecArray | null;
+  while ((trMatch = trRegex.exec(html)) !== null) {
+    const cells: string[] = [];
+    let tdMatch: RegExpExecArray | null;
+    while ((tdMatch = tdRegex.exec(trMatch[1])) !== null) {
+      cells.push(tdMatch[1].replace(/<[^>]+>/g, '').trim());
+    }
+    if (cells.length > 0) rows.push(cells);
   }
+  return rows;
+}
+
+function SafeTable({ content, html }: { content?: unknown; html?: string }) {
+  let rows: string[][] = [];
+
   if (Array.isArray(content)) {
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <tbody>
-            {content.map((row, ri) => (
-              <tr key={ri}>
-                {Array.isArray(row)
-                  ? row.map((cell, ci) => (
-                      <td key={ci} className="border border-[var(--focus-work-border)] px-3 py-1.5">
-                        {String(cell)}
-                      </td>
-                    ))
-                  : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    rows = content.map((row) =>
+      Array.isArray(row) ? row.map((cell) => String(cell)) : [],
     );
+  } else if (html) {
+    rows = parseHtmlToRows(html);
   }
-  return null;
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="border border-[var(--focus-work-border)] px-3 py-1.5">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function HtmlBlock({ text }: { text: string }) {
   if (/<table/i.test(text)) {
-    return <TableBlock content={text} />;
+    return <SafeTable html={text} />;
   }
-  return (
-    <div
-      className="prose prose-sm max-w-none text-[var(--focus-work-text)]"
-      dangerouslySetInnerHTML={{ __html: text }}
-    />
-  );
+  const stripped = text.replace(/<[^>]+>/g, '').trim();
+  return <p className="text-sm">{stripped || text}</p>;
 }
 
 export default function ContentBlockRenderer({ blocks }: { blocks: ContentBlockData[] }) {
@@ -62,7 +78,7 @@ export default function ContentBlockRenderer({ blocks }: { blocks: ContentBlockD
               </p>
             );
           case 'table':
-            return <TableBlock key={i} content={block.content ?? block.text} />;
+            return <SafeTable key={i} content={block.content} html={block.text} />;
           case 'html':
             return <HtmlBlock key={i} text={block.text || ''} />;
           case 'image':

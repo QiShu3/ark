@@ -238,10 +238,10 @@ export default function ChoiceQuestionFocusTemplate({
                   </div>
                 </div>
 
-                {result && currentItem.explanationBlocks && currentItem.explanationBlocks.length > 0 && (
+                {result && (currentItem.explanationBlocks?.length || result.explanationBlocks?.length) && (
                   <div className="mt-4 rounded-xl border border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] p-4">
                     <div className="mb-2 text-xs font-semibold text-[var(--focus-work-emerald-text)]">解析</div>
-                    <ContentBlockRenderer blocks={currentItem.explanationBlocks} />
+                    <ContentBlockRenderer blocks={result.explanationBlocks ?? currentItem.explanationBlocks!} />
                   </div>
                 )}
               </div>

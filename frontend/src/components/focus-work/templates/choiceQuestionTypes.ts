@@ -38,6 +38,7 @@ export type ChoiceQuestionItem = {
 export type ChoiceQuestionSubmitResult = {
   correctOptionKey?: string;
   explanation?: React.ReactNode;
+  explanationBlocks?: ContentBlockData[];
   progressSnapshot?: Record<string, unknown>;
 };
 
