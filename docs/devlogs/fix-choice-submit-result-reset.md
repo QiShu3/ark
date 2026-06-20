@@ -84,3 +84,22 @@
 **修复**：SQL 新增 `explanation` 列查询，并将非空解析文本转换为 `ContentBlock(type="paragraph")` 填充到 `explanation_blocks`。
 
 **验证**：curl 调用 API 确认 `explanation_blocks` 返回长度 1，文本内容正确（上三角矩阵按列优先存储解析）。
+
+---
+
+## 修复解析文本含 HTML 标签时的渲染问题
+
+**用户请求**：查看题目解析为什么没有渲染（出现原始 `<table>` 标签）。
+
+**提交**：`08067d40`
+
+**问题现象**：选择题解析区块中出现原始 HTML 标签文本（`<table>`、`<tr>`、`<td>`），未被渲染为表格。
+
+**根因分析**：
+- 后端两个 adapter 统一将解析文本包装为 `ContentBlock(type="paragraph")`
+- `paragraph` 类型走 ReactMarkdown，默认不渲染原始 HTML 标签
+- 前端的 `ContentBlockRenderer` 支持 `html` 类型，遇到 `<table>` 会走 `SafeTable` 组件正确渲染表格
+
+**修复**：新增 `_explanation_blocks` 辅助函数，用正则检测 HTML 标签，有则使用 `type="html"`，否则使用 `type="paragraph"`。两个 adapter（Content Bank 和 ERC）均改用此函数。
+
+**验证**：浏览器测试第 2 题栈操作解析，表格三列（操作/栈内元素/出栈元素）正常渲染为 DOM table 元素。
