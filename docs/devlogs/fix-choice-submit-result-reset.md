@@ -16,3 +16,25 @@
 **修复**：将 `useEffect` 依赖从 `[item?.id, item]` 改为 `[item?.id]`，只在题目 ID 真正变化时重置状态。
 
 **验证**：在浏览器中重新启动"测试 408-2020"专注工作，选择 C 选项提交后，正确显示绿色高亮和"下一题"按钮。
+
+---
+
+## 修复：真题练习题目进度标签显示全局索引
+
+**用户请求**：修复"题目 1/1"始终显示的问题——专注工作不止一道题，应显示全局进度。
+
+**提交**：`c631eaec`
+
+**问题现象**：真题练习界面右上角的 meta 标签始终显示"题目 1 / 1"，即使本次专注工作包含 40 道题。
+
+**根因分析**：
+- `choiceItemToChoiceQuestion` 使用 `questionIndex + 1 / item.question_count` 作为进度标签
+- 对单题 item（`question_count = 1`），始终显示 "题目 1/1"
+- 缺少跨 item 的全局题号概念
+
+**修复**：
+- 新增 `computeGlobalQuestionIndex` 辅助函数，累加当前 item 之前所有 item 的 `question_count` 再加上本地 `questionIndex`
+- `choiceItemToChoiceQuestion` 新增可选参数 `globalIndex` 和 `globalTotal`
+- 三个调用点（渲染时、同 item 下一题、跨 item 下一题）均传入全局索引和总数
+
+**验证**：浏览器测试 408-2020 真题练习，第一题显示"题目 1 / 40"，提交后翻页显示"题目 2 / 40"。
