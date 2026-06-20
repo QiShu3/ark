@@ -73,9 +73,19 @@ function selectExtraPracticeArticle(articles: ERCArticleListItem[], completedArt
   );
 }
 
+function computeGlobalQuestionIndex(items: ChoiceItemDTO[], itemIndex: number, questionIndex: number): number {
+  let offset = 0;
+  for (let i = 0; i < itemIndex && i < items.length; i++) {
+    offset += items[i].question_count;
+  }
+  return offset + questionIndex;
+}
+
 function choiceItemToChoiceQuestion(
   item: ChoiceItemDTO,
   questionIndex: number,
+  globalIndex?: number,
+  globalTotal?: number,
 ): ChoiceQuestionItem | null {
   const q = item.questions[questionIndex];
   if (!q) return null;
@@ -95,8 +105,11 @@ function choiceItemToChoiceQuestion(
   const stemText = q.stem_blocks.map((b) => b.text || '').join('\n');
 
   const meta: { label: string; tone?: 'blue' | 'amber' | 'emerald' }[] = [];
-  if (item.tags.length > 0) meta.push({ label: item.tags[0], tone: 'blue' });
-  meta.push({ label: `题目 ${questionIndex + 1} / ${item.question_count}` });
+  if (globalIndex != null && globalTotal != null) {
+    meta.push({ label: `题目 ${globalIndex + 1} / ${globalTotal}` });
+  } else {
+    meta.push({ label: `题目 ${questionIndex + 1} / ${item.question_count}` });
+  }
 
   return {
     id: q.id,
@@ -268,13 +281,23 @@ export default function ERCPracticeFocusWork({
       const nextQIndex = currentChoiceQuestionIndex + 1;
       if (nextQIndex < currentItem.questions.length) {
         setCurrentChoiceQuestionIndex(nextQIndex);
-        return choiceItemToChoiceQuestion(currentItem, nextQIndex);
+        return choiceItemToChoiceQuestion(
+          currentItem,
+          nextQIndex,
+          computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, nextQIndex),
+          totalChoiceQuestionCount,
+        );
       }
       const nextItemIndex = currentChoiceItemIndex + 1;
       if (nextItemIndex < choiceItems.length) {
         setCurrentChoiceItemIndex(nextItemIndex);
         setCurrentChoiceQuestionIndex(0);
-        return choiceItemToChoiceQuestion(choiceItems[nextItemIndex], 0);
+        return choiceItemToChoiceQuestion(
+          choiceItems[nextItemIndex],
+          0,
+          computeGlobalQuestionIndex(choiceItems, nextItemIndex, 0),
+          totalChoiceQuestionCount,
+        );
       }
       return null;
     }
@@ -286,7 +309,7 @@ export default function ERCPracticeFocusWork({
       return articleToChoiceQuestionItem(article, nextIndex);
     }
     return null;
-  }, [article, currentQuestionIndex, isChoiceMode, choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex]);
+  }, [article, currentQuestionIndex, isChoiceMode, choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex, totalChoiceQuestionCount]);
 
   const handleChoiceQuestionComplete = useCallback((progressSnapshot?: Record<string, unknown>) => {
     if (progressSnapshot?.no_available_content === true) {
@@ -324,7 +347,12 @@ export default function ERCPracticeFocusWork({
   if (isChoiceMode) {
     const currentItem = choiceItems[currentChoiceItemIndex];
     if (currentItem) {
-      choiceQuestionItem = choiceItemToChoiceQuestion(currentItem, currentChoiceQuestionIndex);
+      choiceQuestionItem = choiceItemToChoiceQuestion(
+        currentItem,
+        currentChoiceQuestionIndex,
+        computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex),
+        totalChoiceQuestionCount,
+      );
     }
   } else if (article) {
     choiceQuestionItem = articleToChoiceQuestionItem(article, currentQuestionIndex);

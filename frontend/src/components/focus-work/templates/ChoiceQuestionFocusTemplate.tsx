@@ -52,7 +52,8 @@ export default function ChoiceQuestionFocusTemplate({
     setSelected(null);
     setResult(null);
     setLocalError(null);
-  }, [item?.id, item]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id]);
 
   React.useEffect(() => {
     if (completedRef.current) return;
@@ -127,7 +128,6 @@ export default function ChoiceQuestionFocusTemplate({
                     {currentItem.material?.title ?? '题目'}
                   </h2>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm text-[var(--focus-work-text-muted)]">
-                    {subtitle ? <span className="font-medium">{subtitle}</span> : null}
                     {(currentItem.meta ?? []).map((meta) => (
                       <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${metaClass(meta.tone)}`}>
                         <BarChart3 className="h-3.5 w-3.5" />
@@ -164,9 +164,6 @@ export default function ChoiceQuestionFocusTemplate({
                     <div className="min-w-0">
                       <h2 className="text-base font-bold text-[var(--focus-work-text)] font-serif">Current Question</h2>
                     </div>
-                  </div>
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-1 text-sm font-semibold text-[var(--focus-work-text)]">
-                    {currentItem.numberLabel}
                   </div>
                   <div className="z-10 flex flex-wrap items-center gap-2">
                     <button
