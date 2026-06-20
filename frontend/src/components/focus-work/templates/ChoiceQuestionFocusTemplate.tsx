@@ -128,7 +128,6 @@ export default function ChoiceQuestionFocusTemplate({
                     {currentItem.material?.title ?? '题目'}
                   </h2>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm text-[var(--focus-work-text-muted)]">
-                    {subtitle ? <span className="font-medium">{subtitle}</span> : null}
                     {(currentItem.meta ?? []).map((meta) => (
                       <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${metaClass(meta.tone)}`}>
                         <BarChart3 className="h-3.5 w-3.5" />

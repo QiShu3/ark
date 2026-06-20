@@ -105,7 +105,6 @@ function choiceItemToChoiceQuestion(
   const stemText = q.stem_blocks.map((b) => b.text || '').join('\n');
 
   const meta: { label: string; tone?: 'blue' | 'amber' | 'emerald' }[] = [];
-  if (item.tags.length > 0) meta.push({ label: item.tags[0], tone: 'blue' });
   if (globalIndex != null && globalTotal != null) {
     meta.push({ label: `题目 ${globalIndex + 1} / ${globalTotal}` });
   } else {
