@@ -52,7 +52,8 @@ export default function ChoiceQuestionFocusTemplate({
     setSelected(null);
     setResult(null);
     setLocalError(null);
-  }, [item?.id, item]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id]);
 
   React.useEffect(() => {
     if (completedRef.current) return;
