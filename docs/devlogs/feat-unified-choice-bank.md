@@ -2,6 +2,23 @@
 
 ## 提交记录
 
+### 2026-06-20 14:56 · `3f050118` · fix: complete unified choice focus workflow
+
+**用户提出的需求：**
+“一并提交了吧”——把当前工作区中剩余的统一选择题题库、专注练习和相关测试改动一并提交。
+
+**本次完成的工作：**
+- 提交剩余 Choice API/adapter/schema 改动，补齐选择题筛选、题目组映射、题目完成信息和内容选择逻辑
+- 提交 test focus / focus workflow 相关后端服务与路由改动，完善测试专注工作配置与运行链路
+- 提交 ERCPracticeFocusWork、ChoiceQuestionFocusTemplate、choice API client、TestFocusWork 等前端链路改动
+- 提交 vocab/flashcard 模板、工作流弹窗、导航测试等与当前专注工作链路相关的收尾修正
+- 补充 choice adapter 与 focus workflow app work 测试覆盖
+
+**验证情况：**
+- 本次提交前未重新运行完整测试
+- 依据前序开发报告，相关改动已通过 backend pytest、frontend vitest、frontend tsc、frontend eslint、backend ruff
+- 本轮操作仅做剩余改动提交与日志整理
+
 ### 2026-06-20 14:53 · `a6f5954f` · feat(admin): add content bank import template validation
 
 **用户提出的需求：**
