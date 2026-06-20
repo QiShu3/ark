@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import os
+import re
 import secrets
+import zipfile
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Annotated, Any
-
-import io
-import re
-import shutil
-import tempfile
-import zipfile
 from pathlib import Path as _Path
+from typing import Annotated, Any
 
 import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -25,6 +22,8 @@ from pydantic import BaseModel, Field
 from lib.content_selector import derive_content_selector
 from lib.sub_app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
+from routes.erc.repository import list_set_rows as list_erc_set_rows
+from routes.vocab.repository import list_vocab_decks
 
 # --- Import logger setup ---
 _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -2866,15 +2865,28 @@ async def list_content_banks_for_type(
     pool = _pool(request)
     async with pool.acquire() as conn:
         if focus_work_type == "vocab_today":
-            rows = await conn.fetch(
-                "SELECT id::text AS id, name, word_count AS count FROM vocab_decks ORDER BY name"
-            )
+            rows = await list_vocab_decks(conn)
+            if rows:
+                return [ContentBankItem(id=r["id"], name=r["name"], count=r["word_count"]) for r in rows]
+            item_type = "word"
         elif focus_work_type in ("erc_review", "erc_practice"):
-            rows = await conn.fetch(
-                "SELECT id::text AS id, name, article_count AS count FROM erc_sets ORDER BY name"
-            )
+            rows = await list_erc_set_rows(conn)
+            if rows:
+                count_key = "question_count" if focus_work_type == "erc_review" else "article_count"
+                return [ContentBankItem(id=r["id"], name=r["name"], count=r[count_key]) for r in rows]
+            item_type = "choice"
         else:
             raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
+        rows = await conn.fetch(
+            """
+            SELECT b.id::text AS id, b.name,
+                   (SELECT COUNT(*) FROM content_items WHERE bank_id = b.id)::int AS count
+            FROM content_banks b
+            WHERE b.item_type = $1
+            ORDER BY b.name
+            """,
+            item_type,
+        )
     return [ContentBankItem(id=r["id"], name=r["name"], count=r["count"]) for r in rows]
 
 

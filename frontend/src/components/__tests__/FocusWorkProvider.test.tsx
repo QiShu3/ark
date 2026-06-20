@@ -323,6 +323,24 @@ describe('FocusWorkProvider', () => {
     expect(apiJson).toHaveBeenCalledWith('/todo/focus/workflow/end-phase', { method: 'POST' });
   });
 
+  it('shows no-content state for empty extra runs instead of another repeat action', async () => {
+    mockCurrentWorkflow({ phase_runtime_state: 'extra_run_completed' }, {
+      counts_for_task_completion: false,
+      status: 'content_completed',
+      progress_snapshot: { no_available_content: true },
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: '暂无可加练内容' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '结束阶段' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再来一轮' })).not.toBeInTheDocument();
+  });
+
   it('lets expired phase extend time or end without task auto-completion', async () => {
     const user = userEvent.setup();
     mockCurrentWorkflow({

@@ -128,6 +128,7 @@ export default function ERCPracticeFocusWork({
   const [completedArticleCount, setCompletedArticleCount] = useState(0);
   const [completedCorrectCount, setCompletedCorrectCount] = useState(0);
   const [completedQuestionCount, setCompletedQuestionCount] = useState(0);
+  const [currentArticleAnsweredCount, setCurrentArticleAnsweredCount] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [submitResult, setSubmitResult] = useState<ERCArticleSubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +177,7 @@ export default function ERCPracticeFocusWork({
       setArticle(articleData);
       setPreheatWords(preheatData);
       setCurrentQuestionIndex(0);
+      setCurrentArticleAnsweredCount(0);
       setSubmitResult(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : '真题练习加载失败');
@@ -240,6 +242,7 @@ export default function ERCPracticeFocusWork({
       setCompletedArticleCount((prev) => prev + 1);
       setCompletedCorrectCount((prev) => prev + result.items.filter((i) => i.is_correct).length);
       setCompletedQuestionCount((prev) => prev + result.items.length);
+      setCurrentArticleAnsweredCount((prev) => prev + result.items.length);
 
       const isCorrect = result.items.find((i) => i.question_id === item.id)?.is_correct ?? false;
       return {
@@ -262,9 +265,31 @@ export default function ERCPracticeFocusWork({
     return null;
   }, [article, currentQuestionIndex]);
 
-  const handleChoiceQuestionComplete = useCallback(() => {
+  const handleChoiceQuestionComplete = useCallback((progressSnapshot?: Record<string, unknown>) => {
+    if (progressSnapshot?.no_available_content === true) {
+      onContentCompleted({
+        article_count: completedArticleCount,
+        target_article_count: targetArticleCount,
+        correct_count: completedCorrectCount,
+        question_count: completedQuestionCount,
+        no_available_content: true,
+      });
+      return;
+    }
+    if (completedArticleCount < targetArticleCount) {
+      void loadArticle();
+      return;
+    }
     handlePhaseComplete(1);
-  }, [handlePhaseComplete]);
+  }, [
+    completedArticleCount,
+    completedCorrectCount,
+    completedQuestionCount,
+    handlePhaseComplete,
+    loadArticle,
+    onContentCompleted,
+    targetArticleCount,
+  ]);
 
   const flashcardItem = preheatWords.length > 0 ? vocabItemToFlashcardItem(preheatWords[0]) : null;
   const choiceQuestionItem = article ? articleToChoiceQuestionItem(article, currentQuestionIndex) : null;
@@ -298,7 +323,7 @@ export default function ERCPracticeFocusWork({
       error={error}
       emptyTitle="暂无真题"
       emptyDescription="当前没有可用的真题练习。"
-      answeredCount={completedQuestionCount}
+      answeredCount={currentArticleAnsweredCount}
       targetCount={article?.questions.length ?? 0}
       disabled={disabled}
       onSubmitAnswer={handleChoiceQuestionSubmit}

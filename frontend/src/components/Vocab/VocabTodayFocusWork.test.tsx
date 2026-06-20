@@ -305,6 +305,69 @@ describe('VocabTodayFocusWork', () => {
     expect(screen.getByText('0 / 10')).toBeInTheDocument();
   });
 
+  it('honors large configured targets for extra runs', async () => {
+    fetchVocabOverviewCurrentWords.mockResolvedValue([
+      {
+        id: 'word-extra',
+        deck_id: 'deck-1',
+        deck_name: 'Default',
+        word: 'brave',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'unstarted',
+        translations: [{ pos: 'adj.', translation: '勇敢的' }],
+      },
+    ]);
+
+    render(
+      <VocabTodayFocusWork
+        run={extraRun({ target_word_count: 100 })}
+        disabled={false}
+        onContentCompleted={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('brave')).toBeInTheDocument();
+    expect(screen.getByText('0 / 100')).toBeInTheDocument();
+  });
+
+  it('uses the configured deck for extra runs while the global deck is still loading', async () => {
+    useVocabDeck.mockReturnValue({
+      decks: [],
+      activeDeck: null,
+      activeDeckVersion: 0,
+      inheritancePrompt: null,
+      setActiveDeck: vi.fn(),
+      confirmInheritance: vi.fn(),
+      dismissInheritance: vi.fn(),
+      loading: true,
+      error: null,
+    });
+    fetchVocabOverviewCurrentWords.mockResolvedValue([
+      {
+        id: 'word-extra',
+        deck_id: 'deck-config',
+        deck_name: 'Configured',
+        word: 'brave',
+        us_pronunciation: null,
+        uk_pronunciation: null,
+        mastery_state: 'unstarted',
+        translations: [{ pos: 'adj.', translation: '勇敢的' }],
+      },
+    ]);
+
+    render(
+      <VocabTodayFocusWork
+        run={extraRun({ deck_id: 'deck-config', target_word_count: 10 })}
+        disabled={false}
+        onContentCompleted={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('brave')).toBeInTheDocument();
+    expect(fetchVocabOverviewCurrentWords).toHaveBeenCalledWith('deck-config', 'all');
+  });
+
   it('uses the daily target count for extra run word selection', async () => {
     useVocabTodaySession.mockReturnValue({
       ready: true,

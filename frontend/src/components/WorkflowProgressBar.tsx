@@ -25,7 +25,9 @@ const WorkflowProgressBar: React.FC<WorkflowProgressBarProps> = ({ workflow, cla
   const timerText = workflow.pending_task_selection
     ? '待选任务'
     : formatClockTime(isCountup ? elapsedSeconds : Math.max(0, Math.round(workflow.remaining_seconds ?? 0)));
-  const targetHint = isCountup && targetDuration > 0 ? `目标 ${formatClockTime(targetDuration)}` : null;
+  const targetHint = isCountup && targetDuration > 0 && !currentPhase?.is_temporary
+    ? `目标 ${formatClockTime(targetDuration)}`
+    : null;
 
   if (!showProgress) {
     return null;

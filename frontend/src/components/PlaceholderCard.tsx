@@ -45,7 +45,7 @@ interface FocusWorkflow {
   state: 'normal' | 'focus' | 'break';
   workflow_name?: string | null;
   current_phase_index?: number | null;
-  phases?: { phase_type: 'focus' | 'break'; duration: number; timer_mode?: 'countdown' | 'countup' | null; task_id?: string | null }[];
+  phases?: { phase_type: 'focus' | 'break'; duration: number; timer_mode?: 'countdown' | 'countup' | null; task_id?: string | null; is_temporary?: boolean }[];
   task_id: string | null;
   task_title: string | null;
   pending_confirmation: boolean;
@@ -59,6 +59,7 @@ interface FocusWorkflow {
   phase_runtime_state?: string | null;
   runtime_task_id?: string | null;
   completed_workflow_name?: string | null;
+  active_run?: { config_snapshot?: Record<string, unknown> | null } | null;
 }
 
 interface EventItem {
@@ -1953,6 +1954,12 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     const hasPendingTransition = !!focusWorkflow?.pending_confirmation;
     const hasPendingTaskSelection = !!focusWorkflow?.pending_task_selection;
     const isBreakPhase = focusWorkflow?.state === 'break';
+    const activeRunConfig = focusWorkflow?.active_run && typeof focusWorkflow.active_run === 'object'
+      ? (focusWorkflow.active_run.config_snapshot as Record<string, unknown> | null | undefined)
+      : null;
+    const activeRunTaskTitle = typeof activeRunConfig?.task_title === 'string'
+      ? activeRunConfig.task_title
+      : null;
     
     // 如果正在专注，显示正在专注的任务名；否则显示即将专注的任务名
     let displayTaskTitle = targetTask?.title || '无计划';
@@ -1962,7 +1969,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
       } else if (hasPendingTaskSelection) {
         displayTaskTitle = '等待选择任务';
       } else {
-        displayTaskTitle = focusWorkflow?.task_title || tasks.find(t => t.id === focusWorkflow?.task_id)?.title || '未知任务';
+        displayTaskTitle = focusWorkflow?.task_title || activeRunTaskTitle || tasks.find(t => t.id === focusWorkflow?.task_id)?.title || '未知任务';
       }
     } else if (isFocusing) {
       displayTaskTitle = tasks.find(t => t.id === currentFocus.task_id)?.title || '未知任务';

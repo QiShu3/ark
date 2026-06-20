@@ -15,9 +15,9 @@ type ActionPanelProps = {
   primaryLabel: string;
   primaryDisabled: boolean;
   onPrimary: () => void;
-  secondaryLabel: string;
-  secondaryDisabled: boolean;
-  onSecondary: () => void;
+  secondaryLabel?: string;
+  secondaryDisabled?: boolean;
+  onSecondary?: () => void;
 };
 
 function ActionPanel({
@@ -40,12 +40,18 @@ function ActionPanel({
         <button type="button" disabled={primaryDisabled} onClick={onPrimary} className={primaryButtonClass}>
           {primaryLabel}
         </button>
-        <button type="button" disabled={secondaryDisabled} onClick={onSecondary} className={secondaryButtonClass}>
-          {secondaryLabel}
-        </button>
+        {secondaryLabel && onSecondary ? (
+          <button type="button" disabled={secondaryDisabled} onClick={onSecondary} className={secondaryButtonClass}>
+            {secondaryLabel}
+          </button>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function runHasNoAvailableContent(run: FocusWorkRendererProps['run'] | null) {
+  return run?.progress_snapshot?.no_available_content === true;
 }
 
 type FocusWorkbenchPanelProps = {
@@ -73,6 +79,8 @@ export default function FocusWorkbenchPanel({
   onCreateExtraRun,
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
+  const noAvailableContent = runHasNoAvailableContent(activeRun);
+
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
     return (
       <ActionPanel
@@ -90,6 +98,19 @@ export default function FocusWorkbenchPanel({
   }
 
   if (phaseRuntimeState === 'extra_run_completed') {
+    if (noAvailableContent) {
+      return (
+        <ActionPanel
+          label="No Content"
+          heading="暂无可加练内容"
+          description="当前词书没有可用于额外轮次的单词。可以结束当前阶段，或先补充词书内容后再回来练习。"
+          primaryLabel="结束阶段"
+          primaryDisabled={busy}
+          onPrimary={onEndPhase}
+        />
+      );
+    }
+
     return (
       <ActionPanel
         label="Extra Round"

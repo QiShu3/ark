@@ -13,6 +13,13 @@ from routes.todo.helpers import (
     _row_to_focus_workflow,
 )
 from routes.todo.schemas import FocusWorkflowOut, FocusWorkflowPhase
+from routes.todo_routes import (
+    _build_run_metadata,
+    _content_bank_article_seed,
+    _content_bank_word_seed,
+    _resolve_erc_app_set_id,
+    _resolve_vocab_app_deck_id,
+)
 
 
 class Row(dict):
@@ -164,6 +171,316 @@ def test_normalize_workflow_phases_preserves_focus_work_type():
 
     assert phases[0]["focus_work_type"] == "vocab_today"
     assert phases[0]["task_id"] is None
+
+
+def test_normalize_workflow_phases_preserves_test_focus_config():
+    phases = _normalize_workflow_phases(
+        [
+            {
+                "phase_type": "focus",
+                "duration": 3600,
+                "timer_mode": "countup",
+                "focus_work_type": "vocab_today",
+                "is_temporary": True,
+                "deck_id": "deck-1",
+                "target_word_count": 100,
+                "daily_target_count": 100,
+                "task_title": "今日单词",
+            }
+        ],
+        fallback_focus_duration=1500,
+        fallback_break_duration=300,
+    )
+
+    assert phases[0]["deck_id"] == "deck-1"
+    assert phases[0]["target_word_count"] == 100
+    assert phases[0]["daily_target_count"] == 100
+    assert phases[0]["task_title"] == "今日单词"
+
+
+@pytest.mark.asyncio
+async def test_build_run_metadata_uses_test_vocab_phase_config():
+    class NoTaskConn:
+        async def fetchrow(self, query: str, *args: object):
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    workflow_row = Row(
+        focus_duration=3600,
+        break_duration=60,
+        phases=[
+            {
+                "phase_type": "focus",
+                "duration": 3600,
+                "timer_mode": "countup",
+                "focus_work_type": "vocab_today",
+                "is_temporary": True,
+                "deck_id": "deck-1",
+                "target_word_count": 100,
+                "daily_target_count": 100,
+                "task_title": "今日单词",
+            }
+        ],
+        current_phase_index=0,
+        runtime_task_id=None,
+        task_id=None,
+        active_focus_work_type="vocab_today",
+    )
+
+    task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
+        NoTaskConn(),
+        user_id=1,
+        workflow_row=workflow_row,
+    )
+
+    assert task_id is None
+    assert focus_work_type == "vocab_today"
+    assert app_id == "vocab"
+    assert app_task_type == "vocab_today"
+    assert config_snapshot["deck_id"] == "deck-1"
+    assert config_snapshot["target_word_count"] == 100
+    assert config_snapshot["daily_target_count"] == 100
+    assert config_snapshot["task_title"] == "今日单词"
+
+
+@pytest.mark.asyncio
+async def test_resolve_vocab_app_deck_id_maps_legacy_content_bank_id():
+    bank_id = uuid4()
+    deck_id = uuid4()
+
+    class LegacyBankConn:
+        async def fetchrow(self, query: str, *args: object):
+            if "FROM vocab_decks WHERE id = $1" in query:
+                assert args[0] == bank_id
+                return None
+            if "FROM content_banks" in query:
+                assert args[0] == bank_id
+                return Row(name="考研英语单词")
+            if "FROM vocab_decks" in query and "WHERE key = $1 OR name = $2" in query:
+                assert args[0] == f"content-bank-{bank_id}"
+                assert args[1] == "考研英语单词"
+                return Row(id=deck_id)
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    resolved = await _resolve_vocab_app_deck_id(LegacyBankConn(), str(bank_id))
+
+    assert resolved == str(deck_id)
+
+
+@pytest.mark.asyncio
+async def test_resolve_vocab_app_deck_id_syncs_unsynced_content_bank(monkeypatch):
+    bank_id = uuid4()
+    synced_deck_id = uuid4()
+    imported: dict[str, object] = {}
+
+    async def fake_import_deck(_conn: object, deck: object) -> str:
+        imported["deck"] = deck
+        return str(synced_deck_id)
+
+    monkeypatch.setattr("routes.todo_routes.import_deck", fake_import_deck)
+
+    class UnsyncedBankConn:
+        async def fetchrow(self, query: str, *args: object):
+            if "FROM vocab_decks WHERE id = $1" in query:
+                return None
+            if "FROM content_banks" in query:
+                return Row(name="考研英语单词")
+            if "FROM vocab_decks" in query and "WHERE key = $1 OR name = $2" in query:
+                return None
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+        async def fetch(self, query: str, *args: object):
+            assert "FROM content_items" in query
+            assert args[0] == bank_id
+            return [
+                Row(
+                    title="abandon",
+                    sort_order=1,
+                    body={
+                        "word": "abandon",
+                        "pos": "n",
+                        "translation": "放任；狂热",
+                        "pronunciation": "US: ə'bændən / UK: ə'bænd(ə)n",
+                        "example": "He approached life with reckless abandon.",
+                        "example_translation": "他以不计后果的放纵态度对待生活。",
+                    },
+                )
+            ]
+
+    resolved = await _resolve_vocab_app_deck_id(UnsyncedBankConn(), str(bank_id))
+
+    assert resolved == str(synced_deck_id)
+    deck = imported["deck"]
+    assert deck.key == f"content-bank-{bank_id}"
+    assert deck.name == "考研英语单词"
+    assert deck.words[0].word == "abandon"
+    assert deck.words[0].translations[0].translation == "放任；狂热"
+    assert deck.words[0].sentences[0].sentence == "He approached life with reckless abandon."
+
+
+def test_content_bank_word_seed_parses_pronunciation_and_example():
+    seed = _content_bank_word_seed(
+        Row(
+            title="abandon",
+            sort_order=1,
+            body={
+                "translation": "放任；狂热",
+                "pronunciation": "US: ə'bændən / UK: ə'bænd(ə)n",
+                "example": "He approached life with reckless abandon.",
+                "example_translation": "他以不计后果的放纵态度对待生活。",
+            },
+        )
+    )
+
+    assert seed is not None
+    assert seed.word == "abandon"
+    assert seed.us_pronunciation == "ə'bændən"
+    assert seed.uk_pronunciation == "ə'bænd(ə)n"
+    assert seed.sentences[0].translation == "他以不计后果的放纵态度对待生活。"
+
+
+def test_content_bank_article_seed_converts_choice_item_to_erc_article():
+    bank_id = uuid4()
+    item_id = uuid4()
+    question_id = uuid4()
+
+    seed = _content_bank_article_seed(
+        bank_id,
+        "408选择题",
+        Row(
+            id=str(item_id),
+            title="2009年 数据结构 第1题",
+            sort_order=0,
+            body={"tags": ["408", "数据结构", "2009"], "passage": "", "examination": ""},
+        ),
+        [
+            Row(
+                id=str(question_id),
+                sort_order=0,
+                question_text="该缓冲区的逻辑结构应该是____。",
+                options={"A": "栈", "B": "队列", "C": "树", "D": "图"},
+                correct_answer="B",
+                analysis="缓冲区先进先出。",
+            )
+        ],
+    )
+
+    assert seed is not None
+    assert seed.article_id == f"content-bank-{bank_id}-{item_id}"
+    assert seed.exam == "408"
+    assert seed.year == 2009
+    assert seed.text_no == 1
+    assert seed.paragraphs[0].text == "2009年 数据结构 第1题"
+    assert seed.questions[0].question_id == f"content-bank-{bank_id}-{item_id}-{question_id}"
+    assert seed.questions[0].answer == "B"
+    assert seed.questions[0].options["B"] == "队列"
+
+
+@pytest.mark.asyncio
+async def test_resolve_erc_app_set_id_maps_legacy_content_bank_id():
+    bank_id = uuid4()
+    set_id = uuid4()
+
+    class LegacyBankConn:
+        async def fetchrow(self, query: str, *args: object):
+            if "FROM erc_sets WHERE id = $1" in query:
+                assert args[0] == bank_id
+                return None
+            if "FROM content_banks" in query:
+                assert args[0] == bank_id
+                return Row(name="408选择题")
+            if "FROM erc_sets" in query and "WHERE key = $1 OR name = $2" in query:
+                assert args[0] == f"content-bank-{bank_id}"
+                assert args[1] == "408选择题"
+                return Row(id=set_id)
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    resolved = await _resolve_erc_app_set_id(LegacyBankConn(), str(bank_id))
+
+    assert resolved == str(set_id)
+
+
+@pytest.mark.asyncio
+async def test_resolve_erc_app_set_id_syncs_unsynced_content_bank(monkeypatch):
+    bank_id = uuid4()
+    item_id = uuid4()
+    question_id = uuid4()
+    synced_set_id = uuid4()
+    imported: dict[str, object] = {"articles": [], "refreshed": None}
+
+    async def fake_upsert_set(_conn: object, **kwargs: object) -> str:
+        imported["set"] = kwargs
+        return str(synced_set_id)
+
+    async def fake_upsert_article_seed(_conn: object, *, set_id: str, seed: object) -> None:
+        assert set_id == str(synced_set_id)
+        imported["articles"].append(seed)
+
+    async def fake_refresh_set_counts(_conn: object, *, set_id: str) -> None:
+        imported["refreshed"] = set_id
+
+    monkeypatch.setattr("routes.todo_routes.upsert_set", fake_upsert_set)
+    monkeypatch.setattr("routes.todo_routes.upsert_article_seed", fake_upsert_article_seed)
+    monkeypatch.setattr("routes.todo_routes.refresh_set_counts", fake_refresh_set_counts)
+
+    class UnsyncedBankConn:
+        async def fetchrow(self, query: str, *args: object):
+            if "FROM erc_sets WHERE id = $1" in query:
+                return None
+            if "FROM content_banks" in query:
+                return Row(name="408选择题")
+            if "FROM erc_sets" in query and "WHERE key = $1 OR name = $2" in query:
+                return None
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+        async def fetch(self, query: str, *args: object):
+            if "FROM content_items" in query:
+                assert args[0] == bank_id
+                return [
+                    Row(
+                        id=str(item_id),
+                        title="2009年 数据结构 第1题",
+                        sort_order=0,
+                        body={"tags": ["408", "数据结构", "2009"], "passage": "", "examination": ""},
+                    )
+                ]
+            if "FROM content_questions" in query:
+                assert args[0] == [item_id]
+                return [
+                    Row(
+                        id=str(question_id),
+                        item_id=str(item_id),
+                        sort_order=0,
+                        question_text="该缓冲区的逻辑结构应该是____。",
+                        options={"A": "栈", "B": "队列", "C": "树", "D": "图"},
+                        correct_answer="B",
+                        analysis="缓冲区先进先出。",
+                    )
+                ]
+            raise AssertionError(f"Unexpected fetch query: {query}")
+
+    resolved = await _resolve_erc_app_set_id(UnsyncedBankConn(), str(bank_id))
+
+    assert resolved == str(synced_set_id)
+    assert imported["set"]["key"] == f"content-bank-{bank_id}"
+    assert imported["set"]["name"] == "408选择题"
+    assert imported["refreshed"] == str(synced_set_id)
+    assert imported["articles"][0].questions[0].answer == "B"
+
+
+@pytest.mark.asyncio
+async def test_resolve_vocab_app_deck_id_keeps_existing_vocab_deck_id():
+    deck_id = uuid4()
+
+    class VocabDeckConn:
+        async def fetchrow(self, query: str, *args: object):
+            if "FROM vocab_decks WHERE id = $1" in query:
+                assert args[0] == deck_id
+                return Row(id=deck_id)
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    resolved = await _resolve_vocab_app_deck_id(VocabDeckConn(), str(deck_id))
+
+    assert resolved == str(deck_id)
 
 
 def test_bind_first_focus_phase_to_task_clears_stale_preset_work_binding():

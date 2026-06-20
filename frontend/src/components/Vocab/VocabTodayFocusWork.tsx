@@ -12,7 +12,7 @@ import type { FlashcardItem, FlashcardRating, FlashcardSubmitResult } from '../f
 
 type RatingValue = FlashcardRating;
 
-const EXTRA_ROUND_LIMIT = 50;
+const EXTRA_ROUND_LIMIT = 500;
 
 type VocabTodayFocusWorkProps = FocusWorkRendererProps;
 
@@ -82,7 +82,8 @@ export default function VocabTodayFocusWork({
   onContentCompleted,
 }: VocabTodayFocusWorkProps) {
   const { activeDeck, activeDeckVersion, loading: deckLoading } = useVocabDeck();
-  const activeDeckId = activeDeck?.id ?? null;
+  const configuredDeckId = typeof run.config_snapshot?.deck_id === 'string' ? run.config_snapshot.deck_id : null;
+  const activeDeckId = configuredDeckId ?? activeDeck?.id ?? null;
   const session = useVocabTodaySession(activeDeckId, activeDeckVersion);
   const completedRef = React.useRef(false);
   const isPaused = disabled;

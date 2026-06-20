@@ -47,6 +47,7 @@ export default function ChoiceQuestionFocusTemplate({
   const completedRef = React.useRef(false);
 
   React.useEffect(() => {
+    completedRef.current = false;
     setCurrentItem(item);
     setSelected(null);
     setResult(null);

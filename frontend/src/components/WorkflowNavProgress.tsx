@@ -266,7 +266,9 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
   const timerText = workflowForMetrics.pending_task_selection
     ? '待选任务'
     : formatClockTime(isCountup ? elapsed : remaining);
-  const targetHint = isCountup && currentDuration > 0 ? `目标 ${formatClockTime(currentDuration)}` : null;
+  const targetHint = isCountup && currentDuration > 0 && !currentPhase?.is_temporary
+    ? `目标 ${formatClockTime(currentDuration)}`
+    : null;
   const hasTaskTitle = Boolean(workflowForMetrics.task_title?.trim());
   const isInteractiveFocus = workflowForMetrics.state === 'focus'
     && !workflowForMetrics.pending_confirmation

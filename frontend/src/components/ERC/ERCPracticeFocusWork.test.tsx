@@ -32,18 +32,18 @@ vi.mock('../../lib/erc/api', () => ({
   submitERCArticle,
 }));
 
-function mockArticleDetail() {
+function mockArticleDetail(articleId = 'kaoyan2_2025_text2', stem = 'Question 26?') {
   return {
-    article_id: 'kaoyan2_2025_text2',
+    article_id: articleId,
     year: 2025,
     text_no: 2,
     title: 'Passage Two',
     paragraphs: [{ paragraph_no: 1, text: 'This is paragraph one.' }],
     questions: [
       {
-        question_id: 'kaoyan2_2025_text2_q26',
+        question_id: `${articleId}_q26`,
         question_no: 26,
-        stem: 'Question 26?',
+        stem,
         options: { A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D' },
       },
     ],
@@ -131,7 +131,10 @@ describe('ERCPracticeFocusWork', () => {
     );
 
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ article_count: 0 }));
+      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({
+        article_count: 0,
+        no_available_content: true,
+      }));
     });
   });
 
@@ -169,19 +172,42 @@ describe('ERCPracticeFocusWork', () => {
 
   it('continues article content until the configured article target is reached', async () => {
     const user = userEvent.setup();
-    fetchERCOverview.mockResolvedValue({
-      recommended_article: { article_id: 'kaoyan2_2025_text2', year: 2025, text_no: 2, title: 'Passage Two' },
-    });
-    fetchERCArticle.mockResolvedValue(mockArticleDetail());
+    fetchERCArticles.mockResolvedValue([
+      {
+        article_id: 'article-one',
+        set_id: 'set-1',
+        year: 2025,
+        text_no: 1,
+        title: 'Passage One',
+        status: 'unstarted',
+        question_count: 1,
+        mistake_count: 0,
+        last_attempt_at: null,
+      },
+      {
+        article_id: 'article-two',
+        set_id: 'set-1',
+        year: 2025,
+        text_no: 2,
+        title: 'Passage Two',
+        status: 'unstarted',
+        question_count: 1,
+        mistake_count: 0,
+        last_attempt_at: null,
+      },
+    ]);
+    fetchERCArticle.mockImplementation((articleId: string) => (
+      Promise.resolve(mockArticleDetail(articleId, articleId === 'article-two' ? 'Second Question?' : 'Question 26?'))
+    ));
     fetchERCVocabularyPreheat.mockResolvedValue([]);
     submitERCArticle.mockResolvedValue({
       attempt_id: 'attempt-1',
-      article_id: 'kaoyan2_2025_text2',
+      article_id: 'article-one',
       correct_count: 1,
       question_count: 1,
       items: [
         {
-          question_id: 'kaoyan2_2025_text2_q26',
+          question_id: 'article-one_q26',
           question_no: 26,
           chosen_option: 'A',
           correct_option: 'A',
@@ -197,7 +223,7 @@ describe('ERCPracticeFocusWork', () => {
     render(
       <MemoryRouter>
         <ERCPracticeFocusWork
-          run={{ ...practiceRun, config_snapshot: { daily_article_target: 2 } }}
+          run={{ ...practiceRun, counts_for_task_completion: false, config_snapshot: { daily_article_target: 2 } }}
           disabled={false}
           onContentCompleted={onContentCompleted}
         />
@@ -211,5 +237,7 @@ describe('ERCPracticeFocusWork', () => {
     await waitFor(() => {
       expect(submitERCArticle).toHaveBeenCalled();
     });
+    expect(await screen.findByText('Second Question?')).toBeInTheDocument();
+    expect(onContentCompleted).not.toHaveBeenCalled();
   });
 });

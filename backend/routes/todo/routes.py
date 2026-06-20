@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -9,6 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from routes.auth_routes import get_current_user
+from routes.erc.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
+from routes.erc.repository import refresh_set_counts, upsert_article_seed, upsert_set
+from routes.vocab.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
+from routes.vocab.repository import import_deck
 
 from .db import _pool_from_request
 from .event_store import (
@@ -523,6 +528,76 @@ async def _app_task_status(conn: Any, *, user_id: int, app_id: str, app_task_typ
     )
 
 
+def _content_bank_vocab_pronunciations(raw_value: Any) -> tuple[str | None, str | None]:
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return None, None
+    us = None
+    uk = None
+    for part in raw.split("/"):
+        text = part.strip()
+        lower = text.lower()
+        if lower.startswith("us:"):
+            us = text[3:].strip() or None
+        elif lower.startswith("uk:"):
+            uk = text[3:].strip() or None
+    if us is None and uk is None:
+        us = raw
+    return us, uk
+
+
+def _content_bank_word_seed(row: Any) -> WordSeed | None:
+    body = _config_payload(_row_value(row, "body", {}))
+    word = str(body.get("word") or _row_value(row, "title") or "").strip()
+    if not word:
+        return None
+    us_pronunciation, uk_pronunciation = _content_bank_vocab_pronunciations(body.get("pronunciation"))
+    translation = str(body.get("translation") or "").strip()
+    translations = [
+        TranslationSeed(
+            translation=translation,
+            pos=str(body.get("pos") or "").strip() or None,
+        )
+    ] if translation else []
+    example = str(body.get("example") or "").strip()
+    example_translation = str(body.get("example_translation") or "").strip()
+    sentences = [SentenceSeed(sentence=example, translation=example_translation)] if example and example_translation else []
+    return WordSeed(
+        word=word,
+        us_pronunciation=us_pronunciation,
+        uk_pronunciation=uk_pronunciation,
+        sort_order=_safe_int(_row_value(row, "sort_order", 0), 0),
+        translations=translations,
+        phrases=[],
+        sentences=sentences,
+    )
+
+
+async def _sync_content_bank_to_vocab_deck(conn: Any, *, bank_id: UUID, bank_name: str) -> str | None:
+    rows = await conn.fetch(
+        """
+        SELECT title, body, sort_order
+        FROM content_items
+        WHERE bank_id = $1
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        bank_id,
+    )
+    words = [seed for row in rows if (seed := _content_bank_word_seed(row)) is not None]
+    if not words:
+        return None
+    return await import_deck(
+        conn,
+        DeckSeed(
+            key=f"content-bank-{bank_id}",
+            name=bank_name,
+            description="由测试专注工作从内容银行同步",
+            source_version="content-bank-sync",
+            words=words,
+        ),
+    )
+
+
 async def _resolve_vocab_app_deck_id(conn: Any, raw_deck_id: str) -> str:
     deck_id = raw_deck_id.strip()
     if not deck_id:
@@ -535,9 +610,31 @@ async def _resolve_vocab_app_deck_id(conn: Any, raw_deck_id: str) -> str:
 
     if deck_uuid is not None:
         deck_row = await conn.fetchrow("SELECT id FROM vocab_decks WHERE id = $1", deck_uuid)
-        if deck_row is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="词书不存在")
-        return str(deck_uuid)
+        if deck_row is not None:
+            return str(deck_uuid)
+        bank_row = await conn.fetchrow("SELECT name FROM content_banks WHERE id = $1", deck_uuid)
+        if bank_row is not None:
+            mapped_row = await conn.fetchrow(
+                """
+                SELECT id
+                FROM vocab_decks
+                WHERE key = $1 OR name = $2
+                ORDER BY CASE WHEN key = $1 THEN 0 ELSE 1 END
+                LIMIT 1
+                """,
+                f"content-bank-{deck_uuid}",
+                str(bank_row["name"]),
+            )
+            if mapped_row is not None:
+                return str(mapped_row["id"])
+            synced_deck_id = await _sync_content_bank_to_vocab_deck(
+                conn,
+                bank_id=deck_uuid,
+                bank_name=str(bank_row["name"]),
+            )
+            if synced_deck_id is not None:
+                return synced_deck_id
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="词书不存在")
 
     deck_row = await conn.fetchrow(
         """
@@ -551,6 +648,183 @@ async def _resolve_vocab_app_deck_id(conn: Any, raw_deck_id: str) -> str:
     if deck_row is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="词书不存在")
     return str(deck_row["deck_id"])
+
+
+def _content_bank_year(title: str, body: dict[str, object]) -> int:
+    candidates = [title, str(body.get("examination") or "")]
+    tags = body.get("tags")
+    if isinstance(tags, list):
+        candidates.extend(str(tag) for tag in tags)
+    match = re.search(r"(?:19|20)\d{2}", " ".join(candidates))
+    return int(match.group(0)) if match else 0
+
+
+def _content_bank_text_no(title: str, fallback: int) -> int:
+    match = re.search(r"第\s*(\d+)\s*题", title)
+    return int(match.group(1)) if match else fallback
+
+
+def _content_bank_exam(bank_name: str, body: dict[str, object]) -> str:
+    examination = str(body.get("examination") or "").strip()
+    if examination:
+        return examination
+    tags = body.get("tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            text = str(tag).strip()
+            if text:
+                return text
+    return bank_name
+
+
+def _content_bank_paragraphs(title: str, body: dict[str, object]) -> list[ERCParagraphSeed]:
+    passage = str(body.get("passage") or "").strip()
+    if not passage:
+        return [ERCParagraphSeed(paragraph_no=1, text=title or "Untitled")]
+    chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", passage) if chunk.strip()]
+    if not chunks:
+        chunks = [passage]
+    return [ERCParagraphSeed(paragraph_no=index, text=text) for index, text in enumerate(chunks, start=1)]
+
+
+def _content_question_seed(bank_id: UUID, item_id: str, row: Any) -> ERCQuestionSeed | None:
+    stem = str(_row_value(row, "question_text") or "").strip()
+    options = _config_payload(_row_value(row, "options", {}))
+    normalized_options = {key: str(options.get(key) or "").strip() for key in ("A", "B", "C", "D")}
+    answer = str(_row_value(row, "correct_answer") or "").strip().upper()
+    if not stem or answer not in normalized_options or not all(normalized_options.values()):
+        return None
+    sort_order = _safe_int(_row_value(row, "sort_order", 0), 0)
+    return ERCQuestionSeed(
+        question_id=f"content-bank-{bank_id}-{item_id}-{_row_value(row, 'id')}",
+        question_no=sort_order + 1,
+        stem=stem,
+        options=normalized_options,
+        answer=answer,
+        evidence={"paragraphs": [], "text": ""},
+        explanation=str(_row_value(row, "analysis") or ""),
+        question_type="practice",
+        sort_order=sort_order + 1,
+    )
+
+
+def _content_bank_article_seed(bank_id: UUID, bank_name: str, item: Any, questions: list[Any]) -> ERCArticleSeed | None:
+    body = _config_payload(_row_value(item, "body", {}))
+    item_id = str(_row_value(item, "id"))
+    title = str(_row_value(item, "title") or "").strip() or f"题目 {item_id}"
+    question_seeds = [
+        seed for question in questions if (seed := _content_question_seed(bank_id, item_id, question)) is not None
+    ]
+    if not question_seeds:
+        return None
+    sort_order = _safe_int(_row_value(item, "sort_order", 0), 0)
+    return ERCArticleSeed(
+        article_id=f"content-bank-{bank_id}-{item_id}",
+        exam=_content_bank_exam(bank_name, body),
+        year=_content_bank_year(title, body),
+        text_no=_content_bank_text_no(title, sort_order + 1),
+        title=title,
+        sort_order=sort_order + 1,
+        paragraphs=_content_bank_paragraphs(title, body),
+        questions=question_seeds,
+    )
+
+
+async def _sync_content_bank_to_erc_set(conn: Any, *, bank_id: UUID, bank_name: str) -> str | None:
+    item_rows = await conn.fetch(
+        """
+        SELECT id::text AS id, title, body, sort_order
+        FROM content_items
+        WHERE bank_id = $1
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        bank_id,
+    )
+    if not item_rows:
+        return None
+    question_rows = await conn.fetch(
+        """
+        SELECT id::text AS id, item_id::text AS item_id, sort_order, question_text, options, correct_answer, analysis
+        FROM content_questions
+        WHERE item_id = ANY($1::uuid[])
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        [UUID(str(_row_value(row, "id"))) for row in item_rows],
+    )
+    questions_by_item: dict[str, list[Any]] = {}
+    for question in question_rows:
+        questions_by_item.setdefault(str(_row_value(question, "item_id")), []).append(question)
+    article_seeds = [
+        seed
+        for item in item_rows
+        if (seed := _content_bank_article_seed(bank_id, bank_name, item, questions_by_item.get(str(_row_value(item, "id")), []))) is not None
+    ]
+    if not article_seeds:
+        return None
+    set_id = await upsert_set(
+        conn,
+        key=f"content-bank-{bank_id}",
+        name=bank_name,
+        description="由测试专注工作从内容银行同步",
+        exam=bank_name,
+        source_version="content-bank-sync",
+    )
+    for seed in article_seeds:
+        await upsert_article_seed(conn, set_id=set_id, seed=seed)
+    await refresh_set_counts(conn, set_id=set_id)
+    return set_id
+
+
+async def _resolve_erc_app_set_id(conn: Any, raw_set_id: str) -> str:
+    set_id = raw_set_id.strip()
+    if not set_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="题库不存在")
+
+    try:
+        set_uuid = UUID(set_id)
+    except ValueError:
+        set_uuid = None
+
+    if set_uuid is not None:
+        set_row = await conn.fetchrow("SELECT id FROM erc_sets WHERE id = $1", set_uuid)
+        if set_row is not None:
+            return str(set_uuid)
+        bank_row = await conn.fetchrow("SELECT name FROM content_banks WHERE id = $1", set_uuid)
+        if bank_row is not None:
+            mapped_row = await conn.fetchrow(
+                """
+                SELECT id
+                FROM erc_sets
+                WHERE key = $1 OR name = $2
+                ORDER BY CASE WHEN key = $1 THEN 0 ELSE 1 END
+                LIMIT 1
+                """,
+                f"content-bank-{set_uuid}",
+                str(bank_row["name"]),
+            )
+            if mapped_row is not None:
+                return str(mapped_row["id"])
+            synced_set_id = await _sync_content_bank_to_erc_set(
+                conn,
+                bank_id=set_uuid,
+                bank_name=str(bank_row["name"]),
+            )
+            if synced_set_id is not None:
+                return synced_set_id
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="题库不存在")
+
+    set_row = await conn.fetchrow(
+        """
+        SELECT id
+        FROM erc_sets
+        WHERE key = $1 OR name = $1
+        LIMIT 1
+        """,
+        set_id,
+    )
+    if set_row is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="题库不存在")
+    return str(set_row["id"])
 
 
 async def _resolve_app_config_event(conn: Any, *, user_id: int, event_id: UUID | None) -> Any | None:
@@ -3325,6 +3599,61 @@ def _runtime_state_for_completed_run(counts_for_task_completion: bool) -> str:
     return "counted_run_completed_confirming" if counts_for_task_completion else "extra_run_completed"
 
 
+def _focus_work_app_metadata(focus_work_type: str | None) -> tuple[str | None, str | None]:
+    if focus_work_type == "vocab_today":
+        return "vocab", "vocab_today"
+    if focus_work_type in {"erc_review", "erc_practice"}:
+        return "erc", focus_work_type
+    return None, None
+
+
+def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_count: int) -> dict[str, Any]:
+    config: dict[str, Any] = {
+        "task_title": {
+            "vocab_today": "今日单词",
+            "erc_review": "错题复习",
+            "erc_practice": "真题练习",
+        }.get(focus_work_type, "测试专注工作"),
+    }
+    if focus_work_type == "vocab_today":
+        if bank_id:
+            config["deck_id"] = bank_id
+        config["target_word_count"] = target_count
+        config["daily_target_count"] = target_count
+    elif focus_work_type == "erc_review":
+        if bank_id:
+            config["set_id"] = bank_id
+            config["article_set_id"] = bank_id
+        config["target_question_count"] = target_count
+        config["daily_question_target"] = target_count
+    elif focus_work_type == "erc_practice":
+        if bank_id:
+            config["set_id"] = bank_id
+            config["article_set_id"] = bank_id
+        config["target_article_count"] = target_count
+        config["daily_article_target"] = target_count
+    return config
+
+
+def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
+    config: dict[str, Any] = {}
+    for key in (
+        "deck_id",
+        "target_word_count",
+        "daily_target_count",
+        "set_id",
+        "article_set_id",
+        "target_question_count",
+        "daily_question_target",
+        "target_article_count",
+        "daily_article_target",
+        "task_title",
+    ):
+        if key in phase:
+            config[key] = phase[key]
+    return config
+
+
 async def _build_run_metadata(
     conn: Any,
     *,
@@ -3366,6 +3695,8 @@ async def _build_run_metadata(
     elif current_phase is not None:
         focus_work_type = focus_work_type or _phase_focus_work_type_value(current_phase)
         config_snapshot["phase_index"] = current_index
+        config_snapshot.update(_phase_config_snapshot(current_phase))
+        app_id, app_task_type = _focus_work_app_metadata(focus_work_type)
 
     if focus_work_type is None:
         focus_work_type = "task_focus"
@@ -4188,6 +4519,13 @@ async def start_test_focus_work(
                     int(user.id),
                 )
 
+            resolved_bank_id = (
+                await _resolve_vocab_app_deck_id(conn, body.bank_id)
+                if body.focus_work_type == "vocab_today" and body.bank_id
+                else body.bank_id
+            )
+            if body.focus_work_type in {"erc_review", "erc_practice"} and body.bank_id:
+                resolved_bank_id = await _resolve_erc_app_set_id(conn, body.bank_id)
             focus_phase = {
                 "phase_type": "focus",
                 "duration": 3600,
@@ -4196,6 +4534,7 @@ async def start_test_focus_work(
                 "focus_work_type": body.focus_work_type,
                 "is_temporary": True,
                 "record_focus": True,
+                **_test_focus_phase_config(body.focus_work_type, resolved_bank_id, body.target_count),
             }
 
             phases = [focus_phase]

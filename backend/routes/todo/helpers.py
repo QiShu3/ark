@@ -1635,6 +1635,21 @@ def _normalize_workflow_phases(
                 normalized["focus_work_type"] = _normalize_focus_work_type(focus_work_type)
                 normalized["is_temporary"] = is_temporary
                 normalized["record_focus"] = record_focus
+                if isinstance(phase, dict):
+                    for key in (
+                        "deck_id",
+                        "target_word_count",
+                        "daily_target_count",
+                        "set_id",
+                        "article_set_id",
+                        "target_question_count",
+                        "daily_question_target",
+                        "target_article_count",
+                        "daily_article_target",
+                        "task_title",
+                    ):
+                        if key in phase:
+                            normalized[key] = phase[key]
             items.append(normalized)
     if not items:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作流至少需要一个阶段")
