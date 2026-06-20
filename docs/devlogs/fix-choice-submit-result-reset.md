@@ -68,3 +68,19 @@
 **修复**：移除 `ChoiceQuestionFocusTemplate` 中渲染 `currentItem.numberLabel` 的绝对定位 div。
 
 **验证**：文档提交，无额外代码验证（TypeScript 编译通过）。
+
+---
+
+## 修复 ERC adapter 选择题查询遗漏 explanation 列
+
+**用户请求**：检查选择题题库有没有答案解析。
+
+**提交**：`e308a2a5`
+
+**问题现象**：提交答案后前端没有显示"解析"区块。数据库 `erc_questions` 表有 `explanation` 列且 629 题中 583 题有解析文本，但 API 返回的 `explanation_blocks` 始终为空数组。
+
+**根因分析**：`list_erc_as_choice_items` 的 SQL 查询只选取了 `id, question_id, question_no, stem, options_json, answer`，没有包含 `explanation` 列，导致 `ChoiceQuestionOut` 的 `explanation_blocks` 默认为空。
+
+**修复**：SQL 新增 `explanation` 列查询，并将非空解析文本转换为 `ContentBlock(type="paragraph")` 填充到 `explanation_blocks`。
+
+**验证**：curl 调用 API 确认 `explanation_blocks` 返回长度 1，文本内容正确（上三角矩阵按列优先存储解析）。
