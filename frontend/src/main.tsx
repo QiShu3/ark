@@ -8,11 +8,6 @@ import ResetPassword from './pages/ResetPassword';
 import AdminUiLibraryPage from './pages/AdminUiLibraryPage';
 import AppCenter from './pages/AppCenter';
 import TestFocusWork from './pages/TestFocusWork';
-import ERCLibrary from './pages/ERC/Library';
-import ERCMistakes from './pages/ERC/Mistakes';
-import ERCPractice from './pages/ERC/Practice';
-import ERCPracticeResult from './pages/ERC/PracticeResult';
-import ERCReview from './pages/ERC/Review';
 import VocabMistakes from './pages/Vocab/Mistakes';
 import VocabReview from './pages/Vocab/Review';
 import VocabStudy from './pages/Vocab/Study';
@@ -38,12 +33,6 @@ createRoot(document.getElementById('root')!).render(
           </Route>
           <Route path="/apps" element={<AppCenter />} />
           <Route path="/:appId" element={<DynamicSubAppHome />} />
-          {/* ERC sub-pages */}
-          <Route path="/erc/library" element={<ERCLibrary />} />
-          <Route path="/erc/articles/:articleId/practice" element={<ERCPractice />} />
-          <Route path="/erc/articles/:articleId/result" element={<ERCPracticeResult />} />
-          <Route path="/erc/review" element={<ERCReview />} />
-          <Route path="/erc/mistakes" element={<ERCMistakes />} />
           {/* Vocab sub-pages */}
           <Route path="/vocab/today" element={<VocabToday />} />
           <Route path="/vocab/study" element={<VocabStudy />} />

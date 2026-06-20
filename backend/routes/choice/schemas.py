@@ -115,3 +115,63 @@ class ChoiceAnswerSubmitOut(BaseModel):
     is_correct: bool
     rating: Literal["again", "hard", "good", "easy"]
     next_review_at: Any = None
+
+
+# ---- Overview / Review / Mistakes (delegated to ERC service) ----
+
+class ChoiceOverviewRecommendedArticle(BaseModel):
+    article_id: str
+    year: int
+    text_no: int
+    title: str
+
+
+class ChoiceOverviewOut(BaseModel):
+    due_review_count: int
+    practiced_article_count: int
+    practiced_question_count: int
+    accuracy: float
+    mistake_count: int
+    recommended_article: ChoiceOverviewRecommendedArticle | None = None
+
+
+class ChoiceReviewNextParagraph(BaseModel):
+    paragraph_no: int
+    text: str
+
+
+class ChoiceReviewNextQuestion(BaseModel):
+    question_id: str
+    question_no: int
+    stem: str
+    options: dict[str, str]
+    answer: str | None = None
+
+
+class ChoiceReviewNextArticle(BaseModel):
+    article_id: str
+    year: int
+    text_no: int
+    title: str
+
+
+class ChoiceReviewNextOut(BaseModel):
+    has_item: bool
+    next_due_at: Any = None
+    article: ChoiceReviewNextArticle | None = None
+    paragraphs: list[ChoiceReviewNextParagraph] = []
+    question: ChoiceReviewNextQuestion | None = None
+
+
+class ChoiceMistakeItemOut(BaseModel):
+    article_id: str
+    year: int
+    text_no: int
+    question_id: str
+    question_no: int
+    stem: str
+    correct_option: str
+    last_chosen_option: str | None = None
+    wrong_count: int
+    last_wrong_at: Any = None
+    is_due: bool = False

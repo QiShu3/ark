@@ -7,27 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ERCPracticeFocusWork from './ERCPracticeFocusWork';
 import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
-const {
-  fetchERCArticles,
-  fetchERCOverview,
-  fetchERCArticle,
-  submitERCArticle,
-  fetchChoiceItems,
-  submitChoiceAnswer,
-} = vi.hoisted(() => ({
-  fetchERCArticles: vi.fn(),
-  fetchERCOverview: vi.fn(),
-  fetchERCArticle: vi.fn(),
-  submitERCArticle: vi.fn(),
+const { fetchChoiceItems, submitChoiceAnswer } = vi.hoisted(() => ({
   fetchChoiceItems: vi.fn(),
   submitChoiceAnswer: vi.fn(),
-}));
-
-vi.mock('../../lib/erc/api', () => ({
-  fetchERCArticles,
-  fetchERCOverview,
-  fetchERCArticle,
-  submitERCArticle,
 }));
 
 vi.mock('../../lib/choice/api', () => ({
@@ -35,22 +17,32 @@ vi.mock('../../lib/choice/api', () => ({
   submitChoiceAnswer,
 }));
 
-function mockArticleDetail(articleId = 'kaoyan2_2025_text2', stem = 'Question 26?') {
-  return {
-    article_id: articleId,
-    year: 2025,
-    text_no: 2,
-    title: 'Passage Two',
-    paragraphs: [{ paragraph_no: 1, text: 'This is paragraph one.' }],
-    questions: [
-      {
-        question_id: `${articleId}_q26`,
-        question_no: 26,
-        stem,
-        options: { A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D' },
-      },
-    ],
-  };
+function mockChoiceItems(articleId = 'choice-article-1', stem = 'Question 26?') {
+  return [
+    {
+      id: articleId,
+      bank_id: 'set-1',
+      title: '2025 数据结构 第1题',
+      material_blocks: [],
+      group_type: 'single',
+      subject_area: '数据结构',
+      tags: ['数据结构'],
+      sort_order: 1,
+      question_count: 1,
+      questions: [
+        {
+          id: `${articleId}_q26`,
+          question_no: 26,
+          stem_blocks: [{ type: 'paragraph', text: stem }],
+          options: [{ key: 'A', text: 'Option A' }, { key: 'B', text: 'Option B' }, { key: 'C', text: 'Option C' }, { key: 'D', text: 'Option D' }],
+          answer: 'A',
+          explanation_blocks: [],
+          tags: [],
+          sort_order: 1,
+        },
+      ],
+    },
+  ];
 }
 
 const practiceRun: FocusWorkRunSummary = {
@@ -60,7 +52,9 @@ const practiceRun: FocusWorkRunSummary = {
   focus_work_type: 'erc_practice',
   counts_for_task_completion: true,
   status: 'running',
-  config_snapshot: {},
+  config_snapshot: {
+    choice_scope: { bank_id: 'set-1', years: [2025], subjects: ['数据结构'] },
+  },
 };
 
 describe('ERCPracticeFocusWork', () => {
@@ -68,19 +62,12 @@ describe('ERCPracticeFocusWork', () => {
     if (!HTMLDivElement.prototype.scrollTo) {
       HTMLDivElement.prototype.scrollTo = vi.fn();
     }
-    fetchERCArticles.mockReset();
-    fetchERCOverview.mockReset();
-    fetchERCArticle.mockReset();
-    submitERCArticle.mockReset();
     fetchChoiceItems.mockReset();
     submitChoiceAnswer.mockReset();
   });
 
-  it('loads the recommended article directly without vocabulary preheat', async () => {
-    fetchERCOverview.mockResolvedValue({
-      recommended_article: { article_id: 'kaoyan2_2025_text2', year: 2025, text_no: 2, title: 'Passage Two' },
-    });
-    fetchERCArticle.mockResolvedValue(mockArticleDetail());
+  it('loads choice items and displays the first question', async () => {
+    fetchChoiceItems.mockResolvedValue(mockChoiceItems());
 
     render(
       <MemoryRouter>
@@ -93,13 +80,10 @@ describe('ERCPracticeFocusWork', () => {
     );
 
     expect(await screen.findByText('Question 26?')).toBeInTheDocument();
-    expect(screen.queryByText('benevolent')).not.toBeInTheDocument();
   });
 
-  it('emits content completion when no recommended article is available', async () => {
-    fetchERCOverview.mockResolvedValue({
-      recommended_article: null,
-    });
+  it('emits content completion when no choice items are available', async () => {
+    fetchChoiceItems.mockResolvedValue([]);
 
     const onContentCompleted = vi.fn();
 
@@ -121,108 +105,7 @@ describe('ERCPracticeFocusWork', () => {
     });
   });
 
-  it('loads library article content for an extra run even when no daily recommendation is available', async () => {
-    fetchERCArticles.mockResolvedValue([
-      {
-        article_id: 'kaoyan2_2025_text2',
-        set_id: 'set-1',
-        year: 2025,
-        text_no: 2,
-        title: 'Passage Two',
-        status: 'unstarted',
-        question_count: 1,
-        mistake_count: 0,
-        last_attempt_at: null,
-      },
-    ]);
-    fetchERCArticle.mockResolvedValue(mockArticleDetail());
-    const onContentCompleted = vi.fn();
-
-    render(
-      <MemoryRouter>
-        <ERCPracticeFocusWork
-          run={{ ...practiceRun, counts_for_task_completion: false }}
-          disabled={false}
-          onContentCompleted={onContentCompleted}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText('Question 26?')).toBeInTheDocument();
-    expect(fetchERCOverview).not.toHaveBeenCalled();
-  });
-
-  it('continues article content until the configured article target is reached', async () => {
-    const user = userEvent.setup();
-    fetchERCArticles.mockResolvedValue([
-      {
-        article_id: 'article-one',
-        set_id: 'set-1',
-        year: 2025,
-        text_no: 1,
-        title: 'Passage One',
-        status: 'unstarted',
-        question_count: 1,
-        mistake_count: 0,
-        last_attempt_at: null,
-      },
-      {
-        article_id: 'article-two',
-        set_id: 'set-1',
-        year: 2025,
-        text_no: 2,
-        title: 'Passage Two',
-        status: 'unstarted',
-        question_count: 1,
-        mistake_count: 0,
-        last_attempt_at: null,
-      },
-    ]);
-    fetchERCArticle.mockImplementation((articleId: string) => (
-      Promise.resolve(mockArticleDetail(articleId, articleId === 'article-two' ? 'Second Question?' : 'Question 26?'))
-    ));
-    submitERCArticle.mockResolvedValue({
-      attempt_id: 'attempt-1',
-      article_id: 'article-one',
-      correct_count: 1,
-      question_count: 1,
-      items: [
-        {
-          question_id: 'article-one_q26',
-          question_no: 26,
-          chosen_option: 'A',
-          correct_option: 'A',
-          is_correct: true,
-          rating: 'good',
-          next_review_at: null,
-          entered_mistakes: false,
-        },
-      ],
-    });
-    const onContentCompleted = vi.fn();
-
-    render(
-      <MemoryRouter>
-        <ERCPracticeFocusWork
-          run={{ ...practiceRun, counts_for_task_completion: false, config_snapshot: { daily_article_target: 2 } }}
-          disabled={false}
-          onContentCompleted={onContentCompleted}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText('Question 26?')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Option A/ }));
-    await user.click(screen.getByRole('button', { name: /提交答案/ }));
-
-    await waitFor(() => {
-      expect(submitERCArticle).toHaveBeenCalled();
-    });
-    expect(await screen.findByText('Second Question?')).toBeInTheDocument();
-    expect(onContentCompleted).not.toHaveBeenCalled();
-  });
-
-  it('uses choice scope items, records answers, and completes at the configured question count', async () => {
+  it('records answers and completes at the configured question count', async () => {
     const user = userEvent.setup();
     fetchChoiceItems.mockResolvedValue([
       {
@@ -287,7 +170,6 @@ describe('ERCPracticeFocusWork', () => {
     );
 
     expect(await screen.findByText('Choice Question One?')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '2025 数据结构 第1题' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Option A/ }));
     await user.click(screen.getByRole('button', { name: /提交答案/ }));
@@ -296,10 +178,9 @@ describe('ERCPracticeFocusWork', () => {
       expect(submitChoiceAnswer).toHaveBeenCalledWith('choice-q1', 'A');
       expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ question_count: 1 }));
     });
-    expect(submitERCArticle).not.toHaveBeenCalled();
   });
 
-  it('renders single choice stems in the upper material panel even when legacy material exists', async () => {
+  it('renders single choice stems in the upper material panel', async () => {
     fetchChoiceItems.mockResolvedValue([
       {
         id: 'choice-single-1',
@@ -345,5 +226,19 @@ describe('ERCPracticeFocusWork', () => {
 
     const materialPanel = await screen.findByLabelText('阅读原文');
     expect(within(materialPanel).getByText('Single choice stem should be on top.')).toBeInTheDocument();
+  });
+
+  it('shows error when bank_id is missing', async () => {
+    render(
+      <MemoryRouter>
+        <ERCPracticeFocusWork
+          run={{ ...practiceRun, config_snapshot: {} }}
+          disabled={false}
+          onContentCompleted={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('未配置题库')).toBeInTheDocument();
   });
 });

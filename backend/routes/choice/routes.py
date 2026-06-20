@@ -6,9 +6,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from routes.auth_routes import get_current_user
-from routes.erc.service import submit_review as submit_erc_question_answer
+from routes.erc.service import (
+    get_next_review,
+    get_overview,
+    list_mistakes,
+)
+from routes.erc.service import (
+    submit_review as submit_erc_question_answer,
+)
 
 from .adapters import (
+    ensure_erc_set_synced,
     get_choice_filters,
     get_erc_choice_filters,
     list_choice_banks,
@@ -22,10 +30,13 @@ from .schemas import (
     ChoiceBankOut,
     ChoiceFiltersOut,
     ChoiceItemOut,
+    ChoiceMistakeItemOut,
+    ChoiceOverviewOut,
     ChoicePracticeCompletion,
     ChoicePracticeScope,
     ChoicePracticeStartRequest,
     ChoicePracticeStartResponse,
+    ChoiceReviewNextOut,
 )
 
 router = APIRouter(prefix="/api/choice", tags=["choice"])
@@ -165,3 +176,44 @@ async def route_submit_choice_answer(
         mode="practice",
     )
     return ChoiceAnswerSubmitOut(**result)
+
+
+# ---- Overview / Review / Mistakes (delegated to ERC service) ----
+
+@router.get("/overview", response_model=ChoiceOverviewOut)
+async def route_choice_overview(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    bank_id: str = Query(...),
+) -> ChoiceOverviewOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        erc_set_id = await ensure_erc_set_synced(conn, bank_id)
+    result = await get_overview(pool, user_id=int(user.id), set_id=erc_set_id)
+    return ChoiceOverviewOut(**result)
+
+
+@router.get("/review/next", response_model=ChoiceReviewNextOut)
+async def route_choice_review_next(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    bank_id: str = Query(...),
+) -> ChoiceReviewNextOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        erc_set_id = await ensure_erc_set_synced(conn, bank_id)
+    result = await get_next_review(pool, user_id=int(user.id), set_id=erc_set_id)
+    return ChoiceReviewNextOut(**result)
+
+
+@router.get("/mistakes", response_model=list[ChoiceMistakeItemOut])
+async def route_choice_mistakes(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    bank_id: str = Query(...),
+) -> list[ChoiceMistakeItemOut]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        erc_set_id = await ensure_erc_set_synced(conn, bank_id)
+    rows = await list_mistakes(pool, user_id=int(user.id), set_id=erc_set_id)
+    return [ChoiceMistakeItemOut(**row) for row in rows]

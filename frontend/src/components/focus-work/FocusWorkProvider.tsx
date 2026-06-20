@@ -20,6 +20,7 @@ type FocusWorkProviderProps = {
 
 type PendingStart = {
   focusWorkType: FocusWorkType;
+  bankId?: string;
 };
 
 function isFocusWorkType(value: unknown): value is FocusWorkType {
@@ -69,7 +70,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     const handleStart = (event: Event) => {
       const detail = (event as CustomEvent<FocusWorkStartDetail>).detail;
       if (!detail || !isFocusWorkType(detail.focusWorkType)) return;
-      setPendingStart({ focusWorkType: detail.focusWorkType });
+      setPendingStart({ focusWorkType: detail.focusWorkType, bankId: detail.bankId });
     };
     window.addEventListener(START_FOCUS_WORK_EVENT, handleStart);
     return () => window.removeEventListener(START_FOCUS_WORK_EVENT, handleStart);
@@ -85,6 +86,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
         body: JSON.stringify({
           focus_work_type: pendingStart.focusWorkType,
           record_focus: record,
+          bank_id: pendingStart.bankId ?? null,
         }),
       });
       setSnapshot(next);

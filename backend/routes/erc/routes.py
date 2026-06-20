@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from routes.auth_routes import get_current_user
 
@@ -50,12 +50,19 @@ async def route_get_overview(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
     set_id: str | None = Query(default=None),
+    response: Response = ...,
 ) -> ERCOverviewOut:
+    response.headers["X-Deprecated"] = "true; use /api/choice/overview?bank_id= instead"
     return ERCOverviewOut(**await get_overview(_pool_from_request(request), user_id=int(user.id), set_id=set_id))
 
 
 @router.get("/sets", response_model=list[ERCSetOut])
-async def route_list_sets(request: Request, user: Annotated[Any, Depends(get_current_user)]) -> list[ERCSetOut]:
+async def route_list_sets(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    response: Response = ...,
+) -> list[ERCSetOut]:
+    response.headers["X-Deprecated"] = "true; use /api/choice/banks instead"
     _ = user
     return [ERCSetOut(**item) for item in await list_sets(_pool_from_request(request))]
 
@@ -66,7 +73,9 @@ async def route_list_articles(
     user: Annotated[Any, Depends(get_current_user)],
     set_id: str | None = Query(default=None),
     exam: str | None = Query(default=None),
+    response: Response = ...,
 ) -> list[ERCArticleListItemOut]:
+    response.headers["X-Deprecated"] = "true; use /api/choice/items?bank_id= instead"
     rows = await list_articles(_pool_from_request(request), user_id=int(user.id), set_id=set_id, exam=exam)
     return [ERCArticleListItemOut(**item) for item in rows]
 
@@ -76,7 +85,9 @@ async def route_get_article_detail(
     request: Request,
     article_id: str,
     user: Annotated[Any, Depends(get_current_user)],
+    response: Response = ...,
 ) -> ERCArticleDetailOut:
+    response.headers["X-Deprecated"] = "true; use /api/choice/items?bank_id= instead"
     return ERCArticleDetailOut(
         **await get_article_detail(_pool_from_request(request), user_id=int(user.id), article_id=article_id)
     )
@@ -105,7 +116,9 @@ async def route_get_next_review(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
     set_id: str | None = Query(default=None),
+    response: Response = ...,
 ) -> ERCReviewNextOut:
+    response.headers["X-Deprecated"] = "true; use /api/choice/review/next?bank_id= instead"
     return ERCReviewNextOut(**await get_next_review(_pool_from_request(request), user_id=int(user.id), set_id=set_id))
 
 
@@ -131,5 +144,7 @@ async def route_list_mistakes(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
     set_id: str | None = Query(default=None),
+    response: Response = ...,
 ) -> list[ERCMistakeItemOut]:
+    response.headers["X-Deprecated"] = "true; use /api/choice/mistakes?bank_id= instead"
     return [ERCMistakeItemOut(**item) for item in await list_mistakes(_pool_from_request(request), user_id=int(user.id), set_id=set_id)]

@@ -616,6 +616,7 @@ class FocusWorkflowSelectTaskRequest(BaseModel):
 class FocusWorkflowStartAppWorkRequest(BaseModel):
     focus_work_type: FocusWorkType
     record_focus: bool = True
+    bank_id: str | None = None
 
 
 class FocusWorkflowResultRequest(BaseModel):
