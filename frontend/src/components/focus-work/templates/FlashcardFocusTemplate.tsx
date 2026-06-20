@@ -70,9 +70,6 @@ function progressSnapshot(completedCount: number, targetCount: number, noAvailab
 }
 
 export default function FlashcardFocusTemplate({
-  title,
-  subtitle,
-  statusLabel,
   item,
   loading,
   error,
@@ -177,27 +174,19 @@ export default function FlashcardFocusTemplate({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-1 pb-2">
       <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden">
-        <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="font-serif text-3xl font-bold tracking-tight text-[var(--focus-work-text)] lg:text-4xl">{title}</h1>
-            <div className="mt-2.5 flex flex-wrap items-center gap-3 text-sm text-[var(--focus-work-text-muted)]">
-              {subtitle ? <span className="font-medium">{subtitle}</span> : null}
-              {statusLabel ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-3 py-1 text-xs font-medium text-[var(--focus-work-text)]">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  {statusLabel}
-                </span>
-              ) : null}
+        {(currentItem?.meta?.length || progressLabel) ? (
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {(currentItem?.meta ?? []).map((meta) => (
-                <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${metaClass(meta.tone)}`}>
+                <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${metaClass(meta.tone)}`}>
                   <BarChart3 className="h-3.5 w-3.5" />
                   {meta.label}
                 </span>
               ))}
             </div>
+            <div className="shrink-0 text-sm text-[var(--focus-work-text-muted)]">{progressLabel}</div>
           </div>
-          <div className="text-sm text-[var(--focus-work-text-muted)]">{progressLabel}</div>
-        </div>
+        ) : null}
 
         {error || localError ? <p className="mb-4 text-sm text-[var(--focus-work-rose-text)]">{error ?? localError}</p> : null}
 

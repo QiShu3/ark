@@ -4,30 +4,17 @@ import {
   fetchERCArticles,
   fetchERCOverview,
   fetchERCArticle,
-  fetchERCVocabularyPreheat,
-  submitERCVocabularyPreheat,
   submitERCArticle,
 } from '../../lib/erc/api';
 import type { ERCArticleDetail, ERCArticleListItem } from '../../lib/erc/types';
-import type { VocabReviewItem } from '../../lib/vocab/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
-import FlashcardFocusTemplate from '../focus-work/templates/FlashcardFocusTemplate';
-import type { FlashcardItem, FlashcardRating, FlashcardSubmitResult } from '../focus-work/templates/flashcardTypes';
-import FocusWorkPhaseTemplate, { usePhaseManager } from '../focus-work/templates/FocusWorkPhaseTemplate';
-import type { FocusWorkPhaseConfig } from '../focus-work/templates/phaseTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-work/templates/choiceQuestionTypes';
-import WordMetaPanel from '../Vocab/WordMetaPanel';
 import { fetchChoiceItems, submitChoiceAnswer } from '../../lib/choice/api';
 import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceCompletion } from '../../lib/choice/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCPracticeFocusWorkProps = FocusWorkRendererProps;
-
-const PHASES: FocusWorkPhaseConfig[] = [
-  { type: 'flashcard', label: '词汇预热' },
-  { type: 'choice_question', label: '真题练习' },
-];
 
 function stringConfig(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -84,25 +71,6 @@ function selectExtraPracticeArticle(articles: ERCArticleListItem[], completedArt
     ?? pool[0]
     ?? null
   );
-}
-
-function vocabItemToFlashcardItem(word: VocabReviewItem): FlashcardItem {
-  return {
-    id: word.id,
-    front: word.word,
-    back: (
-      <div className="space-y-2">
-        <div className="flex gap-4 text-sm text-[var(--focus-work-text-muted)]">
-          {word.us_pronunciation ? <span>US /{word.us_pronunciation}/</span> : null}
-          {word.uk_pronunciation ? <span>UK /{word.uk_pronunciation}/</span> : null}
-        </div>
-        <WordMetaPanel detail={word} />
-      </div>
-    ),
-    meta: [
-      { label: '词汇预热', tone: 'blue' },
-    ],
-  };
 }
 
 function choiceItemToChoiceQuestion(
@@ -184,7 +152,6 @@ export default function ERCPracticeFocusWork({
 
   const targetArticleCount = articleTargetCountFromRun(run);
   const [article, setArticle] = useState<ERCArticleDetail | null>(null);
-  const [preheatWords, setPreheatWords] = useState<VocabReviewItem[]>([]);
   const [completedArticleCount, setCompletedArticleCount] = useState(0);
   const [completedCorrectCount, setCompletedCorrectCount] = useState(0);
   const [completedQuestionCount, setCompletedQuestionCount] = useState(0);
@@ -192,7 +159,6 @@ export default function ERCPracticeFocusWork({
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [preheatCompleted, setPreheatCompleted] = useState(false);
   const completedArticleIdsRef = useRef<Set<string>>(new Set());
 
   const [choiceItems, setChoiceItems] = useState<ChoiceItemDTO[]>([]);
@@ -201,25 +167,22 @@ export default function ERCPracticeFocusWork({
   const totalChoiceQuestionCount = choiceItems.reduce((sum, item) => sum + item.question_count, 0);
   const targetChoiceQuestionCount = isChoiceMode ? choiceTargetQuestionCount(run, totalChoiceQuestionCount) : 0;
 
-  const {
-    currentPhaseIndex,
-    handlePhaseComplete,
-    handleSkip,
-  } = usePhaseManager(PHASES, () => {
+  const completePractice = useCallback((extraSnapshot: Record<string, unknown> = {}) => {
     onContentCompleted({
       article_count: completedArticleCount,
       target_article_count: targetArticleCount === Infinity ? choiceItems.length : targetArticleCount,
       correct_count: completedCorrectCount,
       question_count: completedQuestionCount,
+      ...extraSnapshot,
     });
-  });
-
-  useEffect(() => {
-    if (!loading && preheatWords.length === 0 && currentPhaseIndex === 0 && !preheatCompleted) {
-      setPreheatCompleted(true);
-      handlePhaseComplete(0);
-    }
-  }, [loading, preheatWords.length, currentPhaseIndex, preheatCompleted, handlePhaseComplete]);
+  }, [
+    choiceItems.length,
+    completedArticleCount,
+    completedCorrectCount,
+    completedQuestionCount,
+    onContentCompleted,
+    targetArticleCount,
+  ]);
 
   const loadArticle = useCallback(async () => {
     setLoading(true);
@@ -241,16 +204,11 @@ export default function ERCPracticeFocusWork({
         const articleId = await resolvePracticeArticleId(run, completedArticleIdsRef.current);
         if (!articleId) {
           setArticle(null);
-          setPreheatWords([]);
           setLoading(false);
           return;
         }
-        const [articleData, preheatData] = await Promise.all([
-          fetchERCArticle(articleId),
-          fetchERCVocabularyPreheat(articleId),
-        ]);
+        const articleData = await fetchERCArticle(articleId);
         setArticle(articleData);
-        setPreheatWords(preheatData);
         setCurrentQuestionIndex(0);
         setCurrentArticleAnsweredCount(0);
       }
@@ -264,36 +222,6 @@ export default function ERCPracticeFocusWork({
   useEffect(() => {
     void loadArticle();
   }, [loadArticle]);
-
-  const handleFlashcardSubmit = useCallback(async (item: FlashcardItem, rating: FlashcardRating): Promise<FlashcardSubmitResult> => {
-    if (!article) return { shouldRepeat: false };
-    const word = preheatWords.find((w) => w.id === item.id);
-    if (!word) return { shouldRepeat: false };
-    try {
-      await submitERCVocabularyPreheat(article.article_id, {
-        deck_id: word.deck_id,
-        word_id: word.id,
-        result: rating,
-        prompt_type: word.prompt_type || 'en_to_zh',
-      });
-    } catch (err) {
-      console.error('Failed to submit preheat review', err);
-    }
-    return { shouldRepeat: false };
-  }, [article, preheatWords]);
-
-  const handleFlashcardLoadNext = useCallback(async (): Promise<FlashcardItem | null> => {
-    const currentIndex = preheatWords.findIndex((w) => w.id === preheatWords[0]?.id);
-    const nextIndex = currentIndex + 1;
-    if (nextIndex < preheatWords.length) {
-      return vocabItemToFlashcardItem(preheatWords[nextIndex]);
-    }
-    return null;
-  }, [preheatWords]);
-
-  const handleFlashcardComplete = useCallback(() => {
-    handlePhaseComplete(0);
-  }, [handlePhaseComplete]);
 
   const handleChoiceQuestionSubmit = useCallback(async (item: ChoiceQuestionItem, optionKey: string): Promise<ChoiceQuestionSubmitResult> => {
     if (isChoiceMode) {
@@ -372,27 +300,25 @@ export default function ERCPracticeFocusWork({
       return;
     }
     if (isChoiceMode) {
-      handlePhaseComplete(1);
+      completePractice();
       return;
     }
     if (completedArticleCount < targetArticleCount) {
       void loadArticle();
       return;
     }
-    handlePhaseComplete(1);
+    completePractice();
   }, [
+    choiceItems.length,
     completedArticleCount,
     completedCorrectCount,
     completedQuestionCount,
-    handlePhaseComplete,
+    completePractice,
+    isChoiceMode,
     loadArticle,
     onContentCompleted,
     targetArticleCount,
-    choiceItems.length,
-    isChoiceMode,
   ]);
-
-  const flashcardItem = preheatWords.length > 0 ? vocabItemToFlashcardItem(preheatWords[0]) : null;
 
   let choiceQuestionItem: ChoiceQuestionItem | null = null;
   if (isChoiceMode) {
@@ -404,26 +330,7 @@ export default function ERCPracticeFocusWork({
     choiceQuestionItem = articleToChoiceQuestionItem(article, currentQuestionIndex);
   }
 
-  const renderFlashcardPhase = () => (
-    <FlashcardFocusTemplate
-      title="真题词汇预热"
-      subtitle="ERC 阅读理解"
-      statusLabel="词汇预热"
-      item={flashcardItem}
-      loading={loading}
-      error={error}
-      emptyTitle="无需词汇预热"
-      emptyDescription="当前文章没有需要预热的词汇。"
-      completedCount={0}
-      targetCount={preheatWords.length}
-      disabled={disabled}
-      onSubmitRating={handleFlashcardSubmit}
-      onLoadNext={handleFlashcardLoadNext}
-      onContentCompleted={handleFlashcardComplete}
-    />
-  );
-
-  const renderChoiceQuestionPhase = () => (
+  return (
     <ChoiceQuestionFocusTemplate
       title="真题练习"
       subtitle={isChoiceMode
@@ -443,17 +350,5 @@ export default function ERCPracticeFocusWork({
       onLoadNext={handleChoiceQuestionLoadNext}
       onContentCompleted={handleChoiceQuestionComplete}
     />
-  );
-
-  return (
-    <FocusWorkPhaseTemplate
-      phases={PHASES}
-      currentPhaseIndex={currentPhaseIndex}
-      disabled={disabled}
-      onPhaseComplete={handlePhaseComplete}
-      onSkipped={handleSkip}
-    >
-      {currentPhaseIndex === 0 ? renderFlashcardPhase() : renderChoiceQuestionPhase()}
-    </FocusWorkPhaseTemplate>
   );
 }

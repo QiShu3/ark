@@ -1,5 +1,7 @@
 import React from 'react';
 
+import MarkdownContent from '../MarkdownContent';
+
 export type ContentBlockData = {
   type: 'paragraph' | 'table' | 'image' | 'math' | 'html';
   text?: string;
@@ -45,7 +47,7 @@ function SafeTable({ content, html }: { content?: unknown; html?: string }) {
             <tr key={ri}>
               {row.map((cell, ci) => (
                 <td key={ci} className="border border-[var(--focus-work-border)] px-3 py-1.5">
-                  {cell}
+                  <MarkdownContent content={cell} inline />
                 </td>
               ))}
             </tr>
@@ -61,7 +63,14 @@ function HtmlBlock({ text }: { text: string }) {
     return <SafeTable html={text} />;
   }
   const stripped = text.replace(/<[^>]+>/g, '').trim();
-  return <p className="text-sm">{stripped || text}</p>;
+  return <MarkdownContent content={stripped || text} className="text-sm" />;
+}
+
+function mathContent(text: string | undefined) {
+  const content = (text || '').trim();
+  if (!content) return '';
+  if (content.startsWith('$')) return content;
+  return `$$${content}$$`;
 }
 
 export default function ContentBlockRenderer({ blocks }: { blocks: ContentBlockData[] }) {
@@ -73,9 +82,11 @@ export default function ContentBlockRenderer({ blocks }: { blocks: ContentBlockD
         switch (block.type) {
           case 'paragraph':
             return (
-              <p key={i} className="text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
-                {block.text}
-              </p>
+              <MarkdownContent
+                key={i}
+                content={block.text || ''}
+                className="text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9"
+              />
             );
           case 'table':
             return <SafeTable key={i} content={block.content} html={block.text} />;
@@ -95,15 +106,15 @@ export default function ContentBlockRenderer({ blocks }: { blocks: ContentBlockD
             );
           case 'math':
             return (
-              <span key={i} className="font-mono text-sm">
-                {block.text}
-              </span>
+              <MarkdownContent
+                key={i}
+                content={mathContent(block.text)}
+                className="text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9"
+              />
             );
           default:
             return (
-              <p key={i} className="text-sm text-[var(--focus-work-text-muted)]">
-                {block.text}
-              </p>
+              <MarkdownContent key={i} content={block.text || ''} className="text-sm text-[var(--focus-work-text-muted)]" />
             );
         }
       })}

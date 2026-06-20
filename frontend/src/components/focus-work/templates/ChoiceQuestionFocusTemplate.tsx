@@ -6,6 +6,7 @@ import type {
   ChoiceQuestionItem,
   ChoiceQuestionSubmitResult,
 } from './choiceQuestionTypes';
+import MarkdownContent from '../../MarkdownContent';
 import ContentBlockRenderer from '../ContentBlockRenderer';
 
 function metaClass(tone: string | undefined) {
@@ -24,9 +25,7 @@ function progressSnapshot(answeredCount: number, targetCount: number, noAvailabl
 }
 
 export default function ChoiceQuestionFocusTemplate({
-  title,
   subtitle,
-  statusLabel,
   item,
   loading,
   error,
@@ -102,21 +101,6 @@ export default function ChoiceQuestionFocusTemplate({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-1 pb-2">
       <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden">
-        <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="font-serif text-3xl font-bold tracking-tight text-[var(--focus-work-text)] lg:text-4xl">{title}</h1>
-            <div className="mt-2.5 flex flex-wrap items-center gap-3 text-sm text-[var(--focus-work-text-muted)]">
-              {subtitle ? <span className="font-medium">{subtitle}</span> : null}
-              {(currentItem?.meta ?? []).map((meta) => (
-                <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${metaClass(meta.tone)}`}>
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  {meta.label}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {error || localError ? <p className="mb-4 text-sm text-[var(--focus-work-rose-text)]">{error ?? localError}</p> : null}
 
         {loading ? <p className="text-sm text-[var(--focus-work-text-muted)]">复习题加载中...</p> : null}
@@ -142,6 +126,15 @@ export default function ChoiceQuestionFocusTemplate({
                     <BookOpen className="h-5.5 w-5.5 text-[var(--focus-work-blue-text)]" />
                     {currentItem.material?.title ?? '题目'}
                   </h2>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm text-[var(--focus-work-text-muted)]">
+                    {subtitle ? <span className="font-medium">{subtitle}</span> : null}
+                    {(currentItem.meta ?? []).map((meta) => (
+                      <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${metaClass(meta.tone)}`}>
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        {meta.label}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-3">
                   {currentItem.materialBlocks ? (
@@ -150,7 +143,13 @@ export default function ChoiceQuestionFocusTemplate({
                     currentItem.material?.paragraphs.map((paragraph) => (
                       <p key={paragraph.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
                         <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">{paragraph.label}</span>
-                        <span className="font-serif tracking-normal">{paragraph.text}</span>
+                        <span className="font-serif tracking-normal">
+                          {typeof paragraph.text === 'string' ? (
+                            <MarkdownContent content={paragraph.text} inline />
+                          ) : (
+                            paragraph.text
+                          )}
+                        </span>
                       </p>
                     )) ?? null
                   )}
@@ -164,7 +163,6 @@ export default function ChoiceQuestionFocusTemplate({
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="min-w-0">
                       <h2 className="text-base font-bold text-[var(--focus-work-text)] font-serif">Current Question</h2>
-                      {statusLabel ? <div className="mt-1 text-xs text-[var(--focus-work-text-muted)] font-medium">{statusLabel}</div> : null}
                     </div>
                   </div>
                   <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-1 text-sm font-semibold text-[var(--focus-work-text)]">
@@ -200,7 +198,13 @@ export default function ChoiceQuestionFocusTemplate({
                         <ContentBlockRenderer blocks={currentItem.stemBlocks} />
                       </div>
                     ) : (
-                      <h3 className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">{currentItem.stem}</h3>
+                      <div className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">
+                        {typeof currentItem.stem === 'string' ? (
+                          <MarkdownContent content={currentItem.stem} inline />
+                        ) : (
+                          currentItem.stem
+                        )}
+                      </div>
                     )
                   ) : null}
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -233,7 +237,9 @@ export default function ChoiceQuestionFocusTemplate({
                           className={`flex min-h-[2.5rem] items-center gap-4 rounded-xl border px-4 py-1.5 text-left text-sm transition ${btnStyle}`}
                         >
                           <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-sm font-semibold transition ${badgeStyle}`}>{option.key}</span>
-                          <span className="font-medium">{option.text}</span>
+                          <span className="min-w-0 font-medium">
+                            <MarkdownContent content={option.text} inline />
+                          </span>
                         </button>
                       );
                     })}

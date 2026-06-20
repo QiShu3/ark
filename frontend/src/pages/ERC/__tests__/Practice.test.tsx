@@ -6,25 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Practice from '../Practice';
 
-const { fetchERCArticle, fetchERCVocabularyPreheat, submitERCVocabularyPreheat, submitERCArticle } = vi.hoisted(() => ({
+const { fetchERCArticle, submitERCArticle } = vi.hoisted(() => ({
   fetchERCArticle: vi.fn(),
-  fetchERCVocabularyPreheat: vi.fn(),
-  submitERCVocabularyPreheat: vi.fn(),
   submitERCArticle: vi.fn(),
 }));
 
 vi.mock('../../../lib/erc/api', () => ({
   fetchERCArticle,
-  fetchERCVocabularyPreheat,
-  submitERCVocabularyPreheat,
   submitERCArticle,
 }));
 
 describe('ERC practice page', () => {
   beforeEach(() => {
     fetchERCArticle.mockReset();
-    fetchERCVocabularyPreheat.mockReset();
-    submitERCVocabularyPreheat.mockReset();
     submitERCArticle.mockReset();
   });
 
@@ -76,91 +70,14 @@ describe('ERC practice page', () => {
     );
 
     expect(await screen.findByText(/Question 21/)).toBeInTheDocument();
-    expect(screen.getByText('阅读前词汇预热')).toBeInTheDocument();
-    expect(screen.getByText('预计生词 2 / 3')).toBeInTheDocument();
-    expect(screen.getByText('paradoxical')).toBeInTheDocument();
+    expect(screen.queryByText('阅读前词汇预热')).not.toBeInTheDocument();
+    expect(screen.queryByText('先预热单词')).not.toBeInTheDocument();
+    expect(screen.queryByText('预计生词 2 / 3')).not.toBeInTheDocument();
     expect(screen.getByLabelText('阅读原文')).toHaveClass('backdrop-blur-2xl');
     await userEvent.click(screen.getByRole('radio', { name: 'A A1' }));
     await userEvent.click(screen.getByRole('button', { name: '提交整篇' }));
 
     expect(await screen.findByText('还有 1 道题未作答')).toBeInTheDocument();
     expect(submitERCArticle).not.toHaveBeenCalled();
-  });
-
-  it('runs a vocabulary preheat session before article practice', async () => {
-    fetchERCArticle.mockResolvedValue({
-      article_id: 'kaoyan2_2023_text4',
-      set_id: 'set-1',
-      exam: '考研英语二',
-      year: 2023,
-      text_no: 4,
-      title: '',
-      paragraphs: [{ paragraph_no: 1, text: 'Teenagers are paradoxical.' }],
-      vocabulary_summary: {
-        total_word_count: 2,
-        mastered_count: 0,
-        learning_count: 0,
-        unstarted_count: 2,
-        unknown_count: 0,
-        unfamiliar_count: 2,
-        mastery_rate: 0,
-        preview_words: [{ word: 'paradoxical', state: 'unstarted' }],
-      },
-      questions: [
-        {
-          question_id: 'kaoyan2_2023_text4_q36',
-          question_no: 36,
-          stem: 'Question 36?',
-          options: { A: 'A1', B: 'B1', C: 'C1', D: 'D1' },
-        },
-      ],
-      last_attempt_at: null,
-    });
-    fetchERCVocabularyPreheat.mockResolvedValue([
-      {
-        id: 'word-1',
-        deck_id: 'deck-1',
-        word: 'paradoxical',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        translations: [{ pos: 'adj.', translation: '矛盾的' }],
-        phrases: [],
-        sentences: [],
-        prompt_type: 'en_to_zh',
-        review_mode: 'erc_preheat',
-        mastery_score: 0,
-      },
-    ]);
-    submitERCVocabularyPreheat.mockResolvedValue({
-      mastery_score: 2,
-      next_review_at: '2026-05-10T00:00:00Z',
-      wrong_count: 0,
-      correct_count: 1,
-      interval_days: 1,
-      result: 'good',
-      should_repeat_today: false,
-    });
-
-    render(
-      <MemoryRouter initialEntries={['/erc/articles/kaoyan2_2023_text4/practice']}>
-        <Routes>
-          <Route path="/erc/articles/:articleId/practice" element={<Practice />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    await userEvent.click(await screen.findByRole('button', { name: '先预热单词' }));
-    expect(fetchERCVocabularyPreheat).toHaveBeenCalledWith('kaoyan2_2023_text4');
-    expect((await screen.findAllByText('paradoxical')).length).toBeGreaterThan(0);
-
-    await userEvent.click(screen.getByRole('button', { name: /记住了/ }));
-
-    expect(submitERCVocabularyPreheat).toHaveBeenCalledWith('kaoyan2_2023_text4', {
-      deck_id: 'deck-1',
-      word_id: 'word-1',
-      result: 'good',
-      prompt_type: 'en_to_zh',
-    });
-    expect(await screen.findByText('预热完成，可以开始做题。')).toBeInTheDocument();
   });
 });

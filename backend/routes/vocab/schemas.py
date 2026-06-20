@@ -101,7 +101,7 @@ class VocabWordDetailOut(BaseModel):
 
 class VocabReviewQueueItemOut(VocabWordDetailOut):
     prompt_type: Literal["en_to_zh", "zh_to_en"] = "en_to_zh"
-    review_mode: Literal["study", "review", "learning", "mistake", "erc_preheat"] = "review"
+    review_mode: Literal["study", "review", "learning", "mistake"] = "review"
     mastery_score: int = 0
 
 

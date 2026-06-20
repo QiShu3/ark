@@ -140,14 +140,6 @@ class ERCReviewSubmitOut(BaseModel):
     next_review_at: datetime | None = None
 
 
-class ERCVocabularyPreheatSubmitIn(BaseModel):
-    deck_id: str
-    word_id: str
-    result: Literal["again", "hard", "good", "easy"]
-    prompt_type: str = "en_to_zh"
-    response_ms: int | None = Field(default=None, ge=0)
-
-
 class ERCMistakeItemOut(BaseModel):
     article_id: str
     year: int

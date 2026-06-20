@@ -11,8 +11,6 @@ const {
   fetchERCArticles,
   fetchERCOverview,
   fetchERCArticle,
-  fetchERCVocabularyPreheat,
-  submitERCVocabularyPreheat,
   submitERCArticle,
   fetchChoiceItems,
   submitChoiceAnswer,
@@ -20,8 +18,6 @@ const {
   fetchERCArticles: vi.fn(),
   fetchERCOverview: vi.fn(),
   fetchERCArticle: vi.fn(),
-  fetchERCVocabularyPreheat: vi.fn(),
-  submitERCVocabularyPreheat: vi.fn(),
   submitERCArticle: vi.fn(),
   fetchChoiceItems: vi.fn(),
   submitChoiceAnswer: vi.fn(),
@@ -31,8 +27,6 @@ vi.mock('../../lib/erc/api', () => ({
   fetchERCArticles,
   fetchERCOverview,
   fetchERCArticle,
-  fetchERCVocabularyPreheat,
-  submitERCVocabularyPreheat,
   submitERCArticle,
 }));
 
@@ -77,33 +71,16 @@ describe('ERCPracticeFocusWork', () => {
     fetchERCArticles.mockReset();
     fetchERCOverview.mockReset();
     fetchERCArticle.mockReset();
-    fetchERCVocabularyPreheat.mockReset();
-    submitERCVocabularyPreheat.mockReset();
     submitERCArticle.mockReset();
     fetchChoiceItems.mockReset();
     submitChoiceAnswer.mockReset();
   });
 
-  it('renders preheat words first if any exist', async () => {
+  it('loads the recommended article directly without vocabulary preheat', async () => {
     fetchERCOverview.mockResolvedValue({
       recommended_article: { article_id: 'kaoyan2_2025_text2', year: 2025, text_no: 2, title: 'Passage Two' },
     });
     fetchERCArticle.mockResolvedValue(mockArticleDetail());
-    fetchERCVocabularyPreheat.mockResolvedValue([
-      {
-        id: 'w1',
-        deck_id: 'deck1',
-        word: 'benevolent',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        translations: [{ pos: 'adj', translation: '仁慈的' }],
-        sentences: [],
-        phrases: [],
-        prompt_type: 'en_to_zh',
-        review_mode: 'study',
-        mastery_score: 0,
-      },
-    ]);
 
     render(
       <MemoryRouter>
@@ -115,13 +92,8 @@ describe('ERCPracticeFocusWork', () => {
       </MemoryRouter>,
     );
 
-    // Wait for the component to load and render
-    await waitFor(() => {
-      // Either shows preheat words or shows the question (if preheat is skipped)
-      const hasPreheat = screen.queryByText('benevolent');
-      const hasQuestion = screen.queryByText('Question 26?');
-      expect(hasPreheat || hasQuestion).toBeTruthy();
-    });
+    expect(await screen.findByText('Question 26?')).toBeInTheDocument();
+    expect(screen.queryByText('benevolent')).not.toBeInTheDocument();
   });
 
   it('emits content completion when no recommended article is available', async () => {
@@ -164,7 +136,6 @@ describe('ERCPracticeFocusWork', () => {
       },
     ]);
     fetchERCArticle.mockResolvedValue(mockArticleDetail());
-    fetchERCVocabularyPreheat.mockResolvedValue([]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -210,7 +181,6 @@ describe('ERCPracticeFocusWork', () => {
     fetchERCArticle.mockImplementation((articleId: string) => (
       Promise.resolve(mockArticleDetail(articleId, articleId === 'article-two' ? 'Second Question?' : 'Question 26?'))
     ));
-    fetchERCVocabularyPreheat.mockResolvedValue([]);
     submitERCArticle.mockResolvedValue({
       attempt_id: 'attempt-1',
       article_id: 'article-one',

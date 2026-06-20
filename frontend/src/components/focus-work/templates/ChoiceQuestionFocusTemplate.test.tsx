@@ -52,13 +52,35 @@ describe('ChoiceQuestionFocusTemplate', () => {
   it('renders material, question, options, and metadata', () => {
     renderTemplate();
 
-    expect(screen.getByText('ERC REVIEW')).toBeInTheDocument();
+    expect(screen.queryByText('ERC REVIEW')).not.toBeInTheDocument();
     expect(screen.getByText('2025 年 Text 2 · Test Article')).toBeInTheDocument();
     expect(screen.getByText('错题复习')).toBeInTheDocument();
     expect(screen.getByLabelText('阅读原文')).toBeInTheDocument();
     expect(screen.getByText('Context paragraph.')).toBeInTheDocument();
     expect(screen.getByText('Question 26?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'AA1' })).toBeInTheDocument();
+  });
+
+  it('renders markdown math in material, stem, and option text', () => {
+    renderTemplate({
+      item: {
+        ...item(),
+        stem: '计算 $O(n^2)$',
+        material: {
+          title: '题目',
+          paragraphs: [{ id: 'p1', label: '1', text: '令 $i=1$' }],
+        },
+        options: [
+          { key: 'A', text: '$O(n)$' },
+          { key: 'B', text: '$O(n^2)$' },
+          { key: 'C', text: 'O(nlogn)' },
+          { key: 'D', text: 'O(1)' },
+        ],
+      },
+    });
+
+    expect(document.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText('$O(n)$')).not.toBeInTheDocument();
   });
 
   it('keeps submit disabled until an option is selected', async () => {
