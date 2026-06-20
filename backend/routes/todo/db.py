@@ -306,6 +306,7 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_task_type;")
+        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
         await conn.execute("UPDATE app_task_configs SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
         await conn.execute("UPDATE app_task_configs SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
         await conn.execute("UPDATE focus_work_runs SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
