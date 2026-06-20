@@ -1,32 +1,98 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchERCArticle, fetchERCArticles, fetchERCMistakes, fetchERCReviewNext, submitERCReview } from '../../lib/erc/api';
-import type { ERCArticleDetail, ERCArticleListItem, ERCQuestion, ERCReviewNext } from '../../lib/erc/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem } from '../focus-work/templates/choiceQuestionTypes';
+import { fetchChoiceItems, fetchChoiceReviewNext, submitChoiceAnswer } from '../../lib/choice/api';
+import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceReviewNext } from '../../lib/choice/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCReviewFocusWorkProps = FocusWorkRendererProps;
+
+function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
+  const raw = run.config_snapshot?.choice_scope;
+  if (raw && typeof raw === 'object' && 'bank_id' in raw) return raw as ChoiceScope;
+  return null;
+}
+
+function questionTargetCountFromRun(run: FocusWorkRendererProps['run']) {
+  const rawTarget = Number(run.config_snapshot?.target_question_count ?? run.config_snapshot?.daily_question_target ?? 10);
+  if (!Number.isFinite(rawTarget)) return 10;
+  return Math.max(1, Math.min(200, Math.floor(rawTarget)));
+}
+
+function reviewNextToChoiceQuestion(
+  payload: ChoiceReviewNext,
+  allItems: ChoiceItemDTO[],
+): ChoiceQuestionItem | null {
+  if (!payload.has_item || !payload.question) return null;
+  const question = payload.question;
+
+  const articleItem = allItems.find((item) => item.id === payload.article?.article_id);
+  const hasSharedMaterial = articleItem && articleItem.group_type !== 'single' && articleItem.material_blocks.length > 0;
+  const materialBlocks = payload.paragraphs.map((p) => ({
+    type: 'paragraph' as const,
+    text: p.text,
+  }));
+
+  const optionKeys = Object.keys(question.options) as OptionKey[];
+  const options = optionKeys.map((key) => ({ key, text: question.options[key] }));
+
+  return {
+    id: question.question_id,
+    numberLabel: `Q${question.question_no}`,
+    stem: question.stem,
+    stemBlocks: [{ type: 'paragraph' as const, text: question.stem }],
+    stemPlacement: hasSharedMaterial ? 'question' : 'material',
+    options,
+    material: {
+      title: payload.article?.title || 'Reading Passage',
+      paragraphs: payload.paragraphs.map((p) => ({
+        id: String(p.paragraph_no),
+        label: String(p.paragraph_no),
+        text: p.text,
+      })),
+    },
+    materialBlocks: hasSharedMaterial && articleItem ? articleItem.material_blocks : materialBlocks,
+    meta: [
+      { label: '预计用时：自适应' },
+      { label: '错题复习' },
+    ],
+  };
+}
+
+function reviewNextSubtitle(payload: ChoiceReviewNext): string | undefined {
+  if (!payload.article) return undefined;
+  return `${payload.article.year} 年 Text ${payload.article.text_no} · ${payload.article.title || 'Untitled Article'}`;
+}
 
 export default function ERCReviewFocusWork({
   run,
   disabled,
   onContentCompleted,
 }: ERCReviewFocusWorkProps) {
+  const choiceScope = getChoiceScope(run);
+  const bankId = choiceScope?.bank_id;
   const targetQuestionCount = questionTargetCountFromRun(run);
+
   const [item, setItem] = useState<ChoiceQuestionItem | null>(null);
   const [subtitle, setSubtitle] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
   const [answeredCount, setAnsweredCount] = useState(0);
+  const [allItems, setAllItems] = useState<ChoiceItemDTO[]>([]);
 
   const loadNextReviewItem = useCallback(async () => {
+    if (!bankId) {
+      setError('未配置题库');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const payload = await resolveReviewItem(run, answeredQuestionIdsRef.current);
-      const nextItem = reviewNextToChoiceQuestion(payload);
+      const payload = await fetchChoiceReviewNext(bankId);
+      const nextItem = reviewNextToChoiceQuestion(payload, allItems);
       setItem(nextItem);
       setSubtitle(reviewNextSubtitle(payload));
       setError(null);
@@ -37,15 +103,25 @@ export default function ERCReviewFocusWork({
     } finally {
       setLoading(false);
     }
-  }, [run]);
+  }, [bankId, allItems]);
 
   useEffect(() => {
+    if (!bankId) {
+      setError('未配置题库');
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    void resolveReviewItem(run, answeredQuestionIdsRef.current)
-      .then((payload) => {
+
+    Promise.all([
+      fetchChoiceReviewNext(bankId),
+      fetchChoiceItems(bankId, { limit: 1000 }),
+    ])
+      .then(([payload, items]) => {
         if (cancelled) return;
-        setItem(reviewNextToChoiceQuestion(payload));
+        setAllItems(items);
+        setItem(reviewNextToChoiceQuestion(payload, items));
         setSubtitle(reviewNextSubtitle(payload));
         setError(null);
       })
@@ -59,7 +135,7 @@ export default function ERCReviewFocusWork({
     return () => {
       cancelled = true;
     };
-  }, [run]);
+  }, [bankId]);
 
   return (
     <ChoiceQuestionFocusTemplate
@@ -77,12 +153,12 @@ export default function ERCReviewFocusWork({
       onLoadNext={loadNextReviewItem}
       onContentCompleted={onContentCompleted}
       onSubmitAnswer={async (choiceItem, optionKey) => {
-        const result = await submitERCReview(choiceItem.id, optionKey as OptionKey);
+        const result = await submitChoiceAnswer(choiceItem.id, optionKey);
         answeredQuestionIdsRef.current.add(choiceItem.id);
         setAnsweredCount((count) => count + 1);
         setError(null);
         return {
-          correctOptionKey: result.correct_option,
+          correctOptionKey: result.is_correct ? optionKey : result.correct_option,
           progressSnapshot: {
             answered_count: answeredCount + 1,
             target_question_count: targetQuestionCount,
@@ -91,123 +167,4 @@ export default function ERCReviewFocusWork({
       }}
     />
   );
-}
-
-function reviewNextToChoiceQuestion(payload: ERCReviewNext): ChoiceQuestionItem | null {
-  if (!payload.has_item || !payload.question) return null;
-  const question = payload.question;
-  return {
-    id: question.question_id,
-    numberLabel: `Q${question.question_no}`,
-    stem: question.stem,
-    options: (Object.keys(question.options) as OptionKey[]).map((key) => ({
-      key,
-      text: question.options[key],
-    })),
-    material: {
-      title: 'Reading Passage',
-      paragraphs: payload.paragraphs.map((paragraph) => ({
-        id: String(paragraph.paragraph_no),
-        label: String(paragraph.paragraph_no),
-        text: paragraph.text,
-      })),
-    },
-    meta: [
-      { label: '预计用时：自适应' },
-      { label: '错题复习' },
-    ],
-  };
-}
-
-function reviewNextSubtitle(payload: ERCReviewNext): string | undefined {
-  if (!payload.article) return undefined;
-  return `${payload.article.year} 年 Text ${payload.article.text_no} · ${payload.article.title || 'Untitled Article'}`;
-}
-
-function questionTargetCountFromRun(run: FocusWorkRendererProps['run']) {
-  const rawTarget = Number(run.config_snapshot?.target_question_count ?? run.config_snapshot?.daily_question_target ?? 10);
-  if (!Number.isFinite(rawTarget)) return 10;
-  return Math.max(1, Math.min(200, Math.floor(rawTarget)));
-}
-
-async function resolveReviewItem(run: FocusWorkRendererProps['run'], answeredQuestionIds: Set<string>): Promise<ERCReviewNext> {
-  const dueItem = await fetchERCReviewNext();
-  if (run.counts_for_task_completion || dueItem.has_item) {
-    if (!dueItem.question || !answeredQuestionIds.has(dueItem.question.question_id)) return dueItem;
-  }
-  return resolveExtraReviewItem(run, answeredQuestionIds);
-}
-
-async function resolveExtraReviewItem(run: FocusWorkRendererProps['run'], answeredQuestionIds: Set<string>): Promise<ERCReviewNext> {
-  const mistakeItem = await resolveMistakeReviewItem(answeredQuestionIds);
-  if (mistakeItem) return mistakeItem;
-
-  const articles = sortReviewArticles(await fetchERCArticles(articleFiltersFromRun(run)));
-  for (const article of articles) {
-    const detail = await fetchERCArticle(article.article_id);
-    const question = selectQuestion(detail.questions, answeredQuestionIds);
-    if (question) return reviewItemFromArticle(detail, question);
-  }
-
-  return emptyReviewItem();
-}
-
-async function resolveMistakeReviewItem(answeredQuestionIds: Set<string>) {
-  const mistakes = await fetchERCMistakes();
-  const mistake = mistakes.find((item) => !answeredQuestionIds.has(item.question_id)) ?? mistakes[0];
-  if (!mistake) return null;
-  const detail = await fetchERCArticle(mistake.article_id);
-  const question = detail.questions.find((item) => item.question_id === mistake.question_id) ?? selectQuestion(detail.questions, answeredQuestionIds);
-  return question ? reviewItemFromArticle(detail, question) : null;
-}
-
-function sortReviewArticles(articles: ERCArticleListItem[]) {
-  const rank: Record<ERCArticleListItem['status'], number> = {
-    has_due_review: 0,
-    practiced: 1,
-    unstarted: 2,
-  };
-  return [...articles].sort((a, b) => rank[a.status] - rank[b.status]);
-}
-
-function selectQuestion(questions: ERCQuestion[], answeredQuestionIds: Set<string>) {
-  return questions.find((question) => !answeredQuestionIds.has(question.question_id)) ?? questions[0] ?? null;
-}
-
-function reviewItemFromArticle(article: ERCArticleDetail, question: ERCQuestion): ERCReviewNext {
-  return {
-    has_item: true,
-    next_due_at: null,
-    article: {
-      article_id: article.article_id,
-      year: article.year,
-      text_no: article.text_no,
-      title: article.title,
-    },
-    paragraphs: article.paragraphs,
-    question,
-  };
-}
-
-function emptyReviewItem(): ERCReviewNext {
-  return {
-    has_item: false,
-    next_due_at: null,
-    article: null,
-    paragraphs: [],
-    question: null,
-  };
-}
-
-function articleFiltersFromRun(run: FocusWorkRendererProps['run']) {
-  const setId = stringConfig(run.config_snapshot?.set_id ?? run.config_snapshot?.article_set_id);
-  const exam = stringConfig(run.config_snapshot?.exam);
-  return {
-    ...(setId ? { setId } : {}),
-    ...(exam ? { exam } : {}),
-  };
-}
-
-function stringConfig(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }

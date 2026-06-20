@@ -1,24 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import {
-  fetchERCArticles,
-  fetchERCOverview,
-  fetchERCArticle,
-  submitERCArticle,
-} from '../../lib/erc/api';
-import type { ERCArticleDetail, ERCArticleListItem } from '../../lib/erc/types';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-work/templates/choiceQuestionTypes';
 import { fetchChoiceItems, submitChoiceAnswer } from '../../lib/choice/api';
 import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceCompletion } from '../../lib/choice/types';
 
-type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ERCPracticeFocusWorkProps = FocusWorkRendererProps;
-
-function stringConfig(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
 
 function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
   const raw = run.config_snapshot?.choice_scope;
@@ -32,45 +20,12 @@ function getChoiceCompletion(run: FocusWorkRendererProps['run']): ChoiceCompleti
   return null;
 }
 
-function articleTargetCountFromRun(run: FocusWorkRendererProps['run']) {
-  const completion = getChoiceCompletion(run);
-  if (completion?.mode === 'exhaust_scope') return Infinity;
-  if (completion?.mode === 'question_count' && completion.question_count) return completion.question_count;
-  const rawTarget = Number(run.config_snapshot?.target_article_count ?? run.config_snapshot?.daily_article_target ?? 1);
-  if (!Number.isFinite(rawTarget)) return 1;
-  return Math.max(1, Math.min(500, Math.floor(rawTarget)));
-}
-
 function choiceTargetQuestionCount(run: FocusWorkRendererProps['run'], totalQuestionCount: number) {
   const completion = getChoiceCompletion(run);
   if (completion?.mode === 'question_count' && completion.question_count) {
     return Math.max(1, Math.min(totalQuestionCount, Math.floor(completion.question_count)));
   }
   return totalQuestionCount;
-}
-
-async function resolvePracticeArticleId(run: FocusWorkRendererProps['run'], completedArticleIds: Set<string>) {
-  if (run.counts_for_task_completion) {
-    const overview = await fetchERCOverview();
-    return overview.recommended_article?.article_id ?? null;
-  }
-
-  const setId = stringConfig(run.config_snapshot?.set_id ?? run.config_snapshot?.article_set_id);
-  const exam = stringConfig(run.config_snapshot?.exam);
-  const articles = await fetchERCArticles({ ...(setId ? { setId } : {}), ...(exam ? { exam } : {}) });
-  return selectExtraPracticeArticle(articles, completedArticleIds)?.article_id ?? null;
-}
-
-function selectExtraPracticeArticle(articles: ERCArticleListItem[], completedArticleIds: Set<string>) {
-  const candidates = articles.filter((item) => !completedArticleIds.has(item.article_id));
-  const pool = candidates.length > 0 ? candidates : articles;
-  return (
-    pool.find((item) => item.status === 'unstarted')
-    ?? pool.find((item) => item.status === 'has_due_review')
-    ?? pool.find((item) => item.status === 'practiced')
-    ?? pool[0]
-    ?? null
-  );
 }
 
 function computeGlobalQuestionIndex(items: ChoiceItemDTO[], itemIndex: number, questionIndex: number): number {
@@ -125,245 +80,136 @@ function choiceItemToChoiceQuestion(
   };
 }
 
-function articleToChoiceQuestionItem(
-  article: ERCArticleDetail,
-  currentQuestionIndex: number,
-): ChoiceQuestionItem | null {
-  const question = article.questions[currentQuestionIndex];
-  if (!question) return null;
-
-  return {
-    id: question.question_id,
-    numberLabel: `Q${currentQuestionIndex + 1}`,
-    stem: question.stem,
-    options: (Object.keys(question.options) as OptionKey[]).map((key) => ({
-      key,
-      text: question.options[key],
-    })),
-    material: {
-      title: 'Reading Passage',
-      paragraphs: article.paragraphs.map((paragraph) => ({
-        id: String(paragraph.paragraph_no),
-        label: String(paragraph.paragraph_no),
-        text: paragraph.text,
-      })),
-    },
-    meta: [
-      { label: `${article.year} 年 Text ${article.text_no}`, tone: 'blue' },
-      { label: `题目 ${currentQuestionIndex + 1} / ${article.questions.length}` },
-    ],
-  };
-}
-
 export default function ERCPracticeFocusWork({
   run,
   disabled,
   onContentCompleted,
 }: ERCPracticeFocusWorkProps) {
   const choiceScope = getChoiceScope(run);
-  const isChoiceMode = choiceScope !== null;
-
-  const targetArticleCount = articleTargetCountFromRun(run);
-  const [article, setArticle] = useState<ERCArticleDetail | null>(null);
-  const [completedArticleCount, setCompletedArticleCount] = useState(0);
-  const [completedCorrectCount, setCompletedCorrectCount] = useState(0);
-  const [completedQuestionCount, setCompletedQuestionCount] = useState(0);
-  const [currentArticleAnsweredCount, setCurrentArticleAnsweredCount] = useState(0);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const completedArticleIdsRef = useRef<Set<string>>(new Set());
+  const bankId = choiceScope?.bank_id;
 
   const [choiceItems, setChoiceItems] = useState<ChoiceItemDTO[]>([]);
   const [currentChoiceItemIndex, setCurrentChoiceItemIndex] = useState(0);
   const [currentChoiceQuestionIndex, setCurrentChoiceQuestionIndex] = useState(0);
+  const [answeredCount, setAnsweredCount] = useState(0);
+  const [completedCorrectCount, setCompletedCorrectCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const totalChoiceQuestionCount = choiceItems.reduce((sum, item) => sum + item.question_count, 0);
-  const targetChoiceQuestionCount = isChoiceMode ? choiceTargetQuestionCount(run, totalChoiceQuestionCount) : 0;
+  const targetQuestionCount = choiceTargetQuestionCount(run, totalChoiceQuestionCount);
 
-  const completePractice = useCallback((extraSnapshot: Record<string, unknown> = {}) => {
+  const completePractice = useCallback(() => {
     onContentCompleted({
-      article_count: completedArticleCount,
-      target_article_count: targetArticleCount === Infinity ? choiceItems.length : targetArticleCount,
+      article_count: choiceItems.length,
+      target_article_count: targetQuestionCount,
       correct_count: completedCorrectCount,
-      question_count: completedQuestionCount,
-      ...extraSnapshot,
+      question_count: answeredCount,
     });
-  }, [
-    choiceItems.length,
-    completedArticleCount,
-    completedCorrectCount,
-    completedQuestionCount,
-    onContentCompleted,
-    targetArticleCount,
-  ]);
+  }, [answeredCount, completedCorrectCount, choiceItems.length, onContentCompleted, targetQuestionCount]);
 
-  const loadArticle = useCallback(async () => {
+  const loadItems = useCallback(async () => {
+    if (!bankId) {
+      setError('未配置题库');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      if (isChoiceMode && choiceScope) {
-        const year = choiceScope.years?.[0];
-        const subject = choiceScope.subjects?.[0];
-        const items = await fetchChoiceItems(choiceScope.bank_id, {
-          year: year != null ? Number(year) : undefined,
-          subject: subject || undefined,
-          limit: 1000,
-        });
-        setChoiceItems(items);
-        setCurrentChoiceItemIndex(0);
-        setCurrentChoiceQuestionIndex(0);
-        setCurrentArticleAnsweredCount(0);
-      } else {
-        const articleId = await resolvePracticeArticleId(run, completedArticleIdsRef.current);
-        if (!articleId) {
-          setArticle(null);
-          setLoading(false);
-          return;
-        }
-        const articleData = await fetchERCArticle(articleId);
-        setArticle(articleData);
-        setCurrentQuestionIndex(0);
-        setCurrentArticleAnsweredCount(0);
-      }
+      const year = choiceScope?.years?.[0];
+      const subject = choiceScope?.subjects?.[0];
+      const items = await fetchChoiceItems(bankId, {
+        year: year != null ? Number(year) : undefined,
+        subject: subject || undefined,
+        limit: 1000,
+      });
+      setChoiceItems(items);
+      setCurrentChoiceItemIndex(0);
+      setCurrentChoiceQuestionIndex(0);
+      setAnsweredCount(0);
     } catch (err) {
       setError(err instanceof Error ? err.message : '真题练习加载失败');
     } finally {
       setLoading(false);
     }
-  }, [run, isChoiceMode, choiceScope]);
+  }, [bankId, choiceScope]);
 
   useEffect(() => {
-    void loadArticle();
-  }, [loadArticle]);
+    void loadItems();
+  }, [loadItems]);
 
-  const handleChoiceQuestionSubmit = useCallback(async (item: ChoiceQuestionItem, optionKey: string): Promise<ChoiceQuestionSubmitResult> => {
-    if (isChoiceMode) {
-      const currentItem = choiceItems[currentChoiceItemIndex];
-      if (!currentItem) return { correctOptionKey: undefined };
-      const q = currentItem.questions.find((question) => question.id === item.id);
-      if (!q) return { correctOptionKey: undefined };
-      const isCorrect = q.answer.toUpperCase() === optionKey.toUpperCase();
-      const result = await submitChoiceAnswer(q.id, optionKey);
-      setCompletedQuestionCount((prev) => prev + 1);
-      if (result.is_correct) setCompletedCorrectCount((prev) => prev + 1);
-      setCurrentArticleAnsweredCount((prev) => prev + 1);
-      return {
-        correctOptionKey: isCorrect ? optionKey : result.correct_option,
-        explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,
-      };
+  const handleSubmit = useCallback(async (item: ChoiceQuestionItem, optionKey: string): Promise<ChoiceQuestionSubmitResult> => {
+    const currentItem = choiceItems[currentChoiceItemIndex];
+    if (!currentItem) return { correctOptionKey: undefined };
+    const q = currentItem.questions.find((question) => question.id === item.id);
+    if (!q) return { correctOptionKey: undefined };
+    const result = await submitChoiceAnswer(q.id, optionKey);
+    setAnsweredCount((prev) => prev + 1);
+    if (result.is_correct) setCompletedCorrectCount((prev) => prev + 1);
+    return {
+      correctOptionKey: result.is_correct ? optionKey : result.correct_option,
+      explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,
+    };
+  }, [choiceItems, currentChoiceItemIndex]);
+
+  const handleLoadNext = useCallback(async (): Promise<ChoiceQuestionItem | null> => {
+    const currentItem = choiceItems[currentChoiceItemIndex];
+    if (!currentItem) return null;
+    const nextQIndex = currentChoiceQuestionIndex + 1;
+    if (nextQIndex < currentItem.questions.length) {
+      setCurrentChoiceQuestionIndex(nextQIndex);
+      return choiceItemToChoiceQuestion(
+        currentItem,
+        nextQIndex,
+        computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, nextQIndex),
+        totalChoiceQuestionCount,
+      );
     }
-
-    if (!article) return { correctOptionKey: undefined };
-    const question = article.questions.find((q) => q.question_id === item.id);
-    if (!question) return { correctOptionKey: undefined };
-    const answers = [{ question_id: question.question_id, chosen_option: optionKey as OptionKey }];
-    try {
-      const result = await submitERCArticle(article.article_id, answers);
-      completedArticleIdsRef.current.add(article.article_id);
-      setCompletedArticleCount((prev) => prev + 1);
-      setCompletedCorrectCount((prev) => prev + result.items.filter((i) => i.is_correct).length);
-      setCompletedQuestionCount((prev) => prev + result.items.length);
-      setCurrentArticleAnsweredCount((prev) => prev + result.items.length);
-      const isCorrect = result.items.find((i) => i.question_id === item.id)?.is_correct ?? false;
-      return {
-        correctOptionKey: isCorrect ? optionKey : result.items.find((i) => i.question_id === item.id)?.correct_option,
-      };
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '提交答案失败');
-      return { correctOptionKey: undefined };
-    }
-  }, [article, isChoiceMode, choiceItems, currentChoiceItemIndex]);
-
-  const handleChoiceQuestionLoadNext = useCallback(async (): Promise<ChoiceQuestionItem | null> => {
-    if (isChoiceMode) {
-      const currentItem = choiceItems[currentChoiceItemIndex];
-      if (!currentItem) return null;
-      const nextQIndex = currentChoiceQuestionIndex + 1;
-      if (nextQIndex < currentItem.questions.length) {
-        setCurrentChoiceQuestionIndex(nextQIndex);
-        return choiceItemToChoiceQuestion(
-          currentItem,
-          nextQIndex,
-          computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, nextQIndex),
-          totalChoiceQuestionCount,
-        );
-      }
-      const nextItemIndex = currentChoiceItemIndex + 1;
-      if (nextItemIndex < choiceItems.length) {
-        setCurrentChoiceItemIndex(nextItemIndex);
-        setCurrentChoiceQuestionIndex(0);
-        return choiceItemToChoiceQuestion(
-          choiceItems[nextItemIndex],
-          0,
-          computeGlobalQuestionIndex(choiceItems, nextItemIndex, 0),
-          totalChoiceQuestionCount,
-        );
-      }
-      return null;
-    }
-
-    if (!article) return null;
-    const nextIndex = currentQuestionIndex + 1;
-    if (nextIndex < article.questions.length) {
-      setCurrentQuestionIndex(nextIndex);
-      return articleToChoiceQuestionItem(article, nextIndex);
+    const nextItemIndex = currentChoiceItemIndex + 1;
+    if (nextItemIndex < choiceItems.length) {
+      setCurrentChoiceItemIndex(nextItemIndex);
+      setCurrentChoiceQuestionIndex(0);
+      return choiceItemToChoiceQuestion(
+        choiceItems[nextItemIndex],
+        0,
+        computeGlobalQuestionIndex(choiceItems, nextItemIndex, 0),
+        totalChoiceQuestionCount,
+      );
     }
     return null;
-  }, [article, currentQuestionIndex, isChoiceMode, choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex, totalChoiceQuestionCount]);
+  }, [choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex, totalChoiceQuestionCount]);
 
-  const handleChoiceQuestionComplete = useCallback((progressSnapshot?: Record<string, unknown>) => {
+  const handleComplete = useCallback((progressSnapshot?: Record<string, unknown>) => {
     if (progressSnapshot?.no_available_content === true) {
       onContentCompleted({
-        article_count: completedArticleCount,
-        target_article_count: targetArticleCount === Infinity ? choiceItems.length : targetArticleCount,
+        article_count: choiceItems.length,
+        target_article_count: targetQuestionCount,
         correct_count: completedCorrectCount,
-        question_count: completedQuestionCount,
+        question_count: answeredCount,
         no_available_content: true,
       });
       return;
     }
-    if (isChoiceMode) {
-      completePractice();
-      return;
-    }
-    if (completedArticleCount < targetArticleCount) {
-      void loadArticle();
-      return;
-    }
     completePractice();
-  }, [
-    choiceItems.length,
-    completedArticleCount,
-    completedCorrectCount,
-    completedQuestionCount,
-    completePractice,
-    isChoiceMode,
-    loadArticle,
-    onContentCompleted,
-    targetArticleCount,
-  ]);
+  }, [answeredCount, completedCorrectCount, choiceItems.length, completePractice, onContentCompleted, targetQuestionCount]);
 
   let choiceQuestionItem: ChoiceQuestionItem | null = null;
-  if (isChoiceMode) {
-    const currentItem = choiceItems[currentChoiceItemIndex];
-    if (currentItem) {
-      choiceQuestionItem = choiceItemToChoiceQuestion(
-        currentItem,
-        currentChoiceQuestionIndex,
-        computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex),
-        totalChoiceQuestionCount,
-      );
-    }
-  } else if (article) {
-    choiceQuestionItem = articleToChoiceQuestionItem(article, currentQuestionIndex);
+  const currentItem = choiceItems[currentChoiceItemIndex];
+  if (currentItem) {
+    choiceQuestionItem = choiceItemToChoiceQuestion(
+      currentItem,
+      currentChoiceQuestionIndex,
+      computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex),
+      totalChoiceQuestionCount,
+    );
   }
 
   return (
     <ChoiceQuestionFocusTemplate
       title="真题练习"
-      subtitle={isChoiceMode
-        ? (choiceScope?.subjects?.[0] || choiceScope?.years?.[0] ? `${choiceScope.years?.[0] ?? ''} ${choiceScope.subjects?.[0] ?? ''}`.trim() : undefined)
-        : article ? `${article.year} 年 Text ${article.text_no}` : undefined
+      subtitle={choiceScope?.subjects?.[0] || choiceScope?.years?.[0]
+        ? `${choiceScope.years?.[0] ?? ''} ${choiceScope.subjects?.[0] ?? ''}`.trim()
+        : undefined
       }
       statusLabel="真题练习"
       item={choiceQuestionItem}
@@ -371,12 +217,12 @@ export default function ERCPracticeFocusWork({
       error={error}
       emptyTitle="暂无真题"
       emptyDescription="当前没有可用的真题练习。"
-      answeredCount={currentArticleAnsweredCount}
-      targetCount={isChoiceMode ? targetChoiceQuestionCount : (article?.questions.length ?? 0)}
+      answeredCount={answeredCount}
+      targetCount={targetQuestionCount}
       disabled={disabled}
-      onSubmitAnswer={handleChoiceQuestionSubmit}
-      onLoadNext={handleChoiceQuestionLoadNext}
-      onContentCompleted={handleChoiceQuestionComplete}
+      onSubmitAnswer={handleSubmit}
+      onLoadNext={handleLoadNext}
+      onContentCompleted={handleComplete}
     />
   );
 }

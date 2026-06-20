@@ -4,8 +4,12 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from uuid import UUID
 
 import asyncpg
+
+from routes.erc.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
+from routes.erc.repository import refresh_set_counts, upsert_article_seed, upsert_set
 
 from .schemas import (
     ChoiceBankOut,
@@ -396,7 +400,7 @@ async def list_erc_as_choice_items(
             stem = _str(q["stem"])
             table_block = _detect_table_block(stem)
             stem_blocks = [table_block] if table_block else [ContentBlock(type="paragraph", text=stem)]
-            explanation = _str(q["explanation"])
+            explanation = _str(q.get("explanation", ""))
             explanation_blocks = [ContentBlock(type="paragraph", text=explanation)] if explanation else []
             questions.append(ChoiceQuestionOut(
                 id=str(q["question_id"]),
@@ -423,3 +427,142 @@ async def list_erc_as_choice_items(
         ))
 
     return result[offset: offset + limit]
+
+
+# ---------------------------------------------------------------------------
+# ERC set resolver — maps content_banks UUID → erc_sets UUID
+# ---------------------------------------------------------------------------
+
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    if row is None:
+        return default
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
+def _content_bank_article_seed(
+    bank_id: UUID,
+    bank_name: str,
+    item: Any,
+    questions: list[Any],
+) -> ERCArticleSeed | None:
+    body = _json(_row_value(item, "body"))
+    title = _str(_row_value(item, "title"))
+    passage = str(body.get("passage") or "").strip()
+    exam = str(body.get("examination") or body.get("subject") or bank_name or "").strip()
+    year = _extract_year_from_title_or_body(title, body)
+    sort_order = _int(_row_value(item, "sort_order"))
+    paragraphs = [
+        ERCParagraphSeed(paragraph_no=i + 1, text=chunk)
+        for i, chunk in enumerate(re.split(r"\n\s*\n", passage) if passage else [])
+        if chunk.strip()
+    ]
+    if not paragraphs and passage:
+        paragraphs = [ERCParagraphSeed(paragraph_no=1, text=passage)]
+    erc_questions = []
+    for q in questions:
+        options = _parse_options(_row_value(q, "options"))
+        erc_questions.append(ERCQuestionSeed(
+            question_id=f"cb-{bank_id}-{sort_order}-{_int(_row_value(q, 'sort_order'))}",
+            question_no=_int(_row_value(q, "sort_order")) + 1,
+            stem=_str(_row_value(q, "question_text")),
+            options={opt["key"]: opt["text"] for opt in options},
+            answer=_str(_row_value(q, "correct_answer")),
+            evidence={"paragraphs": [], "text": ""},
+            explanation=_str(_row_value(q, "analysis")),
+            question_type="practice",
+            sort_order=_int(_row_value(q, "sort_order")) + 1,
+        ))
+    article_id = f"cb-{bank_id}-{sort_order}"
+    return ERCArticleSeed(
+        article_id=article_id,
+        exam=exam,
+        year=year,
+        text_no=sort_order,
+        title=title or f"Text {sort_order}",
+        sort_order=sort_order,
+        paragraphs=paragraphs,
+        questions=erc_questions,
+    )
+
+
+async def sync_content_bank_to_erc_set(conn: Any, *, bank_id: UUID, bank_name: str) -> str | None:
+    """Sync content_banks items into erc_sets/erc_articles/erc_questions. Returns erc_set_id."""
+    item_rows = await conn.fetch(
+        """
+        SELECT id::text AS id, title, body, sort_order
+        FROM content_items
+        WHERE bank_id = $1
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        bank_id,
+    )
+    if not item_rows:
+        return None
+    question_rows = await conn.fetch(
+        """
+        SELECT id::text AS id, item_id::text AS item_id, sort_order, question_text, options, correct_answer, analysis
+        FROM content_questions
+        WHERE item_id = ANY($1::uuid[])
+        ORDER BY sort_order ASC, created_at ASC
+        """,
+        [UUID(str(_row_value(row, "id"))) for row in item_rows],
+    )
+    questions_by_item: dict[str, list[Any]] = {}
+    for question in question_rows:
+        questions_by_item.setdefault(str(_row_value(question, "item_id")), []).append(question)
+    article_seeds = [
+        seed
+        for item in item_rows
+        if (seed := _content_bank_article_seed(bank_id, bank_name, item, questions_by_item.get(str(_row_value(item, "id")), []))) is not None
+    ]
+    if not article_seeds:
+        return None
+    set_id = await upsert_set(
+        conn,
+        key=f"content-bank-{bank_id}",
+        name=bank_name,
+        description="由内容银行同步",
+        exam=bank_name,
+        source_version="content-bank-sync",
+    )
+    for seed in article_seeds:
+        await upsert_article_seed(conn, set_id=set_id, seed=seed)
+    await refresh_set_counts(conn, set_id=set_id)
+    return set_id
+
+
+async def resolve_erc_set_id(conn: Any, bank_id: str) -> str | None:
+    """Find the erc_sets UUID for a bank_id (content_bank or erc_set UUID). Returns erc_set_id or None."""
+    try:
+        bank_uuid = UUID(bank_id)
+    except ValueError:
+        return None
+    erc_row = await conn.fetchrow("SELECT id FROM erc_sets WHERE id = $1", bank_uuid)
+    if erc_row is not None:
+        return str(bank_uuid)
+    bank_row = await conn.fetchrow("SELECT name FROM content_banks WHERE id = $1", bank_uuid)
+    if bank_row is not None:
+        mapped_row = await conn.fetchrow(
+            "SELECT id FROM erc_sets WHERE key = $1 OR name = $2 ORDER BY CASE WHEN key = $1 THEN 0 ELSE 1 END LIMIT 1",
+            f"content-bank-{bank_uuid}",
+            str(bank_row["name"]),
+        )
+        if mapped_row is not None:
+            return str(mapped_row["id"])
+        return await sync_content_bank_to_erc_set(conn, bank_id=bank_uuid, bank_name=str(bank_row["name"]))
+    return None
+
+
+async def ensure_erc_set_synced(conn: Any, bank_id: str) -> str:
+    """Resolve bank_id to erc_set_id, raising HTTPException if not found."""
+    from fastapi import HTTPException
+
+    result = await resolve_erc_set_id(conn, bank_id)
+    if result is None:
+        raise HTTPException(status_code=422, detail="题库不存在")
+    return result

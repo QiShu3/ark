@@ -484,9 +484,9 @@ async def test_resolve_erc_app_set_id_syncs_unsynced_content_bank(monkeypatch):
     async def fake_refresh_set_counts(_conn: object, *, set_id: str) -> None:
         imported["refreshed"] = set_id
 
-    monkeypatch.setattr("routes.todo_routes.upsert_set", fake_upsert_set)
-    monkeypatch.setattr("routes.todo_routes.upsert_article_seed", fake_upsert_article_seed)
-    monkeypatch.setattr("routes.todo_routes.refresh_set_counts", fake_refresh_set_counts)
+    monkeypatch.setattr("routes.choice.adapters.upsert_set", fake_upsert_set)
+    monkeypatch.setattr("routes.choice.adapters.upsert_article_seed", fake_upsert_article_seed)
+    monkeypatch.setattr("routes.choice.adapters.refresh_set_counts", fake_refresh_set_counts)
 
     class UnsyncedBankConn:
         async def fetchrow(self, query: str, *args: object):

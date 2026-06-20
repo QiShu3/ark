@@ -8,6 +8,7 @@ export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
 
 export type FocusWorkStartDetail = {
   focusWorkType: FocusWorkType;
+  bankId?: string;
 };
 
 export type FocusWorkRunStatus = 'running' | 'paused' | 'content_completed' | 'completed' | 'abandoned';

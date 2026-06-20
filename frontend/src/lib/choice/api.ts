@@ -1,5 +1,13 @@
 import { apiJson } from '../api';
-import type { ChoiceAnswerSubmitResult, ChoiceBank, ChoiceFilters, ChoiceItem } from './types';
+import type {
+  ChoiceAnswerSubmitResult,
+  ChoiceBank,
+  ChoiceFilters,
+  ChoiceItem,
+  ChoiceMistakeItem,
+  ChoiceOverview,
+  ChoiceReviewNext,
+} from './types';
 
 export function fetchChoiceBanks() {
   return apiJson<ChoiceBank[]>('/api/choice/banks');
@@ -35,4 +43,19 @@ export function submitChoiceAnswer(questionId: string, chosenOption: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chosen_option: chosenOption }),
   });
+}
+
+export function fetchChoiceOverview(bankId: string) {
+  const params = new URLSearchParams({ bank_id: bankId });
+  return apiJson<ChoiceOverview>(`/api/choice/overview?${params.toString()}`);
+}
+
+export function fetchChoiceReviewNext(bankId: string) {
+  const params = new URLSearchParams({ bank_id: bankId });
+  return apiJson<ChoiceReviewNext>(`/api/choice/review/next?${params.toString()}`);
+}
+
+export function fetchChoiceMistakes(bankId: string) {
+  const params = new URLSearchParams({ bank_id: bankId });
+  return apiJson<ChoiceMistakeItem[]>(`/api/choice/mistakes?${params.toString()}`);
 }

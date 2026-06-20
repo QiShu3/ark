@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from routes.auth_routes import get_current_user
+from routes.choice.adapters import resolve_erc_set_id
 from routes.erc.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
-from routes.erc.repository import refresh_set_counts, upsert_article_seed, upsert_set
 from routes.vocab.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
 from routes.vocab.repository import import_deck
 
@@ -651,16 +651,25 @@ async def _resolve_vocab_app_deck_id(conn: Any, raw_deck_id: str) -> str:
 
 
 def _content_bank_year(title: str, body: dict[str, object]) -> int:
-    candidates = [title, str(body.get("examination") or "")]
+    match = re.search(r"(?:19|20)\d{2}", title)
+    if match:
+        return int(match.group(0))
+    examination = str(body.get("examination") or "").strip()
+    if examination:
+        match = re.search(r"(?:19|20)\d{2}", examination)
+        if match:
+            return int(match.group(0))
     tags = body.get("tags")
     if isinstance(tags, list):
-        candidates.extend(str(tag) for tag in tags)
-    match = re.search(r"(?:19|20)\d{2}", " ".join(candidates))
-    return int(match.group(0)) if match else 0
+        for tag in tags:
+            match = re.search(r"(?:19|20)\d{2}", str(tag))
+            if match:
+                return int(match.group(0))
+    return 0
 
 
 def _content_bank_text_no(title: str, fallback: int) -> int:
-    match = re.search(r"第\s*(\d+)\s*题", title)
+    match = re.search(r"[Tt]ext\s*(\d+)", title)
     return int(match.group(1)) if match else fallback
 
 
@@ -730,51 +739,6 @@ def _content_bank_article_seed(bank_id: UUID, bank_name: str, item: Any, questio
     )
 
 
-async def _sync_content_bank_to_erc_set(conn: Any, *, bank_id: UUID, bank_name: str) -> str | None:
-    item_rows = await conn.fetch(
-        """
-        SELECT id::text AS id, title, body, sort_order
-        FROM content_items
-        WHERE bank_id = $1
-        ORDER BY sort_order ASC, created_at ASC
-        """,
-        bank_id,
-    )
-    if not item_rows:
-        return None
-    question_rows = await conn.fetch(
-        """
-        SELECT id::text AS id, item_id::text AS item_id, sort_order, question_text, options, correct_answer, analysis
-        FROM content_questions
-        WHERE item_id = ANY($1::uuid[])
-        ORDER BY sort_order ASC, created_at ASC
-        """,
-        [UUID(str(_row_value(row, "id"))) for row in item_rows],
-    )
-    questions_by_item: dict[str, list[Any]] = {}
-    for question in question_rows:
-        questions_by_item.setdefault(str(_row_value(question, "item_id")), []).append(question)
-    article_seeds = [
-        seed
-        for item in item_rows
-        if (seed := _content_bank_article_seed(bank_id, bank_name, item, questions_by_item.get(str(_row_value(item, "id")), []))) is not None
-    ]
-    if not article_seeds:
-        return None
-    set_id = await upsert_set(
-        conn,
-        key=f"content-bank-{bank_id}",
-        name=bank_name,
-        description="由测试专注工作从内容银行同步",
-        exam=bank_name,
-        source_version="content-bank-sync",
-    )
-    for seed in article_seeds:
-        await upsert_article_seed(conn, set_id=set_id, seed=seed)
-    await refresh_set_counts(conn, set_id=set_id)
-    return set_id
-
-
 async def _resolve_erc_app_set_id(conn: Any, raw_set_id: str) -> str:
     set_id = raw_set_id.strip()
     if not set_id:
@@ -786,31 +750,9 @@ async def _resolve_erc_app_set_id(conn: Any, raw_set_id: str) -> str:
         set_uuid = None
 
     if set_uuid is not None:
-        set_row = await conn.fetchrow("SELECT id FROM erc_sets WHERE id = $1", set_uuid)
-        if set_row is not None:
-            return str(set_uuid)
-        bank_row = await conn.fetchrow("SELECT name FROM content_banks WHERE id = $1", set_uuid)
-        if bank_row is not None:
-            mapped_row = await conn.fetchrow(
-                """
-                SELECT id
-                FROM erc_sets
-                WHERE key = $1 OR name = $2
-                ORDER BY CASE WHEN key = $1 THEN 0 ELSE 1 END
-                LIMIT 1
-                """,
-                f"content-bank-{set_uuid}",
-                str(bank_row["name"]),
-            )
-            if mapped_row is not None:
-                return str(mapped_row["id"])
-            synced_set_id = await _sync_content_bank_to_erc_set(
-                conn,
-                bank_id=set_uuid,
-                bank_name=str(bank_row["name"]),
-            )
-            if synced_set_id is not None:
-                return synced_set_id
+        result = await resolve_erc_set_id(conn, set_id)
+        if result is not None:
+            return result
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="题库不存在")
 
     set_row = await conn.fetchrow(
@@ -3507,7 +3449,7 @@ async def start_focus_workflow_app_work(
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await _sync_active_focus_workflow(conn, int(user.id))
-            focus_phase = {
+            focus_phase: dict[str, Any] = {
                 "phase_type": "focus",
                 "duration": 1500,
                 "timer_mode": "countdown",
@@ -3516,6 +3458,9 @@ async def start_focus_workflow_app_work(
                 "is_temporary": True,
                 "record_focus": bool(body.record_focus),
             }
+            if body.bank_id and body.focus_work_type in {"erc_review", "erc_practice"}:
+                resolved_bank_id = await _resolve_erc_app_set_id(conn, body.bank_id)
+                focus_phase["choice_scope"] = {"bank_id": resolved_bank_id}
             break_phase = {
                 "phase_type": "break",
                 "duration": 300,
@@ -3694,6 +3639,14 @@ async def _build_run_metadata(
             )
             if config_row is not None:
                 config_snapshot.update(_config_payload(config_row["config"]))
+        if "choice_scope" not in config_snapshot and "set_id" in config_snapshot:
+            raw_set_id = config_snapshot.get("set_id")
+            if raw_set_id and focus_work_type in {"erc_review", "erc_practice"}:
+                try:
+                    resolved = await _resolve_erc_app_set_id(conn, str(raw_set_id))
+                    config_snapshot["choice_scope"] = {"bank_id": resolved}
+                except HTTPException:
+                    pass
     elif current_phase is not None:
         focus_work_type = focus_work_type or _phase_focus_work_type_value(current_phase)
         config_snapshot["phase_index"] = current_index
