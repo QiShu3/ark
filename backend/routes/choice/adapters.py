@@ -383,7 +383,7 @@ async def list_erc_as_choice_items(
 
         q_rows = await conn.fetch(
             """
-            SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer
+            SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer, explanation
             FROM erc_questions
             WHERE article_pk = $1::uuid
             ORDER BY sort_order
@@ -396,12 +396,15 @@ async def list_erc_as_choice_items(
             stem = _str(q["stem"])
             table_block = _detect_table_block(stem)
             stem_blocks = [table_block] if table_block else [ContentBlock(type="paragraph", text=stem)]
+            explanation = _str(q["explanation"])
+            explanation_blocks = [ContentBlock(type="paragraph", text=explanation)] if explanation else []
             questions.append(ChoiceQuestionOut(
                 id=str(q["question_id"]),
                 question_no=_int(q["question_no"]),
                 stem_blocks=stem_blocks,
                 options=options,
                 answer=_str(q["answer"]),
+                explanation_blocks=explanation_blocks,
                 tags=[article_exam] if article_exam else [],
                 sort_order=_int(q["question_no"]),
             ))
