@@ -1010,6 +1010,8 @@ async def init_todo(app: Any) -> None:
         )
 
         # Test focus work configs (admin-only)
+        await conn.execute("UPDATE test_focus_configs SET focus_work_type = 'review' WHERE focus_work_type = 'erc_review'")
+        await conn.execute("UPDATE test_focus_configs SET focus_work_type = 'practice' WHERE focus_work_type = 'erc_practice'")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS test_focus_configs (
