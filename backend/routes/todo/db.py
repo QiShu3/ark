@@ -1010,6 +1010,7 @@ async def init_todo(app: Any) -> None:
         )
 
         # Test focus work configs (admin-only)
+        await conn.execute("ALTER TABLE test_focus_configs DROP CONSTRAINT IF EXISTS test_focus_configs_focus_work_type_check;")
         await conn.execute("UPDATE test_focus_configs SET focus_work_type = 'review' WHERE focus_work_type = 'erc_review'")
         await conn.execute("UPDATE test_focus_configs SET focus_work_type = 'practice' WHERE focus_work_type = 'erc_practice'")
         await conn.execute(
