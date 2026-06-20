@@ -1,20 +1,21 @@
 """Business logic for 模板子应用."""
 import json
-from typing import Any
-from datetime import datetime, timezone
-import asyncpg
 
+import asyncpg
 from fsrs import Card, Rating, Scheduler
 
-UTC = timezone.utc
 _scheduler = Scheduler()
 
 
 def _fsrs_rating(label: str | None) -> Rating:
-    if label == "again": return Rating.Again
-    if label == "hard": return Rating.Hard
-    if label == "good": return Rating.Good
-    if label == "easy": return Rating.Easy
+    if label == "again":
+        return Rating.Again
+    if label == "hard":
+        return Rating.Hard
+    if label == "good":
+        return Rating.Good
+    if label == "easy":
+        return Rating.Easy
     return Rating.Good
 
 
@@ -40,7 +41,7 @@ async def get_overview(pool: asyncpg.Pool, *, user_id: int, set_id: str | None =
 
 
 async def get_next_review(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> dict:
-    from .repository import list_due_card_rows, get_next_due_at
+    from .repository import get_next_due_at, list_due_card_rows
     async with pool.acquire() as conn:
         rows = await list_due_card_rows(conn, user_id=user_id, limit=1, set_id=set_id)
     if not rows:
@@ -63,10 +64,10 @@ async def get_next_review(pool: asyncpg.Pool, *, user_id: int, set_id: str | Non
 
 
 async def submit_review(pool: asyncpg.Pool, *, user_id: int, question_id: str, chosen_option: str, rating: str | None = None) -> dict:
-    from .repository import upsert_question_card, insert_review_log, upsert_mistake
+    from .repository import insert_review_log, upsert_mistake, upsert_question_card
     async with pool.acquire() as conn:
         q = await conn.fetchrow(
-            f"SELECT id, answer FROM test-template_questions WHERE question_id = $1", question_id,
+            "SELECT id, answer FROM test-template_questions WHERE question_id = $1", question_id,
         )
         if not q:
             raise ValueError(f"Question not found: {question_id}")
@@ -77,7 +78,7 @@ async def submit_review(pool: asyncpg.Pool, *, user_id: int, question_id: str, c
 
         # FSRS scheduling
         old_card = await conn.fetchrow(
-            f"SELECT fsrs_card_json FROM test-template_user_question_cards WHERE user_id = $1 AND question_pk = $2::uuid",
+            "SELECT fsrs_card_json FROM test-template_user_question_cards WHERE user_id = $1 AND question_pk = $2::uuid",
             user_id, question_pk,
         )
         old_fsrs = json.loads(old_card["fsrs_card_json"]) if old_card else {}

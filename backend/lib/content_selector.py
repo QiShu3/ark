@@ -10,15 +10,12 @@ skeleton 生成直接复用 selector 逻辑，而非硬编码 LIMIT 1。
   闪卡策略 (fsrs_mixed)       — FSRS 调度 + 新词配额（暂为占位，Vocab 已有完整逻辑）
 """
 
-import json as _json
 import random as _random
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
-
-UTC = timezone.utc
 
 
 class ContentSelector(ABC):
@@ -175,7 +172,6 @@ class WeightedMistakeSelector(ContentSelector):
 
         # 2. 冷却期过滤——跳过近期做过的同一题目
         if cooldown_hours > 0:
-            cooldown_since = now.replace(hour=0, minute=0, second=0, microsecond=0)
             # 简化：查近 N 小时内的日志
             recent_logs = await conn.fetch(
                 f"""

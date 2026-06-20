@@ -34,6 +34,8 @@ export function useSubAppHomePage(app: SubAppDeclaration): SubAppHomePageData {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Dynamic sub-app declarations provide one adapter per configured focus work.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const adapters = app.focusWorks.map((fw) => useFocusWorkAdapter(fw, app.id));
 
   const allMetrics = adapters.flatMap((a) => a.metrics);

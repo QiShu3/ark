@@ -1,7 +1,5 @@
 import React from 'react';
 
-import QuizRenderer from './QuizRenderer';
-import StudyCard from './StudyCard';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabTodaySession } from '../../hooks/vocab/useVocabTodaySession';
 import { fetchVocabOverviewCurrentWords, submitVocabContentReview } from '../../lib/vocab/api';
@@ -9,8 +7,6 @@ import type { VocabOverviewCurrentWord, VocabReviewItem } from '../../lib/vocab/
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import FlashcardFocusTemplate from '../focus-work/templates/FlashcardFocusTemplate';
 import type { FlashcardItem, FlashcardRating, FlashcardSubmitResult } from '../focus-work/templates/flashcardTypes';
-
-type RatingValue = FlashcardRating;
 
 const EXTRA_ROUND_LIMIT = 500;
 
@@ -254,8 +250,6 @@ export default function VocabTodayFocusWork({
   const targetCount = isExtraRun ? extraTargetCount : countedTargetCountFromRun(run, session.memorizedCount);
   const loading = isExtraRun ? extraLoading : session.loading;
   const error = isExtraRun ? extraError : (session.error ?? null);
-  const submitting = isExtraRun ? extraSubmitting : session.submitting;
-
   return (
     <FlashcardFocusTemplate
       title="今日单词"

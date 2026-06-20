@@ -77,6 +77,7 @@ export default function TestFocusWork() {
   const [configs, setConfigs] = useState<TestFocusConfig[]>([]);
   const [banks, setBanks] = useState<ContentBank[]>([]);
   const [filters, setFilters] = useState<ChoiceFilters | null>(null);
+  const [scopeTotals, setScopeTotals] = useState<ChoiceFilters | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
@@ -117,15 +118,33 @@ export default function TestFocusWork() {
   const loadFilters = useCallback(async (bankId: string) => {
     if (!bankId) {
       setFilters(null);
+      setScopeTotals(null);
       return;
     }
     try {
       const data = await apiJson<ChoiceFilters>(`/api/choice/filters?bank_id=${bankId}`);
       setFilters(data);
+      setScopeTotals(data);
       setFormYear('');
       setFormSubject('');
     } catch {
       setFilters(null);
+      setScopeTotals(null);
+    }
+  }, []);
+
+  const loadScopeTotals = useCallback(async (bankId: string, year: number | '', subject: string) => {
+    if (!bankId) {
+      setScopeTotals(null);
+      return;
+    }
+    const params = new URLSearchParams({ bank_id: bankId });
+    if (year !== '') params.set('year', String(year));
+    if (subject) params.set('subject', subject);
+    try {
+      setScopeTotals(await apiJson<ChoiceFilters>(`/api/choice/filters?${params.toString()}`));
+    } catch {
+      setScopeTotals(null);
     }
   }, []);
 
@@ -144,6 +163,12 @@ export default function TestFocusWork() {
       setFilters(null);
     }
   }, [formType, formBankId, loadFilters]);
+
+  useEffect(() => {
+    if (formType === 'erc_practice' || formType === 'erc_review') {
+      void loadScopeTotals(formBankId, formYear, formSubject);
+    }
+  }, [formType, formBankId, formYear, formSubject, loadScopeTotals]);
 
   function buildScope(): ChoiceScope | null {
     if (formType !== 'erc_practice' && formType !== 'erc_review') return null;
@@ -342,7 +367,7 @@ export default function TestFocusWork() {
                   </select>
                   <p className="mt-1 text-xs text-[var(--ark-text-faint)]">
                     {formCompletionMode === 'exhaust_scope'
-                      ? `范围内共 ${filters!.total_questions} 道题`
+                      ? `范围内共 ${scopeTotals?.total_questions ?? filters!.total_questions} 道题`
                       : '指定做题数量'}
                   </p>
                 </div>

@@ -63,3 +63,12 @@ export type ChoiceCompletion = {
   question_count?: number;
   duration_seconds?: number;
 };
+
+export type ChoiceAnswerSubmitResult = {
+  question_id: string;
+  chosen_option: string;
+  correct_option: string;
+  is_correct: boolean;
+  rating: 'again' | 'hard' | 'good' | 'easy';
+  next_review_at?: string | null;
+};

@@ -4541,7 +4541,10 @@ async def start_test_focus_work(
                 **_test_focus_phase_config(body.focus_work_type, resolved_bank_id, body.target_count),
             }
             if body.scope is not None:
-                focus_phase["choice_scope"] = body.scope
+                choice_scope = dict(body.scope)
+                if resolved_bank_id and body.focus_work_type in {"erc_review", "erc_practice"}:
+                    choice_scope["bank_id"] = resolved_bank_id
+                focus_phase["choice_scope"] = choice_scope
             if body.completion is not None:
                 focus_phase["choice_completion"] = body.completion
 

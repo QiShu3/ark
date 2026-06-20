@@ -1,7 +1,8 @@
 """API endpoints for 模板子应用."""
-from typing import Any
-from typing import Annotated
+from typing import Annotated, Any
+
 from fastapi import APIRouter, Depends, Query, Request
+
 from ..auth_routes import get_current_user
 from . import schemas, service
 

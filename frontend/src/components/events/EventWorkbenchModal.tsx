@@ -24,7 +24,7 @@ import { saveEventERCConfig } from '../../lib/erc/configSync';
 import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import WorkflowPhaseChips from '../WorkflowPhaseChips';
-import { ArrowLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import Button from '../Button';
 import {
   cloneWorkflowForm,
@@ -35,7 +35,6 @@ import {
   normalizeWorkflowFormPhases,
   type WorkflowFormState,
   type WorkflowPreset,
-  type WorkflowPresetPhase,
 } from '../workflowPresetForm';
 import type { EventItem, EventWorkbench } from '../../lib/events/types';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';

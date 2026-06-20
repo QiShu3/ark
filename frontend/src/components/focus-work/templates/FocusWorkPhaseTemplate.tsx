@@ -11,7 +11,6 @@ function PhaseProgress({ phases, currentIndex }: { phases: FocusWorkPhaseConfig[
       {phases.map((phase, index) => {
         const isCompleted = index < currentIndex;
         const isCurrent = index === currentIndex;
-        const isPending = index > currentIndex;
 
         return (
           <React.Fragment key={phase.type}>
@@ -44,7 +43,7 @@ export default function FocusWorkPhaseTemplate({
   onPhaseComplete,
   onSkipped,
 }: FocusWorkPhaseTemplateProps) {
-  const currentPhase = phases[currentPhaseIndex];
+  void onPhaseComplete;
   const isLastPhase = currentPhaseIndex === phases.length - 1;
 
   const handleSkip = () => {

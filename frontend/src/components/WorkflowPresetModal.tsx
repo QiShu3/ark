@@ -1,6 +1,5 @@
 import React from 'react';
 import AppModalFrame from './AppModalFrame';
-import WorkflowPhaseChips from './WorkflowPhaseChips';
 import {
   FileText,
   Coffee,
@@ -12,22 +11,17 @@ import {
   GripVertical,
   Pencil,
   MoreVertical,
-  Check,
-  RotateCcw,
 } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   horizontalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -35,7 +29,6 @@ import { CSS } from '@dnd-kit/utilities';
 
 import type { Task } from './taskTypes';
 import {
-  buildWorkflowPreview,
   getWorkflowPresetPhases,
   getWorkflowTaskOptions,
   type WorkflowFormPhase,
@@ -83,7 +76,7 @@ const BADGE_COLORS = [
   'bg-slate-500 text-white',
 ];
 
-const PRESET_ICONS: Record<string, React.FC<any>> = {
+const PRESET_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   file: FileText,
   coffee: Coffee,
   book: BookOpen,
@@ -109,9 +102,8 @@ const SortableStageNode: React.FC<{
   index: number;
   isActive: boolean;
   onClick: () => void;
-  getTaskTitle: (taskId: string) => string | null | undefined;
   tasks: Task[];
-}> = ({ pair, index, isActive, onClick, getTaskTitle, tasks }) => {
+}> = ({ pair, index, isActive, onClick, tasks }) => {
   const {
     attributes,
     listeners,
@@ -137,16 +129,6 @@ const SortableStageNode: React.FC<{
     : '运行时选择任务';
 
   const badgeColor = BADGE_COLORS[index % BADGE_COLORS.length] || 'bg-slate-500 text-white';
-
-  // Get App icon or fallback
-  let TaskIcon = FileText;
-  if (matchedTask?.app_task_type === 'vocab_today') {
-    TaskIcon = BookOpen;
-  } else if (matchedTask?.app_task_type === 'erc_review') {
-    TaskIcon = RotateCcw;
-  } else if (matchedTask?.app_task_type === 'erc_practice') {
-    TaskIcon = FileText;
-  }
 
   return (
     <div
@@ -618,7 +600,6 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                           index={index}
                           isActive={activeEditingIndex === index}
                           onClick={() => setActiveEditingIndex(index)}
-                          getTaskTitle={(taskId) => tasks.find((t) => t.id === taskId)?.title}
                           tasks={tasks}
                         />
                       </React.Fragment>

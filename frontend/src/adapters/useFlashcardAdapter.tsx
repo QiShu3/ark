@@ -6,31 +6,39 @@ import type { FocusWorkDeclaration } from '../lib/subAppRegistry';
 import type { FocusWorkAdapter } from './types';
 
 export function useFlashcardAdapter(
-  _fw: FocusWorkDeclaration,
-  _appId: string,
+  fw: FocusWorkDeclaration,
+  appId: string,
 ): FocusWorkAdapter {
+  void fw;
+  void appId;
   const {
     decks, activeDeck, activeDeckVersion,
     setActiveDeck,
-    loading: _deckLoading, error: _deckError,
   } = useVocabDeck();
+  const activeDeckId = activeDeck?.id ?? null;
 
   const [today, setToday] = useState<VocabTodaySummary | null>(null);
   const [ltOverview, setLtOverview] = useState<VocabOverview | null>(null);
 
   useEffect(() => {
-    if (!activeDeck) { setToday(null); return; }
     let c = false;
-    fetchVocabToday(activeDeck.id).then((s) => { if (!c) setToday(s); }).catch(() => {});
+    if (!activeDeckId) {
+      queueMicrotask(() => { if (!c) setToday(null); });
+      return () => { c = true; };
+    }
+    fetchVocabToday(activeDeckId).then((s) => { if (!c) setToday(s); }).catch(() => {});
     return () => { c = true; };
-  }, [activeDeck?.id, activeDeckVersion]);
+  }, [activeDeckId, activeDeckVersion]);
 
   useEffect(() => {
-    if (!activeDeck) { setLtOverview(null); return; }
     let c = false;
-    fetchVocabOverview(activeDeck.id).then((o) => { if (!c) setLtOverview(o); }).catch(() => {});
+    if (!activeDeckId) {
+      queueMicrotask(() => { if (!c) setLtOverview(null); });
+      return () => { c = true; };
+    }
+    fetchVocabOverview(activeDeckId).then((o) => { if (!c) setLtOverview(o); }).catch(() => {});
     return () => { c = true; };
-  }, [activeDeck?.id, activeDeckVersion]);
+  }, [activeDeckId, activeDeckVersion]);
 
   const todayPct = today && today.total_count > 0
     ? Math.round((today.completed_count / today.total_count) * 100) : 0;

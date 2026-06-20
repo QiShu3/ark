@@ -25,6 +25,7 @@ export type ChoiceQuestionItem = {
   numberLabel: string;
   stem: React.ReactNode;
   stemBlocks?: ContentBlockData[];
+  stemPlacement?: 'material' | 'question';
   options: ChoiceQuestionOption[];
   material?: {
     title: string;

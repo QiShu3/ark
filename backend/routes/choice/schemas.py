@@ -101,3 +101,17 @@ class ChoicePracticeStartResponse(BaseModel):
     scope_snapshot: dict[str, Any] = {}
     completion_snapshot: dict[str, Any] = {}
     total_in_scope: int = 0
+
+
+class ChoiceAnswerSubmitIn(BaseModel):
+    chosen_option: Literal["A", "B", "C", "D"]
+    time_spent_ms: int | None = Field(default=None, ge=0)
+
+
+class ChoiceAnswerSubmitOut(BaseModel):
+    question_id: str
+    chosen_option: str
+    correct_option: str
+    is_correct: bool
+    rating: Literal["again", "hard", "good", "easy"]
+    next_review_at: Any = None

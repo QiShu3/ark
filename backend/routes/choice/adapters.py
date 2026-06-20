@@ -61,6 +61,8 @@ def _detect_table_block(text: str) -> ContentBlock | None:
 
 
 def _parse_options(raw: Any) -> list[dict[str, str]]:
+    if isinstance(raw, str):
+        return _parse_options(_json(raw))
     if isinstance(raw, dict):
         return [{"key": k, "text": str(v)} for k, v in sorted(raw.items())]
     if isinstance(raw, list):
@@ -121,7 +123,14 @@ async def list_choice_banks(conn: asyncpg.Connection) -> list[ChoiceBankOut]:
     return [ChoiceBankOut(**dict(r)) for r in rows]
 
 
-async def get_choice_filters(conn: asyncpg.Connection, *, bank_id: str) -> ChoiceFiltersOut:
+async def get_choice_filters(
+    conn: asyncpg.Connection,
+    *,
+    bank_id: str,
+    year: int | None = None,
+    subject: str | None = None,
+    tag: str | None = None,
+) -> ChoiceFiltersOut:
     items = await conn.fetch(
         """
         SELECT ci.id, ci.title, ci.body
@@ -134,36 +143,42 @@ async def get_choice_filters(conn: asyncpg.Connection, *, bank_id: str) -> Choic
     years: set[int] = set()
     subjects: set[str] = set()
     tags: set[str] = set()
-    total_items = len(items)
-    total_questions = 0
+    filtered_item_ids: list[str] = []
 
     for item in items:
         body = _json(item["body"])
         title = _str(item["title"])
-        year = _extract_year_from_title_or_body(title, body)
-        if year:
-            years.add(year)
-        subject = str(body.get("subject") or "").strip()
-        if subject:
-            subjects.add(subject)
-        for t in _extract_tags_from_body(body):
+        item_year = _extract_year_from_title_or_body(title, body)
+        if item_year:
+            years.add(item_year)
+        item_subject = str(body.get("subject") or "").strip()
+        if item_subject:
+            subjects.add(item_subject)
+        item_tags = _extract_tags_from_body(body)
+        for t in item_tags:
             tags.add(t)
+        if year and item_year != year:
+            continue
+        if subject and item_subject != subject:
+            continue
+        if tag and tag not in item_tags:
+            continue
+        filtered_item_ids.append(str(item["id"]))
 
-    q_count = await conn.fetchval(
-        """
-        SELECT COUNT(*)::int FROM content_questions cq
-        JOIN content_items ci ON ci.id = cq.item_id
-        WHERE ci.bank_id = $1::uuid
-        """,
-        bank_id,
-    )
-    total_questions = q_count or 0
+    if filtered_item_ids:
+        q_count = await conn.fetchval(
+            "SELECT COUNT(*)::int FROM content_questions WHERE item_id = ANY($1::uuid[])",
+            filtered_item_ids,
+        )
+        total_questions = q_count or 0
+    else:
+        total_questions = 0
 
     return ChoiceFiltersOut(
         years=sorted(years),
         subjects=sorted(subjects),
         tags=sorted(tags),
-        total_items=total_items,
+        total_items=len(filtered_item_ids),
         total_questions=total_questions,
     )
 
@@ -274,7 +289,13 @@ async def list_erc_as_choice_banks(conn: asyncpg.Connection) -> list[ChoiceBankO
     return [ChoiceBankOut(**dict(r)) for r in rows]
 
 
-async def get_erc_choice_filters(conn: asyncpg.Connection, *, bank_id: str) -> ChoiceFiltersOut:
+async def get_erc_choice_filters(
+    conn: asyncpg.Connection,
+    *,
+    bank_id: str,
+    year: int | None = None,
+    subject: str | None = None,
+) -> ChoiceFiltersOut:
     rows = await conn.fetch(
         """
         SELECT a.year, a.exam, a.title, a.id
@@ -285,8 +306,7 @@ async def get_erc_choice_filters(conn: asyncpg.Connection, *, bank_id: str) -> C
     )
     years: set[int] = set()
     subjects: set[str] = set()
-    total_items = len(rows)
-    total_questions = 0
+    filtered_article_ids: list[str] = []
 
     for row in rows:
         y = _int(row["year"])
@@ -295,23 +315,26 @@ async def get_erc_choice_filters(conn: asyncpg.Connection, *, bank_id: str) -> C
         exam = _str(row["exam"])
         if exam:
             subjects.add(exam)
+        if year and y != year:
+            continue
+        if subject and exam != subject:
+            continue
+        filtered_article_ids.append(str(row["id"]))
 
-    q_count = await conn.fetchval(
-        """
-        SELECT COUNT(*)::int
-        FROM erc_questions q
-        JOIN erc_articles a ON a.id = q.article_pk
-        WHERE a.set_id = $1::uuid
-        """,
-        bank_id,
-    )
-    total_questions = q_count or 0
+    if filtered_article_ids:
+        q_count = await conn.fetchval(
+            "SELECT COUNT(*)::int FROM erc_questions WHERE article_pk = ANY($1::uuid[])",
+            filtered_article_ids,
+        )
+        total_questions = q_count or 0
+    else:
+        total_questions = 0
 
     return ChoiceFiltersOut(
         years=sorted(years),
         subjects=sorted(subjects),
         tags=[],
-        total_items=total_items,
+        total_items=len(filtered_article_ids),
         total_questions=total_questions,
     )
 
@@ -388,7 +411,7 @@ async def list_erc_as_choice_items(
             bank_id=bank_id,
             title=_str(article["title"]) or f"Text {article['text_no']}",
             material_blocks=material_blocks,
-            group_type="passage",
+            group_type="passage" if len(questions) > 1 else "single",
             subject_area=article_exam or None,
             tags=[article_exam] if article_exam else [],
             sort_order=_int(article["sort_order"]),

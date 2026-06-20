@@ -5,7 +5,6 @@ import type {
   FlashcardFocusTemplateProps,
   FlashcardItem,
   FlashcardRating,
-  FlashcardSubmitResult,
 } from './flashcardTypes';
 
 const RATING_ACTIONS: Array<{
@@ -92,7 +91,6 @@ export default function FlashcardFocusTemplate({
   const [revealed, setRevealed] = React.useState(false);
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
-  const [loadingNext, setLoadingNext] = React.useState(false);
   const completedRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -169,21 +167,6 @@ export default function FlashcardFocusTemplate({
       setLocalError(err instanceof Error ? err.message : '提交失败');
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleLoadNext() {
-    if (disabled || loadingNext) return;
-    setLoadingNext(true);
-    try {
-      const nextItem = await onLoadNext();
-      setCurrentItem(nextItem);
-      setRevealed(false);
-      setLocalError(null);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : '加载下一题失败');
-    } finally {
-      setLoadingNext(false);
     }
   }
 

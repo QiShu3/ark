@@ -546,6 +546,7 @@ async def submit_review(
     question_id: str,
     chosen_option: str,
     time_spent_ms: int | None,
+    mode: str = "review",
 ) -> dict:
     now = datetime.now(UTC)
     async with pool.acquire() as conn:
@@ -558,6 +559,8 @@ async def submit_review(
             rating = rating_for_answer(is_correct=is_correct)
             card_row = await get_user_question_card(conn, user_id=user_id, question_pk=row["question_pk"])
             scheduled = _schedule_review(dict(card_row) if card_row else None, rating=rating, now=now)
+            if mode == "practice":
+                scheduled = make_practice_wrong_immediately_due(scheduled, rating=rating, now=now)
             await upsert_user_question_card(
                 conn,
                 user_id=user_id,
@@ -576,7 +579,7 @@ async def submit_review(
                 article_pk=row["article_pk"],
                 question_pk=row["question_pk"],
                 attempt_id=None,
-                mode="review",
+                mode=mode,
                 chosen_option=chosen_option,
                 correct_option=row["answer"],
                 is_correct=is_correct,

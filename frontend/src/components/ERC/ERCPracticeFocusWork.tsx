@@ -18,7 +18,7 @@ import type { FocusWorkPhaseConfig } from '../focus-work/templates/phaseTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-work/templates/choiceQuestionTypes';
 import WordMetaPanel from '../Vocab/WordMetaPanel';
-import { fetchChoiceItems } from '../../lib/choice/api';
+import { fetchChoiceItems, submitChoiceAnswer } from '../../lib/choice/api';
 import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceCompletion } from '../../lib/choice/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
@@ -52,6 +52,14 @@ function articleTargetCountFromRun(run: FocusWorkRendererProps['run']) {
   const rawTarget = Number(run.config_snapshot?.target_article_count ?? run.config_snapshot?.daily_article_target ?? 1);
   if (!Number.isFinite(rawTarget)) return 1;
   return Math.max(1, Math.min(500, Math.floor(rawTarget)));
+}
+
+function choiceTargetQuestionCount(run: FocusWorkRendererProps['run'], totalQuestionCount: number) {
+  const completion = getChoiceCompletion(run);
+  if (completion?.mode === 'question_count' && completion.question_count) {
+    return Math.max(1, Math.min(totalQuestionCount, Math.floor(completion.question_count)));
+  }
+  return totalQuestionCount;
 }
 
 async function resolvePracticeArticleId(run: FocusWorkRendererProps['run'], completedArticleIds: Set<string>) {
@@ -104,9 +112,17 @@ function choiceItemToChoiceQuestion(
   const q = item.questions[questionIndex];
   if (!q) return null;
 
-  const material = item.material_blocks.length > 0
+  const hasSharedMaterial = item.group_type !== 'single' && item.material_blocks.length > 0;
+  const titleText = (item.title || '').trim();
+  const itemMaterialBlocks = item.material_blocks.filter((block) => {
+    const blockText = typeof block.text === 'string' ? block.text.trim() : '';
+    return blockText && blockText !== titleText;
+  });
+  const standaloneMaterialBlocks = [...itemMaterialBlocks, ...q.stem_blocks];
+  const material = hasSharedMaterial
     ? { title: item.title || '阅读材料', paragraphs: [{ id: 'main', text: '' }] }
     : undefined;
+  const stemPlacement = hasSharedMaterial ? 'question' : 'material';
 
   const stemText = q.stem_blocks.map((b) => b.text || '').join('\n');
 
@@ -119,9 +135,10 @@ function choiceItemToChoiceQuestion(
     numberLabel: item.group_type === 'passage' ? `Q${questionIndex + 1}` : `#${item.sort_order || questionIndex + 1}`,
     stem: stemText,
     stemBlocks: q.stem_blocks.length > 0 ? q.stem_blocks : undefined,
+    stemPlacement,
     options: q.options,
-    material: material as ChoiceQuestionItem['material'],
-    materialBlocks: item.material_blocks.length > 0 ? item.material_blocks : undefined,
+    material: (material ?? { title: item.title || '题目', paragraphs: [] }) as ChoiceQuestionItem['material'],
+    materialBlocks: hasSharedMaterial ? item.material_blocks : standaloneMaterialBlocks,
     explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,
     meta,
   };
@@ -181,6 +198,8 @@ export default function ERCPracticeFocusWork({
   const [choiceItems, setChoiceItems] = useState<ChoiceItemDTO[]>([]);
   const [currentChoiceItemIndex, setCurrentChoiceItemIndex] = useState(0);
   const [currentChoiceQuestionIndex, setCurrentChoiceQuestionIndex] = useState(0);
+  const totalChoiceQuestionCount = choiceItems.reduce((sum, item) => sum + item.question_count, 0);
+  const targetChoiceQuestionCount = isChoiceMode ? choiceTargetQuestionCount(run, totalChoiceQuestionCount) : 0;
 
   const {
     currentPhaseIndex,
@@ -212,7 +231,7 @@ export default function ERCPracticeFocusWork({
         const items = await fetchChoiceItems(choiceScope.bank_id, {
           year: year != null ? Number(year) : undefined,
           subject: subject || undefined,
-          limit: 200,
+          limit: 1000,
         });
         setChoiceItems(items);
         setCurrentChoiceItemIndex(0);
@@ -283,11 +302,12 @@ export default function ERCPracticeFocusWork({
       const q = currentItem.questions.find((question) => question.id === item.id);
       if (!q) return { correctOptionKey: undefined };
       const isCorrect = q.answer.toUpperCase() === optionKey.toUpperCase();
+      const result = await submitChoiceAnswer(q.id, optionKey);
       setCompletedQuestionCount((prev) => prev + 1);
-      if (isCorrect) setCompletedCorrectCount((prev) => prev + 1);
+      if (result.is_correct) setCompletedCorrectCount((prev) => prev + 1);
       setCurrentArticleAnsweredCount((prev) => prev + 1);
       return {
-        correctOptionKey: isCorrect ? optionKey : q.answer,
+        correctOptionKey: isCorrect ? optionKey : result.correct_option,
         explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,
       };
     }
@@ -351,6 +371,10 @@ export default function ERCPracticeFocusWork({
       });
       return;
     }
+    if (isChoiceMode) {
+      handlePhaseComplete(1);
+      return;
+    }
     if (completedArticleCount < targetArticleCount) {
       void loadArticle();
       return;
@@ -365,6 +389,7 @@ export default function ERCPracticeFocusWork({
     onContentCompleted,
     targetArticleCount,
     choiceItems.length,
+    isChoiceMode,
   ]);
 
   const flashcardItem = preheatWords.length > 0 ? vocabItemToFlashcardItem(preheatWords[0]) : null;
@@ -412,7 +437,7 @@ export default function ERCPracticeFocusWork({
       emptyTitle="暂无真题"
       emptyDescription="当前没有可用的真题练习。"
       answeredCount={currentArticleAnsweredCount}
-      targetCount={isChoiceMode ? choiceItems.reduce((sum, it) => sum + it.question_count, 0) : (article?.questions.length ?? 0)}
+      targetCount={isChoiceMode ? targetChoiceQuestionCount : (article?.questions.length ?? 0)}
       disabled={disabled}
       onSubmitAnswer={handleChoiceQuestionSubmit}
       onLoadNext={handleChoiceQuestionLoadNext}

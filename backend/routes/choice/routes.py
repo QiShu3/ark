@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from routes.auth_routes import get_current_user
+from routes.erc.service import submit_review as submit_erc_question_answer
 
 from .adapters import (
     get_choice_filters,
@@ -16,6 +17,8 @@ from .adapters import (
     list_erc_as_choice_items,
 )
 from .schemas import (
+    ChoiceAnswerSubmitIn,
+    ChoiceAnswerSubmitOut,
     ChoiceBankOut,
     ChoiceFiltersOut,
     ChoiceItemOut,
@@ -53,6 +56,9 @@ async def route_get_filters(
     request: Request,
     _user: Annotated[Any, Depends(get_current_user)],
     bank_id: str = Query(..., description="Bank ID (content_bank or erc_set)"),
+    year: int | None = Query(default=None),
+    subject: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
 ) -> ChoiceFiltersOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -61,8 +67,8 @@ async def route_get_filters(
             bank_id,
         )
         if erc_row is not None:
-            return await get_erc_choice_filters(conn, bank_id=bank_id)
-        return await get_choice_filters(conn, bank_id=bank_id)
+            return await get_erc_choice_filters(conn, bank_id=bank_id, year=year, subject=subject)
+        return await get_choice_filters(conn, bank_id=bank_id, year=year, subject=subject, tag=tag)
 
 
 @router.get("/items", response_model=list[ChoiceItemOut])
@@ -73,7 +79,7 @@ async def route_list_items(
     year: int | None = Query(default=None),
     subject: str | None = Query(default=None),
     tag: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ) -> list[ChoiceItemOut]:
     pool = _pool(request)
@@ -141,3 +147,21 @@ async def route_start_practice(
         completion_snapshot=completion.model_dump(),
         total_in_scope=total_questions,
     )
+
+
+@router.post("/questions/{question_id}/submit", response_model=ChoiceAnswerSubmitOut)
+async def route_submit_choice_answer(
+    question_id: str,
+    body: ChoiceAnswerSubmitIn,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> ChoiceAnswerSubmitOut:
+    result = await submit_erc_question_answer(
+        _pool(request),
+        user_id=int(user.id),
+        question_id=question_id,
+        chosen_option=body.chosen_option,
+        time_spent_ms=body.time_spent_ms,
+        mode="practice",
+    )
+    return ChoiceAnswerSubmitOut(**result)
