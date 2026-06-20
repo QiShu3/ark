@@ -54,3 +54,17 @@
 - 移除 `choiceItemToChoiceQuestion` 中将 tag 推入 meta 数组的代码
 
 **验证**：浏览器检查 meta 区域只剩 "题目 1 / 40"，"2020" 和 "408" 均已移除。
+
+---
+
+## 移除题目区域中间的 numberLabel 徽章
+
+**用户请求**：去掉 "Current Question" 标题旁的 #417 标签。
+
+**提交**：`6a288ae0`
+
+**问题现象**：题目区域 header 中间显示 `#417` 等序号徽章（来自 `item.sort_order`），与 meta 区域的 "题目 X / Y" 信息重复。
+
+**修复**：移除 `ChoiceQuestionFocusTemplate` 中渲染 `currentItem.numberLabel` 的绝对定位 div。
+
+**验证**：文档提交，无额外代码验证（TypeScript 编译通过）。
