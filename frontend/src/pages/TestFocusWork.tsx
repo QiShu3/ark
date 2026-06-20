@@ -11,12 +11,37 @@ type ContentBank = {
   count: number;
 };
 
+type ChoiceFilters = {
+  years: number[];
+  subjects: string[];
+  tags: string[];
+  total_items: number;
+  total_questions: number;
+};
+
+type ChoiceScope = {
+  bank_id: string;
+  years?: number[];
+  subjects?: string[];
+  tags?: string[];
+  status?: string;
+  mode?: string;
+};
+
+type ChoiceCompletion = {
+  mode: string;
+  question_count?: number;
+  duration_seconds?: number;
+};
+
 type TestFocusConfig = {
   id: string;
   name: string;
   focus_work_type: FocusWorkType;
   bank_id: string | null;
   target_count: number;
+  scope?: ChoiceScope | null;
+  completion?: ChoiceCompletion | null;
   created_at: string;
   updated_at: string;
 };
@@ -35,10 +60,24 @@ function getCountLabel(type: FocusWorkType): string {
   return FOCUS_WORK_TYPES.find((t) => t.value === type)?.countLabel ?? '项';
 }
 
+function configDisplaySummary(config: TestFocusConfig): string {
+  const parts: string[] = [];
+  if (config.scope?.years?.length) parts.push(`${config.scope.years[0]} 年`);
+  if (config.scope?.subjects?.length) parts.push(config.scope.subjects[0]);
+  if (config.completion?.mode === 'exhaust_scope') {
+    parts.push('做完整个范围');
+  } else {
+    parts.push(`目标: ${config.target_count}`);
+  }
+  return parts.join(' · ');
+}
+
 export default function TestFocusWork() {
   const navigate = useNavigate();
   const [configs, setConfigs] = useState<TestFocusConfig[]>([]);
   const [banks, setBanks] = useState<ContentBank[]>([]);
+  const [filters, setFilters] = useState<ChoiceFilters | null>(null);
+  const [scopeTotals, setScopeTotals] = useState<ChoiceFilters | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
@@ -48,6 +87,9 @@ export default function TestFocusWork() {
   const [formType, setFormType] = useState<FocusWorkType>('vocab_today');
   const [formBankId, setFormBankId] = useState('');
   const [formTargetCount, setFormTargetCount] = useState(10);
+  const [formYear, setFormYear] = useState<number | ''>('');
+  const [formSubject, setFormSubject] = useState('');
+  const [formCompletionMode, setFormCompletionMode] = useState<'question_count' | 'exhaust_scope'>('question_count');
 
   const loadConfigs = useCallback(async () => {
     try {
@@ -73,6 +115,39 @@ export default function TestFocusWork() {
     }
   }, [formBankId]);
 
+  const loadFilters = useCallback(async (bankId: string) => {
+    if (!bankId) {
+      setFilters(null);
+      setScopeTotals(null);
+      return;
+    }
+    try {
+      const data = await apiJson<ChoiceFilters>(`/api/choice/filters?bank_id=${bankId}`);
+      setFilters(data);
+      setScopeTotals(data);
+      setFormYear('');
+      setFormSubject('');
+    } catch {
+      setFilters(null);
+      setScopeTotals(null);
+    }
+  }, []);
+
+  const loadScopeTotals = useCallback(async (bankId: string, year: number | '', subject: string) => {
+    if (!bankId) {
+      setScopeTotals(null);
+      return;
+    }
+    const params = new URLSearchParams({ bank_id: bankId });
+    if (year !== '') params.set('year', String(year));
+    if (subject) params.set('subject', subject);
+    try {
+      setScopeTotals(await apiJson<ChoiceFilters>(`/api/choice/filters?${params.toString()}`));
+    } catch {
+      setScopeTotals(null);
+    }
+  }, []);
+
   useEffect(() => {
     void loadConfigs();
   }, [loadConfigs]);
@@ -80,6 +155,39 @@ export default function TestFocusWork() {
   useEffect(() => {
     void loadBanks(formType);
   }, [formType, loadBanks]);
+
+  useEffect(() => {
+    if (formType === 'erc_practice' || formType === 'erc_review') {
+      void loadFilters(formBankId);
+    } else {
+      setFilters(null);
+    }
+  }, [formType, formBankId, loadFilters]);
+
+  useEffect(() => {
+    if (formType === 'erc_practice' || formType === 'erc_review') {
+      void loadScopeTotals(formBankId, formYear, formSubject);
+    }
+  }, [formType, formBankId, formYear, formSubject, loadScopeTotals]);
+
+  function buildScope(): ChoiceScope | null {
+    if (formType !== 'erc_practice' && formType !== 'erc_review') return null;
+    if (!formBankId) return null;
+    return {
+      bank_id: formBankId,
+      years: formYear !== '' ? [formYear] : undefined,
+      subjects: formSubject ? [formSubject] : undefined,
+      status: 'all',
+      mode: 'sequential',
+    };
+  }
+
+  function buildCompletion(): ChoiceCompletion {
+    if (formCompletionMode === 'exhaust_scope') {
+      return { mode: 'exhaust_scope' };
+    }
+    return { mode: 'question_count', question_count: formTargetCount };
+  }
 
   async function handleCreate() {
     if (!formName.trim()) {
@@ -89,11 +197,15 @@ export default function TestFocusWork() {
     setCreating(true);
     setError(null);
     try {
+      const scope = buildScope();
+      const completion = buildCompletion();
       const formData = new FormData();
       formData.append('name', formName.trim());
       formData.append('focus_work_type', formType);
       formData.append('bank_id', formBankId);
       formData.append('target_count', String(formTargetCount));
+      if (scope) formData.append('scope_json', JSON.stringify(scope));
+      formData.append('completion_json', JSON.stringify(completion));
 
       const res = await apiFetch('/api/admin/test-focus-configs', {
         method: 'POST',
@@ -130,6 +242,8 @@ export default function TestFocusWork() {
     setStarting(config.id);
     setError(null);
     try {
+      const scope = config.scope ?? null;
+      const completion = config.completion ?? { mode: 'question_count', question_count: config.target_count };
       await apiJson('/todo/focus/workflow/start-test-focus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,6 +251,8 @@ export default function TestFocusWork() {
           focus_work_type: config.focus_work_type,
           bank_id: config.bank_id,
           target_count: config.target_count,
+          scope,
+          completion,
         }),
       });
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
@@ -147,6 +263,9 @@ export default function TestFocusWork() {
       setStarting(null);
     }
   }
+
+  const isChoiceType = formType === 'erc_practice' || formType === 'erc_review';
+  const showFilters = isChoiceType && filters !== null;
 
   return (
     <div className="ark-page fixed inset-x-1 bottom-1 top-[7.5rem] z-10 overflow-y-auto rounded-[28px] px-6 pb-10 pt-6 md:px-8" style={{ clipPath: 'inset(10px round 28px)' }}>
@@ -178,7 +297,7 @@ export default function TestFocusWork() {
                 type="text"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                placeholder="例如：高考词汇复习"
+                placeholder="例如：2025年408真题"
                 className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] placeholder:text-[var(--ark-text-faint)] focus:border-ark-accent focus:outline-none"
               />
             </div>
@@ -207,20 +326,70 @@ export default function TestFocusWork() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--ark-text-muted)]">目标数量</label>
-              <input
-                type="number"
-                value={formTargetCount}
-                onChange={(e) => setFormTargetCount(Math.max(1, Math.min(500, parseInt(e.target.value) || 10)))}
-                min={1}
-                max={500}
-                className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] focus:border-ark-accent focus:outline-none"
-              />
-              <p className="mt-1 text-xs text-[var(--ark-text-faint)]">
-                {getCountLabel(formType)}
-              </p>
-            </div>
+
+            {showFilters && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--ark-text-muted)]">年份</label>
+                  <select
+                    value={formYear}
+                    onChange={(e) => setFormYear(e.target.value ? Number(e.target.value) : '')}
+                    className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] focus:border-ark-accent focus:outline-none"
+                  >
+                    <option value="">全部年份</option>
+                    {filters!.years.map((y) => (
+                      <option key={y} value={y}>{y} 年</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--ark-text-muted)]">科目/考试</label>
+                  <select
+                    value={formSubject}
+                    onChange={(e) => setFormSubject(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] focus:border-ark-accent focus:outline-none"
+                  >
+                    <option value="">全部科目</option>
+                    {filters!.subjects.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--ark-text-muted)]">完成条件</label>
+                  <select
+                    value={formCompletionMode}
+                    onChange={(e) => setFormCompletionMode(e.target.value as 'question_count' | 'exhaust_scope')}
+                    className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] focus:border-ark-accent focus:outline-none"
+                  >
+                    <option value="question_count">做 N 道题</option>
+                    <option value="exhaust_scope">做完整个范围</option>
+                  </select>
+                  <p className="mt-1 text-xs text-[var(--ark-text-faint)]">
+                    {formCompletionMode === 'exhaust_scope'
+                      ? `范围内共 ${scopeTotals?.total_questions ?? filters!.total_questions} 道题`
+                      : '指定做题数量'}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {(!showFilters || formCompletionMode === 'question_count') && (
+              <div>
+                <label className="block text-sm font-medium text-[var(--ark-text-muted)]">目标数量</label>
+                <input
+                  type="number"
+                  value={formTargetCount}
+                  onChange={(e) => setFormTargetCount(Math.max(1, Math.min(500, parseInt(e.target.value) || 10)))}
+                  min={1}
+                  max={500}
+                  className="mt-1.5 w-full rounded-xl border border-ark-border bg-ark-surface-strong px-4 py-2.5 text-sm text-[var(--ark-text)] focus:border-ark-accent focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-[var(--ark-text-faint)]">
+                  {isChoiceType ? '道题' : getCountLabel(formType)}
+                </p>
+              </div>
+            )}
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
@@ -262,7 +431,7 @@ export default function TestFocusWork() {
                       <span className="rounded-full border border-ark-border bg-ark-surface-strong px-2.5 py-0.5 text-xs">
                         {getFocusWorkTypeLabel(config.focus_work_type)}
                       </span>
-                      <span>目标: {config.target_count} {getCountLabel(config.focus_work_type)}</span>
+                      <span>{configDisplaySummary(config)}</span>
                     </div>
                   </div>
                   <div className="ml-4 flex items-center gap-2">

@@ -155,7 +155,7 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
             const hasLeft = isChecked && (idx % 7 !== 0) && cellChecked[idx - 1];
             const hasRight = isChecked && (idx % 7 !== 6) && cellChecked[idx + 1];
 
-            let circleClass = '';
+            let circleClass: string;
             if (!cell.inCurrentMonth) {
               circleClass = 'ark-calendar-circle-muted';
             } else {

@@ -1006,11 +1006,15 @@ async def init_todo(app: Any) -> None:
                 focus_work_type TEXT NOT NULL CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice')),
                 bank_id TEXT,
                 target_count INTEGER DEFAULT 10,
+                scope_json JSONB,
+                completion_json JSONB,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
             """
         )
+        await conn.execute("ALTER TABLE test_focus_configs ADD COLUMN IF NOT EXISTS scope_json JSONB;")
+        await conn.execute("ALTER TABLE test_focus_configs ADD COLUMN IF NOT EXISTS completion_json JSONB;")
 
         await _clear_event_template_store(conn)
         await _seed_event_template_store(conn)

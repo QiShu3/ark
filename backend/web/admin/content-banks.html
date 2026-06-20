@@ -25,6 +25,18 @@
     .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--muted); }
     .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; box-sizing: border-box; }
     .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+    .select-help-row { display: flex; align-items: center; gap: 8px; }
+    .select-help-row select { flex: 1; }
+    .help-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--accent); font-weight: 700; cursor: pointer; }
+    .help-btn:hover { border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .template-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 0 12px; }
+    .template-code { margin: 12px 0 0; padding: 14px; border: 1px solid var(--border-soft); border-radius: 8px; background: #fbf7ef; color: #2f241b; font-size: 12px; line-height: 1.55; overflow: auto; max-height: 360px; white-space: pre; }
+    .validation-box { display: none; margin-top: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-soft); font-size: 13px; line-height: 1.6; }
+    .validation-box.active { display: block; }
+    .validation-box.valid { border-color: #9ccc9c; background: #f1f8ef; color: #256029; }
+    .validation-box.invalid { border-color: #e6a09a; background: #fff1ef; color: #9f2d20; }
+    .validation-box.warning { border-color: #e6c777; background: #fff8e1; color: #7a5b00; }
+    .validation-box ul { margin: 6px 0 0 18px; padding: 0; }
     @media (max-width: 920px) { .stat-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -146,10 +158,13 @@
         </div>
         <div class="form-group">
           <label for="import-type">类型</label>
-          <select id="import-type" required>
-            <option value="word">闪卡 (word) — 单词词书</option>
-            <option value="choice">选择题 (choice) — 文章+题目</option>
-          </select>
+          <div class="select-help-row">
+            <select id="import-type" required>
+              <option value="word">闪卡 (word) — 单词词书</option>
+              <option value="choice">选择题 (choice) — 文章+题目</option>
+            </select>
+            <button type="button" class="help-btn" id="btn-template-help" aria-label="查看题库 JSON 模板">?</button>
+          </div>
         </div>
         <div class="form-group">
           <label for="import-file">JSON / ZIP 文件</label>
@@ -159,12 +174,26 @@
             word: 数组 [{word, pronunciation, translation, pos, example, example_translation}]<br>
             choice: 数组 [{title, passage, tags, questions: [{question_text, options, correct_answer}]}]
           </p>
+          <div class="validation-box" id="import-validation" aria-live="polite"></div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeImportModal()">取消</button>
           <button type="submit" class="btn btn-primary" id="import-submit-btn">导入</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Template modal -->
+  <div class="modal-overlay" id="template-modal">
+    <div class="modal-box">
+      <h3 id="template-title">题库 JSON 模板</h3>
+      <p class="template-note" id="template-note"></p>
+      <pre class="template-code" id="template-code"></pre>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btn-close-template">关闭</button>
+        <button type="button" class="btn btn-primary" id="btn-copy-template">复制模板</button>
+      </div>
     </div>
   </div>
 </main>
@@ -304,16 +333,275 @@ function renderBanks(banks) {
 
 function openImportModal() {
   document.getElementById('import-modal').classList.add('active');
+  clearImportValidation();
 }
 
 function closeImportModal() {
   document.getElementById('import-modal').classList.remove('active');
   document.getElementById('import-form').reset();
+  clearImportValidation();
 }
 
 document.getElementById('import-modal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeImportModal();
 });
+
+document.getElementById('template-modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeTemplateModal();
+});
+
+document.getElementById('btn-template-help').addEventListener('click', openTemplateModal);
+document.getElementById('btn-close-template').addEventListener('click', closeTemplateModal);
+document.getElementById('btn-copy-template').addEventListener('click', copyCurrentTemplate);
+document.getElementById('import-type').addEventListener('change', async () => {
+  if (document.getElementById('template-modal').classList.contains('active')) {
+    renderTemplateModal();
+  }
+  await validateSelectedImportFile();
+});
+document.getElementById('import-file').addEventListener('change', validateSelectedImportFile);
+
+function getCurrentTemplate() {
+  const type = document.getElementById('import-type').value;
+  if (type === 'word') {
+    return {
+      title: '闪卡词书 JSON 模板',
+      note: '文件必须是非空 JSON 数组。每个对象是一张词卡，word 必填，其余字段可按需要补充。',
+      code: JSON.stringify([
+        {
+          word: 'benevolent',
+          pronunciation: '/bəˈnevələnt/',
+          translation: '仁慈的；乐善好施的',
+          pos: 'adj.',
+          example: 'She was a benevolent leader.',
+          example_translation: '她是一位仁慈的领导者。'
+        }
+      ], null, 2),
+    };
+  }
+  return {
+    title: '选择题 JSON 模板',
+    note: '文件必须是非空 JSON 数组。每个对象是一组题：单题可以 passage 为空；阅读/材料题把共享材料放在 passage，questions 中放多道题。建议 tags 中放年份、考试、科目，便于筛选。',
+    code: JSON.stringify([
+      {
+        title: '2025年 408 数据结构 第1题',
+        examination: '2025 408',
+        tags: ['2025', '408', '数据结构', '选择题'],
+        passage: '',
+        questions: [
+          {
+            question_text: '下列程序段的时间复杂度是？',
+            options: {
+              A: 'O(log n)',
+              B: 'O(n)',
+              C: 'O(n log n)',
+              D: 'O(n^2)'
+            },
+            correct_answer: 'B',
+            analysis: '解析写在这里。'
+          }
+        ]
+      },
+      {
+        title: '2025年 英语 Text 1',
+        examination: '2025 考研英语',
+        tags: ['2025', '英语', '阅读', 'Text 1'],
+        passage: '第一段内容。\\n\\n第二段内容。',
+        questions: [
+          {
+            paragraph_no: 1,
+            question_text: 'What is the main idea of Paragraph 1?',
+            options: {
+              A: 'Option A',
+              B: 'Option B',
+              C: 'Option C',
+              D: 'Option D'
+            },
+            correct_answer: 'A',
+            analysis: '解析写在这里。'
+          }
+        ]
+      }
+    ], null, 2),
+  };
+}
+
+function renderTemplateModal() {
+  const tpl = getCurrentTemplate();
+  document.getElementById('template-title').textContent = tpl.title;
+  document.getElementById('template-note').textContent = tpl.note;
+  document.getElementById('template-code').textContent = tpl.code;
+}
+
+function openTemplateModal() {
+  renderTemplateModal();
+  document.getElementById('template-modal').classList.add('active');
+}
+
+function closeTemplateModal() {
+  document.getElementById('template-modal').classList.remove('active');
+}
+
+async function copyCurrentTemplate() {
+  const tpl = getCurrentTemplate();
+  try {
+    await navigator.clipboard.writeText(tpl.code);
+    showToast('模板已复制', 'success');
+  } catch (e) {
+    showToast('复制失败，请手动选择模板内容复制', 'error');
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function renderValidationResult(result) {
+  const box = document.getElementById('import-validation');
+  box.className = 'validation-box active ' + result.level;
+  const title = '<strong>' + escapeHtml(result.title) + '</strong>';
+  const messages = result.messages && result.messages.length
+    ? '<ul>' + result.messages.slice(0, 20).map(m => '<li>' + escapeHtml(m) + '</li>').join('') + '</ul>'
+    : '';
+  const overflow = result.messages && result.messages.length > 20
+    ? '<div>... 等 ' + result.messages.length + ' 条提示</div>'
+    : '';
+  box.innerHTML = title + messages + overflow;
+}
+
+function clearImportValidation() {
+  const box = document.getElementById('import-validation');
+  box.className = 'validation-box';
+  box.textContent = '';
+}
+
+function validateEntries(raw, itemType) {
+  const errors = [];
+  const warnings = [];
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return { errors: ['题库文件应为一个非空 JSON 数组'], warnings };
+  }
+
+  raw.forEach((entry, index) => {
+    const idx = index + 1;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      errors.push('第 ' + idx + ' 条: 必须是对象');
+      return;
+    }
+
+    if (itemType === 'word') {
+      if (!String(entry.word || '').trim()) {
+        errors.push('第 ' + idx + ' 条: 缺少 word 字段');
+      }
+      return;
+    }
+
+    if (entry.tags != null && !Array.isArray(entry.tags)) {
+      errors.push('第 ' + idx + ' 条: tags 应为数组');
+    }
+    if (entry.passage != null && typeof entry.passage !== 'string') {
+      errors.push('第 ' + idx + ' 条: passage 应为字符串');
+    }
+    if (!Array.isArray(entry.questions) || entry.questions.length === 0) {
+      errors.push('第 ' + idx + ' 条: questions 应为非空数组');
+      return;
+    }
+    if (!entry.passage && entry.questions.length > 1) {
+      warnings.push('第 ' + idx + ' 条: 多题但 passage 为空，将按单题组显示；如是阅读/材料题建议填写 passage');
+    }
+
+    entry.questions.forEach((question, questionIndex) => {
+      const label = '第 ' + idx + ' 条 第 ' + (questionIndex + 1) + ' 题';
+      if (!question || typeof question !== 'object' || Array.isArray(question)) {
+        errors.push(label + ': 必须是对象');
+        return;
+      }
+      if (!String(question.question_text || '').trim()) {
+        errors.push(label + ': 缺少 question_text');
+      }
+      const answer = String(question.correct_answer || '').trim();
+      if (!answer) {
+        errors.push(label + ': 缺少 correct_answer');
+      }
+      const options = question.options;
+      if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).length === 0) {
+        errors.push(label + ': options 应为非空对象');
+      } else {
+        Object.entries(options).forEach(([key, value]) => {
+          if (!String(key).trim()) errors.push(label + ': options 中存在空选项 key');
+          if (!String(value || '').trim()) errors.push(label + ': 选项 ' + key + ' 内容为空');
+        });
+        if (answer && !(answer in options)) {
+          errors.push(label + ": correct_answer '" + answer + "' 不在 options 中");
+        }
+        const optionKeys = Object.keys(options);
+        if (!['A', 'B', 'C', 'D'].every(k => optionKeys.includes(k))) {
+          warnings.push(label + ': 建议使用 A/B/C/D 四个选项 key');
+        }
+      }
+    });
+  });
+
+  return { errors, warnings };
+}
+
+async function validateImportFile(file, itemType) {
+  if (!file) {
+    return { ok: false, level: 'invalid', title: '请先选择文件', messages: [] };
+  }
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.zip')) {
+    return {
+      ok: true,
+      level: 'warning',
+      title: 'ZIP 文件将在服务端解析并验证',
+      messages: ['浏览器端仅即时验证 JSON 文件；ZIP 内 JSON 与图片路径会在导入前由后端再次验证。'],
+    };
+  }
+  if (!name.endsWith('.json') && file.type !== 'application/json') {
+    return { ok: false, level: 'invalid', title: '请选择 .json 或 .zip 文件', messages: [] };
+  }
+
+  let raw;
+  try {
+    raw = JSON.parse(await file.text());
+  } catch (e) {
+    return { ok: false, level: 'invalid', title: 'JSON 解析失败', messages: [e.message] };
+  }
+
+  const { errors, warnings } = validateEntries(raw, itemType);
+  if (errors.length > 0) {
+    return { ok: false, level: 'invalid', title: '格式验证失败，共 ' + errors.length + ' 个错误', messages: errors };
+  }
+  if (warnings.length > 0) {
+    return { ok: true, level: 'warning', title: '格式可导入，但有 ' + warnings.length + ' 条建议', messages: warnings };
+  }
+  const totalQuestions = itemType === 'choice'
+    ? raw.reduce((sum, entry) => sum + (Array.isArray(entry.questions) ? entry.questions.length : 0), 0)
+    : 0;
+  const detail = itemType === 'choice'
+    ? ['共 ' + raw.length + ' 个题目组，' + totalQuestions + ' 道题']
+    : ['共 ' + raw.length + ' 个词条'];
+  return { ok: true, level: 'valid', title: '格式验证通过', messages: detail };
+}
+
+async function validateSelectedImportFile() {
+  const file = document.getElementById('import-file').files[0];
+  if (!file) {
+    clearImportValidation();
+    return { ok: false };
+  }
+  const itemType = document.getElementById('import-type').value;
+  const result = await validateImportFile(file, itemType);
+  renderValidationResult(result);
+  return result;
+}
 
 async function handleImportSubmit(e) {
   e.preventDefault();
@@ -323,6 +611,13 @@ async function handleImportSubmit(e) {
 
   if (!name || !itemType || !file) {
     showToast('请填写所有字段', 'error');
+    return;
+  }
+
+  const validation = await validateImportFile(file, itemType);
+  renderValidationResult(validation);
+  if (!validation.ok) {
+    showToast('JSON 格式验证失败，请修正后再导入', 'error');
     return;
   }
 

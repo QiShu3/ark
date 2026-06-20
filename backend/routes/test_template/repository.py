@@ -1,11 +1,9 @@
 """DB tables and queries for 模板子应用."""
 import json
+from datetime import datetime
 from typing import Any
-from datetime import datetime, timedelta, timezone
 
 import asyncpg
-
-UTC = timezone.utc
 
 
 async def init_tables(pool: asyncpg.Pool) -> None:
@@ -18,7 +16,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
 
 async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     return await conn.fetch(
-        f"SELECT id, key, name, item_count, is_published FROM test-template_sets WHERE is_published = TRUE ORDER BY name"
+        "SELECT id, key, name, item_count, is_published FROM test-template_sets WHERE is_published = TRUE ORDER BY name"
     )
 
 
@@ -26,7 +24,7 @@ async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
 
 async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> dict[str, Any]:
     row = await conn.fetchrow(
-        f"""
+        """
         SELECT
           (SELECT COUNT(*)::int FROM test_template_review_logs WHERE user_id = $1) AS practiced_count,
           (SELECT COUNT(*)::int FROM test_template_review_logs WHERE user_id = $1 AND is_correct = TRUE) AS correct_count,
@@ -42,7 +40,7 @@ async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int, set_id:
 
 async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: int, set_id: str | None = None) -> list[asyncpg.Record]:
     return await conn.fetch(
-        f"""
+        """
         SELECT c.question_pk::text, c.due_at, c.fsrs_card_json, c.wrong_count, c.right_count, c.lapse_count,
                q.question_id, q.stem, q.options_json, q.answer, q.explanation, q.meta_json,
                COALESCE(m.is_active, FALSE) AS is_mistake
@@ -59,7 +57,7 @@ async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: i
 
 async def get_next_due_at(conn: asyncpg.Connection, *, user_id: int) -> Any:
     row = await conn.fetchrow(
-        f"SELECT MIN(due_at) AS next_due_at FROM test_template_user_question_cards WHERE user_id = $1 AND due_at > NOW()",
+        "SELECT MIN(due_at) AS next_due_at FROM test_template_user_question_cards WHERE user_id = $1 AND due_at > NOW()",
         user_id,
     )
     return row["next_due_at"] if row else None
@@ -69,7 +67,7 @@ async def get_next_due_at(conn: asyncpg.Connection, *, user_id: int) -> Any:
 
 async def upsert_question_card(conn: asyncpg.Connection, *, user_id: int, question_pk: str, is_correct: bool, chosen_option: str, fsrs_json: dict, next_due: datetime) -> None:
     await conn.execute(
-        f"""INSERT INTO test_template_user_question_cards (user_id, question_pk, due_at, fsrs_card_json, wrong_count, right_count, lapse_count, last_review_at, last_answer_correct, last_chosen_option)
+        """INSERT INTO test_template_user_question_cards (user_id, question_pk, due_at, fsrs_card_json, wrong_count, right_count, lapse_count, last_review_at, last_answer_correct, last_chosen_option)
             VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, NOW(), $8, $9)
             ON CONFLICT (user_id, question_pk) DO UPDATE SET
               due_at=EXCLUDED.due_at, fsrs_card_json=EXCLUDED.fsrs_card_json,
@@ -86,7 +84,7 @@ async def upsert_question_card(conn: asyncpg.Connection, *, user_id: int, questi
 
 async def insert_review_log(conn: asyncpg.Connection, *, user_id: int, question_pk: str, chosen_option: str, is_correct: bool, rating: str | None = None) -> None:
     await conn.execute(
-        f"INSERT INTO test_template_review_logs (user_id, question_pk, chosen_option, is_correct, rating) VALUES ($1, $2::uuid, $3, $4, $5)",
+        "INSERT INTO test_template_review_logs (user_id, question_pk, chosen_option, is_correct, rating) VALUES ($1, $2::uuid, $3, $4, $5)",
         user_id, question_pk, chosen_option, is_correct, rating,
     )
 
@@ -94,12 +92,12 @@ async def insert_review_log(conn: asyncpg.Connection, *, user_id: int, question_
 async def upsert_mistake(conn: asyncpg.Connection, *, user_id: int, question_pk: str, is_correct: bool) -> None:
     if is_correct:
         await conn.execute(
-            f"UPDATE test_template_mistake_bucket SET is_active = FALSE WHERE user_id = $1 AND question_pk = $2::uuid",
+            "UPDATE test_template_mistake_bucket SET is_active = FALSE WHERE user_id = $1 AND question_pk = $2::uuid",
             user_id, question_pk,
         )
     else:
         await conn.execute(
-            f"""INSERT INTO test_template_mistake_bucket (user_id, question_pk, wrong_count, last_wrong_at, is_active)
+            """INSERT INTO test_template_mistake_bucket (user_id, question_pk, wrong_count, last_wrong_at, is_active)
                 VALUES ($1, $2::uuid, 1, NOW(), TRUE)
                 ON CONFLICT (user_id, question_pk) DO UPDATE SET wrong_count = test_template_mistake_bucket.wrong_count + 1, last_wrong_at = NOW(), is_active = TRUE""",
             user_id, question_pk,
@@ -110,7 +108,7 @@ async def upsert_mistake(conn: asyncpg.Connection, *, user_id: int, question_pk:
 
 async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> list[asyncpg.Record]:
     return await conn.fetch(
-        f"""
+        """
         SELECT q.question_id, q.stem, q.answer AS correct_option, c.last_chosen_option,
                m.wrong_count, m.last_wrong_at, COALESCE(c.due_at <= NOW(), FALSE) AS is_due
         FROM test_template_mistake_bucket m

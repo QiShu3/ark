@@ -1647,6 +1647,8 @@ def _normalize_workflow_phases(
                         "target_article_count",
                         "daily_article_target",
                         "task_title",
+                        "choice_scope",
+                        "choice_completion",
                     ):
                         if key in phase:
                             normalized[key] = phase[key]

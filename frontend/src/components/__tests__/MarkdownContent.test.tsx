@@ -72,4 +72,16 @@ describe('MarkdownContent', () => {
     expect(del).toBeInTheDocument();
     expect(del?.textContent).toBe('deleted');
   });
+
+  it('renders inline math with KaTeX', () => {
+    render(<MarkdownContent content="复杂度是 $O(n^2)$" />);
+    expect(document.querySelector('.katex')).toBeInTheDocument();
+    expect(screen.queryByText('$O(n^2)$')).not.toBeInTheDocument();
+  });
+
+  it('can render inline content without paragraph wrappers', () => {
+    const { container } = render(<MarkdownContent content="答案 **A**" inline />);
+    expect(container.querySelector('p')).not.toBeInTheDocument();
+    expect(screen.getByText('A').tagName).toBe('STRONG');
+  });
 });

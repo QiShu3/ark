@@ -1,5 +1,5 @@
 """Sub-app: 模板子应用"""
-from .routes import router
+from .routes import router as router
 
 
 async def init_test_template(pool):

@@ -1,5 +1,4 @@
 import { type ReactNode } from 'react';
-import { X } from 'lucide-react';
 import AppModalFrame from './AppModalFrame';
 import Button from './Button';
 
@@ -76,7 +75,7 @@ export default function SubAppConfigModal({
 
       {/* Body */}
       <div className="mt-6 space-y-5">
-        {focusWorks.map((fw, _index) => (
+        {focusWorks.map((fw) => (
           <FocusWorkSection key={fw.id} fw={fw} />
         ))}
       </div>

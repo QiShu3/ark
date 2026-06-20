@@ -1,6 +1,8 @@
 """Pydantic models for 模板子应用."""
 from __future__ import annotations
+
 from datetime import datetime
+
 from pydantic import BaseModel
 
 

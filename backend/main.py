@@ -15,6 +15,7 @@ from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
+from routes.choice import router as choice_router
 from routes.erc import init_erc
 from routes.erc import router as erc_router
 from routes.todo_routes import init_todo
@@ -105,6 +106,7 @@ app.include_router(vocab_router)
 app.include_router(erc_router)
 app.include_router(app_registry_router)
 app.include_router(admin_router)
+app.include_router(choice_router)
 
 # Auto-discover and register dynamic sub-app routers
 for _decl in get_all():

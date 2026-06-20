@@ -132,8 +132,12 @@ describe('Navigation', () => {
     mockApiJson.mockResolvedValue(null);
 
     const originalLocation = window.location;
-    delete (window as any).location;
-    (window as any).location = { ...originalLocation, href: '' };
+    Reflect.deleteProperty(window, 'location');
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+      writable: true,
+    });
 
     renderNavigation('/apps', { is_admin: true });
 
@@ -144,7 +148,11 @@ describe('Navigation', () => {
     await user.click(adminButton);
     expect(window.location.href).toBe('/admin/');
 
-    (window as any).location = originalLocation;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+      writable: true,
+    });
   });
 
   it('shows the UI library entry for admins and navigates to it', async () => {

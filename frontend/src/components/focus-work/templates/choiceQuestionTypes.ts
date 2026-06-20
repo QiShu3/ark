@@ -1,5 +1,7 @@
 import type React from 'react';
 
+import type { ContentBlockData } from '../ContentBlockRenderer';
+
 export type ChoiceQuestionOption = {
   key: string;
   text: string;
@@ -22,17 +24,22 @@ export type ChoiceQuestionItem = {
   id: string;
   numberLabel: string;
   stem: React.ReactNode;
+  stemBlocks?: ContentBlockData[];
+  stemPlacement?: 'material' | 'question';
   options: ChoiceQuestionOption[];
   material?: {
     title: string;
     paragraphs: ChoiceQuestionMaterialParagraph[];
   };
+  materialBlocks?: ContentBlockData[];
+  explanationBlocks?: ContentBlockData[];
   meta?: ChoiceQuestionMeta[];
 };
 
 export type ChoiceQuestionSubmitResult = {
   correctOptionKey?: string;
   explanation?: React.ReactNode;
+  explanationBlocks?: ContentBlockData[];
   progressSnapshot?: Record<string, unknown>;
 };
 

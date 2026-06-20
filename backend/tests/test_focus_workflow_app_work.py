@@ -174,6 +174,14 @@ def test_normalize_workflow_phases_preserves_focus_work_type():
 
 
 def test_normalize_workflow_phases_preserves_test_focus_config():
+    choice_scope = {
+        "bank_id": "bank-1",
+        "years": [2025],
+        "subjects": ["计算机组成原理"],
+        "status": "all",
+        "mode": "sequential",
+    }
+    choice_completion = {"mode": "question_count", "question_count": 3}
     phases = _normalize_workflow_phases(
         [
             {
@@ -186,6 +194,8 @@ def test_normalize_workflow_phases_preserves_test_focus_config():
                 "target_word_count": 100,
                 "daily_target_count": 100,
                 "task_title": "今日单词",
+                "choice_scope": choice_scope,
+                "choice_completion": choice_completion,
             }
         ],
         fallback_focus_duration=1500,
@@ -196,6 +206,8 @@ def test_normalize_workflow_phases_preserves_test_focus_config():
     assert phases[0]["target_word_count"] == 100
     assert phases[0]["daily_target_count"] == 100
     assert phases[0]["task_title"] == "今日单词"
+    assert phases[0]["choice_scope"] == choice_scope
+    assert phases[0]["choice_completion"] == choice_completion
 
 
 @pytest.mark.asyncio
@@ -240,6 +252,60 @@ async def test_build_run_metadata_uses_test_vocab_phase_config():
     assert config_snapshot["target_word_count"] == 100
     assert config_snapshot["daily_target_count"] == 100
     assert config_snapshot["task_title"] == "今日单词"
+
+
+@pytest.mark.asyncio
+async def test_build_run_metadata_uses_test_choice_phase_config():
+    class NoTaskConn:
+        async def fetchrow(self, query: str, *args: object):
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    choice_scope = {
+        "bank_id": "bank-1",
+        "years": [2025],
+        "subjects": ["计算机组成原理"],
+        "status": "all",
+        "mode": "sequential",
+    }
+    choice_completion = {"mode": "question_count", "question_count": 3}
+    workflow_row = Row(
+        focus_duration=3600,
+        break_duration=60,
+        phases=[
+            {
+                "phase_type": "focus",
+                "duration": 3600,
+                "timer_mode": "countup",
+                "focus_work_type": "erc_practice",
+                "is_temporary": True,
+                "set_id": "bank-1",
+                "article_set_id": "bank-1",
+                "target_article_count": 3,
+                "daily_article_target": 3,
+                "task_title": "真题练习",
+                "choice_scope": choice_scope,
+                "choice_completion": choice_completion,
+            }
+        ],
+        current_phase_index=0,
+        runtime_task_id=None,
+        task_id=None,
+        active_focus_work_type="erc_practice",
+    )
+
+    task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
+        NoTaskConn(),
+        user_id=1,
+        workflow_row=workflow_row,
+    )
+
+    assert task_id is None
+    assert focus_work_type == "erc_practice"
+    assert app_id == "erc"
+    assert app_task_type == "erc_practice"
+    assert config_snapshot["choice_scope"] == choice_scope
+    assert config_snapshot["choice_completion"] == choice_completion
+    assert config_snapshot["task_title"] == "真题练习"
 
 
 @pytest.mark.asyncio
