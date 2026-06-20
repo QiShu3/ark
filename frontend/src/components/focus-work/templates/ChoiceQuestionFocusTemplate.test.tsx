@@ -35,7 +35,7 @@ function renderTemplate(overrides: Partial<React.ComponentProps<typeof ChoiceQue
     loading: false,
     error: null,
     emptyTitle: '暂无可复习内容',
-    emptyDescription: '当前没有可用的 ERC 复习内容。',
+    emptyDescription: '当前没有可用的 复习内容。',
     answeredCount: 0,
     targetCount: 10,
     disabled: false,

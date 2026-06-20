@@ -6,12 +6,12 @@ const {
   deleteEventArrangementTask,
   getEventWorkbench,
   initializeVocabAppTask,
-  saveEventERCConfig,
+  saveEventChoiceConfig,
 } = vi.hoisted(() => ({
   deleteEventArrangementTask: vi.fn(),
   getEventWorkbench: vi.fn(),
   initializeVocabAppTask: vi.fn(),
-  saveEventERCConfig: vi.fn(),
+  saveEventChoiceConfig: vi.fn(),
 }));
 
 vi.mock('../api', () => ({
@@ -27,7 +27,7 @@ vi.mock('../../vocab/api', () => ({
 }));
 
 vi.mock('../../erc/configSync', () => ({
-  saveEventERCConfig,
+  saveEventChoiceConfig,
 }));
 
 describe('activateEventSubApps', () => {
@@ -35,7 +35,7 @@ describe('activateEventSubApps', () => {
     getEventWorkbench.mockReset();
     deleteEventArrangementTask.mockReset();
     initializeVocabAppTask.mockReset();
-    saveEventERCConfig.mockReset();
+    saveEventChoiceConfig.mockReset();
   });
 
   it('merges ERC passive app tasks into one event-bound ERC config', async () => {
@@ -59,7 +59,7 @@ describe('activateEventSubApps', () => {
             defaultFocusDuration: 1800,
             addToTodayPlan: false,
           }),
-          app_task_type: 'erc_practice',
+          app_task_type: 'practice',
         },
         {
           id: 'temp-review',
@@ -70,7 +70,7 @@ describe('activateEventSubApps', () => {
             defaultFocusDuration: 1200,
             addToTodayPlan: true,
           }),
-          app_task_type: 'erc_review',
+          app_task_type: 'review',
         },
       ],
       created_appointments: [],
@@ -78,7 +78,7 @@ describe('activateEventSubApps', () => {
 
     await activateEventSubApps('event-1');
 
-    expect(saveEventERCConfig).toHaveBeenCalledWith({
+    expect(saveEventChoiceConfig).toHaveBeenCalledWith({
       eventId: 'event-1',
       practice: {
         daily_article_target: 2,

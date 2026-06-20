@@ -22,7 +22,7 @@ class ContentConfigField:
 
 @dataclass
 class FocusWorkDeclaration:
-    type: str             # "vocab_today" / "erc_review"
+    type: str             # "vocab_today" / "review"
     label: str            # "今日单词" / "错题复习"
     template: str         # "flashcard" / "choice_question"
     content_bank_type: str  # "word_deck" / "article_set"
@@ -75,7 +75,7 @@ ERC = SubAppDeclaration(
     sections=["hero", "asset", "arrangements", "feedback", "modals"],
     focus_works=[
         FocusWorkDeclaration(
-            type="erc_practice",
+            type="practice",
             label="真题练习",
             template="choice_question",
             content_bank_type="article_set",
@@ -86,7 +86,7 @@ ERC = SubAppDeclaration(
             ],
         ),
         FocusWorkDeclaration(
-            type="erc_review",
+            type="review",
             label="错题复习",
             template="choice_question",
             content_bank_type="article_set",

@@ -13,7 +13,7 @@ TaskSourceType = Literal["user", "app"]
 EventPlanScheduleMode = Literal["from_start", "before_due"]
 EventPlanItemKind = Literal["task", "appointment"]
 AppTaskId = Literal["vocab", "erc"]
-AppTaskType = Literal["vocab_today", "erc_review", "erc_practice"]
+AppTaskType = Literal["vocab_today", "review", "practice"]
 AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
 AppTaskRuntimeState = Literal[
     "uninitialized",
@@ -30,7 +30,7 @@ AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break"]
 FocusTimerMode = Literal["countdown", "countup"]
-FocusWorkType = Literal["vocab_today", "erc_review", "erc_practice", "task_focus"]
+FocusWorkType = Literal["vocab_today", "review", "practice", "task_focus"]
 FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
 FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
 FocusWorkRunStatus = Literal["running", "paused", "content_completed", "completed", "abandoned"]

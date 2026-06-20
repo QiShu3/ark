@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
 from routes.todo.helpers import (
     _bind_first_focus_phase_to_task,
@@ -80,14 +81,14 @@ def test_focus_workflow_phase_accepts_task_focus_type():
 def test_focus_workflow_out_exposes_focus_work_runtime_fields():
     payload = FocusWorkflowOut(
         state="focus",
-        active_focus_work_type="erc_review",
+        active_focus_work_type="review",
         focus_work_display_state="fullscreen",
         next_focus_work_type=None,
         has_minimized_work=False,
         phase_runtime_state="running_run",
     )
 
-    assert payload.active_focus_work_type == "erc_review"
+    assert payload.active_focus_work_type == "review"
     assert payload.focus_work_display_state == "fullscreen"
     assert payload.phase_runtime_state == "running_run"
 
@@ -276,7 +277,7 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
                 "phase_type": "focus",
                 "duration": 3600,
                 "timer_mode": "countup",
-                "focus_work_type": "erc_practice",
+                "focus_work_type": "practice",
                 "is_temporary": True,
                 "set_id": "bank-1",
                 "article_set_id": "bank-1",
@@ -290,7 +291,7 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
         current_phase_index=0,
         runtime_task_id=None,
         task_id=None,
-        active_focus_work_type="erc_practice",
+        active_focus_work_type="practice",
     )
 
     task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
@@ -300,9 +301,9 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
     )
 
     assert task_id is None
-    assert focus_work_type == "erc_practice"
+    assert focus_work_type == "practice"
     assert app_id == "erc"
-    assert app_task_type == "erc_practice"
+    assert app_task_type == "practice"
     assert config_snapshot["choice_scope"] == choice_scope
     assert config_snapshot["choice_completion"] == choice_completion
     assert config_snapshot["task_title"] == "真题练习"
@@ -442,95 +443,31 @@ def test_content_bank_article_seed_converts_choice_item_to_erc_article():
 
 
 @pytest.mark.asyncio
-async def test_resolve_erc_app_set_id_maps_legacy_content_bank_id():
+async def test_resolve_erc_app_set_id_rejects_unknown_uuid():
     bank_id = uuid4()
-    set_id = uuid4()
 
-    class LegacyBankConn:
+    class UnknownConn:
         async def fetchrow(self, query: str, *args: object):
-            if "FROM erc_sets WHERE id = $1" in query:
-                assert args[0] == bank_id
+            if "FROM choice_sets WHERE id = $1" in query:
                 return None
-            if "FROM content_banks" in query:
-                assert args[0] == bank_id
-                return Row(name="408选择题")
-            if "FROM erc_sets" in query and "WHERE key = $1 OR name = $2" in query:
-                assert args[0] == f"content-bank-{bank_id}"
-                assert args[1] == "408选择题"
-                return Row(id=set_id)
             raise AssertionError(f"Unexpected fetchrow query: {query}")
 
-    resolved = await _resolve_erc_app_set_id(LegacyBankConn(), str(bank_id))
-
-    assert resolved == str(set_id)
+    with pytest.raises(HTTPException, match="题库不存在"):
+        await _resolve_erc_app_set_id(UnknownConn(), str(bank_id))
 
 
 @pytest.mark.asyncio
-async def test_resolve_erc_app_set_id_syncs_unsynced_content_bank(monkeypatch):
-    bank_id = uuid4()
-    item_id = uuid4()
-    question_id = uuid4()
-    synced_set_id = uuid4()
-    imported: dict[str, object] = {"articles": [], "refreshed": None}
+async def test_resolve_erc_app_set_id_finds_existing_choice_set():
+    set_id = uuid4()
 
-    async def fake_upsert_set(_conn: object, **kwargs: object) -> str:
-        imported["set"] = kwargs
-        return str(synced_set_id)
-
-    async def fake_upsert_article_seed(_conn: object, *, set_id: str, seed: object) -> None:
-        assert set_id == str(synced_set_id)
-        imported["articles"].append(seed)
-
-    async def fake_refresh_set_counts(_conn: object, *, set_id: str) -> None:
-        imported["refreshed"] = set_id
-
-    monkeypatch.setattr("routes.choice.adapters.upsert_set", fake_upsert_set)
-    monkeypatch.setattr("routes.choice.adapters.upsert_article_seed", fake_upsert_article_seed)
-    monkeypatch.setattr("routes.choice.adapters.refresh_set_counts", fake_refresh_set_counts)
-
-    class UnsyncedBankConn:
+    class ExistingSetConn:
         async def fetchrow(self, query: str, *args: object):
-            if "FROM erc_sets WHERE id = $1" in query:
-                return None
-            if "FROM content_banks" in query:
-                return Row(name="408选择题")
-            if "FROM erc_sets" in query and "WHERE key = $1 OR name = $2" in query:
-                return None
+            if "FROM choice_sets WHERE id = $1" in query:
+                return Row(id=set_id)
             raise AssertionError(f"Unexpected fetchrow query: {query}")
 
-        async def fetch(self, query: str, *args: object):
-            if "FROM content_items" in query:
-                assert args[0] == bank_id
-                return [
-                    Row(
-                        id=str(item_id),
-                        title="2009年 数据结构 第1题",
-                        sort_order=0,
-                        body={"tags": ["408", "数据结构", "2009"], "passage": "", "examination": ""},
-                    )
-                ]
-            if "FROM content_questions" in query:
-                assert args[0] == [item_id]
-                return [
-                    Row(
-                        id=str(question_id),
-                        item_id=str(item_id),
-                        sort_order=0,
-                        question_text="该缓冲区的逻辑结构应该是____。",
-                        options={"A": "栈", "B": "队列", "C": "树", "D": "图"},
-                        correct_answer="B",
-                        analysis="缓冲区先进先出。",
-                    )
-                ]
-            raise AssertionError(f"Unexpected fetch query: {query}")
-
-    resolved = await _resolve_erc_app_set_id(UnsyncedBankConn(), str(bank_id))
-
-    assert resolved == str(synced_set_id)
-    assert imported["set"]["key"] == f"content-bank-{bank_id}"
-    assert imported["set"]["name"] == "408选择题"
-    assert imported["refreshed"] == str(synced_set_id)
-    assert imported["articles"][0].questions[0].answer == "B"
+    resolved = await _resolve_erc_app_set_id(ExistingSetConn(), str(set_id))
+    assert resolved == str(set_id)
 
 
 @pytest.mark.asyncio
@@ -585,7 +522,7 @@ async def test_create_workflow_activates_first_bound_focus_work_without_starting
             "duration": 60,
             "timer_mode": "countdown",
             "task_id": None,
-            "focus_work_type": "erc_review",
+            "focus_work_type": "review",
             "record_focus": True,
         },
         {"phase_type": "break", "duration": 60, "timer_mode": None, "task_id": None, "focus_work_type": None},
@@ -604,7 +541,7 @@ async def test_create_workflow_activates_first_bound_focus_work_without_starting
     workflow_insert_query, workflow_insert_args = conn.fetchrow_calls[0]
     assert "active_focus_work_type" in workflow_insert_query
     assert "focus_work_display_state" in workflow_insert_query
-    assert "erc_review" in workflow_insert_args
+    assert "review" in workflow_insert_args
     assert "fullscreen" in workflow_insert_args
     assert not any("focus_app_work_logs" in query for query, _args in conn.execute_calls)
 
@@ -637,7 +574,7 @@ async def test_create_workflow_activates_app_managed_task_adapter_without_starti
 
 def test_focus_work_type_for_task_row_maps_app_managed_tasks():
     assert _focus_work_type_for_task_row({"app_task_type": "vocab_today"}) == "vocab_today"
-    assert _focus_work_type_for_task_row({"app_task_type": "erc_review"}) == "erc_review"
+    assert _focus_work_type_for_task_row({"app_task_type": "review"}) == "review"
     assert _focus_work_type_for_task_row({"app_task_type": None}) == "task_focus"
 
 

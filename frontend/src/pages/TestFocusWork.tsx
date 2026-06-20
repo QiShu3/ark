@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Beaker, Plus, Trash2, Play, Loader2 } from 'lucide-react';
 import { apiJson, apiFetch } from '../lib/api';
 
-type FocusWorkType = 'vocab_today' | 'erc_review' | 'erc_practice';
+type FocusWorkType = 'vocab_today' | 'review' | 'practice';
 
 type ContentBank = {
   id: string;
@@ -48,8 +48,8 @@ type TestFocusConfig = {
 
 const FOCUS_WORK_TYPES: { value: FocusWorkType; label: string; countLabel: string }[] = [
   { value: 'vocab_today', label: '今日单词', countLabel: '个单词' },
-  { value: 'erc_review', label: '错题复习', countLabel: '道题目' },
-  { value: 'erc_practice', label: '真题练习', countLabel: '篇文章' },
+  { value: 'review', label: '错题复习', countLabel: '道题目' },
+  { value: 'practice', label: '真题练习', countLabel: '篇文章' },
 ];
 
 function getFocusWorkTypeLabel(type: FocusWorkType): string {
@@ -157,7 +157,7 @@ export default function TestFocusWork() {
   }, [formType, loadBanks]);
 
   useEffect(() => {
-    if (formType === 'erc_practice' || formType === 'erc_review') {
+    if (formType === 'practice' || formType === 'review') {
       void loadFilters(formBankId);
     } else {
       setFilters(null);
@@ -165,13 +165,13 @@ export default function TestFocusWork() {
   }, [formType, formBankId, loadFilters]);
 
   useEffect(() => {
-    if (formType === 'erc_practice' || formType === 'erc_review') {
+    if (formType === 'practice' || formType === 'review') {
       void loadScopeTotals(formBankId, formYear, formSubject);
     }
   }, [formType, formBankId, formYear, formSubject, loadScopeTotals]);
 
   function buildScope(): ChoiceScope | null {
-    if (formType !== 'erc_practice' && formType !== 'erc_review') return null;
+    if (formType !== 'practice' && formType !== 'review') return null;
     if (!formBankId) return null;
     return {
       bank_id: formBankId,
@@ -264,7 +264,7 @@ export default function TestFocusWork() {
     }
   }
 
-  const isChoiceType = formType === 'erc_practice' || formType === 'erc_review';
+  const isChoiceType = formType === 'practice' || formType === 'review';
   const showFilters = isChoiceType && filters !== null;
 
   return (

@@ -6,23 +6,23 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from routes.auth_routes import get_current_user
-from routes.erc.service import (
-    get_next_review,
-    get_overview,
-    list_mistakes,
-)
-from routes.erc.service import (
-    submit_review as submit_erc_question_answer,
-)
 
 from .adapters import (
-    ensure_erc_set_synced,
+    ensure_choice_set,
     get_choice_filters,
     get_erc_choice_filters,
     list_choice_banks,
     list_choice_items,
     list_erc_as_choice_banks,
     list_erc_as_choice_items,
+)
+from .service import (
+    get_next_review,
+    get_overview,
+    list_mistakes,
+)
+from .service import (
+    submit_review as submit_erc_question_answer,
 )
 from .schemas import (
     ChoiceAnswerSubmitIn,
@@ -74,7 +74,7 @@ async def route_get_filters(
     pool = _pool(request)
     async with pool.acquire() as conn:
         erc_row = await conn.fetchrow(
-            "SELECT id FROM erc_sets WHERE id = $1::uuid AND is_published = TRUE",
+            "SELECT id FROM choice_sets WHERE id = $1::uuid AND is_published = TRUE",
             bank_id,
         )
         if erc_row is not None:
@@ -96,7 +96,7 @@ async def route_list_items(
     pool = _pool(request)
     async with pool.acquire() as conn:
         erc_row = await conn.fetchrow(
-            "SELECT id FROM erc_sets WHERE id = $1::uuid AND is_published = TRUE",
+            "SELECT id FROM choice_sets WHERE id = $1::uuid AND is_published = TRUE",
             bank_id,
         )
         if erc_row is not None:
@@ -135,7 +135,7 @@ async def route_start_practice(
 
     async with pool.acquire() as conn:
         erc_row = await conn.fetchrow(
-            "SELECT id, name FROM erc_sets WHERE id = $1::uuid AND is_published = TRUE",
+            "SELECT id, name FROM choice_sets WHERE id = $1::uuid AND is_published = TRUE",
             scope.bank_id,
         )
         if erc_row is not None:
@@ -188,8 +188,8 @@ async def route_choice_overview(
 ) -> ChoiceOverviewOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        erc_set_id = await ensure_erc_set_synced(conn, bank_id)
-    result = await get_overview(pool, user_id=int(user.id), set_id=erc_set_id)
+        choice_set_id = await ensure_choice_set(conn, bank_id)
+    result = await get_overview(pool, user_id=int(user.id), set_id=choice_set_id)
     return ChoiceOverviewOut(**result)
 
 
@@ -201,8 +201,8 @@ async def route_choice_review_next(
 ) -> ChoiceReviewNextOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        erc_set_id = await ensure_erc_set_synced(conn, bank_id)
-    result = await get_next_review(pool, user_id=int(user.id), set_id=erc_set_id)
+        choice_set_id = await ensure_choice_set(conn, bank_id)
+    result = await get_next_review(pool, user_id=int(user.id), set_id=choice_set_id)
     return ChoiceReviewNextOut(**result)
 
 
@@ -214,6 +214,6 @@ async def route_choice_mistakes(
 ) -> list[ChoiceMistakeItemOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        erc_set_id = await ensure_erc_set_synced(conn, bank_id)
-    rows = await list_mistakes(pool, user_id=int(user.id), set_id=erc_set_id)
+        choice_set_id = await ensure_choice_set(conn, bank_id)
+    rows = await list_mistakes(pool, user_id=int(user.id), set_id=choice_set_id)
     return [ChoiceMistakeItemOut(**row) for row in rows]

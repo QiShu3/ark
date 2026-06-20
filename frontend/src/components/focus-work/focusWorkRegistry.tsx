@@ -1,15 +1,15 @@
 import type { FocusWorkDefinition, FocusWorkType } from './focusWorkTypes';
 import { subAppList, type SubAppDeclaration } from '../../lib/subAppRegistry';
 import VocabTodayFocusWork from '../Vocab/VocabTodayFocusWork';
-import ERCReviewFocusWork from '../ERC/ERCReviewFocusWork';
-import ERCPracticeFocusWork from '../ERC/ERCPracticeFocusWork';
+import ReviewFocusWork from '../ERC/ReviewFocusWork';
+import PracticeFocusWork from '../ERC/PracticeFocusWork';
 import TaskFocusWork from './TaskFocusWork';
 
 // 组件映射：专注工作类型 → render 函数（新增子应用时在这里注册组件）
 const RENDER_MAP: Record<string, (props: Parameters<FocusWorkDefinition['render']>[0]) => React.ReactNode> = {
   vocab_today: (props) => <VocabTodayFocusWork {...props} />,
-  erc_review: (props) => <ERCReviewFocusWork {...props} />,
-  erc_practice: (props) => <ERCPracticeFocusWork {...props} />,
+  review: (props) => <ReviewFocusWork {...props} />,
+  practice: (props) => <PracticeFocusWork {...props} />,
   task_focus: (props) => <TaskFocusWork {...props} />,
 };
 

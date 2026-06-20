@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ERCPracticeFocusWork from './ERCPracticeFocusWork';
+import PracticeFocusWork from './PracticeFocusWork';
 import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
 const { fetchChoiceItems, submitChoiceAnswer } = vi.hoisted(() => ({
@@ -49,7 +49,7 @@ const practiceRun: FocusWorkRunSummary = {
   id: 'run-1',
   workflow_id: 'workflow-1',
   phase_index: 0,
-  focus_work_type: 'erc_practice',
+  focus_work_type: 'practice',
   counts_for_task_completion: true,
   status: 'running',
   config_snapshot: {
@@ -57,7 +57,7 @@ const practiceRun: FocusWorkRunSummary = {
   },
 };
 
-describe('ERCPracticeFocusWork', () => {
+describe('PracticeFocusWork', () => {
   beforeEach(() => {
     if (!HTMLDivElement.prototype.scrollTo) {
       HTMLDivElement.prototype.scrollTo = vi.fn();
@@ -71,7 +71,7 @@ describe('ERCPracticeFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCPracticeFocusWork
+        <PracticeFocusWork
           run={practiceRun}
           disabled={false}
           onContentCompleted={vi.fn()}
@@ -89,7 +89,7 @@ describe('ERCPracticeFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCPracticeFocusWork
+        <PracticeFocusWork
           run={practiceRun}
           disabled={false}
           onContentCompleted={onContentCompleted}
@@ -154,7 +154,7 @@ describe('ERCPracticeFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCPracticeFocusWork
+        <PracticeFocusWork
           run={{
             ...practiceRun,
             counts_for_task_completion: false,
@@ -209,7 +209,7 @@ describe('ERCPracticeFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCPracticeFocusWork
+        <PracticeFocusWork
           run={{
             ...practiceRun,
             counts_for_task_completion: false,
@@ -231,7 +231,7 @@ describe('ERCPracticeFocusWork', () => {
   it('shows error when bank_id is missing', async () => {
     render(
       <MemoryRouter>
-        <ERCPracticeFocusWork
+        <PracticeFocusWork
           run={{ ...practiceRun, config_snapshot: {} }}
           disabled={false}
           onContentCompleted={vi.fn()}

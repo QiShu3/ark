@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from inspect import getsource
 
-from routes.erc.repository import get_overview_counts
-from routes.erc.service import (
+from routes.choice.repository import get_overview_counts
+from routes.choice.service import (
     _vocabulary_summary,
     choose_due_review_candidate,
     make_practice_wrong_immediately_due,
@@ -53,9 +53,9 @@ def test_make_practice_wrong_immediately_due_keeps_correct_due_time() -> None:
 def test_overview_counts_do_not_join_independent_count_sources() -> None:
     source = getsource(get_overview_counts)
 
-    assert "LEFT JOIN erc_review_logs" not in source
-    assert "LEFT JOIN erc_user_question_cards" not in source
-    assert "LEFT JOIN erc_mistake_bucket" not in source
+    assert "LEFT JOIN choice_review_logs" not in source
+    assert "LEFT JOIN choice_user_question_cards" not in source
+    assert "LEFT JOIN choice_mistake_bucket" not in source
 
 
 def test_choose_due_review_candidate_uses_weighted_random_within_due_candidates() -> None:

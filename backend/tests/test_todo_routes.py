@@ -1152,8 +1152,8 @@ async def test_init_todo_seeds_event_template_store(monkeypatch) -> None:
     assert template["items"] == []
     assert [item["client_id"] for item in template["app_configs"]] == [
         "vocab_today",
-        "erc_practice",
-        "erc_review",
+        "practice",
+        "review",
     ]
     assert template["workflows"][0]["phases"][0]["task_id"] == "vocab_today"
 
@@ -1584,10 +1584,10 @@ async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_hea
     task = await client.get(f"/todo/tasks/{payload['task_id']}", headers=auth_headers)
     assert task.status_code == 200
     task_payload = task.json()
-    assert task_payload["title"] == "ERC 复习"
+    assert task_payload["title"] == "复习"
     assert task_payload["source_type"] == "app"
     assert task_payload["app_id"] == "erc"
-    assert task_payload["app_task_type"] == "erc_review"
+    assert task_payload["app_task_type"] == "review"
     assert task_payload["managed_by_app"] is True
     assert task_payload["is_recurring"] is True
     assert task_payload["period_type"] == "daily"
@@ -4058,7 +4058,7 @@ def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:
             "pending_confirmation": False,
             "pending_task_selection": False,
             "runtime_task_id": conn.task_id,
-            "active_focus_work_type": "erc_review",
+            "active_focus_work_type": "review",
             "focus_work_display_state": "fullscreen",
             "is_paused": True,
             "paused_at": datetime.now(UTC),
@@ -4074,7 +4074,7 @@ def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["is_paused"] is False
-    assert data["active_focus_work_type"] == "erc_review"
+    assert data["active_focus_work_type"] == "review"
 
 
 def _preset_row(

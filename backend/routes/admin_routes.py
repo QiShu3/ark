@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from lib.content_selector import derive_content_selector
 from lib.sub_app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
-from routes.erc.repository import list_set_rows as list_erc_set_rows
+from routes.choice.repository import list_set_rows as list_erc_set_rows
 from routes.vocab.repository import list_vocab_decks
 
 # --- Import logger setup ---
@@ -422,8 +422,8 @@ async def _query_app_stats(conn: Any, app_id: str, bank_type: str) -> str:
         word_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_words")
         return f"{deck_count} 词库 / {word_count:,} 词"
     if app_id == "erc":
-        set_count = await conn.fetchval("SELECT COUNT(*) FROM erc_sets")
-        article_count = await conn.fetchval("SELECT COUNT(*) FROM erc_articles")
+        set_count = await conn.fetchval("SELECT COUNT(*) FROM choice_sets")
+        article_count = await conn.fetchval("SELECT COUNT(*) FROM choice_articles")
         return f"{set_count} 阅读集 / {article_count} 篇文章"
     # generic fallback for new sub-apps
     return "—"
@@ -1469,10 +1469,10 @@ async def erc_stats(
     pool = _pool(request)
     today = date.today()
     async with pool.acquire() as conn:
-        total = await conn.fetchval("SELECT COUNT(*) FROM erc_questions")
-        today_q = await conn.fetchval("SELECT COUNT(*) FROM erc_review_logs WHERE created_at::date = $1", today)
+        total = await conn.fetchval("SELECT COUNT(*) FROM choice_questions")
+        today_q = await conn.fetchval("SELECT COUNT(*) FROM choice_review_logs WHERE created_at::date = $1", today)
         correct = await conn.fetchval(
-            "SELECT COUNT(*) FROM erc_review_logs WHERE is_correct = TRUE AND created_at::date = $1", today
+            "SELECT COUNT(*) FROM choice_review_logs WHERE is_correct = TRUE AND created_at::date = $1", today
         )
     acc = (correct / today_q * 100) if today_q > 0 else 0.0
     return ErcStats(total_questions=total, today_questions=today_q, avg_accuracy=round(acc, 1))
@@ -1496,10 +1496,10 @@ async def erc_sets(
         rows = await conn.fetch(
             """
             SELECT s.id::text AS id, s.name, s.article_count, s.is_published,
-                   (SELECT COUNT(*) FROM erc_user_article_attempts a
-                    JOIN erc_articles art ON art.id = a.article_pk
+                   (SELECT COUNT(*) FROM choice_user_article_attempts a
+                    JOIN choice_articles art ON art.id = a.article_pk
                     WHERE art.set_id = s.id) AS attempt_count
-            FROM erc_sets s
+            FROM choice_sets s
             ORDER BY s.name
             """
         )
@@ -1518,7 +1518,7 @@ async def toggle_erc_set_publish(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcSetPublishOut:
-    from routes.erc.repository import toggle_set_published
+    from routes.choice.repository import toggle_set_published
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1539,7 +1539,7 @@ async def delete_erc_set(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcSetDeleteOut:
-    from routes.erc.repository import delete_set
+    from routes.choice.repository import delete_set
 
     pool = _pool(request)
     try:
@@ -1569,7 +1569,7 @@ async def erc_set_articles(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> list[ErcArticleListItem]:
-    from routes.erc.repository import list_admin_articles
+    from routes.choice.repository import list_admin_articles
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1599,7 +1599,7 @@ async def erc_article_detail(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcArticleDetailOut:
-    from routes.erc.repository import get_article_row, list_paragraph_rows, list_question_rows
+    from routes.choice.repository import get_article_row, list_paragraph_rows, list_question_rows
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1634,7 +1634,7 @@ async def delete_erc_article(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcArticleDeleteOut:
-    from routes.erc.repository import delete_article, refresh_set_counts
+    from routes.choice.repository import delete_article, refresh_set_counts
 
     pool = _pool(request)
     try:
@@ -1643,7 +1643,7 @@ async def delete_erc_article(
                 article_id = await delete_article(conn, article_pk=article_pk)
                 # Refresh parent set counts
                 set_id = await conn.fetchval(
-                    "SELECT set_id::text FROM erc_articles WHERE id = $1::uuid", article_pk
+                    "SELECT set_id::text FROM choice_articles WHERE id = $1::uuid", article_pk
                 )
                 if set_id:
                     await refresh_set_counts(conn, set_id=set_id)
@@ -1667,9 +1667,6 @@ async def import_erc_articles(
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcImportOut:
     import json as _json
-
-    from routes.erc.importer import parse_article_payload
-    from routes.erc.repository import refresh_set_counts, upsert_article_seed, upsert_set
 
     # Read multipart form
     form = await request.form()
@@ -1700,44 +1697,86 @@ async def import_erc_articles(
     if len(articles_raw) == 0:
         raise HTTPException(status_code=400, detail="文章内容不能为空")
 
-    # Parse all articles
-    seeds = []
-    for i, item in enumerate(articles_raw, 1):
-        if not isinstance(item, dict):
-            raise HTTPException(status_code=400, detail=f"第 {i} 条必须是对象")
-        try:
-            seed = parse_article_payload(item, source_name=f"{item.get('article_id', f'article_{i}')}.json", sort_order=i)
-        except (KeyError, TypeError, ValueError) as e:
-            _import_logger.error("ERC 第 %d 条解析失败: filename=%s, error=%s", i, filename, e)
-            raise HTTPException(status_code=400, detail=f"第 {i} 条解析失败: {e}")
-        seeds.append(seed)
-
-    # Derive set metadata from first article or filename
-    first_exam = seeds[0].exam if seeds else "unknown"
-    set_key = Path(filename).stem  # e.g., "cet4-2024.json" -> "cet4-2024"
+    # Import ERC format directly into choice_sets
+    set_key = Path(filename).stem
     set_name = set_key
-    description = f"{set_name} 阅读集"
-
-    # Import
     pool = _pool(request)
+    total_questions = 0
+
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
-                set_id = await upsert_set(
-                    conn, key=set_key, name=set_name,
-                    description=description, exam=first_exam, source_version="json-import"
+                set_id = await conn.fetchval(
+                    """INSERT INTO choice_sets (key, name, description, exam, source_version)
+                       VALUES ($1, $2, $3, $4, 'json-import') RETURNING id::text""",
+                    set_key, set_name, f"{set_name} 阅读集",
+                    str(articles_raw[0].get("exam") or "") if articles_raw else "",
                 )
-                for seed in seeds:
-                    await upsert_article_seed(conn, set_id=set_id, seed=seed)
-                await refresh_set_counts(conn, set_id=set_id)
+
+                for i, article in enumerate(articles_raw, 1):
+                    if not isinstance(article, dict):
+                        raise HTTPException(status_code=400, detail=f"第 {i} 条必须是对象")
+
+                    exam = str(article.get("exam") or "").strip()
+                    year = int(article.get("year") or 0)
+                    text_no = int(article.get("text_no") or i)
+                    title = str(article.get("title") or f"Text {text_no}")
+
+                    # Insert article
+                    article_pk = await conn.fetchval(
+                        """INSERT INTO choice_articles (set_id, article_id, exam, year, text_no, title, sort_order)
+                           VALUES ($1::uuid, $2, $3, $4, $5, $6, $7) RETURNING id::text""",
+                        set_id, f"{set_key}_text{i}", exam, year, text_no, title, i,
+                    )
+
+                    # Insert paragraphs
+                    content_list = article.get("content") or []
+                    for pi, item in enumerate(content_list, 1):
+                        if isinstance(item, dict) and item.get("text"):
+                            await conn.execute(
+                                "INSERT INTO choice_paragraphs (article_pk, paragraph_no, text) VALUES ($1::uuid, $2, $3)",
+                                article_pk, pi, str(item["text"]),
+                            )
+
+                    # Insert questions
+                    questions_list = article.get("questions") or []
+                    for qi, q in enumerate(questions_list, 1):
+                        if not isinstance(q, dict):
+                            continue
+                        stem = str(q.get("stem") or "").strip()
+                        options = q.get("options") or {}
+                        answer = str(q.get("answer") or "").strip().upper()
+                        explanation = str(q.get("explanation") or "").strip()
+                        if not stem or not answer:
+                            continue
+                        await conn.execute(
+                            """INSERT INTO choice_questions
+                               (article_pk, question_id, question_no, stem, options_json, answer, explanation)
+                               VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7)""",
+                            article_pk, f"{set_key}_text{i}_q{qi}", qi, stem,
+                            _json.dumps(options, ensure_ascii=False), answer, explanation,
+                        )
+                        total_questions += 1
+
+                # Refresh counts
+                await conn.execute(
+                    """UPDATE choice_sets SET
+                       article_count = (SELECT COUNT(*) FROM choice_articles WHERE set_id = $1::uuid),
+                       question_count = (SELECT COUNT(*) FROM choice_questions q JOIN choice_articles a ON a.id = q.article_pk WHERE a.set_id = $1::uuid)
+                       WHERE id = $1::uuid""",
+                    set_id,
+                )
+
+    except HTTPException:
+        raise
     except Exception as e:
         _import_logger.exception("ERC 数据库导入失败: filename=%s, error=%s", filename, e)
         raise HTTPException(status_code=500, detail=f"导入失败: {e}")
 
-    total_questions = sum(len(s.questions) for s in seeds)
+    article_count = len(articles_raw)
     _import_logger.info("ERC 导入成功: filename=%s, set=%s, articles=%d, questions=%d",
-                        filename, set_name, len(seeds), total_questions)
-    return ErcImportOut(set_key=set_key, set_name=set_name, article_count=len(seeds), question_count=total_questions)
+                        filename, set_name, article_count, total_questions)
+    return ErcImportOut(set_key=set_key, set_name=set_name, article_count=article_count, question_count=total_questions)
 
 
 # ---------------------------------------------------------------------------
@@ -2869,10 +2908,10 @@ async def list_content_banks_for_type(
             if rows:
                 return [ContentBankItem(id=r["id"], name=r["name"], count=r["word_count"]) for r in rows]
             item_type = "word"
-        elif focus_work_type in ("erc_review", "erc_practice"):
+        elif focus_work_type in ("review", "practice"):
             rows = await list_erc_set_rows(conn)
             if rows:
-                count_key = "question_count" if focus_work_type == "erc_review" else "article_count"
+                count_key = "question_count" if focus_work_type == "review" else "article_count"
                 return [ContentBankItem(id=r["id"], name=r["name"], count=r[count_key]) for r in rows]
             item_type = "choice"
         else:
@@ -2948,7 +2987,7 @@ async def create_test_focus_config(
     completion_json: str = Form(""),
 ) -> TestFocusConfigOut:
     """创建测试专注配置。"""
-    if focus_work_type not in ("vocab_today", "erc_review", "erc_practice"):
+    if focus_work_type not in ("vocab_today", "review", "practice"):
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")

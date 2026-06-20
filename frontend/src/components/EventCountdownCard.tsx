@@ -32,7 +32,7 @@ import {
   type EventArrangementAppointmentInput,
 } from '../lib/events/arrangementApi';
 import { fetchVocabDecks, initializeVocabAppTask } from '../lib/vocab/api';
-import { saveEventERCConfig, type ERCPracticeConfigInput, type ERCReviewConfigInput } from '../lib/erc/configSync';
+import { saveEventChoiceConfig, type PracticeConfigInput, type ReviewConfigInput } from '../lib/erc/configSync';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import type { VocabDeck } from '../lib/vocab/types';
@@ -62,7 +62,7 @@ type EventFormState = {
 
 type ConfiguredAppState = {
   clientId: string;
-  appType: 'vocab_today' | 'erc_practice' | 'erc_review';
+  appType: 'vocab_today' | 'practice' | 'review';
   config: {
     deckId?: string;
     deckName?: string;
@@ -76,7 +76,7 @@ type ConfiguredAppState = {
 };
 
 type AppEditorState = {
-  appType: 'vocab_today' | 'erc_practice' | 'erc_review';
+  appType: 'vocab_today' | 'practice' | 'review';
   deckId: string;
   dailyTargetCount: number;
   dailyArticleTarget: number;
@@ -256,7 +256,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     if (app.appType === 'vocab_today') {
       return `今日单词 (应用：${app.config.deckName || '未命名词书'})`;
     }
-    if (app.appType === 'erc_practice') {
+    if (app.appType === 'practice') {
       return '真题练习 (应用)';
     }
     return '错题复习 (应用)';
@@ -276,7 +276,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   function buildConfiguredApps(template: EventPlanTemplate | undefined): ConfiguredAppState[] {
     if (!template?.app_configs) return [];
     return template.app_configs
-      .filter((item) => ['vocab_today', 'erc_practice', 'erc_review'].includes(item.app_type))
+      .filter((item) => ['vocab_today', 'practice', 'review'].includes(item.app_type))
       .map((item) => ({
         clientId: item.client_id || makeConfiguredAppClientId(),
         appType: item.app_type,
@@ -1040,9 +1040,9 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       const createdEvent = await createEvent(payload);
       const workflowTaskIdMap = new Map<string, string>();
       const ercApps: {
-        practice?: ERCPracticeConfigInput;
+        practice?: PracticeConfigInput;
         practiceClientId?: string;
-        review?: ERCReviewConfigInput;
+        review?: ReviewConfigInput;
         reviewClientId?: string;
       } = {};
 
@@ -1056,14 +1056,14 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
             event_id: createdEvent.id,
           });
           if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
-        } else if (app.appType === 'erc_practice') {
+        } else if (app.appType === 'practice') {
           ercApps.practice = {
             daily_article_target: app.config.dailyArticleTarget!,
             default_focus_duration: app.config.defaultFocusDuration,
             add_to_today_plan: app.config.addToTodayPlan,
           };
           ercApps.practiceClientId = app.clientId;
-        } else if (app.appType === 'erc_review') {
+        } else if (app.appType === 'review') {
           ercApps.review = {
             review_scope: app.config.reviewScope!,
             daily_question_target: app.config.dailyQuestionTarget!,
@@ -1075,7 +1075,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       }
 
       if (ercApps.practice || ercApps.review) {
-        const ercStatus = await saveEventERCConfig({
+        const ercStatus = await saveEventChoiceConfig({
           eventId: createdEvent.id,
           practice: ercApps.practice,
           review: ercApps.review,
@@ -1134,7 +1134,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   }, [storeTemplates]);
 
   function beginAddConfiguredApp(): void {
-    const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+    const unconfiguredTypes = (['vocab_today', 'practice', 'review'] as const)
       .filter(type => !configuredApps.some(app => app.appType === type));
       
     if (unconfiguredTypes.length === 0) return;
@@ -1192,9 +1192,9 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
         deckId: appEditor.appType === 'vocab_today' ? appEditor.deckId : undefined,
         deckName,
         dailyTargetCount: appEditor.appType === 'vocab_today' ? appEditor.dailyTargetCount : undefined,
-        dailyArticleTarget: appEditor.appType === 'erc_practice' ? appEditor.dailyArticleTarget : undefined,
-        reviewScope: appEditor.appType === 'erc_review' ? appEditor.reviewScope : undefined,
-        dailyQuestionTarget: appEditor.appType === 'erc_review' ? appEditor.dailyQuestionTarget : undefined,
+        dailyArticleTarget: appEditor.appType === 'practice' ? appEditor.dailyArticleTarget : undefined,
+        reviewScope: appEditor.appType === 'review' ? appEditor.reviewScope : undefined,
+        dailyQuestionTarget: appEditor.appType === 'review' ? appEditor.dailyQuestionTarget : undefined,
         defaultFocusDuration: appEditor.focusDurationMin * 60,
         addToTodayPlan: appEditor.addToTodayPlan,
       },
@@ -1224,7 +1224,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     if (app.appType === 'vocab_today') {
       return `词书: ${app.config.deckName || '加载中...'}, 每日 ${app.config.dailyTargetCount} 词, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
     }
-    if (app.appType === 'erc_practice') {
+    if (app.appType === 'practice') {
       return `每日 ${app.config.dailyArticleTarget} 篇文章, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
     }
     return `范围: ${app.config.reviewScope === 'due' ? '到期复习' : app.config.reviewScope === 'mistakes' ? '错题复习' : '全部'}, 每日 ${app.config.dailyQuestionTarget} 题, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
@@ -1232,8 +1232,8 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
 
   function getStoreAppName(appType: string): string {
     if (appType === 'vocab_today') return '今日单词';
-    if (appType === 'erc_practice') return '真题练习';
-    if (appType === 'erc_review') return '错题复习';
+    if (appType === 'practice') return '真题练习';
+    if (appType === 'review') return '错题复习';
     return appType;
   }
 
@@ -1251,11 +1251,11 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       const dailyTarget = typeof config.dailyTargetCount === 'number' ? `每日 ${config.dailyTargetCount} 词` : null;
       return [`词书 ${deckName}`, dailyTarget, focusDuration].filter(Boolean).join(' · ');
     }
-    if (app.app_type === 'erc_practice') {
+    if (app.app_type === 'practice') {
       const dailyTarget = typeof config.dailyArticleTarget === 'number' ? `每日 ${config.dailyArticleTarget} 篇文章` : null;
       return [dailyTarget, focusDuration].filter(Boolean).join(' · ');
     }
-    if (app.app_type === 'erc_review') {
+    if (app.app_type === 'review') {
       const scope = config.reviewScope === 'due'
         ? '到期复习'
         : config.reviewScope === 'mistakes'
@@ -1280,7 +1280,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
 
   function renderAppEditor() {
     if (!appEditor) return null;
-    const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+    const unconfiguredTypes = (['vocab_today', 'practice', 'review'] as const)
       .filter(type => !configuredApps.some(app => app.appType === type) || (appEditor.index !== null && appEditor.appType === type));
 
     return (
@@ -1306,7 +1306,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
             >
               {unconfiguredTypes.map((type) => (
                 <option key={type} value={type}>
-                  {type === 'vocab_today' ? '今日单词 (背单词)' : type === 'erc_practice' ? '真题练习 (ERC)' : '错题复习 (ERC)'}
+                  {type === 'vocab_today' ? '今日单词 (背单词)' : type === 'practice' ? '真题练习' : '错题复习'}
                 </option>
               ))}
             </select>
@@ -1315,7 +1315,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           <div className="text-sm font-medium text-ark-text">
             应用：
             <span className="text-blue-300">
-              {appEditor.appType === 'vocab_today' ? '今日单词' : appEditor.appType === 'erc_practice' ? '真题练习' : '错题复习'}
+              {appEditor.appType === 'vocab_today' ? '今日单词' : appEditor.appType === 'practice' ? '真题练习' : '错题复习'}
             </span>
           </div>
         )}
@@ -1359,7 +1359,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           </>
         ) : null}
 
-        {appEditor.appType === 'erc_practice' ? (
+        {appEditor.appType === 'practice' ? (
           <label className="grid gap-1 text-xs text-ark-text-muted">
             每日目标文章数
             <input
@@ -1378,7 +1378,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           </label>
         ) : null}
 
-        {appEditor.appType === 'erc_review' ? (
+        {appEditor.appType === 'review' ? (
           <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
               复习范围
@@ -1471,7 +1471,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   }
 
   function renderCreateAppsColumn() {
-    const unconfiguredTypes = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+    const unconfiguredTypes = (['vocab_today', 'practice', 'review'] as const)
       .filter(type => !configuredApps.some(app => app.appType === type));
 
     return (
@@ -1489,7 +1489,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 className="min-h-12 rounded-lg bg-ark-surface-subtle border border-ark-border px-3 py-2 text-left hover:bg-ark-surface-subtle flex flex-col justify-center animate-fadeIn"
               >
                 <div className="text-sm font-semibold text-ark-text">
-                  {app.appType === 'vocab_today' ? '今日单词' : app.appType === 'erc_practice' ? '真题练习' : '错题复习'}
+                  {app.appType === 'vocab_today' ? '今日单词' : app.appType === 'practice' ? '真题练习' : '错题复习'}
                 </div>
                 <div className="text-xs text-ark-text-muted mt-1 truncate">
                   {getAppConfigSummary(app)}

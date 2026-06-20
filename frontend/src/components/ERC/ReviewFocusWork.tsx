@@ -7,7 +7,7 @@ import { fetchChoiceItems, fetchChoiceReviewNext, submitChoiceAnswer } from '../
 import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceReviewNext } from '../../lib/choice/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
-type ERCReviewFocusWorkProps = FocusWorkRendererProps;
+type ReviewFocusWorkProps = FocusWorkRendererProps;
 
 function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
   const raw = run.config_snapshot?.choice_scope;
@@ -66,11 +66,11 @@ function reviewNextSubtitle(payload: ChoiceReviewNext): string | undefined {
   return `${payload.article.year} 年 Text ${payload.article.text_no} · ${payload.article.title || 'Untitled Article'}`;
 }
 
-export default function ERCReviewFocusWork({
+export default function ReviewFocusWork({
   run,
   disabled,
   onContentCompleted,
-}: ERCReviewFocusWorkProps) {
+}: ReviewFocusWorkProps) {
   const choiceScope = getChoiceScope(run);
   const bankId = choiceScope?.bank_id;
   const targetQuestionCount = questionTargetCountFromRun(run);
@@ -139,14 +139,14 @@ export default function ERCReviewFocusWork({
 
   return (
     <ChoiceQuestionFocusTemplate
-      title="ERC REVIEW"
+      title="复习训练"
       subtitle={subtitle}
       statusLabel="复习题"
       item={item}
       loading={loading}
       error={error}
       emptyTitle="暂无可复习内容"
-      emptyDescription="当前没有可用的 ERC 复习内容。"
+      emptyDescription="当前没有可用的 复习内容。"
       answeredCount={answeredCount}
       targetCount={targetQuestionCount}
       disabled={disabled}

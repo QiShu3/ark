@@ -1,4 +1,5 @@
-"""Unified choice question bank — adapter over existing content_banks + erc_sets."""
+"""Unified choice question bank."""
+from .repository import init_choice
 from .routes import router
 
-__all__ = ["router"]
+__all__ = ["init_choice", "router"]

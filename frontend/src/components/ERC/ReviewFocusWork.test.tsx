@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ERCReviewFocusWork from './ERCReviewFocusWork';
+import ReviewFocusWork from './ReviewFocusWork';
 import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
 const { fetchChoiceReviewNext, fetchChoiceItems, submitChoiceAnswer } = vi.hoisted(() => ({
@@ -38,7 +38,7 @@ const reviewRun: FocusWorkRunSummary = {
   id: 'run-1',
   workflow_id: 'workflow-1',
   phase_index: 0,
-  focus_work_type: 'erc_review',
+  focus_work_type: 'review',
   counts_for_task_completion: true,
   status: 'running',
   config_snapshot: {
@@ -46,7 +46,7 @@ const reviewRun: FocusWorkRunSummary = {
   },
 };
 
-describe('ERCReviewFocusWork', () => {
+describe('ReviewFocusWork', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchChoiceReviewNext.mockReset();
@@ -60,7 +60,7 @@ describe('ERCReviewFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCReviewFocusWork
+        <ReviewFocusWork
           run={reviewRun}
           disabled
           onContentCompleted={vi.fn()}
@@ -86,7 +86,7 @@ describe('ERCReviewFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCReviewFocusWork
+        <ReviewFocusWork
           run={reviewRun}
           disabled={false}
           onContentCompleted={onContentCompleted}
@@ -114,7 +114,7 @@ describe('ERCReviewFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCReviewFocusWork
+        <ReviewFocusWork
           run={reviewRun}
           disabled={false}
           onContentCompleted={vi.fn()}
@@ -148,7 +148,7 @@ describe('ERCReviewFocusWork', () => {
 
     render(
       <MemoryRouter>
-        <ERCReviewFocusWork
+        <ReviewFocusWork
           run={{ ...reviewRun, config_snapshot: { choice_scope: { bank_id: 'set-1' }, daily_question_target: 1 } }}
           disabled={false}
           onContentCompleted={onContentCompleted}
@@ -168,7 +168,7 @@ describe('ERCReviewFocusWork', () => {
   it('shows error when bank_id is missing', async () => {
     render(
       <MemoryRouter>
-        <ERCReviewFocusWork
+        <ReviewFocusWork
           run={{ ...reviewRun, config_snapshot: {} }}
           disabled={false}
           onContentCompleted={vi.fn()}

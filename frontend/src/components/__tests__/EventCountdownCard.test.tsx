@@ -740,7 +740,7 @@ describe('EventCountdownCard', () => {
         const payload = JSON.parse(options.body || '{}');
         expect(payload).toMatchObject({
           title: '真题练习 (应用)',
-          app_task_type: 'erc_practice',
+          app_task_type: 'practice',
           event_id: 'event-app-workflow',
         });
         return {
@@ -799,7 +799,7 @@ describe('EventCountdownCard', () => {
     const createDialog = screen.getByRole('dialog', { name: '添加事件' });
 
     await user.click(within(createDialog).getByRole('button', { name: '添加应用' }));
-    await user.selectOptions(screen.getByLabelText('选择应用'), 'erc_practice');
+    await user.selectOptions(screen.getByLabelText('选择应用'), 'practice');
     await user.click(screen.getByRole('button', { name: '保存应用' }));
     expect(within(createDialog).getByRole('button', { name: /真题练习/ })).toBeInTheDocument();
 

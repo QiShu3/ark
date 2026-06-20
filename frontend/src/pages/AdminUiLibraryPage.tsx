@@ -123,7 +123,7 @@ export default function AdminUiLibraryPage() {
           phases={[
             { phase_type: 'focus', duration: 1500, focus_work_type: 'vocab_today' },
             { phase_type: 'break', duration: 300 },
-            { phase_type: 'focus', duration: 1500, focus_work_type: 'erc_practice' },
+            { phase_type: 'focus', duration: 1500, focus_work_type: 'practice' },
             { phase_type: 'break', duration: 300 },
           ]}
           maxTaskWidthClassName="max-w-[120px]"

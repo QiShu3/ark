@@ -20,7 +20,7 @@ type FocusWorkflowPhase = {
   duration: number;
   timer_mode: 'countdown' | 'countup' | null;
   task_id: string | null;
-  focus_work_type: 'vocab_today' | 'erc_review' | 'erc_practice' | 'task_focus' | null;
+  focus_work_type: 'vocab_today' | 'review' | 'practice' | 'task_focus' | null;
 };
 
 type FocusWorkflow = {
@@ -307,8 +307,8 @@ export default function HomeRightDashboard() {
     } else if (nextFocusPhase.focus_work_type) {
       const FOCUS_WORK_LABELS: Record<string, string> = {
         vocab_today: '今日单词',
-        erc_practice: 'ERC 真题练习',
-        erc_review: 'ERC 复习',
+        practice: '真题练习',
+        review: '复习',
         task_focus: '任务专注',
       };
       taskLabel = FOCUS_WORK_LABELS[nextFocusPhase.focus_work_type] ?? '应用任务';

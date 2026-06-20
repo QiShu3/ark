@@ -15,8 +15,8 @@ type WorkflowPhaseChipPhase = {
 
 const FOCUS_WORK_LABELS: Record<string, string> = {
   vocab_today: '今日单词',
-  erc_practice: 'ERC 真题练习',
-  erc_review: 'ERC 复习',
+  practice: '真题练习',
+  review: '复习',
   task_focus: '任务专注',
 };
 

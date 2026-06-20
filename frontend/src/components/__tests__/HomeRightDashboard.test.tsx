@@ -178,7 +178,7 @@ describe('HomeRightDashboard', () => {
           phases: [
             { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'vocab_today' },
             { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
-            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'erc_practice' },
+            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'practice' },
           ],
           task_id: null,
           task_title: null,
@@ -196,7 +196,7 @@ describe('HomeRightDashboard', () => {
     expect(screen.getByText('当前工作流：考研英语')).toBeInTheDocument();
     expect(screen.getByText('考研英语')).toBeInTheDocument();
     expect(screen.getByText('今日单词')).toBeInTheDocument();
-    expect(screen.getAllByText('ERC 真题练习').length).toBe(2);
+    expect(screen.getAllByText('真题练习').length).toBe(2);
     expect(screen.getByText('下个任务')).toBeInTheDocument();
     expect(screen.queryByText('10:00')).not.toBeInTheDocument();
   });

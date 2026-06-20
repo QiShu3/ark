@@ -144,7 +144,7 @@ class TestERCChoiceAdapter:
 
         class Conn:
             async def fetch(self, query: str, *args: object):
-                if "FROM erc_articles" in query:
+                if "FROM choice_articles" in query:
                     return [
                         {
                             "article_pk": "00000000-0000-0000-0000-000000000001",
@@ -156,9 +156,9 @@ class TestERCChoiceAdapter:
                             "sort_order": 1,
                         }
                     ]
-                if "FROM erc_paragraphs" in query:
+                if "FROM choice_paragraphs" in query:
                     return [{"paragraph_no": 1, "text": "2025年 数据结构 第1题"}]
-                if "FROM erc_questions" in query:
+                if "FROM choice_questions" in query:
                     return [
                         {
                             "question_pk": "00000000-0000-0000-0000-000000000101",
@@ -181,7 +181,7 @@ class TestERCChoiceAdapter:
 
         class Conn:
             async def fetch(self, query: str, *args: object):
-                if "FROM erc_articles" in query:
+                if "FROM choice_articles" in query:
                     return [
                         {
                             "article_pk": "00000000-0000-0000-0000-000000000001",
@@ -193,9 +193,9 @@ class TestERCChoiceAdapter:
                             "sort_order": 1,
                         }
                     ]
-                if "FROM erc_paragraphs" in query:
+                if "FROM choice_paragraphs" in query:
                     return [{"paragraph_no": 1, "text": "阅读材料"}]
-                if "FROM erc_questions" in query:
+                if "FROM choice_questions" in query:
                     return [
                         {
                             "question_pk": "00000000-0000-0000-0000-000000000101",

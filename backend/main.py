@@ -15,9 +15,8 @@ from routes.auth_routes import router as auth_router
 from routes.chat_routes import router as chat_router
 from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
+from routes.choice import init_choice
 from routes.choice import router as choice_router
-from routes.erc import init_erc
-from routes.erc import router as erc_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
 from routes.vocab import init_vocab
@@ -33,7 +32,7 @@ async def _lifespan(app: FastAPI):
     await init_checkin(app)
     await init_todo(app)
     await init_vocab(app)
-    await init_erc(app)
+    await init_choice(app)
     # 通用题库表
     async with app.state.auth_pool.acquire() as conn:
         await conn.execute("""
@@ -103,7 +102,6 @@ app.include_router(checkin_router)
 app.include_router(chat_router)
 app.include_router(todo_router)
 app.include_router(vocab_router)
-app.include_router(erc_router)
 app.include_router(app_registry_router)
 app.include_router(admin_router)
 app.include_router(choice_router)

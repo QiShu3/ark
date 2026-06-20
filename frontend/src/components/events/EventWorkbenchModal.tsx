@@ -20,7 +20,7 @@ import {
 } from '../../lib/events/arrangementApi';
 import { activateEventSubApps } from '../../lib/events/eventAppSync';
 import { fetchVocabDecks, initializeVocabAppTask } from '../../lib/vocab/api';
-import { saveEventERCConfig } from '../../lib/erc/configSync';
+import { saveEventChoiceConfig } from '../../lib/erc/configSync';
 import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import WorkflowPhaseChips from '../WorkflowPhaseChips';
@@ -843,7 +843,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
   function beginAddAppConfig(): void {
     const usedTypes = new Set(appTasks.map((t) => t.app_task_type));
-    const available = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+    const available = (['vocab_today', 'practice', 'review'] as const)
       .filter((t) => !usedTypes.has(t));
     if (available.length === 0) return;
     const appType = available[0];
@@ -902,8 +902,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setAppConfigSubmitting(true);
     setAppConfigError(null);
     try {
-      const isERCApp = appConfigEditor.appType === 'erc_practice' || appConfigEditor.appType === 'erc_review';
-      if (appConfigEditor.editingTaskId && !isERCApp) {
+      const isChoiceApp = appConfigEditor.appType === 'practice' || appConfigEditor.appType === 'review';
+      if (appConfigEditor.editingTaskId && !isChoiceApp) {
         await deleteEventArrangementTask(appConfigEditor.editingTaskId);
         removeTask(appConfigEditor.editingTaskId);
       }
@@ -920,8 +920,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           const refreshed = await getEventWorkbench(currentEvent.id);
           setWorkbench(refreshed);
         }
-      } else if (appConfigEditor.appType === 'erc_practice') {
-        await saveEventERCConfig({
+      } else if (appConfigEditor.appType === 'practice') {
+        await saveEventChoiceConfig({
           eventId: currentEvent.id,
           practice: {
             daily_article_target: appConfigEditor.dailyArticleTarget,
@@ -932,7 +932,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
         const refreshed = await getEventWorkbench(currentEvent.id);
         setWorkbench(refreshed);
       } else {
-        await saveEventERCConfig({
+        await saveEventChoiceConfig({
           eventId: currentEvent.id,
           review: {
             review_scope: appConfigEditor.reviewScope,
@@ -1438,7 +1438,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   function renderAppConfigEditor() {
     if (!appConfigEditor) return null;
     const usedTypes = new Set(appTasks.map((t) => t.app_task_type));
-    const available = (['vocab_today', 'erc_practice', 'erc_review'] as const)
+    const available = (['vocab_today', 'practice', 'review'] as const)
       .filter((t) => !usedTypes.has(t) || t === appConfigEditor.appType);
     const isNew = appConfigEditor.editingTaskId === null;
 
@@ -1455,14 +1455,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             >
               {available.map((t) => (
                 <option key={t} value={t}>
-                  {t === 'vocab_today' ? '今日单词' : t === 'erc_practice' ? '真题练习' : '错题复习'}
+                  {t === 'vocab_today' ? '今日单词' : t === 'practice' ? '真题练习' : '错题复习'}
                 </option>
               ))}
             </select>
           </label>
         ) : (
           <div className="text-sm text-ark-text">
-            {appConfigEditor.appType === 'vocab_today' ? '今日单词' : appConfigEditor.appType === 'erc_practice' ? '真题练习' : '错题复习'}
+            {appConfigEditor.appType === 'vocab_today' ? '今日单词' : appConfigEditor.appType === 'practice' ? '真题练习' : '错题复习'}
           </div>
         )}
 
@@ -1495,7 +1495,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           </>
         ) : null}
 
-        {appConfigEditor.appType === 'erc_practice' ? (
+        {appConfigEditor.appType === 'practice' ? (
           <label className="grid gap-1 text-xs text-ark-text-muted">
             每日目标文章数
             <input
@@ -1509,7 +1509,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           </label>
         ) : null}
 
-        {appConfigEditor.appType === 'erc_review' ? (
+        {appConfigEditor.appType === 'review' ? (
           <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
               复习范围
@@ -1775,14 +1775,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                   const isEditing = appConfigEditor?.editingTaskId === task.id;
                   const typeLabel = task.app_task_type === 'vocab_today'
                     ? '今日单词'
-                    : task.app_task_type === 'erc_practice'
+                    : task.app_task_type === 'practice'
                       ? '真题练习'
                       : '错题复习';
                   const summaryParts: string[] = [];
                   if (task.app_task_type === 'vocab_today') {
                     if (config.deckName) summaryParts.push(`词书 ${config.deckName}`);
                     if (config.dailyTargetCount) summaryParts.push(`每日 ${config.dailyTargetCount} 词`);
-                  } else if (task.app_task_type === 'erc_practice') {
+                  } else if (task.app_task_type === 'practice') {
                     if (config.dailyArticleTarget) summaryParts.push(`每日 ${config.dailyArticleTarget} 篇`);
                   } else {
                     if (config.reviewScope) summaryParts.push(config.reviewScope === 'due' ? '到期复习' : config.reviewScope === 'mistakes' ? '错题复习' : '全部');
@@ -1810,7 +1810,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
                 {appConfigEditor && !appConfigEditor.editingTaskId ? renderAppConfigEditor() : null}
                 {(() => {
                   const usedTypes = new Set(appTasks.map((t) => t.app_task_type));
-                  const available = (['vocab_today', 'erc_practice', 'erc_review'] as const).filter((t) => !usedTypes.has(t));
+                  const available = (['vocab_today', 'practice', 'review'] as const).filter((t) => !usedTypes.has(t));
                   if (!appConfigEditor && available.length > 0) {
                     return (
                       <button

@@ -8,7 +8,7 @@ import asyncpg
 from .importer import ERCArticleSeed, ERCArticleWordSeed
 
 
-async def init_erc(app: Any) -> None:
+async def init_choice(app: Any) -> None:
     pool = getattr(getattr(app, "state", None), "auth_pool", None)
     if pool is None:
         raise RuntimeError("auth_pool 未初始化，无法创建 ERC 表")
@@ -20,7 +20,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_sets (
+            CREATE TABLE IF NOT EXISTS choice_sets (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               key TEXT NOT NULL UNIQUE,
               name TEXT NOT NULL,
@@ -36,9 +36,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_articles (
+            CREATE TABLE IF NOT EXISTS choice_articles (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              set_id UUID NOT NULL REFERENCES erc_sets(id) ON DELETE CASCADE,
+              set_id UUID NOT NULL REFERENCES choice_sets(id) ON DELETE CASCADE,
               article_id TEXT NOT NULL UNIQUE,
               exam TEXT NOT NULL,
               year INTEGER NOT NULL,
@@ -52,9 +52,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_paragraphs (
+            CREATE TABLE IF NOT EXISTS choice_paragraphs (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
+              article_pk UUID NOT NULL REFERENCES choice_articles(id) ON DELETE CASCADE,
               paragraph_no INTEGER NOT NULL,
               text TEXT NOT NULL,
               UNIQUE(article_pk, paragraph_no)
@@ -63,9 +63,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_questions (
+            CREATE TABLE IF NOT EXISTS choice_questions (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
+              article_pk UUID NOT NULL REFERENCES choice_articles(id) ON DELETE CASCADE,
               question_id TEXT NOT NULL UNIQUE,
               question_no INTEGER NOT NULL,
               stem TEXT NOT NULL,
@@ -82,8 +82,8 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_article_words (
-              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
+            CREATE TABLE IF NOT EXISTS choice_article_words (
+              article_pk UUID NOT NULL REFERENCES choice_articles(id) ON DELETE CASCADE,
               word TEXT NOT NULL,
               sort_order INTEGER NOT NULL DEFAULT 0,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -93,10 +93,10 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_user_article_attempts (
+            CREATE TABLE IF NOT EXISTS choice_user_article_attempts (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
+              article_pk UUID NOT NULL REFERENCES choice_articles(id) ON DELETE CASCADE,
               correct_count INTEGER NOT NULL,
               question_count INTEGER NOT NULL,
               time_spent_ms INTEGER NULL,
@@ -108,10 +108,10 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_user_question_cards (
+            CREATE TABLE IF NOT EXISTS choice_user_question_cards (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              question_pk UUID NOT NULL REFERENCES erc_questions(id) ON DELETE CASCADE,
+              question_pk UUID NOT NULL REFERENCES choice_questions(id) ON DELETE CASCADE,
               due_at TIMESTAMPTZ NULL,
               fsrs_card_json JSONB NULL,
               wrong_count INTEGER NOT NULL DEFAULT 0,
@@ -128,12 +128,12 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_review_logs (
+            CREATE TABLE IF NOT EXISTS choice_review_logs (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
-              question_pk UUID NOT NULL REFERENCES erc_questions(id) ON DELETE CASCADE,
-              attempt_id UUID NULL REFERENCES erc_user_article_attempts(id) ON DELETE SET NULL,
+              article_pk UUID NOT NULL REFERENCES choice_articles(id) ON DELETE CASCADE,
+              question_pk UUID NOT NULL REFERENCES choice_questions(id) ON DELETE CASCADE,
+              attempt_id UUID NULL REFERENCES choice_user_article_attempts(id) ON DELETE SET NULL,
               mode TEXT NOT NULL,
               chosen_option TEXT NOT NULL,
               correct_option TEXT NOT NULL,
@@ -146,10 +146,10 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_mistake_bucket (
+            CREATE TABLE IF NOT EXISTS choice_mistake_bucket (
               user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
-              article_pk UUID NOT NULL REFERENCES erc_articles(id) ON DELETE CASCADE,
-              question_pk UUID NOT NULL REFERENCES erc_questions(id) ON DELETE CASCADE,
+              article_pk UUID NOT NULL REFERENCES choice_articles(id) ON DELETE CASCADE,
+              question_pk UUID NOT NULL REFERENCES choice_questions(id) ON DELETE CASCADE,
               wrong_count INTEGER NOT NULL DEFAULT 0,
               last_wrong_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -159,7 +159,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS erc_user_settings (
+            CREATE TABLE IF NOT EXISTS choice_user_settings (
               user_id BIGINT PRIMARY KEY REFERENCES auth_users(id) ON DELETE CASCADE,
               daily_review_target INTEGER NOT NULL DEFAULT 20,
               same_article_cooldown_hours INTEGER NOT NULL DEFAULT 24,
@@ -168,17 +168,17 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             );
             """
         )
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_erc_articles_set_sort ON erc_articles(set_id, sort_order);")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_choice_articles_set_sort ON choice_articles(set_id, sort_order);")
         await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_erc_article_words_article_sort ON erc_article_words(article_pk, sort_order);"
+            "CREATE INDEX IF NOT EXISTS idx_choice_article_words_article_sort ON choice_article_words(article_pk, sort_order);"
         )
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_erc_cards_due ON erc_user_question_cards(user_id, due_at);")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_choice_cards_due ON choice_user_question_cards(user_id, due_at);")
         await conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_erc_logs_user_created ON erc_review_logs(user_id, created_at DESC);"
+            "CREATE INDEX IF NOT EXISTS idx_choice_logs_user_created ON choice_review_logs(user_id, created_at DESC);"
         )
-        # Migration: add is_published to erc_sets
+        # Migration: add is_published to choice_sets
         await conn.execute(
-            "ALTER TABLE erc_sets ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE"
+            "ALTER TABLE choice_sets ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE"
         )
 
 
@@ -197,7 +197,7 @@ async def upsert_set(
 ) -> str:
     row = await conn.fetchrow(
         """
-        INSERT INTO erc_sets(key, name, description, exam, source_version)
+        INSERT INTO choice_sets(key, name, description, exam, source_version)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (key) DO UPDATE
         SET name = EXCLUDED.name,
@@ -219,7 +219,7 @@ async def upsert_set(
 async def upsert_article_seed(conn: asyncpg.Connection, *, set_id: str, seed: ERCArticleSeed) -> None:
     article_row = await conn.fetchrow(
         """
-        INSERT INTO erc_articles(set_id, article_id, exam, year, text_no, title, sort_order)
+        INSERT INTO choice_articles(set_id, article_id, exam, year, text_no, title, sort_order)
         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (article_id) DO UPDATE
         SET set_id = EXCLUDED.set_id,
@@ -240,10 +240,10 @@ async def upsert_article_seed(conn: asyncpg.Connection, *, set_id: str, seed: ER
         seed.sort_order,
     )
     article_pk = str(article_row["id"])
-    await conn.execute("DELETE FROM erc_paragraphs WHERE article_pk = $1::uuid", article_pk)
+    await conn.execute("DELETE FROM choice_paragraphs WHERE article_pk = $1::uuid", article_pk)
     for paragraph in seed.paragraphs:
         await conn.execute(
-            "INSERT INTO erc_paragraphs(article_pk, paragraph_no, text) VALUES ($1::uuid, $2, $3)",
+            "INSERT INTO choice_paragraphs(article_pk, paragraph_no, text) VALUES ($1::uuid, $2, $3)",
             article_pk,
             paragraph.paragraph_no,
             paragraph.text,
@@ -251,7 +251,7 @@ async def upsert_article_seed(conn: asyncpg.Connection, *, set_id: str, seed: ER
     for question in seed.questions:
         await conn.execute(
             """
-            INSERT INTO erc_questions(
+            INSERT INTO choice_questions(
               article_pk, question_id, question_no, stem, options_json, answer,
               evidence_json, explanation, question_type, sort_order
             )
@@ -284,14 +284,14 @@ async def upsert_article_seed(conn: asyncpg.Connection, *, set_id: str, seed: ER
 async def refresh_set_counts(conn: asyncpg.Connection, *, set_id: str) -> None:
     await conn.execute(
         """
-        UPDATE erc_sets
+        UPDATE choice_sets
         SET article_count = (
-              SELECT COUNT(*) FROM erc_articles WHERE set_id = $1::uuid
+              SELECT COUNT(*) FROM choice_articles WHERE set_id = $1::uuid
             ),
             question_count = (
               SELECT COUNT(*)
-              FROM erc_questions q
-              JOIN erc_articles a ON a.id = q.article_pk
+              FROM choice_questions q
+              JOIN choice_articles a ON a.id = q.article_pk
               WHERE a.set_id = $1::uuid
             ),
             updated_at = NOW()
@@ -302,16 +302,16 @@ async def refresh_set_counts(conn: asyncpg.Connection, *, set_id: str) -> None:
 
 
 async def replace_article_words(conn: asyncpg.Connection, *, seed: ERCArticleWordSeed) -> None:
-    article_row = await conn.fetchrow("SELECT id::text AS article_pk FROM erc_articles WHERE article_id = $1", seed.article_id)
+    article_row = await conn.fetchrow("SELECT id::text AS article_pk FROM choice_articles WHERE article_id = $1", seed.article_id)
     if article_row is None:
         raise ValueError(f"article_id {seed.article_id} does not exist")
 
     article_pk = str(article_row["article_pk"])
-    await conn.execute("DELETE FROM erc_article_words WHERE article_pk = $1::uuid", article_pk)
+    await conn.execute("DELETE FROM choice_article_words WHERE article_pk = $1::uuid", article_pk)
     for index, word in enumerate(seed.words, start=1):
         await conn.execute(
             """
-            INSERT INTO erc_article_words(article_pk, word, sort_order)
+            INSERT INTO choice_article_words(article_pk, word, sort_order)
             VALUES ($1::uuid, $2, $3)
             """,
             article_pk,
@@ -324,7 +324,7 @@ async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     return await conn.fetch(
         """
         SELECT id::text AS id, key, name, description, exam, article_count, question_count
-        FROM erc_sets
+        FROM choice_sets
         WHERE is_published = TRUE
         ORDER BY key ASC
         """
@@ -334,7 +334,7 @@ async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
 async def toggle_set_published(conn: asyncpg.Connection, *, set_id: str) -> bool:
     row = await conn.fetchrow(
         """
-        UPDATE erc_sets
+        UPDATE choice_sets
         SET is_published = NOT is_published, updated_at = NOW()
         WHERE id = $1::uuid
         RETURNING is_published
@@ -349,7 +349,7 @@ async def toggle_set_published(conn: asyncpg.Connection, *, set_id: str) -> bool
 async def delete_set(conn: asyncpg.Connection, *, set_id: str) -> str:
     """Hard-delete a set and all its articles/questions (CASCADE). Returns the set name."""
     row = await conn.fetchrow(
-        "DELETE FROM erc_sets WHERE id = $1::uuid RETURNING name",
+        "DELETE FROM choice_sets WHERE id = $1::uuid RETURNING name",
         set_id,
     )
     if row is None:
@@ -368,8 +368,8 @@ async def list_admin_articles(conn: asyncpg.Connection, *, set_id: str) -> list[
           a.title,
           a.sort_order,
           COUNT(q.id)::int AS question_count
-        FROM erc_articles a
-        LEFT JOIN erc_questions q ON q.article_pk = a.id
+        FROM choice_articles a
+        LEFT JOIN choice_questions q ON q.article_pk = a.id
         WHERE a.set_id = $1::uuid
         GROUP BY a.id
         ORDER BY a.sort_order ASC
@@ -381,7 +381,7 @@ async def list_admin_articles(conn: asyncpg.Connection, *, set_id: str) -> list[
 async def delete_article(conn: asyncpg.Connection, *, article_pk: str) -> str:
     """Hard-delete a single article (CASCADE). Returns the article_id."""
     row = await conn.fetchrow(
-        "DELETE FROM erc_articles WHERE id = $1::uuid RETURNING article_id",
+        "DELETE FROM choice_articles WHERE id = $1::uuid RETURNING article_id",
         article_pk,
     )
     if row is None:
@@ -409,13 +409,13 @@ async def list_article_rows(
           COUNT(DISTINCT m.question_pk)::int AS mistake_count,
           MAX(attempt.submitted_at) AS last_attempt_at,
           BOOL_OR(c.due_at IS NOT NULL AND c.due_at <= NOW()) AS has_due_review
-        FROM erc_articles a
-        JOIN erc_questions q ON q.article_pk = a.id
-        LEFT JOIN erc_user_article_attempts attempt
+        FROM choice_articles a
+        JOIN choice_questions q ON q.article_pk = a.id
+        LEFT JOIN choice_user_article_attempts attempt
           ON attempt.article_pk = a.id AND attempt.user_id = $1
-        LEFT JOIN erc_user_question_cards c
+        LEFT JOIN choice_user_question_cards c
           ON c.question_pk = q.id AND c.user_id = $1
-        LEFT JOIN erc_mistake_bucket m
+        LEFT JOIN choice_mistake_bucket m
           ON m.question_pk = q.id AND m.user_id = $1 AND m.is_active = TRUE
         WHERE ($2::uuid IS NULL OR a.set_id = $2::uuid)
           AND ($3::text IS NULL OR a.exam = $3)
@@ -439,7 +439,7 @@ async def get_article_row(conn: asyncpg.Connection, *, article_id: str) -> async
           a.year,
           a.text_no,
           a.title
-        FROM erc_articles a
+        FROM choice_articles a
         WHERE a.article_id = $1
         """,
         article_id,
@@ -455,7 +455,7 @@ async def get_last_article_attempt_at(
     row = await conn.fetchrow(
         """
         SELECT MAX(submitted_at) AS last_attempt_at
-        FROM erc_user_article_attempts
+        FROM choice_user_article_attempts
         WHERE user_id = $1 AND article_pk = $2::uuid
         """,
         user_id,
@@ -468,7 +468,7 @@ async def list_paragraph_rows(conn: asyncpg.Connection, *, article_pk: str) -> l
     return await conn.fetch(
         """
         SELECT paragraph_no, text
-        FROM erc_paragraphs
+        FROM choice_paragraphs
         WHERE article_pk = $1::uuid
         ORDER BY paragraph_no ASC
         """,
@@ -480,7 +480,7 @@ async def list_question_rows(conn: asyncpg.Connection, *, article_pk: str) -> li
     return await conn.fetch(
         """
         SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer
-        FROM erc_questions
+        FROM choice_questions
         WHERE article_pk = $1::uuid
         ORDER BY sort_order ASC
         """,
@@ -504,7 +504,7 @@ async def list_article_word_state_rows(
             WHEN BOOL_OR(p.word_id IS NOT NULL) THEN 'learning'
             ELSE 'unstarted'
           END AS state
-        FROM erc_article_words aw
+        FROM choice_article_words aw
         LEFT JOIN vocab_words v ON LOWER(v.word) = aw.word
         LEFT JOIN vocab_user_word_progress p
           ON p.user_id = $1
@@ -533,8 +533,8 @@ async def get_question_row_by_public_id(conn: asyncpg.Connection, *, question_id
           a.year,
           a.text_no,
           a.title
-        FROM erc_questions q
-        JOIN erc_articles a ON a.id = q.article_pk
+        FROM choice_questions q
+        JOIN choice_articles a ON a.id = q.article_pk
         WHERE q.question_id = $1
         """,
         question_id,
@@ -553,7 +553,7 @@ async def insert_article_attempt(
 ) -> str:
     row = await conn.fetchrow(
         """
-        INSERT INTO erc_user_article_attempts(
+        INSERT INTO choice_user_article_attempts(
           user_id, article_pk, correct_count, question_count, time_spent_ms, started_at
         )
         VALUES ($1, $2::uuid, $3, $4, $5, $6)
@@ -578,7 +578,7 @@ async def get_user_question_card(
     return await conn.fetchrow(
         """
         SELECT due_at, fsrs_card_json, wrong_count, right_count, lapse_count
-        FROM erc_user_question_cards
+        FROM choice_user_question_cards
         WHERE user_id = $1 AND question_pk = $2::uuid
         """,
         user_id,
@@ -601,7 +601,7 @@ async def upsert_user_question_card(
 ) -> None:
     await conn.execute(
         """
-        INSERT INTO erc_user_question_cards(
+        INSERT INTO choice_user_question_cards(
           user_id, question_pk, due_at, fsrs_card_json, wrong_count, right_count, lapse_count,
           last_review_at, last_answer_correct, last_chosen_option, updated_at
         )
@@ -646,7 +646,7 @@ async def insert_review_log(
 ) -> None:
     await conn.execute(
         """
-        INSERT INTO erc_review_logs(
+        INSERT INTO choice_review_logs(
           user_id, article_pk, question_pk, attempt_id, mode, chosen_option,
           correct_option, is_correct, rating, time_spent_ms
         )
@@ -675,17 +675,17 @@ async def upsert_mistake(
 ) -> None:
     await conn.execute(
         """
-        INSERT INTO erc_mistake_bucket(user_id, article_pk, question_pk, wrong_count, last_wrong_at, is_active)
+        INSERT INTO choice_mistake_bucket(user_id, article_pk, question_pk, wrong_count, last_wrong_at, is_active)
         VALUES ($1, $2::uuid, $3::uuid, CASE WHEN $4 THEN 1 ELSE 0 END, NOW(), $4)
         ON CONFLICT (user_id, question_pk)
         DO UPDATE SET
           wrong_count = CASE
-            WHEN $4 THEN erc_mistake_bucket.wrong_count + 1
-            ELSE erc_mistake_bucket.wrong_count
+            WHEN $4 THEN choice_mistake_bucket.wrong_count + 1
+            ELSE choice_mistake_bucket.wrong_count
           END,
           last_wrong_at = CASE
             WHEN $4 THEN NOW()
-            ELSE erc_mistake_bucket.last_wrong_at
+            ELSE choice_mistake_bucket.last_wrong_at
           END,
           is_active = $4,
           article_pk = EXCLUDED.article_pk
@@ -722,10 +722,10 @@ async def list_due_card_rows(conn: asyncpg.Connection, *, user_id: int, limit: i
           a.text_no,
           a.title,
           COALESCE(m.is_active, FALSE) AS is_mistake
-        FROM erc_user_question_cards c
-        JOIN erc_questions q ON q.id = c.question_pk
-        JOIN erc_articles a ON a.id = q.article_pk
-        LEFT JOIN erc_mistake_bucket m ON m.user_id = c.user_id AND m.question_pk = c.question_pk
+        FROM choice_user_question_cards c
+        JOIN choice_questions q ON q.id = c.question_pk
+        JOIN choice_articles a ON a.id = q.article_pk
+        LEFT JOIN choice_mistake_bucket m ON m.user_id = c.user_id AND m.question_pk = c.question_pk
         WHERE c.user_id = $1
           AND c.due_at IS NOT NULL
           AND c.due_at <= NOW()
@@ -746,7 +746,7 @@ async def list_recent_review_article_rows(
     return await conn.fetch(
         """
         SELECT DISTINCT article_pk::text AS article_pk, created_at
-        FROM erc_review_logs
+        FROM choice_review_logs
         WHERE user_id = $1 AND created_at >= $2
         ORDER BY created_at DESC
         """,
@@ -759,7 +759,7 @@ async def get_next_due_at(conn: asyncpg.Connection, *, user_id: int) -> Any:
     row = await conn.fetchrow(
         """
         SELECT MIN(due_at) AS next_due_at
-        FROM erc_user_question_cards
+        FROM choice_user_question_cards
         WHERE user_id = $1 AND due_at IS NOT NULL AND due_at > NOW()
         """,
         user_id,
@@ -770,9 +770,9 @@ async def get_next_due_at(conn: asyncpg.Connection, *, user_id: int) -> Any:
 async def get_user_settings(conn: asyncpg.Connection, *, user_id: int) -> asyncpg.Record:
     return await conn.fetchrow(
         """
-        INSERT INTO erc_user_settings(user_id)
+        INSERT INTO choice_user_settings(user_id)
         VALUES ($1)
-        ON CONFLICT (user_id) DO UPDATE SET updated_at = erc_user_settings.updated_at
+        ON CONFLICT (user_id) DO UPDATE SET updated_at = choice_user_settings.updated_at
         RETURNING daily_review_target, same_article_cooldown_hours
         """,
         user_id,
@@ -788,34 +788,34 @@ async def get_overview_counts(conn: asyncpg.Connection, *, user_id: int, set_id:
         SELECT
           (
             SELECT COUNT(DISTINCT attempt.article_pk)::int
-            FROM erc_user_article_attempts attempt
-            {'JOIN erc_articles a ON a.id = attempt.article_pk' if set_id else ''}
+            FROM choice_user_article_attempts attempt
+            {'JOIN choice_articles a ON a.id = attempt.article_pk' if set_id else ''}
             WHERE attempt.user_id = $1 {'AND a.set_id = $2::uuid' if set_id else ''}
           ) AS practiced_article_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_review_logs rl
-            {'JOIN erc_questions q_rl ON q_rl.id = rl.question_pk JOIN erc_articles a_rl ON a_rl.id = q_rl.article_pk' if set_id else ''}
+            FROM choice_review_logs rl
+            {'JOIN choice_questions q_rl ON q_rl.id = rl.question_pk JOIN choice_articles a_rl ON a_rl.id = q_rl.article_pk' if set_id else ''}
             WHERE rl.user_id = $1 {'AND a_rl.set_id = $2::uuid' if set_id else ''}
           ) AS practiced_question_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_review_logs rl2
-            {'JOIN erc_questions q_rl2 ON q_rl2.id = rl2.question_pk JOIN erc_articles a_rl2 ON a_rl2.id = q_rl2.article_pk' if set_id else ''}
+            FROM choice_review_logs rl2
+            {'JOIN choice_questions q_rl2 ON q_rl2.id = rl2.question_pk JOIN choice_articles a_rl2 ON a_rl2.id = q_rl2.article_pk' if set_id else ''}
             WHERE rl2.user_id = $1 AND rl2.is_correct = TRUE {'AND a_rl2.set_id = $2::uuid' if set_id else ''}
           ) AS correct_log_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_user_question_cards c
-            JOIN erc_questions q_c ON q_c.id = c.question_pk
-            JOIN erc_articles a_c ON a_c.id = q_c.article_pk
+            FROM choice_user_question_cards c
+            JOIN choice_questions q_c ON q_c.id = c.question_pk
+            JOIN choice_articles a_c ON a_c.id = q_c.article_pk
             WHERE c.user_id = $1 AND c.due_at IS NOT NULL AND c.due_at <= NOW() {'AND a_c.set_id = $2::uuid' if set_id else ''}
           ) AS due_review_count,
           (
             SELECT COUNT(*)::int
-            FROM erc_mistake_bucket mb
-            JOIN erc_questions q_mb ON q_mb.id = mb.question_pk
-            JOIN erc_articles a_mb ON a_mb.id = q_mb.article_pk
+            FROM choice_mistake_bucket mb
+            JOIN choice_questions q_mb ON q_mb.id = mb.question_pk
+            JOIN choice_articles a_mb ON a_mb.id = q_mb.article_pk
             WHERE mb.user_id = $1 AND mb.is_active = TRUE {'AND a_mb.set_id = $2::uuid' if set_id else ''}
           ) AS mistake_count
         """,
@@ -840,10 +840,10 @@ async def get_recommended_article(conn: asyncpg.Connection, *, user_id: int, set
     return await conn.fetchrow(
         f"""
         SELECT a.article_id, a.year, a.text_no, a.title
-        FROM erc_articles a
+        FROM choice_articles a
         WHERE NOT EXISTS (
           SELECT 1
-          FROM erc_user_article_attempts attempt
+          FROM choice_user_article_attempts attempt
           WHERE attempt.user_id = $1 AND attempt.article_pk = a.id
         )
         {set_filter}
@@ -873,10 +873,10 @@ async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int, set_id: s
           m.wrong_count,
           m.last_wrong_at,
           COALESCE(c.due_at <= NOW(), FALSE) AS is_due
-        FROM erc_mistake_bucket m
-        JOIN erc_questions q ON q.id = m.question_pk
-        JOIN erc_articles a ON a.id = m.article_pk
-        LEFT JOIN erc_user_question_cards c ON c.user_id = m.user_id AND c.question_pk = m.question_pk
+        FROM choice_mistake_bucket m
+        JOIN choice_questions q ON q.id = m.question_pk
+        JOIN choice_articles a ON a.id = m.article_pk
+        LEFT JOIN choice_user_question_cards c ON c.user_id = m.user_id AND c.question_pk = m.question_pk
         WHERE m.user_id = $1 AND m.is_active = TRUE {set_filter}
         ORDER BY m.last_wrong_at DESC, a.year DESC, a.text_no ASC, q.sort_order ASC
         """,

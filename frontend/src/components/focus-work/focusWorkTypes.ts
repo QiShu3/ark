@@ -2,7 +2,7 @@ import type React from 'react';
 import type { AppTaskId, AppTaskType } from '../taskTypes';
 import type { WorkflowSnapshot } from '../workflowProgress';
 
-export type FocusWorkType = 'vocab_today' | 'erc_review' | 'erc_practice' | 'task_focus';
+export type FocusWorkType = 'vocab_today' | 'review' | 'practice' | 'task_focus';
 export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
 

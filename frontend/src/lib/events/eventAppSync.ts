@@ -1,7 +1,7 @@
 import { getEventWorkbench } from './api';
 import { deleteEventArrangementTask } from './arrangementApi';
 import { initializeVocabAppTask } from '../vocab/api';
-import { saveEventERCConfig, type ERCPracticeConfigInput, type ERCReviewConfigInput } from '../erc/configSync';
+import { saveEventChoiceConfig, type PracticeConfigInput, type ReviewConfigInput } from '../erc/configSync';
 
 /**
  * Activates passive sub-app configuration tasks saved under a non-primary event
@@ -14,8 +14,8 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
       (task) => task.app_task_type
     );
     const ercConfigs: {
-      practice?: ERCPracticeConfigInput;
-      review?: ERCReviewConfigInput;
+      practice?: PracticeConfigInput;
+      review?: ReviewConfigInput;
       taskIds: string[];
     } = { taskIds: [] };
 
@@ -33,7 +33,7 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
             add_to_today_plan: config.addToTodayPlan,
             event_id: eventId,
           });
-        } else if (appType === 'erc_practice') {
+        } else if (appType === 'practice') {
           ercConfigs.practice = {
             daily_article_target: config.dailyArticleTarget,
             default_focus_duration: config.defaultFocusDuration,
@@ -41,7 +41,7 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
           };
           ercConfigs.taskIds.push(task.id);
           continue;
-        } else if (appType === 'erc_review') {
+        } else if (appType === 'review') {
           ercConfigs.review = {
             review_scope: config.reviewScope,
             daily_question_target: config.dailyQuestionTarget,
@@ -61,7 +61,7 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
 
     if (ercConfigs.practice || ercConfigs.review) {
       try {
-        await saveEventERCConfig({
+        await saveEventChoiceConfig({
           eventId,
           practice: ercConfigs.practice,
           review: ercConfigs.review,
@@ -70,7 +70,7 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
           await deleteEventArrangementTask(taskId);
         }
       } catch (err) {
-        console.error('Failed to activate ERC app config', err);
+        console.error('Failed to activate choice app config', err);
       }
     }
   } catch (err) {

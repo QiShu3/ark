@@ -1578,7 +1578,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
               }`}>
-                {task.app_id === 'vocab' ? '单词' : (task.app_id === 'erc' ? 'ERC' : task.app_id)}
+                {task.app_id === 'vocab' ? '单词' : (task.app_id === 'erc' ? '题库' : task.app_id)}
               </span>
             )}
           </div>

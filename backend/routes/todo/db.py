@@ -40,8 +40,8 @@ async def _seed_event_template_store(conn: Any) -> None:
             },
         },
         {
-            "client_id": "erc_practice",
-            "app_type": "erc_practice",
+            "client_id": "practice",
+            "app_type": "practice",
             "config": {
                 "dailyArticleTarget": 1,
                 "defaultFocusDuration": 1500,
@@ -49,8 +49,8 @@ async def _seed_event_template_store(conn: Any) -> None:
             },
         },
         {
-            "client_id": "erc_review",
-            "app_type": "erc_review",
+            "client_id": "review",
+            "app_type": "review",
             "config": {
                 "reviewScope": "due",
                 "dailyQuestionTarget": 10,
@@ -89,7 +89,7 @@ async def _seed_event_template_store(conn: Any) -> None:
                     "phase_type": "focus",
                     "duration": 300,
                     "timer_mode": "countdown",
-                    "task_id": "erc_practice",
+                    "task_id": "practice",
                     "focus_work_type": None,
                     "is_temporary": False,
                     "record_focus": True,
@@ -107,7 +107,7 @@ async def _seed_event_template_store(conn: Any) -> None:
                     "phase_type": "focus",
                     "duration": 300,
                     "timer_mode": "countdown",
-                    "task_id": "erc_review",
+                    "task_id": "review",
                     "focus_work_type": None,
                     "is_temporary": False,
                     "record_focus": True,
@@ -228,7 +228,7 @@ async def init_todo(app: Any) -> None:
               CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin')),
               CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app')),
               CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
-              CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice')),
+              CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice')),
               CONSTRAINT chk_tasks_app_metadata_consistency CHECK (
                   (
                     source_type = 'user'
@@ -305,7 +305,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
+            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'));"
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_metadata_consistency;")
         await conn.execute(
@@ -374,7 +374,7 @@ async def init_todo(app: Any) -> None:
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc')),
-              CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review', 'erc_practice')),
+              CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'review', 'practice')),
               CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid')),
               CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type)
             );
@@ -406,7 +406,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
         await conn.execute(
-            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
+            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('vocab_today', 'review', 'practice'));"
         )
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_status;")
         await conn.execute(
@@ -699,9 +699,9 @@ async def init_todo(app: Any) -> None:
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_focus_work_runs_status CHECK (status IN ('running', 'paused', 'content_completed', 'completed', 'abandoned')),
-              CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus')),
+              CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus')),
               CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
-              CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'))
+              CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'))
             );
             """
         )
@@ -744,7 +744,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_type;")
         await conn.execute(
-            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus'));"
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus'));"
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_id;")
         await conn.execute(
@@ -752,7 +752,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_task_type;")
         await conn.execute(
-            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'erc_review', 'erc_practice'));"
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'));"
         )
         await conn.execute(
             """
@@ -790,7 +790,7 @@ async def init_todo(app: Any) -> None:
               progress_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
               record_focus BOOLEAN NOT NULL DEFAULT TRUE,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus')),
+              CONSTRAINT chk_focus_app_work_logs_type CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus')),
               CONSTRAINT chk_focus_app_work_logs_result CHECK (result IS NULL OR result IN ('completed', 'interrupted', 'abandoned')),
               CONSTRAINT chk_focus_app_work_logs_duration CHECK (duration >= 0),
               CONSTRAINT chk_focus_app_work_logs_end_at CHECK (end_at IS NULL OR end_at >= start_time)
@@ -802,7 +802,7 @@ async def init_todo(app: Any) -> None:
             """
             ALTER TABLE focus_app_work_logs
             ADD CONSTRAINT chk_focus_app_work_logs_type
-            CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice', 'task_focus'));
+            CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus'));
             """
         )
         await conn.execute(
@@ -1003,7 +1003,7 @@ async def init_todo(app: Any) -> None:
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
-                focus_work_type TEXT NOT NULL CHECK (focus_work_type IN ('vocab_today', 'erc_review', 'erc_practice')),
+                focus_work_type TEXT NOT NULL CHECK (focus_work_type IN ('vocab_today', 'review', 'practice')),
                 bank_id TEXT,
                 target_count INTEGER DEFAULT 10,
                 scope_json JSONB,

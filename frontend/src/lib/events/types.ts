@@ -32,7 +32,7 @@ export type EventPlanTemplateItem = {
 
 export type EventPlanTemplateAppConfig = {
   client_id: string;
-  app_type: 'vocab_today' | 'erc_practice' | 'erc_review';
+  app_type: 'vocab_today' | 'practice' | 'review';
   config: Record<string, unknown>;
 };
 

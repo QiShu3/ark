@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from routes.auth_routes import get_current_user
-from routes.choice.adapters import resolve_erc_set_id
-from routes.erc.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
+from routes.choice.adapters import resolve_choice_set_id
+from routes.choice.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
 from routes.vocab.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
 from routes.vocab.repository import import_deck
 
@@ -750,7 +750,7 @@ async def _resolve_erc_app_set_id(conn: Any, raw_set_id: str) -> str:
         set_uuid = None
 
     if set_uuid is not None:
-        result = await resolve_erc_set_id(conn, set_id)
+        result = await resolve_choice_set_id(conn, set_id)
         if result is not None:
             return result
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="题库不存在")
@@ -758,7 +758,7 @@ async def _resolve_erc_app_set_id(conn: Any, raw_set_id: str) -> str:
     set_row = await conn.fetchrow(
         """
         SELECT id
-        FROM erc_sets
+        FROM choice_sets
         WHERE key = $1 OR name = $1
         LIMIT 1
         """,
@@ -834,7 +834,7 @@ async def get_erc_app_task_status(
 ) -> AppTaskStatusOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_review")
+        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="review")
 
 
 @router.post("/app-tasks/erc/init", response_model=AppTaskStatusOut)
@@ -862,7 +862,7 @@ async def init_erc_app_task(
                 conn,
                 user_id=int(user.id),
                 app_id="erc",
-                app_task_type="erc_review",
+                app_task_type="review",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
                 event_id=event_row["id"],
@@ -871,23 +871,23 @@ async def init_erc_app_task(
                 conn,
                 user_id=int(user.id),
                 app_id="erc",
-                app_task_type="erc_review",
+                app_task_type="review",
                 event_row=event_row,
             )
 
 
 @router.get("/app-tasks/erc-practice/status", response_model=AppTaskStatusOut)
-async def get_erc_practice_app_task_status(
+async def get_practice_app_task_status(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> AppTaskStatusOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="erc_practice")
+        return await _app_task_status(conn, user_id=int(user.id), app_id="erc", app_task_type="practice")
 
 
 @router.post("/app-tasks/erc-practice/init", response_model=AppTaskStatusOut)
-async def init_erc_practice_app_task(
+async def init_practice_app_task(
     request: Request,
     body: ERCPracticeAppTaskInitRequest,
     user: Annotated[Any, Depends(get_current_user)],
@@ -910,7 +910,7 @@ async def init_erc_practice_app_task(
                 conn,
                 user_id=int(user.id),
                 app_id="erc",
-                app_task_type="erc_practice",
+                app_task_type="practice",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
                 event_id=event_row["id"],
@@ -919,7 +919,7 @@ async def init_erc_practice_app_task(
                 conn,
                 user_id=int(user.id),
                 app_id="erc",
-                app_task_type="erc_practice",
+                app_task_type="practice",
                 event_row=event_row,
             )
 
@@ -1029,14 +1029,14 @@ async def get_erc_config_status(
         practice = await _erc_module_status(
             conn,
             user_id=int(user.id),
-            app_task_type="erc_practice",
+            app_task_type="practice",
             event_id=event_row["id"],
             event_name=str(event_row["name"]),
         )
         review = await _erc_module_status(
             conn,
             user_id=int(user.id),
-            app_task_type="erc_review",
+            app_task_type="review",
             event_id=event_row["id"],
             event_name=str(event_row["name"]),
         )
@@ -1157,7 +1157,7 @@ async def save_erc_config(
             practice = await _save_erc_module(
                 conn,
                 user_id=int(user.id),
-                app_task_type="erc_practice",
+                app_task_type="practice",
                 config=practice_config,
                 enabled=body.practice_enabled,
                 add_to_today_plan=body.practice.add_to_today_plan,
@@ -1166,7 +1166,7 @@ async def save_erc_config(
             review = await _save_erc_module(
                 conn,
                 user_id=int(user.id),
-                app_task_type="erc_review",
+                app_task_type="review",
                 config=review_config,
                 enabled=body.review_enabled,
                 add_to_today_plan=body.review.add_to_today_plan,
@@ -3458,7 +3458,7 @@ async def start_focus_workflow_app_work(
                 "is_temporary": True,
                 "record_focus": bool(body.record_focus),
             }
-            if body.bank_id and body.focus_work_type in {"erc_review", "erc_practice"}:
+            if body.bank_id and body.focus_work_type in {"review", "practice"}:
                 resolved_bank_id = await _resolve_erc_app_set_id(conn, body.bank_id)
                 focus_phase["choice_scope"] = {"bank_id": resolved_bank_id}
             break_phase = {
@@ -3547,7 +3547,7 @@ def _runtime_state_for_completed_run(counts_for_task_completion: bool) -> str:
 def _focus_work_app_metadata(focus_work_type: str | None) -> tuple[str | None, str | None]:
     if focus_work_type == "vocab_today":
         return "vocab", "vocab_today"
-    if focus_work_type in {"erc_review", "erc_practice"}:
+    if focus_work_type in {"review", "practice"}:
         return "erc", focus_work_type
     return None, None
 
@@ -3556,8 +3556,8 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
     config: dict[str, Any] = {
         "task_title": {
             "vocab_today": "今日单词",
-            "erc_review": "错题复习",
-            "erc_practice": "真题练习",
+            "review": "错题复习",
+            "practice": "真题练习",
         }.get(focus_work_type, "测试专注工作"),
     }
     if focus_work_type == "vocab_today":
@@ -3565,13 +3565,13 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
             config["deck_id"] = bank_id
         config["target_word_count"] = target_count
         config["daily_target_count"] = target_count
-    elif focus_work_type == "erc_review":
+    elif focus_work_type == "review":
         if bank_id:
             config["set_id"] = bank_id
             config["article_set_id"] = bank_id
         config["target_question_count"] = target_count
         config["daily_question_target"] = target_count
-    elif focus_work_type == "erc_practice":
+    elif focus_work_type == "practice":
         if bank_id:
             config["set_id"] = bank_id
             config["article_set_id"] = bank_id
@@ -3641,7 +3641,7 @@ async def _build_run_metadata(
                 config_snapshot.update(_config_payload(config_row["config"]))
         if "choice_scope" not in config_snapshot and "set_id" in config_snapshot:
             raw_set_id = config_snapshot.get("set_id")
-            if raw_set_id and focus_work_type in {"erc_review", "erc_practice"}:
+            if raw_set_id and focus_work_type in {"review", "practice"}:
                 try:
                     resolved = await _resolve_erc_app_set_id(conn, str(raw_set_id))
                     config_snapshot["choice_scope"] = {"bank_id": resolved}
@@ -4458,7 +4458,7 @@ async def start_test_focus_work(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
     """启动测试专注工作（正计时模式）。"""
-    if body.focus_work_type not in ("vocab_today", "erc_review", "erc_practice"):
+    if body.focus_work_type not in ("vocab_today", "review", "practice"):
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {body.focus_work_type}")
     if body.target_count < 1 or body.target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
@@ -4481,7 +4481,7 @@ async def start_test_focus_work(
                 if body.focus_work_type == "vocab_today" and body.bank_id
                 else body.bank_id
             )
-            if body.focus_work_type in {"erc_review", "erc_practice"} and body.bank_id:
+            if body.focus_work_type in {"review", "practice"} and body.bank_id:
                 resolved_bank_id = await _resolve_erc_app_set_id(conn, body.bank_id)
             focus_phase = {
                 "phase_type": "focus",
@@ -4495,7 +4495,7 @@ async def start_test_focus_work(
             }
             if body.scope is not None:
                 choice_scope = dict(body.scope)
-                if resolved_bank_id and body.focus_work_type in {"erc_review", "erc_practice"}:
+                if resolved_bank_id and body.focus_work_type in {"review", "practice"}:
                     choice_scope["bank_id"] = resolved_bank_id
                 focus_phase["choice_scope"] = choice_scope
             if body.completion is not None:

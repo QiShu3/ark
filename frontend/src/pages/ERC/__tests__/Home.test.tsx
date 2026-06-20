@@ -10,7 +10,7 @@ const { apiJson } = vi.hoisted(() => ({
 vi.mock('../../../lib/api', () => ({ apiJson }));
 
 const mockFw = {
-  type: 'erc_practice', label: '真题练习', template: 'choice_question' as const,
+  type: 'practice', label: '真题练习', template: 'choice_question' as const,
   contentBankType: 'article_set' as const, contentSelector: 'sequential', contentFields: [],
 };
 

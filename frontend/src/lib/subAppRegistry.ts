@@ -40,7 +40,7 @@ export interface SubAppDeclaration {
 
 // ---- 专注工作类型（从 registry 推导） ----
 
-export type RegisteredFocusWorkType = 'vocab_today' | 'erc_review' | 'erc_practice' | 'task_focus';
+export type RegisteredFocusWorkType = 'vocab_today' | 'review' | 'practice' | 'task_focus';
 
 // ---- 图标查找 ----
 
@@ -86,7 +86,7 @@ const ercDeclaration: SubAppDeclaration = {
   sections: ['hero', 'asset', 'arrangements', 'feedback', 'modals'],
   focusWorks: [
     {
-      type: 'erc_practice',
+      type: 'practice',
       label: '真题练习',
       template: 'choice_question',
       contentBankType: 'article_set',
@@ -97,7 +97,7 @@ const ercDeclaration: SubAppDeclaration = {
       ],
     },
     {
-      type: 'erc_review',
+      type: 'review',
       label: '错题复习',
       template: 'choice_question',
       contentBankType: 'article_set',

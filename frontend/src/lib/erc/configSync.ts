@@ -1,26 +1,26 @@
-import { fetchERCConfigStatus, saveERCConfig } from './api';
-import type { ERCConfigSavePayload, ERCConfigStatus, ERCModuleStatus } from './types';
+import { fetchChoiceConfigStatus, saveChoiceConfig } from './api';
+import type { ChoiceConfigSavePayload, ChoiceConfigStatus, ChoiceModuleStatus } from './types';
 
-export type ERCPracticeConfigInput = {
+export type PracticeConfigInput = {
   daily_article_target: number;
   default_focus_duration: number;
   add_to_today_plan: boolean;
 };
 
-export type ERCReviewConfigInput = {
+export type ReviewConfigInput = {
   review_scope: 'due' | 'mistakes' | 'all';
   daily_question_target: number;
   default_focus_duration: number;
   add_to_today_plan: boolean;
 };
 
-const DEFAULT_PRACTICE_CONFIG: ERCPracticeConfigInput = {
+const DEFAULT_PRACTICE_CONFIG: PracticeConfigInput = {
   daily_article_target: 1,
   default_focus_duration: 1500,
   add_to_today_plan: true,
 };
 
-const DEFAULT_REVIEW_CONFIG: ERCReviewConfigInput = {
+const DEFAULT_REVIEW_CONFIG: ReviewConfigInput = {
   review_scope: 'due',
   daily_question_target: 10,
   default_focus_duration: 1500,
@@ -37,12 +37,12 @@ function booleanConfig(config: Record<string, unknown> | undefined, key: string,
   return typeof value === 'boolean' ? value : fallback;
 }
 
-function reviewScopeConfig(config: Record<string, unknown> | undefined): ERCReviewConfigInput['review_scope'] {
+function reviewScopeConfig(config: Record<string, unknown> | undefined): ReviewConfigInput['review_scope'] {
   const value = config?.review_scope;
   return value === 'mistakes' || value === 'all' || value === 'due' ? value : 'due';
 }
 
-function practiceConfigFromModule(module: ERCModuleStatus): ERCPracticeConfigInput {
+function practiceConfigFromModule(module: ChoiceModuleStatus): PracticeConfigInput {
   return {
     daily_article_target: numberConfig(
       module.config,
@@ -62,7 +62,7 @@ function practiceConfigFromModule(module: ERCModuleStatus): ERCPracticeConfigInp
   };
 }
 
-function reviewConfigFromModule(module: ERCModuleStatus): ERCReviewConfigInput {
+function reviewConfigFromModule(module: ChoiceModuleStatus): ReviewConfigInput {
   return {
     review_scope: reviewScopeConfig(module.config),
     daily_question_target: numberConfig(module.config, 'daily_question_target', DEFAULT_REVIEW_CONFIG.daily_question_target),
@@ -71,20 +71,20 @@ function reviewConfigFromModule(module: ERCModuleStatus): ERCReviewConfigInput {
   };
 }
 
-export type SaveEventERCConfigInput = {
+export type SaveEventChoiceConfigInput = {
   eventId: string;
-  practice?: ERCPracticeConfigInput;
-  review?: ERCReviewConfigInput;
+  practice?: PracticeConfigInput;
+  review?: ReviewConfigInput;
 };
 
-export async function saveEventERCConfig(input: SaveEventERCConfigInput): Promise<ERCConfigStatus> {
-  const current = await fetchERCConfigStatus(input.eventId);
-  const payload: ERCConfigSavePayload = {
+export async function saveEventChoiceConfig(input: SaveEventChoiceConfigInput): Promise<ChoiceConfigStatus> {
+  const current = await fetchChoiceConfigStatus(input.eventId);
+  const payload: ChoiceConfigSavePayload = {
     event_id: input.eventId,
     practice_enabled: input.practice !== undefined || current.practice.enabled,
     review_enabled: input.review !== undefined || current.review.enabled,
     practice: input.practice ?? (current.practice.enabled ? practiceConfigFromModule(current.practice) : DEFAULT_PRACTICE_CONFIG),
     review: input.review ?? (current.review.enabled ? reviewConfigFromModule(current.review) : DEFAULT_REVIEW_CONFIG),
   };
-  return saveERCConfig(payload);
+  return saveChoiceConfig(payload);
 }

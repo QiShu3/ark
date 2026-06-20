@@ -23,7 +23,7 @@ function phaseStatusLabel(phaseType: 'focus' | 'break'): string {
 
 const FOCUS_WORK_LABELS = {
   vocab_today: '背单词',
-  erc_review: 'ERC 复习',
+  review: '复习',
   task_focus: '任务专注',
 } as const;
 

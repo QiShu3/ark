@@ -6,7 +6,7 @@ import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-wo
 import { fetchChoiceItems, submitChoiceAnswer } from '../../lib/choice/api';
 import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceCompletion } from '../../lib/choice/types';
 
-type ERCPracticeFocusWorkProps = FocusWorkRendererProps;
+type PracticeFocusWorkProps = FocusWorkRendererProps;
 
 function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
   const raw = run.config_snapshot?.choice_scope;
@@ -80,11 +80,11 @@ function choiceItemToChoiceQuestion(
   };
 }
 
-export default function ERCPracticeFocusWork({
+export default function PracticeFocusWork({
   run,
   disabled,
   onContentCompleted,
-}: ERCPracticeFocusWorkProps) {
+}: PracticeFocusWorkProps) {
   const choiceScope = getChoiceScope(run);
   const bankId = choiceScope?.bank_id;
 

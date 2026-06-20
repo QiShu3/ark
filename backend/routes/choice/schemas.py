@@ -90,7 +90,7 @@ class ChoicePracticeCompletion(BaseModel):
 
 
 class ChoicePracticeStartRequest(BaseModel):
-    focus_work_type: str = "erc_practice"
+    focus_work_type: str = "practice"
     scope: ChoicePracticeScope
     completion: ChoicePracticeCompletion = Field(default_factory=ChoicePracticeCompletion)
     name: str = ""
