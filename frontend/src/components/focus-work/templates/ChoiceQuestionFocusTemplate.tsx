@@ -6,6 +6,7 @@ import type {
   ChoiceQuestionItem,
   ChoiceQuestionSubmitResult,
 } from './choiceQuestionTypes';
+import ContentBlockRenderer from '../ContentBlockRenderer';
 
 function metaClass(tone: string | undefined) {
   if (tone === 'blue') return 'border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)]';
@@ -143,12 +144,16 @@ export default function ChoiceQuestionFocusTemplate({
                   </h2>
                 </div>
                 <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-3">
-                  {currentItem.material.paragraphs.map((paragraph) => (
-                    <p key={paragraph.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
-                      <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">{paragraph.label}</span>
-                      <span className="font-serif tracking-normal">{paragraph.text}</span>
-                    </p>
-                  ))}
+                  {currentItem.materialBlocks ? (
+                    <ContentBlockRenderer blocks={currentItem.materialBlocks} />
+                  ) : (
+                    currentItem.material.paragraphs.map((paragraph) => (
+                      <p key={paragraph.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
+                        <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">{paragraph.label}</span>
+                        <span className="font-serif tracking-normal">{paragraph.text}</span>
+                      </p>
+                    ))
+                  )}
                 </div>
               </article>
             ) : null}
@@ -189,7 +194,13 @@ export default function ChoiceQuestionFocusTemplate({
                 </div>
 
                 <div className="mt-4">
-                  <h3 className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">{currentItem.stem}</h3>
+                  {currentItem.stemBlocks ? (
+                    <div className="space-y-2">
+                      <ContentBlockRenderer blocks={currentItem.stemBlocks} />
+                    </div>
+                  ) : (
+                    <h3 className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">{currentItem.stem}</h3>
+                  )}
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {currentItem.options.map((option) => {
                       const isSelected = selected === option.key;
@@ -226,6 +237,13 @@ export default function ChoiceQuestionFocusTemplate({
                     })}
                   </div>
                 </div>
+
+                {result && currentItem.explanationBlocks && currentItem.explanationBlocks.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] p-4">
+                    <div className="mb-2 text-xs font-semibold text-[var(--focus-work-emerald-text)]">解析</div>
+                    <ContentBlockRenderer blocks={currentItem.explanationBlocks} />
+                  </div>
+                )}
               </div>
             </section>
           </div>

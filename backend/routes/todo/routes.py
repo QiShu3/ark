@@ -3648,6 +3648,8 @@ def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
         "target_article_count",
         "daily_article_target",
         "task_title",
+        "choice_scope",
+        "choice_completion",
     ):
         if key in phase:
             config[key] = phase[key]
@@ -4492,6 +4494,8 @@ class TestFocusWorkStartRequest(BaseModel):
     focus_work_type: str
     bank_id: str | None = None
     target_count: int = 10
+    scope: dict[str, Any] | None = None
+    completion: dict[str, Any] | None = None
 
 
 @router.post("/focus/workflow/start-test-focus", response_model=FocusWorkflowOut)
@@ -4536,6 +4540,10 @@ async def start_test_focus_work(
                 "record_focus": True,
                 **_test_focus_phase_config(body.focus_work_type, resolved_bank_id, body.target_count),
             }
+            if body.scope is not None:
+                focus_phase["choice_scope"] = body.scope
+            if body.completion is not None:
+                focus_phase["choice_completion"] = body.completion
 
             phases = [focus_phase]
             try:
