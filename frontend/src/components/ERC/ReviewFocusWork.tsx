@@ -30,10 +30,14 @@ function reviewNextToChoiceQuestion(
 
   const articleItem = allItems.find((item) => item.id === payload.article?.article_id);
   const hasSharedMaterial = articleItem && articleItem.group_type !== 'single' && articleItem.material_blocks.length > 0;
-  const materialBlocks = payload.paragraphs.map((p) => ({
+  const paragraphBlocks = payload.paragraphs.map((p) => ({
     type: 'paragraph' as const,
     text: p.text,
   }));
+  const stemBlock = { type: 'paragraph' as const, text: question.stem };
+  const materialBlocks = hasSharedMaterial && articleItem
+    ? articleItem.material_blocks
+    : [...paragraphBlocks, stemBlock];
 
   const optionKeys = Object.keys(question.options) as OptionKey[];
   const options = optionKeys.map((key) => ({ key, text: question.options[key] }));
@@ -53,7 +57,7 @@ function reviewNextToChoiceQuestion(
         text: p.text,
       })),
     },
-    materialBlocks: hasSharedMaterial && articleItem ? articleItem.material_blocks : materialBlocks,
+    materialBlocks,
     meta: [
       { label: '预计用时：自适应' },
       { label: '错题复习' },

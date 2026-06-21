@@ -120,8 +120,11 @@ export default function ChoiceQuestionFocusTemplate({
 
         {currentItem ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            {(currentItem.material || currentItem.materialBlocks) ? (
-              <article aria-label="阅读原文" className="flex min-h-0 flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8">
+            {subtitle ? (
+              <p className="text-sm text-[var(--focus-work-text-muted)]">{subtitle}</p>
+            ) : null}
+            {(currentItem.material || currentItem.materialBlocks?.length) ? (
+              <article aria-label="阅读原文" className="flex flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8">
                 <div className="mb-5 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-4">
                   <h2 className="flex items-center gap-2.5 text-xl font-bold text-[var(--focus-work-text)] font-serif lg:text-2xl">
                     <BookOpen className="h-5.5 w-5.5 text-[var(--focus-work-blue-text)]" />
@@ -136,8 +139,8 @@ export default function ChoiceQuestionFocusTemplate({
                     ))}
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-3">
-                  {currentItem.materialBlocks ? (
+                <div className="flex-1 space-y-6 overflow-y-auto pr-3">
+                  {currentItem.materialBlocks?.length ? (
                     <ContentBlockRenderer blocks={currentItem.materialBlocks} />
                   ) : (
                     currentItem.material?.paragraphs.map((paragraph) => (
