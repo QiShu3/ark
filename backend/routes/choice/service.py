@@ -80,7 +80,7 @@ def choose_due_review_candidate(
         )
     ]
     if not candidates:
-        candidates = due_rows
+        return None
 
     weighted_candidates = [(row, due_review_weight(row, now=now)) for row in candidates]
     total_weight = sum(weight for _row, weight in weighted_candidates)
