@@ -61,8 +61,9 @@ export default function SetSnapshotPanel({ bankId }: Props) {
   return (
     <div className="space-y-3">
       {snapshots.map((snap) => {
-        const d = snap.data;
-        const focus = d.focus_stats;
+        const m = snap.mastery as Record<string, number>;
+        const focus = snap.focus_stats as Record<string, number>;
+        const due = snap.due_status as Record<string, number>;
         return (
           <div
             key={snap.id}
@@ -81,51 +82,51 @@ export default function SetSnapshotPanel({ bankId }: Props) {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {d.accuracy != null && (
+              {focus.accuracy != null && (
                 <div className="flex items-center gap-2">
                   <Target className="h-4 w-4 text-[var(--ark-text-faint)]" />
                   <div>
                     <div className="text-xs text-[var(--ark-text-muted)]">正确率</div>
-                    <div className="text-sm font-semibold text-[var(--ark-text)]">{Math.round(d.accuracy * 100)}%</div>
+                    <div className="text-sm font-semibold text-[var(--ark-text)]">{Math.round(focus.accuracy * 100)}%</div>
                   </div>
                 </div>
               )}
-              {d.due_count != null && (
+              {due.due_now != null && (
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-[var(--ark-text-faint)]" />
                   <div>
                     <div className="text-xs text-[var(--ark-text-muted)]">待复习</div>
-                    <div className="text-sm font-semibold text-[var(--ark-text)]">{d.due_count}</div>
+                    <div className="text-sm font-semibold text-[var(--ark-text)]">{due.due_now}</div>
                   </div>
                 </div>
               )}
-              {d.mastered_count != null && (
+              {m.mastered != null && (
                 <div className="flex items-center gap-2">
                   <Target className="h-4 w-4 text-emerald-500" />
                   <div>
                     <div className="text-xs text-[var(--ark-text-muted)]">已掌握</div>
-                    <div className="text-sm font-semibold text-[var(--ark-text)]">{d.mastered_count}</div>
+                    <div className="text-sm font-semibold text-[var(--ark-text)]">{m.mastered}</div>
                   </div>
                 </div>
               )}
-              {focus?.total_runs != null && focus.total_runs > 0 && (
+              {focus.total_sessions != null && focus.total_sessions > 0 && (
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-[var(--ark-text-faint)]" />
                   <div>
                     <div className="text-xs text-[var(--ark-text-muted)]">累计练习</div>
                     <div className="text-sm font-semibold text-[var(--ark-text)]">
-                      {focus.total_runs}次 · {formatDuration(focus.total_duration_seconds ?? 0)}
+                      {focus.total_sessions}次 · {formatDuration(focus.total_minutes ?? 0)}
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {d.total_count != null && (
+            {snap.total_questions != null && (
               <div className="mt-3 flex gap-2 text-[10px] uppercase tracking-wider text-[var(--ark-text-faint)]">
-                <span>共{d.total_count}题</span>
-                {d.new_count != null && d.new_count > 0 && <span>新{d.new_count}</span>}
-                {d.learning_count != null && d.learning_count > 0 && <span>学习中{d.learning_count}</span>}
+                <span>共{snap.total_questions}题</span>
+                {m.weak != null && m.weak > 0 && <span>薄弱{m.weak}</span>}
+                {m.familiar != null && m.familiar > 0 && <span>熟悉{m.familiar}</span>}
               </div>
             )}
           </div>

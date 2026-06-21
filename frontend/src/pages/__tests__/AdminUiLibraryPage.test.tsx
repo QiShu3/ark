@@ -1,13 +1,18 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { HashRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import AdminUiLibraryPage from '../AdminUiLibraryPage';
 
 describe('AdminUiLibraryPage', () => {
   it('renders the component library sections and core examples', () => {
-    render(<AdminUiLibraryPage />);
+    render(
+      <HashRouter>
+        <AdminUiLibraryPage />
+      </HashRouter>,
+    );
 
     expect(screen.getByRole('main', { name: 'UI 组件库' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'UI 组件库' })).toBeInTheDocument();
@@ -26,7 +31,11 @@ describe('AdminUiLibraryPage', () => {
 
   it('opens the AppModalFrame preview', async () => {
     const user = userEvent.setup();
-    render(<AdminUiLibraryPage />);
+    render(
+      <HashRouter>
+        <AdminUiLibraryPage />
+      </HashRouter>,
+    );
 
     await user.click(screen.getByRole('button', { name: '预览弹窗' }));
 

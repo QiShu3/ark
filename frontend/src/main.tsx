@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import AdminUiLibraryPage from './pages/AdminUiLibraryPage';
 import AppCenter from './pages/AppCenter';
+import AdminSetSnapshots from './pages/AdminSetSnapshots';
 import TestFocusWork from './pages/TestFocusWork';
 import VocabMistakes from './pages/Vocab/Mistakes';
 import VocabReview from './pages/Vocab/Review';
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin/ui" element={<AdminUiLibraryPage />} />
+            <Route path="/admin/snapshots" element={<AdminSetSnapshots />} />
             <Route path="/test-focus" element={<TestFocusWork />} />
           </Route>
           <Route path="/apps" element={<AppCenter />} />
