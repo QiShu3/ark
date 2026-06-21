@@ -3868,6 +3868,7 @@ async def complete_focus_workflow_run_task_and_end_phase(
                 result="completed",
                 progress_snapshot=run.progress_snapshot or {},
             )
+            await _maybe_snapshot_choice_set(conn, int(user.id), run)
             next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
     return next_out
 
@@ -3922,8 +3923,37 @@ async def end_focus_workflow_phase(
                 result=app_work_result,
                 progress_snapshot=app_work_progress_snapshot,
             )
+            if active_run is not None and app_work_result == "completed":
+                await _maybe_snapshot_choice_set(conn, int(user.id), active_run)
             next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
     return next_out
+
+
+async def _maybe_snapshot_choice_set(conn: Any, user_id: int, run: Any) -> None:
+    """Create a mastery snapshot if the focus run used a question set."""
+    try:
+        config = run.config_snapshot if hasattr(run, "config_snapshot") else None
+        if not config:
+            return
+        scope = config.get("choice_scope") or {}
+        bank_id = scope.get("bank_id")
+        if not bank_id:
+            return
+        set_id = await _resolve_erc_app_set_id(conn, bank_id)
+        from routes.choice.repository import aggregate_set_snapshot, aggregate_focus_stats, insert_set_snapshot
+        data = await aggregate_set_snapshot(conn, user_id=user_id, set_id=set_id)
+        focus = await aggregate_focus_stats(conn, user_id=user_id, set_id=set_id)
+        data["focus_stats"] = focus
+        await insert_set_snapshot(
+            conn,
+            user_id=user_id,
+            set_id=set_id,
+            data=data,
+            trigger_reason="phase_end",
+            focus_run_id=str(run.id),
+        )
+    except Exception:
+        pass  # Best-effort; snapshot failure should not block phase end
 
 
 @router.post("/focus/workflow/extend-phase", response_model=FocusWorkflowOut)

@@ -130,3 +130,25 @@ export type ChoiceMistakeItem = {
   last_wrong_at?: string | null;
   is_due: boolean;
 };
+
+export type SetSnapshot = {
+  id: string;
+  set_id: string;
+  data: {
+    total_count?: number;
+    due_count?: number;
+    new_count?: number;
+    learning_count?: number;
+    mastered_count?: number;
+    accuracy?: number;
+    focus_stats?: {
+      total_runs?: number;
+      total_duration_seconds?: number;
+      total_correct?: number;
+      total_wrong?: number;
+    };
+  };
+  trigger_reason: string;
+  focus_run_id?: string | null;
+  created_at: string;
+};

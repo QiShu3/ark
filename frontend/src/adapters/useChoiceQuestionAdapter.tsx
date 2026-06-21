@@ -4,6 +4,7 @@ import { BookOpen, RefreshCw } from 'lucide-react';
 import { apiJson } from '../lib/api';
 import type { FocusWorkDeclaration } from '../lib/subAppRegistry';
 import type { FocusWorkAdapter } from './types';
+import SetSnapshotPanel from '../components/ERC/SetSnapshotPanel';
 
 interface Overview {
   practiced_count: number; correct_count: number;
@@ -79,6 +80,12 @@ export function useChoiceQuestionAdapter(
           {overview.due_count > 0 ? `有 ${overview.due_count} 道题目等待复习` : '暂无待复习题目，开始新的练习吧'}
         </div>
       </div>
+      {activeSetId && (
+        <div className="rounded-lg border border-ark-border p-4">
+          <div className="mb-3 text-sm font-medium text-[var(--ark-text-muted)]">学习存档</div>
+          <SetSnapshotPanel bankId={activeSetId} />
+        </div>
+      )}
     </div>
   ) : null;
 

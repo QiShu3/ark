@@ -180,6 +180,29 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         await conn.execute(
             "ALTER TABLE choice_sets ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE"
         )
+        # Snapshot table
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS choice_set_snapshots (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              set_id UUID NOT NULL REFERENCES choice_sets(id) ON DELETE CASCADE,
+              total_questions INTEGER NOT NULL,
+              total_articles INTEGER NOT NULL,
+              by_state JSONB NOT NULL,
+              mastery JSONB NOT NULL,
+              fsrs_stats JSONB NOT NULL,
+              due_status JSONB NOT NULL,
+              focus_stats JSONB NOT NULL,
+              trigger_reason TEXT NOT NULL DEFAULT 'phase_end',
+              focus_run_id UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_snapshots_user_set ON choice_set_snapshots(user_id, set_id, created_at DESC);"
+        )
 
 
 def _json_param(value: Any) -> str:
@@ -881,4 +904,243 @@ async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int, set_id: s
         ORDER BY m.last_wrong_at DESC, a.year DESC, a.text_no ASC, q.sort_order ASC
         """,
         *params,
+    )
+
+
+# ---- Set Snapshots ----
+
+
+async def aggregate_set_snapshot(conn: asyncpg.Connection, *, user_id: int, set_id: str) -> dict[str, Any]:
+    """Aggregate mastery data for a question set to build a snapshot."""
+    # Total questions and articles
+    totals = await conn.fetchrow(
+        """
+        SELECT
+          (SELECT COUNT(*)::int FROM choice_questions q
+           JOIN choice_articles a ON a.id = q.article_pk
+           WHERE a.set_id = $1::uuid) AS total_questions,
+          (SELECT COUNT(*)::int FROM choice_articles a
+           WHERE a.set_id = $1::uuid) AS total_articles
+        """,
+        set_id,
+    )
+
+    # By FSRS state
+    state_rows = await conn.fetch(
+        """
+        SELECT
+          COALESCE(c.fsrs_card_json ->> 'state', '0') AS state,
+          COUNT(*)::int AS count
+        FROM choice_user_question_cards c
+        JOIN choice_questions q ON q.id = c.question_pk
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE c.user_id = $1 AND a.set_id = $2::uuid
+        GROUP BY state
+        """,
+        user_id,
+        set_id,
+    )
+
+    # Mastery tiers (from fsrs_card_json stability)
+    mastery_rows = await conn.fetch(
+        """
+        SELECT
+          CASE
+            WHEN COALESCE((c.fsrs_card_json ->> 'stability')::float, 0) > 30 THEN 'mastered'
+            WHEN COALESCE((c.fsrs_card_json ->> 'stability')::float, 0) > 7 THEN 'familiar'
+            ELSE 'weak'
+          END AS tier,
+          COUNT(*)::int AS count
+        FROM choice_user_question_cards c
+        JOIN choice_questions q ON q.id = c.question_pk
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE c.user_id = $1 AND a.set_id = $2::uuid
+        GROUP BY tier
+        """,
+        user_id,
+        set_id,
+    )
+
+    # Mistake count
+    mistake_row = await conn.fetchrow(
+        """
+        SELECT COUNT(*)::int AS mistake_count
+        FROM choice_mistake_bucket m
+        JOIN choice_questions q ON q.id = m.question_pk
+        JOIN choice_articles a ON a.id = m.article_pk
+        WHERE m.user_id = $1 AND a.set_id = $2::uuid AND m.is_active = TRUE
+        """,
+        user_id,
+        set_id,
+    )
+
+    # FSRS stats
+    fsrs_row = await conn.fetchrow(
+        """
+        SELECT
+          ROUND(AVG(COALESCE((c.fsrs_card_json ->> 'stability')::float, 0))::numeric, 2) AS avg_stability,
+          ROUND(AVG(COALESCE((c.fsrs_card_json ->> 'difficulty')::float, 0))::numeric, 3) AS avg_difficulty,
+          COALESCE(SUM(c.lapse_count), 0)::int AS total_lapses,
+          ROUND(AVG(c.right_count + c.wrong_count)::numeric, 1) AS avg_reps
+        FROM choice_user_question_cards c
+        JOIN choice_questions q ON q.id = c.question_pk
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE c.user_id = $1 AND a.set_id = $2::uuid
+        """,
+        user_id,
+        set_id,
+    )
+
+    # Due status
+    due_row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*)::int AS due_now,
+          COUNT(*) FILTER (WHERE c.due_at < NOW() - INTERVAL '1 hour')::int AS overdue
+        FROM choice_user_question_cards c
+        JOIN choice_questions q ON q.id = c.question_pk
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE c.user_id = $1 AND a.set_id = $2::uuid
+          AND c.due_at IS NOT NULL AND c.due_at <= NOW()
+        """,
+        user_id,
+        set_id,
+    )
+
+    total_q = (totals["total_questions"] or 0) if totals else 0
+    total_a = (totals["total_articles"] or 0) if totals else 0
+
+    by_state = {row["state"]: row["count"] for row in state_rows}
+    mastered = sum(r["count"] for r in mastery_rows if r["tier"] == "mastered")
+    familiar = sum(r["count"] for r in mastery_rows if r["tier"] == "familiar")
+    weak = sum(r["count"] for r in mastery_rows if r["tier"] == "weak")
+    mistakes = (mistake_row["mistake_count"] or 0) if mistake_row else 0
+
+    return {
+        "total_questions": total_q,
+        "total_articles": total_a,
+        "by_state": by_state,
+        "mastery": {
+            "mastered": mastered,
+            "familiar": familiar,
+            "weak": weak,
+            "mistake": mistakes,
+        },
+        "fsrs_stats": {
+            "avg_stability": float(fsrs_row["avg_stability"] or 0) if fsrs_row else 0,
+            "avg_difficulty": float(fsrs_row["avg_difficulty"] or 0) if fsrs_row else 0,
+            "total_lapses": (fsrs_row["total_lapses"] or 0) if fsrs_row else 0,
+            "avg_reps": float(fsrs_row["avg_reps"] or 0) if fsrs_row else 0,
+        },
+        "due_status": {
+            "due_now": (due_row["due_now"] or 0) if due_row else 0,
+            "overdue": (due_row["overdue"] or 0) if due_row else 0,
+        },
+    }
+
+
+async def aggregate_focus_stats(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    set_id: str,
+) -> dict[str, Any]:
+    """Aggregate focus work stats relevant to a question set."""
+    row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*)::int AS total_sessions,
+          COALESCE(SUM(duration), 0)::int AS total_seconds
+        FROM focus_app_work_logs fl
+        WHERE fl.user_id = $1
+          AND fl.focus_work_type IN ('review', 'practice')
+          AND fl.end_at IS NOT NULL
+        """,
+        user_id,
+    )
+
+    # Review accuracy from logs
+    acc_row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*)::int AS total_answers,
+          COUNT(*) FILTER (WHERE rl.is_correct = TRUE)::int AS correct_answers
+        FROM choice_review_logs rl
+        JOIN choice_questions q ON q.id = rl.question_pk
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE rl.user_id = $1 AND a.set_id = $2::uuid
+        """,
+        user_id,
+        set_id,
+    )
+
+    total = (row["total_sessions"] or 0) if row else 0
+    seconds = (row["total_seconds"] or 0) if row else 0
+    answers = (acc_row["total_answers"] or 0) if acc_row else 0
+    correct = (acc_row["correct_answers"] or 0) if acc_row else 0
+
+    return {
+        "total_sessions": total,
+        "total_minutes": round(seconds / 60),
+        "total_answers": answers,
+        "accuracy": round(correct / answers, 3) if answers > 0 else 0,
+    }
+
+
+async def insert_set_snapshot(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    set_id: str,
+    data: dict[str, Any],
+    trigger_reason: str,
+    focus_run_id: str | None,
+) -> str:
+    row = await conn.fetchrow(
+        """
+        INSERT INTO choice_set_snapshots(
+          user_id, set_id, total_questions, total_articles,
+          by_state, mastery, fsrs_stats, due_status, focus_stats,
+          trigger_reason, focus_run_id
+        )
+        VALUES ($1, $2::uuid, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11::uuid)
+        RETURNING id::text
+        """,
+        user_id,
+        set_id,
+        data["total_questions"],
+        data["total_articles"],
+        _json_param(data["by_state"]),
+        _json_param(data["mastery"]),
+        _json_param(data["fsrs_stats"]),
+        _json_param(data["due_status"]),
+        _json_param(data["focus_stats"]),
+        trigger_reason,
+        focus_run_id,
+    )
+    return str(row["id"])
+
+
+async def list_set_snapshots(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    set_id: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT id::text, user_id, set_id::text, total_questions, total_articles,
+               by_state, mastery, fsrs_stats, due_status, focus_stats,
+               trigger_reason, focus_run_id::text, created_at
+        FROM choice_set_snapshots
+        WHERE user_id = $1 AND set_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT $3 OFFSET $4
+        """,
+        user_id,
+        set_id,
+        limit,
+        offset,
     )

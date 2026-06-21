@@ -7,6 +7,7 @@ import type {
   ChoiceMistakeItem,
   ChoiceOverview,
   ChoiceReviewNext,
+  SetSnapshot,
 } from './types';
 
 export function fetchChoiceBanks() {
@@ -58,4 +59,11 @@ export function fetchChoiceReviewNext(bankId: string) {
 export function fetchChoiceMistakes(bankId: string) {
   const params = new URLSearchParams({ bank_id: bankId });
   return apiJson<ChoiceMistakeItem[]>(`/api/choice/mistakes?${params.toString()}`);
+}
+
+export function fetchSetSnapshots(bankId: string, opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams({ bank_id: bankId });
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.offset) params.set('offset', String(opts.offset));
+  return apiJson<SetSnapshot[]>(`/api/choice/snapshots?${params.toString()}`);
 }

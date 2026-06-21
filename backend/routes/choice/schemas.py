@@ -175,3 +175,20 @@ class ChoiceMistakeItemOut(BaseModel):
     wrong_count: int
     last_wrong_at: Any = None
     is_due: bool = False
+
+
+# ---- Set Snapshots ----
+
+class SetSnapshotOut(BaseModel):
+    id: str
+    set_id: str
+    total_questions: int
+    total_articles: int
+    by_state: dict[str, Any]
+    mastery: dict[str, Any]
+    fsrs_stats: dict[str, Any]
+    due_status: dict[str, Any]
+    focus_stats: dict[str, Any]
+    trigger_reason: str
+    focus_run_id: str | None = None
+    created_at: Any

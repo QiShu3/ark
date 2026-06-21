@@ -19,6 +19,7 @@ from .adapters import (
 from .service import (
     get_next_review,
     get_overview,
+    get_set_snapshots,
     list_mistakes,
 )
 from .service import (
@@ -37,6 +38,7 @@ from .schemas import (
     ChoicePracticeStartRequest,
     ChoicePracticeStartResponse,
     ChoiceReviewNextOut,
+    SetSnapshotOut,
 )
 
 router = APIRouter(prefix="/api/choice", tags=["choice"])
@@ -217,3 +219,18 @@ async def route_choice_mistakes(
         choice_set_id = await ensure_choice_set(conn, bank_id)
     rows = await list_mistakes(pool, user_id=int(user.id), set_id=choice_set_id)
     return [ChoiceMistakeItemOut(**row) for row in rows]
+
+
+@router.get("/snapshots", response_model=list[SetSnapshotOut])
+async def route_list_snapshots(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    bank_id: str = Query(...),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> list[SetSnapshotOut]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        choice_set_id = await ensure_choice_set(conn, bank_id)
+    rows = await get_set_snapshots(pool, user_id=int(user.id), set_id=choice_set_id, limit=limit, offset=offset)
+    return [SetSnapshotOut(**row) for row in rows]

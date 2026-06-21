@@ -10,6 +10,8 @@ import asyncpg
 from fastapi import HTTPException
 
 from .repository import (
+    aggregate_focus_stats,
+    aggregate_set_snapshot,
     get_article_row,
     get_last_article_attempt_at,
     get_next_due_at,
@@ -20,6 +22,7 @@ from .repository import (
     get_user_settings,
     insert_article_attempt,
     insert_review_log,
+    insert_set_snapshot,
     list_article_rows,
     list_article_word_state_rows,
     list_due_card_rows,
@@ -28,6 +31,7 @@ from .repository import (
     list_question_rows,
     list_recent_review_article_rows,
     list_set_rows,
+    list_set_snapshots,
     upsert_mistake,
     upsert_user_question_card,
 )
@@ -503,3 +507,42 @@ async def submit_review(
 async def list_mistakes(pool: asyncpg.Pool, *, user_id: int, set_id: str | None = None) -> list[dict]:
     async with pool.acquire() as conn:
         return [dict(row) for row in await list_mistake_rows(conn, user_id=user_id, set_id=set_id)]
+
+
+# ---- Set Snapshots ----
+
+
+async def snapshot_set(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    set_id: str,
+    trigger_reason: str = "phase_end",
+    focus_run_id: str | None = None,
+) -> str:
+    """Create a mastery snapshot for a question set. Returns snapshot ID."""
+    async with pool.acquire() as conn:
+        data = await aggregate_set_snapshot(conn, user_id=user_id, set_id=set_id)
+        focus = await aggregate_focus_stats(conn, user_id=user_id, set_id=set_id)
+        data["focus_stats"] = focus
+        return await insert_set_snapshot(
+            conn,
+            user_id=user_id,
+            set_id=set_id,
+            data=data,
+            trigger_reason=trigger_reason,
+            focus_run_id=focus_run_id,
+        )
+
+
+async def get_set_snapshots(
+    pool: asyncpg.Pool,
+    *,
+    user_id: int,
+    set_id: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await list_set_snapshots(conn, user_id=user_id, set_id=set_id, limit=limit, offset=offset)
+        return [dict(row) for row in rows]
