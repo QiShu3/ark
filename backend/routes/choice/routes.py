@@ -15,6 +15,7 @@ from .adapters import (
     list_choice_items,
     list_erc_as_choice_banks,
     list_erc_as_choice_items,
+    resolve_choice_set_id,
 )
 from .service import (
     get_next_review,
