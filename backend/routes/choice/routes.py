@@ -231,6 +231,23 @@ async def route_list_snapshots(
 ) -> list[SetSnapshotOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        choice_set_id = await ensure_choice_set(conn, bank_id)
+        # Try as choice_set first
+        resolved = await resolve_choice_set_id(conn, bank_id)
+        if resolved is None:
+            # Try to find choice_set by matching content_bank name
+            bank_row = await conn.fetchrow(
+                "SELECT name FROM content_banks WHERE id = $1::uuid",
+                bank_id,
+            )
+            if bank_row is not None:
+                set_row = await conn.fetchrow(
+                    "SELECT id::text FROM choice_sets WHERE name = $1 AND is_published = TRUE LIMIT 1",
+                    bank_row["name"],
+                )
+                if set_row is not None:
+                    resolved = set_row["id"]
+        if resolved is None:
+            raise HTTPException(status_code=422, detail="题库不存在")
+        choice_set_id = resolved
     rows = await get_set_snapshots(pool, user_id=int(user.id), set_id=choice_set_id, limit=limit, offset=offset)
     return [SetSnapshotOut(**row) for row in rows]
