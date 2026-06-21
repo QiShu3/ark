@@ -105,8 +105,17 @@ export default function SnapshotSubApp() {
 
   useEffect(() => {
     fetchChoiceBanks().then((list) => {
-      setBanks(list);
-      if (list.length > 0) setSelectedBank(list[0].id);
+      // Deduplicate by name, prefer choice_sets (source='erc') over content_banks
+      const byName = new Map<string, ChoiceBank>();
+      for (const b of list) {
+        const existing = byName.get(b.name);
+        if (!existing || b.source === 'erc') {
+          byName.set(b.name, b);
+        }
+      }
+      const deduped = Array.from(byName.values());
+      setBanks(deduped);
+      if (deduped.length > 0) setSelectedBank(deduped[0].id);
     }).catch(() => {});
   }, []);
 
