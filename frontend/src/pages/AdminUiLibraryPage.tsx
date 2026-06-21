@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Check, ExternalLink, Layers, Settings, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Check, ExternalLink, Settings, X } from 'lucide-react';
 
 import AppModalFrame from '../components/AppModalFrame';
 import Button from '../components/Button';
@@ -68,7 +67,6 @@ function TokenSwatch({ token }: { token: string }) {
 }
 
 export default function AdminUiLibraryPage() {
-  const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
 
   const componentEntries: ComponentEntry[] = [
@@ -154,16 +152,6 @@ export default function AdminUiLibraryPage() {
           <p className="mt-2 max-w-2xl text-sm text-ark-text-muted">
             统一记录可复用组件、主题 token 和首页右栏 UI 治理入口。
           </p>
-          <div className="mt-4 flex gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Layers className="h-4 w-4" />}
-              onClick={() => navigate('/admin/snapshots')}
-            >
-              题库存档分析
-            </Button>
-          </div>
         </header>
 
         <section className="mb-8">

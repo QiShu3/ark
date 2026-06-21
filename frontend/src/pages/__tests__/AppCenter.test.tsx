@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import AppCenter from '../AppCenter';
 
 describe('AppCenter', () => {
-  it('only shows the two launchers that remain in scope', () => {
+  it('only shows the launchers that remain in scope', () => {
     render(
       <MemoryRouter>
         <AppCenter />
@@ -16,7 +16,7 @@ describe('AppCenter', () => {
     expect(screen.getByRole('main', { name: '应用中心' })).toHaveClass('ark-page');
     expect(screen.getByText('背单词')).toBeInTheDocument();
     expect(screen.getByText('阅读训练')).toBeInTheDocument();
-    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getAllByRole('button')).toHaveLength(3);
     expect(screen.queryByText('添加应用')).not.toBeInTheDocument();
   });
 });
