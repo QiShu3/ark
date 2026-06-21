@@ -545,4 +545,16 @@ async def get_set_snapshots(
 ) -> list[dict]:
     async with pool.acquire() as conn:
         rows = await list_set_snapshots(conn, user_id=user_id, set_id=set_id, limit=limit, offset=offset)
-        return [dict(row) for row in rows]
+        results = []
+        for row in rows:
+            d = dict(row)
+            # Parse JSONB fields from strings to dicts
+            for key in ("by_state", "mastery", "fsrs_stats", "due_status", "focus_stats"):
+                if isinstance(d.get(key), str):
+                    try:
+                        import json
+                        d[key] = json.loads(d[key])
+                    except (json.JSONDecodeError, TypeError):
+                        d[key] = {}
+            results.append(d)
+        return results
