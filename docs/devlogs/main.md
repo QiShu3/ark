@@ -2,6 +2,32 @@
 
 ## 提交记录
 
+### 2026-06-22 · `c6fc060a` · feat: add deliberate workflow admin app
+
+**用户需求**：用户希望实现「刻意工作流」管理员子应用，并持续调整为渐进式、可持久化、可切换已保存工作流的体验；期间明确提出“选择题中的练习模式和复习模式的题库不应该是一样的吗？”以及“每次进入该页面都要重新过一遍流程，这不好，我希望可以持久化保存刻意工作流，支持切换刻意工作流和再次新建工作流”。
+
+**完成工作**：
+- 新增 `deliberate` 后端领域模块，支持管理员配置 CRUD、题库上传校验、运行档案查询和正式启动接口。
+- 新增 `content_bank` 初始化模块，并由 lifespan 调用，减少 `main.py` 中的表初始化混杂。
+- 将旧测试专注启动复用新的正计时专注启动逻辑，保留兼容入口。
+- 为选择题提交增加 `practice/review` mode，并让选择题快照统计按题库过滤。
+- 新增管理员「刻意工作流」子应用页面和 API client，应用中心仅管理员展示入口。
+- 页面改为渐进式创建：选择类型、题库资产、工作参数、运行复盘。
+- 将选择题练习/复习与题库资产解耦：同一份 `choice_set` 题库可绑定练习或复习模式。
+- 已保存工作流支持持久化展示、下拉切换、再次新建和再次启动，不再每次进入都强制重走创建流程。
+- 修复开发热重载下 `todo` 初始化重复创建约束/索引导致的启动失败。
+
+**验证情况**：
+- `backend`: `uv run pytest`，212 passed
+- `backend`: `uv run ruff check routes/todo/db.py`，passed
+- `frontend`: `pnpm check`，passed
+- `frontend`: `pnpm test`，250 passed，8 skipped
+- 临时启动 `uvicorn main:app --port 8011`，startup complete
+- 当前 `http://127.0.0.1:8000/docs` 返回 200 OK
+- 浏览器烟测确认管理员入口、已保存工作流默认展示、新建向导、工作流切换、选择题题库/练习复习绑定关系正常
+
+**变更文件**：26 files changed, 2627 insertions(+), 209 deletions(-)
+
 ### 2026-06-20 · `e65b54d6` · refactor: 统一 Choice 数据层，彻底废弃 ERC 模块
 
 **用户需求**：将 ERC 旧题库路径合并到 content_banks 体系，统一数据层命名
