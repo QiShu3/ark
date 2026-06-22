@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, BarChart3, TrendingUp, Target, Clock, AlertTriangle, Layers } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Target, Clock, AlertTriangle, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchChoiceBanks, fetchSetSnapshots } from '../lib/choice/api';
-import type { ChoiceBank, SetSnapshot } from '../lib/choice/types';
+import { apiJson } from '../lib/api';
+import { fetchSetSnapshots } from '../lib/choice/api';
+import type { SetSnapshot } from '../lib/choice/types';
+
+type BankItem = {
+  id: string;
+  name: string;
+  item_type: string;
+  item_count: number;
+  is_published: boolean;
+};
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes}分钟`;
@@ -64,14 +73,20 @@ function DonutChart({ segments, size = 100 }: { segments: { label: string; value
   const total = segments.reduce((s, seg) => s + seg.value, 0) || 1;
   const r = size / 2 - 8;
   const circ = 2 * Math.PI * r;
-  let offset = 0;
+
+  const offsets = segments.reduce<number[]>((acc, seg) => {
+    const prev = acc[acc.length - 1] ?? 0;
+    const dash = (seg.value / total) * circ;
+    acc.push(prev + dash);
+    return acc;
+  }, []);
+
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full -rotate-90">
-        {segments.map((seg) => {
-          const pct = seg.value / total;
-          const dash = pct * circ;
-          const el = (
+        {segments.map((seg, i) => {
+          const dash = (seg.value / total) * circ;
+          return (
             <circle
               key={seg.label}
               cx={size / 2}
@@ -81,12 +96,10 @@ function DonutChart({ segments, size = 100 }: { segments: { label: string; value
               stroke={seg.color}
               strokeWidth={8}
               strokeDasharray={`${dash} ${circ - dash}`}
-              strokeDashoffset={-offset}
+              strokeDashoffset={-(offsets[i] - dash)}
               strokeLinecap="round"
             />
           );
-          offset += dash;
-          return el;
         })}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
@@ -98,24 +111,15 @@ function DonutChart({ segments, size = 100 }: { segments: { label: string; value
 
 export default function SnapshotSubApp() {
   const navigate = useNavigate();
-  const [banks, setBanks] = useState<ChoiceBank[]>([]);
+  const [banks, setBanks] = useState<BankItem[]>([]);
   const [selectedBank, setSelectedBank] = useState<string>('');
   const [snapshots, setSnapshots] = useState<SetSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchChoiceBanks().then((list) => {
-      // Deduplicate by name, prefer choice_sets (source='erc') over content_banks
-      const byName = new Map<string, ChoiceBank>();
-      for (const b of list) {
-        const existing = byName.get(b.name);
-        if (!existing || b.source === 'erc') {
-          byName.set(b.name, b);
-        }
-      }
-      const deduped = Array.from(byName.values());
-      setBanks(deduped);
-      if (deduped.length > 0) setSelectedBank(deduped[0].id);
+    apiJson<BankItem[]>('/api/admin/content-banks').then((list) => {
+      setBanks(list);
+      if (list.length > 0) setSelectedBank(list[0].id);
     }).catch(() => {});
   }, []);
 
@@ -184,7 +188,7 @@ export default function SnapshotSubApp() {
             className="rounded-lg border border-ark-border bg-ark-surface px-4 py-2.5 text-sm text-[var(--ark-text)] focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)]"
           >
             {banks.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} ({b.question_count}题)</option>
+              <option key={b.id} value={b.id}>{b.name} ({b.item_count}题)</option>
             ))}
           </select>
           <span className="text-xs text-[var(--ark-text-faint)]">{snapshots.length} 条存档</span>

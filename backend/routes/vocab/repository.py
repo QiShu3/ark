@@ -1283,3 +1283,134 @@ async def update_daily_plan_item(
         status,
         last_result,
     )
+
+
+# ---------------------------------------------------------------------------
+# Vocab deck snapshots
+# ---------------------------------------------------------------------------
+
+
+async def aggregate_vocab_snapshot(conn: asyncpg.Connection, *, user_id: int, deck_id: str) -> dict:
+    """Aggregate mastery data for a vocab deck."""
+    row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*)::int AS total_words,
+          COUNT(*) FILTER ( WHERE mastery_score >= 80 )::int AS mastered,
+          COUNT(*) FILTER ( WHERE mastery_score >= 40 AND mastery_score < 80 )::int AS learning,
+          COUNT(*) FILTER ( WHERE mastery_score > 0 AND mastery_score < 40 )::int AS young,
+          COUNT(*) FILTER ( WHERE mastery_score = 0 )::int AS new_words,
+          COUNT(*) FILTER ( WHERE is_suspended )::int AS suspended,
+          COALESCE(SUM(correct_count), 0)::int AS total_correct,
+          COALESCE(SUM(wrong_count), 0)::int AS total_wrong,
+          COALESCE(SUM(lapse_count), 0)::int AS total_lapses,
+          COALESCE(AVG(interval_days), 0)::float AS avg_interval,
+          COUNT(*) FILTER ( WHERE next_review_at IS NOT NULL AND next_review_at <= NOW() )::int AS due_now,
+          COUNT(*) FILTER ( WHERE next_review_at IS NOT NULL AND next_review_at > NOW() )::int AS due_later
+        FROM vocab_user_word_progress
+        WHERE user_id = $1 AND deck_id = $2::uuid
+        """,
+        user_id,
+        deck_id,
+    )
+    if not row:
+        return {"total_words": 0, "by_mastery": {}, "due_status": {}}
+    return {
+        "total_words": row["total_words"],
+        "by_mastery": {
+            "mastered": row["mastered"],
+            "learning": row["learning"],
+            "young": row["young"],
+            "new": row["new_words"],
+            "suspended": row["suspended"],
+        },
+        "due_status": {
+            "due_now": row["due_now"],
+            "due_later": row["due_later"],
+        },
+        "stats": {
+            "total_correct": row["total_correct"],
+            "total_wrong": row["total_wrong"],
+            "total_lapses": row["total_lapses"],
+            "avg_interval": round(row["avg_interval"], 1),
+        },
+    }
+
+
+async def aggregate_vocab_focus_stats(conn: asyncpg.Connection, *, user_id: int, deck_id: str) -> dict:
+    """Aggregate focus/review stats for a vocab deck."""
+    row = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*)::int AS total_reviews,
+          COUNT(*) FILTER ( WHERE last_result = 'correct' )::int AS correct_count,
+          COUNT(*) FILTER ( WHERE last_result = 'wrong' )::int AS wrong_count
+        FROM vocab_user_word_progress
+        WHERE user_id = $1 AND deck_id = $2::uuid
+          AND last_review_at IS NOT NULL
+        """,
+        user_id,
+        deck_id,
+    )
+    if not row or row["total_reviews"] == 0:
+        return {"total_reviews": 0, "accuracy": 0}
+    total = row["total_reviews"]
+    correct = row["correct_count"]
+    return {
+        "total_reviews": total,
+        "accuracy": round(correct / total, 4) if total else 0,
+    }
+
+
+async def insert_vocab_snapshot(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_id: str,
+    data: dict,
+    trigger_reason: str = "phase_end",
+    focus_run_id: str | None = None,
+) -> str:
+    """Insert a vocab deck snapshot."""
+    row = await conn.fetchrow(
+        """
+        INSERT INTO vocab_deck_snapshots
+          (user_id, deck_id, total_words, by_mastery, due_status, focus_stats, trigger_reason, focus_run_id)
+        VALUES ($1, $2::uuid, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8)
+        RETURNING id::text
+        """,
+        user_id,
+        deck_id,
+        data.get("total_words", 0),
+        json.dumps(data.get("by_mastery", {}), ensure_ascii=False),
+        json.dumps(data.get("due_status", {}), ensure_ascii=False),
+        json.dumps(data.get("focus_stats", {}), ensure_ascii=False),
+        trigger_reason,
+        focus_run_id,
+    )
+    return str(row["id"])
+
+
+async def list_vocab_snapshots(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_id: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[asyncpg.Record]:
+    """List vocab deck snapshots."""
+    return await conn.fetch(
+        """
+        SELECT id::text, deck_id::text, total_words, by_mastery, due_status, focus_stats,
+               trigger_reason, focus_run_id, created_at
+        FROM vocab_deck_snapshots
+        WHERE user_id = $1 AND deck_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT $3 OFFSET $4
+        """,
+        user_id,
+        deck_id,
+        limit,
+        offset,
+    )

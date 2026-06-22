@@ -1868,51 +1868,88 @@ async def list_content_banks(
     fw_type: str | None = Query(default=None),
 ) -> list[ContentBankListItem]:
     pool = _pool(request)
-    conditions: list[str] = []
-    params: list[Any] = []
-    idx = 1
-
-    if type:
-        conditions.append(f"b.item_type = ${idx}")
-        params.append(type)
-        idx += 1
-    if fw_type:
-        conditions.append(f"b.fw_type = ${idx}")
-        params.append(fw_type)
-        idx += 1
-    if search:
-        conditions.append(f"b.name ILIKE ${idx}")
-        params.append(f"%{search}%")
-        idx += 1
-
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
+        # 1. Query content_banks (word type and any remaining)
+        cb_conditions: list[str] = []
+        cb_params: list[Any] = []
+        cb_idx = 1
+        if type:
+            cb_conditions.append(f"b.item_type = ${cb_idx}")
+            cb_params.append(type)
+            cb_idx += 1
+        if fw_type:
+            cb_conditions.append(f"b.fw_type = ${cb_idx}")
+            cb_params.append(fw_type)
+            cb_idx += 1
+        if search:
+            cb_conditions.append(f"b.name ILIKE ${cb_idx}")
+            cb_params.append(f"%{search}%")
+            cb_idx += 1
+        cb_where = ("WHERE " + " AND ".join(cb_conditions)) if cb_conditions else ""
+
+        cb_rows = await conn.fetch(
             f"""
             SELECT b.id::text, b.name, b.fw_type, b.item_type, b.description,
                    b.is_published, b.created_at,
                    (SELECT COUNT(*) FROM content_items WHERE bank_id = b.id)::int AS item_count
             FROM content_banks b
-            {where}
-            ORDER BY b.item_type, b.name
+            {cb_where}
+            ORDER BY b.name
             """,
-            *params,
+            *cb_params,
         )
 
-    return [
-        ContentBankListItem(
-            id=r["id"],
-            name=r["name"],
-            fw_type=r["fw_type"],
-            item_type=r["item_type"],
-            description=r["description"],
-            item_count=r["item_count"],
-            is_published=r["is_published"],
-            created_at=r["created_at"].isoformat() if r["created_at"] else "",
+        results = [
+            ContentBankListItem(
+                id=str(r["id"]),
+                name=r["name"],
+                fw_type=r["fw_type"],
+                item_type=r["item_type"],
+                description=r["description"],
+                item_count=r["item_count"],
+                is_published=r["is_published"],
+                created_at=r["created_at"].isoformat() if r["created_at"] else "",
+            )
+            for r in cb_rows
+        ]
+
+        # 2. Query choice_sets (choice question banks)
+        cs_conditions: list[str] = []
+        cs_params: list[Any] = []
+        cs_idx = 1
+        if search:
+            cs_conditions.append(f"s.name ILIKE ${cs_idx}")
+            cs_params.append(f"%{search}%")
+            cs_idx += 1
+        cs_where = ("WHERE " + " AND ".join(cs_conditions)) if cs_conditions else ""
+
+        cs_rows = await conn.fetch(
+            f"""
+            SELECT s.id::text, s.name, s.description, s.is_published, s.created_at,
+                   s.article_count AS item_count
+            FROM choice_sets s
+            {cs_where}
+            ORDER BY s.name
+            """,
+            *cs_params,
         )
-        for r in rows
-    ]
+
+        results.extend([
+            ContentBankListItem(
+                id=str(r["id"]),
+                name=r["name"],
+                fw_type="erc_practice",
+                item_type="passage",
+                description=r["description"],
+                item_count=r["item_count"],
+                is_published=r["is_published"],
+                created_at=r["created_at"].isoformat() if r["created_at"] else "",
+            )
+            for r in cs_rows
+        ])
+
+    return results
 
 
 @router.get("/content-banks/{bank_id}", response_model=ContentBankDetailOut)
@@ -2199,25 +2236,22 @@ async def create_content_bank(
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
-                # Create bank first to get its ID
-                bank_row = await conn.fetchrow(
-                    """INSERT INTO content_banks (fw_type, name, description, item_type, is_published)
-                       VALUES ($1, $2, $3, $4, false) RETURNING id::text""",
-                    fw_type, name, description, item_type,
-                )
-                bank_id = bank_row["id"]
+                if item_type == "word":
+                    # Word type: write to content_banks + content_items
+                    bank_row = await conn.fetchrow(
+                        """INSERT INTO content_banks (fw_type, name, description, item_type, is_published)
+                           VALUES ($1, $2, $3, $4, false) RETURNING id::text""",
+                        fw_type, name, description, item_type,
+                    )
+                    bank_id = bank_row["id"]
 
-                # Re-parse with real bank_id for ZIP image copying
-                if filename.lower().endswith(".zip"):
-                    raw = _process_content_bank_file(file_bytes, filename, bank_id)
+                    if filename.lower().endswith(".zip"):
+                        raw = _process_content_bank_file(file_bytes, filename, bank_id)
 
-                item_count = 0
-                question_count = 0
-                for i, entry in enumerate(raw):
-                    if not isinstance(entry, dict):
-                        raise HTTPException(status_code=400, detail=f"第 {i + 1} 条必须是对象")
-
-                    if item_type == "word":
+                    item_count = 0
+                    for i, entry in enumerate(raw):
+                        if not isinstance(entry, dict):
+                            raise HTTPException(status_code=400, detail=f"第 {i + 1} 条必须是对象")
                         body = {
                             "word": entry.get("word", ""),
                             "pronunciation": entry.get("pronunciation", ""),
@@ -2233,38 +2267,38 @@ async def create_content_bank(
                             bank_id, i, title, json.dumps(body, ensure_ascii=False),
                         )
                         item_count += 1
-                    else:
-                        body = {
-                            "passage": entry.get("passage", ""),
-                            "tags": entry.get("tags", []),
-                            "examination": entry.get("examination", ""),
-                        }
-                        title = entry.get("title") or ""
-                        item_row = await conn.fetchrow(
-                            """INSERT INTO content_items (bank_id, sort_order, title, body)
-                               VALUES ($1::uuid, $2, $3, $4::jsonb) RETURNING id::text""",
-                            bank_id, i, title, json.dumps(body, ensure_ascii=False),
-                        )
-                        item_id = item_row["id"]
-                        item_count += 1
+                    question_count = 0
+                else:
+                    # Choice type: write to choice_sets (skip content_banks)
+                    from routes.choice.importer import parse_content_bank_entries
+                    from routes.choice.repository import (
+                        upsert_set,
+                        upsert_article_seed,
+                        refresh_set_counts,
+                    )
 
-                        questions = entry.get("questions", [])
-                        if not isinstance(questions, list):
-                            questions = []
-                        for qi, q in enumerate(questions):
-                            await conn.execute(
-                                """INSERT INTO content_questions
-                                   (item_id, sort_order, paragraph_no, question_text, options, correct_answer, analysis, image_url)
-                                   VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, $8)""",
-                                item_id, qi,
-                                q.get("paragraph_no"),
-                                q.get("question_text", ""),
-                                json.dumps(q.get("options", {}), ensure_ascii=False),
-                                q.get("correct_answer", ""),
-                                q.get("analysis", ""),
-                                q.get("image_url", ""),
-                            )
-                            question_count += 1
+                    # Generate set_key from name
+                    set_key = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]", "_", name).strip("_").lower()
+                    if not set_key:
+                        set_key = f"bank_{secrets.token_hex(4)}"
+
+                    set_id = await upsert_set(
+                        conn,
+                        key=set_key,
+                        name=name,
+                        description=description or f"{name} 选择题",
+                        exam=raw[0].get("examination", "") if raw else "",
+                        source_version="content-bank-import",
+                    )
+
+                    seeds = parse_content_bank_entries(raw, set_key=set_key)
+                    for seed in seeds:
+                        await upsert_article_seed(conn, set_id=set_id, seed=seed)
+                    await refresh_set_counts(conn, set_id=set_id)
+
+                    bank_id = set_id
+                    item_count = len(seeds)
+                    question_count = sum(len(s.questions) for s in seeds)
     except HTTPException:
         raise
     except Exception as e:
@@ -2905,28 +2939,13 @@ async def list_content_banks_for_type(
     async with pool.acquire() as conn:
         if focus_work_type == "vocab_today":
             rows = await list_vocab_decks(conn)
-            if rows:
-                return [ContentBankItem(id=r["id"], name=r["name"], count=r["word_count"]) for r in rows]
-            item_type = "word"
+            return [ContentBankItem(id=r["id"], name=r["name"], count=r["word_count"]) for r in rows]
         elif focus_work_type in ("review", "practice"):
             rows = await list_erc_set_rows(conn)
-            if rows:
-                count_key = "question_count" if focus_work_type == "review" else "article_count"
-                return [ContentBankItem(id=r["id"], name=r["name"], count=r[count_key]) for r in rows]
-            item_type = "choice"
+            count_key = "question_count" if focus_work_type == "review" else "article_count"
+            return [ContentBankItem(id=r["id"], name=r["name"], count=r[count_key]) for r in rows]
         else:
             raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
-        rows = await conn.fetch(
-            """
-            SELECT b.id::text AS id, b.name,
-                   (SELECT COUNT(*) FROM content_items WHERE bank_id = b.id)::int AS count
-            FROM content_banks b
-            WHERE b.item_type = $1
-            ORDER BY b.name
-            """,
-            item_type,
-        )
-    return [ContentBankItem(id=r["id"], name=r["name"], count=r["count"]) for r in rows]
 
 
 class TestFocusConfigOut(BaseModel):

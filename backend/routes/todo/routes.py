@@ -3583,6 +3583,7 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
 def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
     config: dict[str, Any] = {}
     for key in (
+        "focus_work_type",
         "deck_id",
         "target_word_count",
         "daily_target_count",
@@ -3625,6 +3626,7 @@ async def _build_run_metadata(
         focus_work_type = _focus_work_type_for_task_row(task_row)
         app_id = _row_value(task_row, "app_id")
         app_task_type = _row_value(task_row, "app_task_type")
+        config_snapshot["focus_work_type"] = focus_work_type
         config_snapshot["task_id"] = str(task_row["id"])
         config_snapshot["task_title"] = str(task_row["title"])
         if _row_value(task_row, "app_config_id") is not None:
@@ -3868,7 +3870,7 @@ async def complete_focus_workflow_run_task_and_end_phase(
                 result="completed",
                 progress_snapshot=run.progress_snapshot or {},
             )
-            await _maybe_snapshot_choice_set(conn, int(user.id), run)
+            await _maybe_snapshot_focus_run(conn, int(user.id), run)
             next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
     return next_out
 
@@ -3924,17 +3926,48 @@ async def end_focus_workflow_phase(
                 progress_snapshot=app_work_progress_snapshot,
             )
             if active_run is not None and app_work_result == "completed":
-                await _maybe_snapshot_choice_set(conn, int(user.id), active_run)
+                await _maybe_snapshot_focus_run(conn, int(user.id), active_run)
             next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
     return next_out
 
 
-async def _maybe_snapshot_choice_set(conn: Any, user_id: int, run: Any) -> None:
-    """Create a mastery snapshot if the focus run used a question set."""
+async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> None:
+    """Create a mastery snapshot after a focus run completes.
+
+    For choice sets: writes to choice_set_snapshots.
+    For vocab decks: writes to vocab_deck_snapshots.
+    """
     try:
+        # Use focus_work_type from the run itself, not from config_snapshot
+        focus_work_type = getattr(run, "focus_work_type", None) or ""
         config = run.config_snapshot if hasattr(run, "config_snapshot") else None
         if not config:
             return
+
+        # Vocab deck snapshot
+        if focus_work_type == "vocab_today":
+            deck_id = config.get("deck_id")
+            if not deck_id:
+                return
+            from routes.vocab.repository import (
+                aggregate_vocab_snapshot,
+                aggregate_vocab_focus_stats,
+                insert_vocab_snapshot,
+            )
+            data = await aggregate_vocab_snapshot(conn, user_id=user_id, deck_id=deck_id)
+            focus = await aggregate_vocab_focus_stats(conn, user_id=user_id, deck_id=deck_id)
+            data["focus_stats"] = focus
+            await insert_vocab_snapshot(
+                conn,
+                user_id=user_id,
+                deck_id=deck_id,
+                data=data,
+                trigger_reason="phase_end",
+                focus_run_id=str(run.id),
+            )
+            return
+
+        # Choice set snapshot
         scope = config.get("choice_scope") or {}
         bank_id = scope.get("bank_id")
         if not bank_id:

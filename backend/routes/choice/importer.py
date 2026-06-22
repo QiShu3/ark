@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -159,4 +160,106 @@ def load_article_word_seeds(directory: Path) -> list[ERCArticleWordSeed]:
             raise ValueError(f"duplicate article_id {seed.article_id}")
         seen_article_ids.add(seed.article_id)
         seeds.append(seed)
+    return seeds
+
+
+# ---------------------------------------------------------------------------
+# Content bank choice format → ERCArticleSeed conversion
+# ---------------------------------------------------------------------------
+
+
+def _extract_year_from_title(title: str, tags: list) -> int:
+    """Extract a 4-digit year from title or tags."""
+    m = re.search(r"((?:19|20)\d{2})", title)
+    if m:
+        return int(m.group(1))
+    for tag in tags:
+        m = re.search(r"((?:19|20)\d{2})", str(tag))
+        if m:
+            return int(m.group(1))
+    return 0
+
+
+def _extract_text_no_from_title(title: str, fallback: int) -> int:
+    """Extract 'Text N' from title, or return fallback."""
+    m = re.search(r"[Tt]ext\s*(\d+)", title)
+    return int(m.group(1)) if m else fallback
+
+
+def parse_content_bank_entries(
+    raw: list[dict],
+    *,
+    set_key: str,
+) -> list[ERCArticleSeed]:
+    """Convert content-bank choice JSON entries into ERCArticleSeed list.
+
+    Field mapping:
+    - entry.passage          → choice_paragraphs (split on ``\\n\\n``)
+    - entry.title            → choice_articles.title
+    - entry.examination/tags → choice_articles.exam
+    - question.question_text → choice_questions.stem
+    - question.correct_answer→ choice_questions.answer
+    - question.analysis      → choice_questions.explanation
+    """
+    seeds: list[ERCArticleSeed] = []
+    for i, entry in enumerate(raw, 1):
+        if not isinstance(entry, dict):
+            continue
+
+        article_id = f"{set_key}_text{i}"
+        title = str(entry.get("title") or f"Text {i}")
+        exam = str(entry.get("examination") or "")
+        tags = entry.get("tags") or []
+        if not exam and tags:
+            exam = str(tags[0])
+        year = _extract_year_from_title(title, tags)
+        text_no = _extract_text_no_from_title(title, i)
+
+        # passage → paragraphs
+        passage = str(entry.get("passage") or "")
+        paragraphs = [
+            ERCParagraphSeed(paragraph_no=j, text=para.strip())
+            for j, para in enumerate(passage.split("\n\n"), 1)
+            if para.strip()
+        ]
+
+        # questions
+        questions: list[ERCQuestionSeed] = []
+        raw_questions = entry.get("questions")
+        if not isinstance(raw_questions, list):
+            raw_questions = []
+        for qi, q in enumerate(raw_questions, 1):
+            if not isinstance(q, dict):
+                continue
+            stem = str(q.get("question_text") or "").strip()
+            options = q.get("options") or {}
+            answer = str(q.get("correct_answer") or "").strip().upper()
+            if not stem or not answer or not isinstance(options, dict) or answer not in options:
+                continue
+            questions.append(
+                ERCQuestionSeed(
+                    question_id=f"{article_id}_q{qi}",
+                    question_no=qi,
+                    stem=stem,
+                    options=options,
+                    answer=answer,
+                    evidence={},
+                    explanation=str(q.get("analysis") or ""),
+                    question_type="",
+                    sort_order=qi,
+                )
+            )
+
+        seeds.append(
+            ERCArticleSeed(
+                article_id=article_id,
+                exam=exam,
+                year=year,
+                text_no=text_no,
+                title=title,
+                sort_order=i,
+                paragraphs=paragraphs,
+                questions=questions,
+            )
+        )
     return seeds

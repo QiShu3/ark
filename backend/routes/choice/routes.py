@@ -9,10 +9,7 @@ from routes.auth_routes import get_current_user
 
 from .adapters import (
     ensure_choice_set,
-    get_choice_filters,
     get_erc_choice_filters,
-    list_choice_banks,
-    list_choice_items,
     list_erc_as_choice_banks,
     list_erc_as_choice_items,
     resolve_choice_set_id,
@@ -60,29 +57,21 @@ async def route_list_banks(
 ) -> list[ChoiceBankOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        choice_banks = await list_choice_banks(conn)
-        erc_banks = await list_erc_as_choice_banks(conn)
-    return choice_banks + erc_banks
+        return await list_erc_as_choice_banks(conn)
 
 
 @router.get("/filters", response_model=ChoiceFiltersOut)
 async def route_get_filters(
     request: Request,
     _user: Annotated[Any, Depends(get_current_user)],
-    bank_id: str = Query(..., description="Bank ID (content_bank or erc_set)"),
+    bank_id: str = Query(..., description="Bank ID (choice_set)"),
     year: int | None = Query(default=None),
     subject: str | None = Query(default=None),
     tag: str | None = Query(default=None),
 ) -> ChoiceFiltersOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        erc_row = await conn.fetchrow(
-            "SELECT id FROM choice_sets WHERE id = $1::uuid AND is_published = TRUE",
-            bank_id,
-        )
-        if erc_row is not None:
-            return await get_erc_choice_filters(conn, bank_id=bank_id, year=year, subject=subject)
-        return await get_choice_filters(conn, bank_id=bank_id, year=year, subject=subject, tag=tag)
+        return await get_erc_choice_filters(conn, bank_id=bank_id, year=year, subject=subject)
 
 
 @router.get("/items", response_model=list[ChoiceItemOut])
@@ -98,16 +87,8 @@ async def route_list_items(
 ) -> list[ChoiceItemOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        erc_row = await conn.fetchrow(
-            "SELECT id FROM choice_sets WHERE id = $1::uuid AND is_published = TRUE",
-            bank_id,
-        )
-        if erc_row is not None:
-            return await list_erc_as_choice_items(
-                conn, bank_id=bank_id, year=year, subject=subject, limit=limit, offset=offset,
-            )
-        return await list_choice_items(
-            conn, bank_id=bank_id, year=year, subject=subject, tag=tag, limit=limit, offset=offset,
+        return await list_erc_as_choice_items(
+            conn, bank_id=bank_id, year=year, subject=subject, limit=limit, offset=offset,
         )
 
 
@@ -232,23 +213,69 @@ async def route_list_snapshots(
 ) -> list[SetSnapshotOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        # Try as choice_set first
+        # Check if it's a choice_set
         resolved = await resolve_choice_set_id(conn, bank_id)
-        if resolved is None:
-            # Try to find choice_set by matching content_bank name
-            bank_row = await conn.fetchrow(
-                "SELECT name FROM content_banks WHERE id = $1::uuid",
+        if resolved is not None:
+            rows = await get_set_snapshots(pool, user_id=int(user.id), set_id=resolved, limit=limit, offset=offset)
+            return [SetSnapshotOut(**row) for row in rows]
+
+        # Check if it's a vocab_deck directly
+        deck_row = await conn.fetchrow(
+            "SELECT id::text FROM vocab_decks WHERE id = $1::uuid",
+            bank_id,
+        )
+        deck_id = deck_row["id"] if deck_row else None
+
+        # If not found, check if it's a content_banks ID (vocab type) and resolve to vocab_decks
+        if deck_id is None:
+            cb_row = await conn.fetchrow(
+                "SELECT id::text, item_type, fw_type FROM content_banks WHERE id = $1::uuid",
                 bank_id,
             )
-            if bank_row is not None:
-                set_row = await conn.fetchrow(
-                    "SELECT id::text FROM choice_sets WHERE name = $1 AND is_published = TRUE LIMIT 1",
-                    bank_row["name"],
+            if cb_row and cb_row["item_type"] == "word":
+                # Find matching vocab_decks by name
+                vd_row = await conn.fetchrow(
+                    """
+                    SELECT vd.id::text FROM vocab_decks vd
+                    JOIN content_banks cb ON cb.name = vd.name
+                    WHERE cb.id = $1::uuid
+                    """,
+                    bank_id,
                 )
-                if set_row is not None:
-                    resolved = set_row["id"]
-        if resolved is None:
-            raise HTTPException(status_code=422, detail="题库不存在")
-        choice_set_id = resolved
-    rows = await get_set_snapshots(pool, user_id=int(user.id), set_id=choice_set_id, limit=limit, offset=offset)
-    return [SetSnapshotOut(**row) for row in rows]
+                if vd_row:
+                    deck_id = vd_row["id"]
+
+        if deck_id is not None:
+            import json as _json
+            from routes.vocab.repository import list_vocab_snapshots
+            rows = await list_vocab_snapshots(
+                conn, user_id=int(user.id), deck_id=deck_id, limit=limit, offset=offset,
+            )
+            result: list[SetSnapshotOut] = []
+            for r in rows:
+                by_mastery = r["by_mastery"]
+                due_status = r["due_status"]
+                focus_stats = r["focus_stats"]
+                if isinstance(by_mastery, str):
+                    by_mastery = _json.loads(by_mastery)
+                if isinstance(due_status, str):
+                    due_status = _json.loads(due_status)
+                if isinstance(focus_stats, str):
+                    focus_stats = _json.loads(focus_stats)
+                result.append(SetSnapshotOut(
+                    id=str(r["id"]),
+                    set_id=str(r["deck_id"]),
+                    total_questions=r["total_words"],
+                    total_articles=0,
+                    by_state=by_mastery,
+                    mastery={},
+                    fsrs_stats={},
+                    due_status=due_status,
+                    focus_stats=focus_stats,
+                    trigger_reason=r["trigger_reason"],
+                    focus_run_id=r["focus_run_id"],
+                    created_at=r["created_at"].isoformat() if r["created_at"] else "",
+                ))
+            return result
+
+        raise HTTPException(status_code=422, detail="题库不存在")
