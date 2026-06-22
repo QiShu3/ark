@@ -277,7 +277,7 @@ export default function TestFocusWork() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--ark-text)]">测试专注工作</h1>
-            <p className="mt-1 text-sm text-[var(--ark-text-muted)]">管理员专用测试工具 — 测试专注工作与题库的互动</p>
+            <p className="mt-1 text-sm text-[var(--ark-text-muted)]">管理员专用调试工具 — 正式流程请使用刻意工作流</p>
           </div>
         </div>
 

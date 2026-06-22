@@ -106,6 +106,7 @@ class ChoicePracticeStartResponse(BaseModel):
 class ChoiceAnswerSubmitIn(BaseModel):
     chosen_option: Literal["A", "B", "C", "D"]
     time_spent_ms: int | None = Field(default=None, ge=0)
+    mode: Literal["practice", "review"] = "practice"
 
 
 class ChoiceAnswerSubmitOut(BaseModel):

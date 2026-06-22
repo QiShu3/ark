@@ -38,11 +38,11 @@ export function fetchChoiceItems(
   return apiJson<ChoiceItem[]>(`/api/choice/items?${params.toString()}`);
 }
 
-export function submitChoiceAnswer(questionId: string, chosenOption: string) {
+export function submitChoiceAnswer(questionId: string, chosenOption: string, mode: 'practice' | 'review' = 'practice') {
   return apiJson<ChoiceAnswerSubmitResult>(`/api/choice/questions/${encodeURIComponent(questionId)}/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chosen_option: chosenOption }),
+    body: JSON.stringify({ chosen_option: chosenOption, mode }),
   });
 }
 

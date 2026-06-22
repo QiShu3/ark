@@ -175,7 +175,7 @@ describe('PracticeFocusWork', () => {
     await user.click(screen.getByRole('button', { name: /提交答案/ }));
 
     await waitFor(() => {
-      expect(submitChoiceAnswer).toHaveBeenCalledWith('choice-q1', 'A');
+      expect(submitChoiceAnswer).toHaveBeenCalledWith('choice-q1', 'A', 'practice');
       expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ question_count: 1 }));
     });
   });

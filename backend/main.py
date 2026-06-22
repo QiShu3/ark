@@ -17,6 +17,9 @@ from routes.checkin_routes import init_checkin
 from routes.checkin_routes import router as checkin_router
 from routes.choice import init_choice
 from routes.choice import router as choice_router
+from routes.content_bank import init_content_bank
+from routes.deliberate import init_deliberate
+from routes.deliberate import router as deliberate_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
 from routes.vocab import init_vocab
@@ -33,44 +36,8 @@ async def _lifespan(app: FastAPI):
     await init_todo(app)
     await init_vocab(app)
     await init_choice(app)
-    # 通用题库表
-    async with app.state.auth_pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS content_banks (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                fw_type TEXT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                item_type TEXT NOT NULL CHECK (item_type IN ('choice', 'word')),
-                is_published BOOLEAN NOT NULL DEFAULT false,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS content_items (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                bank_id UUID NOT NULL REFERENCES content_banks(id) ON DELETE CASCADE,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                title TEXT,
-                body JSONB NOT NULL DEFAULT '{}',
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS content_questions (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                item_id UUID NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                paragraph_no INTEGER,
-                question_text TEXT NOT NULL,
-                options JSONB NOT NULL DEFAULT '{}',
-                correct_answer TEXT NOT NULL,
-                analysis TEXT,
-                image_url TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-        """)
+    await init_content_bank(app)
+    await init_deliberate(app)
     try:
         yield
     finally:
@@ -104,6 +71,7 @@ app.include_router(todo_router)
 app.include_router(vocab_router)
 app.include_router(app_registry_router)
 app.include_router(admin_router)
+app.include_router(deliberate_router)
 app.include_router(choice_router)
 
 # Auto-discover and register dynamic sub-app routers

@@ -127,7 +127,7 @@ describe('ReviewFocusWork', () => {
     await user.click(screen.getByRole('button', { name: '提交答案' }));
 
     await waitFor(() => {
-      expect(submitChoiceAnswer).toHaveBeenCalledWith('kaoyan2_2025_text2_q26', 'A');
+      expect(submitChoiceAnswer).toHaveBeenCalledWith('kaoyan2_2025_text2_q26', 'A', 'review');
     });
     expect(await screen.findByRole('button', { name: '下一题' })).toBeInTheDocument();
   });

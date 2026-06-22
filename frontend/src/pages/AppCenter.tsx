@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Beaker } from 'lucide-react';
+import { Beaker, Workflow } from 'lucide-react';
 import { useAuthStore } from '../lib/auth';
 import { subAppList, getSubAppIcon, loadDynamicRegistry, type SubAppDeclaration } from '../lib/subAppRegistry';
 
@@ -40,17 +40,30 @@ export default function AppCenter() {
             );
           })}
           {isAdmin && (
-            <button
-              type="button"
-              className="ark-home-card ark-home-shortcut-card ark-focus-ring flex min-h-[180px] flex-col justify-center rounded-[20px] px-6 py-8 text-left"
-              onClick={() => navigate('/test-focus')}
-            >
-              <span className="ark-home-shortcut-icon mb-4 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
-                <Beaker className="h-7 w-7" aria-hidden="true" />
-              </span>
-              <span className="text-lg font-semibold text-[var(--ark-text)]">测试专注工作</span>
-              <span className="mt-1.5 text-sm font-medium text-[var(--ark-text-faint)]">管理员专用测试工具</span>
-            </button>
+            <>
+              <button
+                type="button"
+                className="ark-home-card ark-home-shortcut-card ark-focus-ring flex min-h-[180px] flex-col justify-center rounded-[20px] px-6 py-8 text-left"
+                onClick={() => navigate('/deliberate-workflow')}
+              >
+                <span className="ark-home-shortcut-icon mb-4 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
+                  <Workflow className="h-7 w-7" aria-hidden="true" />
+                </span>
+                <span className="text-lg font-semibold text-[var(--ark-text)]">刻意工作流</span>
+                <span className="mt-1.5 text-sm font-medium text-[var(--ark-text-faint)]">题库、专注与存档复盘</span>
+              </button>
+              <button
+                type="button"
+                className="ark-home-card ark-home-shortcut-card ark-focus-ring flex min-h-[180px] flex-col justify-center rounded-[20px] px-6 py-8 text-left"
+                onClick={() => navigate('/test-focus')}
+              >
+                <span className="ark-home-shortcut-icon mb-4 flex h-12 w-12 items-center justify-center rounded-[16px] text-[var(--ark-accent)]">
+                  <Beaker className="h-7 w-7" aria-hidden="true" />
+                </span>
+                <span className="text-lg font-semibold text-[var(--ark-text)]">测试专注工作</span>
+                <span className="mt-1.5 text-sm font-medium text-[var(--ark-text-faint)]">管理员专用调试工具</span>
+              </button>
+            </>
           )}
         </div>
       </div>

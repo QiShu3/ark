@@ -1649,6 +1649,10 @@ def _normalize_workflow_phases(
                         "task_title",
                         "choice_scope",
                         "choice_completion",
+                        "deliberate_run_id",
+                        "deliberate_config_id",
+                        "deliberate_kind",
+                        "deliberate_name",
                     ):
                         if key in phase:
                             normalized[key] = phase[key]

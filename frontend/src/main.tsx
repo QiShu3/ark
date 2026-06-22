@@ -8,6 +8,7 @@ import ResetPassword from './pages/ResetPassword';
 import AdminUiLibraryPage from './pages/AdminUiLibraryPage';
 import AppCenter from './pages/AppCenter';
 import AdminSetSnapshots from './pages/AdminSetSnapshots';
+import DeliberateWorkflow from './pages/DeliberateWorkflow';
 import SnapshotSubApp from './pages/SnapshotSubApp';
 import TestFocusWork from './pages/TestFocusWork';
 import VocabMistakes from './pages/Vocab/Mistakes';
@@ -31,6 +32,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />} />
           <Route element={<RequireAdmin />}>
             <Route path="/admin/ui" element={<AdminUiLibraryPage />} />
+            <Route path="/deliberate-workflow" element={<DeliberateWorkflow />} />
             <Route path="/test-focus" element={<TestFocusWork />} />
           </Route>
           <Route path="/apps" element={<AppCenter />} />

@@ -157,7 +157,7 @@ export default function ReviewFocusWork({
       onLoadNext={loadNextReviewItem}
       onContentCompleted={onContentCompleted}
       onSubmitAnswer={async (choiceItem, optionKey) => {
-        const result = await submitChoiceAnswer(choiceItem.id, optionKey);
+        const result = await submitChoiceAnswer(choiceItem.id, optionKey, 'review');
         answeredQuestionIdsRef.current.add(choiceItem.id);
         setAnsweredCount((count) => count + 1);
         setError(null);

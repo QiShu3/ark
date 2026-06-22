@@ -12,8 +12,16 @@ from pydantic import BaseModel
 from routes.auth_routes import get_current_user
 from routes.choice.adapters import resolve_choice_set_id
 from routes.choice.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
+from routes.choice.repository import aggregate_focus_stats, aggregate_set_snapshot, insert_set_snapshot
+from routes.deliberate import repository as deliberate_repository
+from routes.deliberate.service import validate_config_shape
 from routes.vocab.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
-from routes.vocab.repository import import_deck
+from routes.vocab.repository import (
+    aggregate_vocab_focus_stats,
+    aggregate_vocab_snapshot,
+    import_deck,
+    insert_vocab_snapshot,
+)
 
 from .db import _pool_from_request
 from .event_store import (
@@ -3596,10 +3604,79 @@ def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
         "task_title",
         "choice_scope",
         "choice_completion",
+        "deliberate_run_id",
+        "deliberate_config_id",
+        "deliberate_kind",
+        "deliberate_name",
     ):
         if key in phase:
             config[key] = phase[key]
     return config
+
+
+def _deliberate_run_id_from_focus_run(run: Any | None) -> str | None:
+    if run is None:
+        return None
+    config = getattr(run, "config_snapshot", None)
+    if not isinstance(config, dict):
+        return None
+    raw = config.get("deliberate_run_id")
+    return str(raw) if raw else None
+
+
+async def _attach_deliberate_focus_run(conn: Any, user_id: int, run: Any) -> None:
+    deliberate_run_id = _deliberate_run_id_from_focus_run(run)
+    if not deliberate_run_id:
+        return
+    await deliberate_repository.attach_focus_run(
+        conn,
+        user_id=user_id,
+        run_id=deliberate_run_id,
+        focus_run_id=run.id,
+    )
+
+
+async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) -> None:
+    deliberate_run_id = _deliberate_run_id_from_focus_run(run)
+    if not deliberate_run_id:
+        return
+    await deliberate_repository.mark_content_completed(
+        conn,
+        user_id=user_id,
+        run_id=deliberate_run_id,
+        progress_snapshot=run.progress_snapshot or {},
+    )
+
+
+async def _mark_deliberate_completed(
+    conn: Any,
+    user_id: int,
+    run: Any,
+    snapshot_info: dict[str, str] | None,
+) -> None:
+    deliberate_run_id = _deliberate_run_id_from_focus_run(run)
+    if not deliberate_run_id:
+        return
+    await deliberate_repository.mark_completed(
+        conn,
+        user_id=user_id,
+        run_id=deliberate_run_id,
+        progress_snapshot=run.progress_snapshot or {},
+        snapshot_id=snapshot_info.get("snapshot_id") if snapshot_info else None,
+        snapshot_type=snapshot_info.get("snapshot_type") if snapshot_info else None,
+    )
+
+
+async def _mark_deliberate_abandoned(conn: Any, user_id: int, run: Any) -> None:
+    deliberate_run_id = _deliberate_run_id_from_focus_run(run)
+    if not deliberate_run_id:
+        return
+    await deliberate_repository.mark_abandoned(
+        conn,
+        user_id=user_id,
+        run_id=deliberate_run_id,
+        progress_snapshot=run.progress_snapshot or {},
+    )
 
 
 async def _build_run_metadata(
@@ -3726,6 +3803,7 @@ async def create_focus_workflow_run(
                 config_snapshot=config_snapshot,
                 source_run_id=source_run_id,
             )
+            await _attach_deliberate_focus_run(conn, int(user.id), run)
             next_row = await _set_workflow_active_run(
                 conn,
                 workflow_id=row["id"],
@@ -3763,6 +3841,7 @@ async def complete_focus_workflow_run_content(
                 run_id=run_id,
                 progress_snapshot=dict(body.progress_snapshot),
             )
+            await _mark_deliberate_content_completed(conn, int(user.id), run)
             await _close_open_focus_app_work_log(
                 conn,
                 int(user.id),
@@ -3857,7 +3936,7 @@ async def complete_focus_workflow_run_task_and_end_phase(
                 task_id=run.task_id,
                 completed_at=datetime.now(UTC),
             )
-            await _complete_focus_work_run(
+            completed_run = await _complete_focus_work_run(
                 conn,
                 user_id=int(user.id),
                 run_id=run.id,
@@ -3870,7 +3949,8 @@ async def complete_focus_workflow_run_task_and_end_phase(
                 result="completed",
                 progress_snapshot=run.progress_snapshot or {},
             )
-            await _maybe_snapshot_focus_run(conn, int(user.id), run)
+            snapshot_info = await _maybe_snapshot_focus_run(conn, int(user.id), completed_run)
+            await _mark_deliberate_completed(conn, int(user.id), completed_run, snapshot_info)
             next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
     return next_out
 
@@ -3898,7 +3978,7 @@ async def end_focus_workflow_phase(
                     if _row_value(row, "phase_runtime_state") == "phase_time_expired_prompt"
                     else "extra_phase_ended"
                 )
-                await _complete_focus_work_run(
+                active_run = await _complete_focus_work_run(
                     conn,
                     user_id=int(user.id),
                     run_id=active_run.id,
@@ -3908,7 +3988,7 @@ async def end_focus_workflow_phase(
                 app_work_progress_snapshot = active_run.progress_snapshot or {}
             elif active_run is not None and active_run.status in {"running", "paused"}:
                 if _row_value(row, "phase_runtime_state") == "phase_time_expired_prompt":
-                    await _complete_focus_work_run(
+                    active_run = await _complete_focus_work_run(
                         conn,
                         user_id=int(user.id),
                         run_id=active_run.id,
@@ -3918,6 +3998,7 @@ async def end_focus_workflow_phase(
                     app_work_progress_snapshot = active_run.progress_snapshot or {}
                 else:
                     await _abandon_active_focus_work_run(conn, user_id=int(user.id), workflow_id=row["id"])
+                    await _mark_deliberate_abandoned(conn, int(user.id), active_run)
             await _close_open_focus_log(conn, int(user.id))
             await _close_open_focus_app_work_log(
                 conn,
@@ -3926,12 +4007,13 @@ async def end_focus_workflow_phase(
                 progress_snapshot=app_work_progress_snapshot,
             )
             if active_run is not None and app_work_result == "completed":
-                await _maybe_snapshot_focus_run(conn, int(user.id), active_run)
+                snapshot_info = await _maybe_snapshot_focus_run(conn, int(user.id), active_run)
+                await _mark_deliberate_completed(conn, int(user.id), active_run, snapshot_info)
             next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
     return next_out
 
 
-async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> None:
+async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> dict[str, str] | None:
     """Create a mastery snapshot after a focus run completes.
 
     For choice sets: writes to choice_set_snapshots.
@@ -3942,22 +4024,17 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> None:
         focus_work_type = getattr(run, "focus_work_type", None) or ""
         config = run.config_snapshot if hasattr(run, "config_snapshot") else None
         if not config:
-            return
+            return None
 
         # Vocab deck snapshot
         if focus_work_type == "vocab_today":
             deck_id = config.get("deck_id")
             if not deck_id:
-                return
-            from routes.vocab.repository import (
-                aggregate_vocab_snapshot,
-                aggregate_vocab_focus_stats,
-                insert_vocab_snapshot,
-            )
+                return None
             data = await aggregate_vocab_snapshot(conn, user_id=user_id, deck_id=deck_id)
             focus = await aggregate_vocab_focus_stats(conn, user_id=user_id, deck_id=deck_id)
             data["focus_stats"] = focus
-            await insert_vocab_snapshot(
+            snapshot_id = await insert_vocab_snapshot(
                 conn,
                 user_id=user_id,
                 deck_id=deck_id,
@@ -3965,19 +4042,18 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> None:
                 trigger_reason="phase_end",
                 focus_run_id=str(run.id),
             )
-            return
+            return {"snapshot_id": snapshot_id, "snapshot_type": "vocab_deck"}
 
         # Choice set snapshot
         scope = config.get("choice_scope") or {}
         bank_id = scope.get("bank_id")
         if not bank_id:
-            return
+            return None
         set_id = await _resolve_erc_app_set_id(conn, bank_id)
-        from routes.choice.repository import aggregate_set_snapshot, aggregate_focus_stats, insert_set_snapshot
         data = await aggregate_set_snapshot(conn, user_id=user_id, set_id=set_id)
         focus = await aggregate_focus_stats(conn, user_id=user_id, set_id=set_id)
         data["focus_stats"] = focus
-        await insert_set_snapshot(
+        snapshot_id = await insert_set_snapshot(
             conn,
             user_id=user_id,
             set_id=set_id,
@@ -3985,8 +4061,9 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> None:
             trigger_reason="phase_end",
             focus_run_id=str(run.id),
         )
+        return {"snapshot_id": snapshot_id, "snapshot_type": "choice_set"}
     except Exception:
-        pass  # Best-effort; snapshot failure should not block phase end
+        return None  # Best-effort; snapshot failure should not block phase end
 
 
 @router.post("/focus/workflow/extend-phase", response_model=FocusWorkflowOut)
@@ -4514,6 +4591,110 @@ class TestFocusWorkStartRequest(BaseModel):
     completion: dict[str, Any] | None = None
 
 
+class DeliberateWorkflowStartRequest(BaseModel):
+    config_id: str | None = None
+    name: str | None = None
+    kind: str | None = None
+    focus_work_type: str | None = None
+    bank_id: str | None = None
+    target_count: int = 10
+    scope: dict[str, Any] | None = None
+    completion: dict[str, Any] | None = None
+
+
+async def _resolve_countup_focus_bank_id(conn: Any, focus_work_type: str, bank_id: str | None) -> str | None:
+    if not bank_id:
+        return None
+    if focus_work_type == "vocab_today":
+        return await _resolve_vocab_app_deck_id(conn, bank_id)
+    if focus_work_type in {"review", "practice"}:
+        return await _resolve_erc_app_set_id(conn, bank_id)
+    return bank_id
+
+
+async def _create_countup_focus_workflow(
+    conn: Any,
+    *,
+    user_id: int,
+    workflow_name: str,
+    focus_work_type: str,
+    bank_id: str | None,
+    target_count: int,
+    scope: dict[str, Any] | None,
+    completion: dict[str, Any] | None,
+    deliberate_context: dict[str, Any] | None = None,
+) -> Any:
+    if focus_work_type not in ("vocab_today", "review", "practice"):
+        raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
+    if target_count < 1 or target_count > 500:
+        raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
+
+    existing = await conn.fetchrow(
+        "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
+        user_id,
+    )
+    if existing is not None:
+        await conn.execute(
+            "UPDATE focus_workflows SET status = 'stopped', ended_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND status = 'active'",
+            user_id,
+        )
+
+    resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
+    focus_phase = {
+        "phase_type": "focus",
+        "duration": 3600,
+        "timer_mode": "countup",
+        "task_id": None,
+        "focus_work_type": focus_work_type,
+        "is_temporary": True,
+        "record_focus": True,
+        **_test_focus_phase_config(focus_work_type, resolved_bank_id, target_count),
+    }
+    if scope is not None:
+        choice_scope = dict(scope)
+        if resolved_bank_id and focus_work_type in {"review", "practice"}:
+            choice_scope["bank_id"] = resolved_bank_id
+        focus_phase["choice_scope"] = choice_scope
+    elif resolved_bank_id and focus_work_type in {"review", "practice"}:
+        focus_phase["choice_scope"] = {"bank_id": resolved_bank_id, "status": "all", "mode": "sequential"}
+    if completion is not None:
+        focus_phase["choice_completion"] = completion
+    if deliberate_context:
+        focus_phase.update(deliberate_context)
+
+    try:
+        created = await conn.fetchrow(
+            """
+            INSERT INTO focus_workflows(
+                user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                focus_duration, break_duration, current_phase, phase_started_at,
+                phase_planned_duration, pending_confirmation, pending_task_selection, status,
+                active_focus_work_type, focus_work_display_state, focus_work_result,
+                focus_work_progress_snapshot, is_paused, paused_at, record_focus
+            )
+            VALUES ($1, NULL, NULL, $2, $3::jsonb, 0, $4, $5, 'focus', NOW(), $4, FALSE, FALSE,
+                    'active', $6, 'fullscreen', NULL, NULL, FALSE, NULL, $7)
+            RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                      focus_duration, break_duration, current_phase, phase_started_at,
+                      phase_planned_duration, pending_confirmation, pending_task_selection,
+                      active_focus_work_type, focus_work_display_state, focus_work_result,
+                      focus_work_progress_snapshot, is_paused, paused_at, record_focus
+            """,
+            user_id,
+            workflow_name,
+            _to_jsonb_param([focus_phase]),
+            60,
+            60,
+            focus_work_type,
+            True,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="启动专注工作失败") from exc
+    if created is None:
+        raise HTTPException(status_code=500, detail="启动专注工作失败")
+    return created
+
+
 @router.post("/focus/workflow/start-test-focus", response_model=FocusWorkflowOut)
 async def start_test_focus_work(
     request: Request,
@@ -4521,78 +4702,100 @@ async def start_test_focus_work(
     user: Annotated[Any, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
     """启动测试专注工作（正计时模式）。"""
-    if body.focus_work_type not in ("vocab_today", "review", "practice"):
-        raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {body.focus_work_type}")
-    if body.target_count < 1 or body.target_count > 500:
-        raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
-
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            existing = await conn.fetchrow(
-                "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
-                int(user.id),
+            created = await _create_countup_focus_workflow(
+                conn,
+                user_id=int(user.id),
+                workflow_name="测试专注工作",
+                focus_work_type=body.focus_work_type,
+                bank_id=body.bank_id,
+                target_count=body.target_count,
+                scope=body.scope,
+                completion=body.completion,
             )
-            if existing is not None:
-                await conn.execute(
-                    "UPDATE focus_workflows SET status = 'stopped', ended_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND status = 'active'",
-                    int(user.id),
-                )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)
 
-            resolved_bank_id = (
-                await _resolve_vocab_app_deck_id(conn, body.bank_id)
-                if body.focus_work_type == "vocab_today" and body.bank_id
-                else body.bank_id
-            )
-            if body.focus_work_type in {"review", "practice"} and body.bank_id:
-                resolved_bank_id = await _resolve_erc_app_set_id(conn, body.bank_id)
-            focus_phase = {
-                "phase_type": "focus",
-                "duration": 3600,
-                "timer_mode": "countup",
-                "task_id": None,
-                "focus_work_type": body.focus_work_type,
-                "is_temporary": True,
-                "record_focus": True,
-                **_test_focus_phase_config(body.focus_work_type, resolved_bank_id, body.target_count),
+
+@router.post("/focus/workflow/start-deliberate-workflow", response_model=FocusWorkflowOut)
+async def start_deliberate_workflow(
+    request: Request,
+    body: DeliberateWorkflowStartRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    """启动刻意工作流（正计时模式）。"""
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            config_id = body.config_id
+            if config_id:
+                config_row = await deliberate_repository.get_config(conn, user_id=int(user.id), config_id=config_id)
+                if config_row is None:
+                    raise HTTPException(status_code=404, detail="刻意工作流配置不存在")
+                name = str(config_row["name"])
+                kind = str(config_row["kind"])
+                focus_work_type = str(config_row["focus_work_type"])
+                bank_id = config_row["bank_id"]
+                target_count = int(config_row["target_count"])
+                scope = _config_payload(config_row["scope_json"])
+                completion = _config_payload(config_row["completion_json"])
+            else:
+                if not body.focus_work_type:
+                    raise HTTPException(status_code=400, detail="缺少 focus_work_type")
+                focus_work_type = body.focus_work_type
+                kind = body.kind or ("flashcard" if focus_work_type == "vocab_today" else "choice")
+                name = (body.name or "未保存的刻意工作流").strip()
+                bank_id = body.bank_id
+                target_count = int(body.target_count)
+                scope = body.scope or {}
+                completion = body.completion or {}
+
+            validate_config_shape(kind, focus_work_type, target_count)
+            resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
+            if resolved_bank_id and focus_work_type in {"review", "practice"}:
+                scope = dict(scope or {})
+                scope["bank_id"] = resolved_bank_id
+            config_snapshot = {
+                "config_id": config_id,
+                "name": name,
+                "kind": kind,
+                "focus_work_type": focus_work_type,
+                "bank_id": resolved_bank_id,
+                "target_count": target_count,
+                "scope": scope,
+                "completion": completion,
             }
-            if body.scope is not None:
-                choice_scope = dict(body.scope)
-                if resolved_bank_id and body.focus_work_type in {"review", "practice"}:
-                    choice_scope["bank_id"] = resolved_bank_id
-                focus_phase["choice_scope"] = choice_scope
-            if body.completion is not None:
-                focus_phase["choice_completion"] = body.completion
-
-            phases = [focus_phase]
-            try:
-                created = await conn.fetchrow(
-                    """
-                    INSERT INTO focus_workflows(
-                        user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
-                        focus_duration, break_duration, current_phase, phase_started_at,
-                        phase_planned_duration, pending_confirmation, pending_task_selection, status,
-                        active_focus_work_type, focus_work_display_state, focus_work_result,
-                        focus_work_progress_snapshot, is_paused, paused_at, record_focus
-                    )
-                    VALUES ($1, NULL, NULL, $2, $3::jsonb, 0, $4, $5, 'focus', NOW(), $4, FALSE, FALSE,
-                            'active', $6, 'fullscreen', NULL, NULL, FALSE, NULL, $7)
-                    RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
-                              focus_duration, break_duration, current_phase, phase_started_at,
-                              phase_planned_duration, pending_confirmation, pending_task_selection,
-                              active_focus_work_type, focus_work_display_state, focus_work_result,
-                              focus_work_progress_snapshot, is_paused, paused_at, record_focus
-                    """,
-                    int(user.id),
-                    "测试专注工作",
-                    _to_jsonb_param(phases),
-                    60,
-                    60,
-                    body.focus_work_type,
-                    True,
-                )
-            except Exception as exc:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="启动测试专注工作失败") from exc
-            if created is None:
-                raise HTTPException(status_code=500, detail="启动测试专注工作失败")
+            deliberate_run = await deliberate_repository.create_run(
+                conn,
+                user_id=int(user.id),
+                config_id=config_id,
+                focus_work_type=focus_work_type,
+                bank_id=resolved_bank_id,
+                config_snapshot=config_snapshot,
+            )
+            deliberate_run_id = str(deliberate_run["id"])
+            deliberate_context = {
+                "deliberate_run_id": deliberate_run_id,
+                "deliberate_config_id": config_id,
+                "deliberate_kind": kind,
+                "deliberate_name": name,
+            }
+            created = await _create_countup_focus_workflow(
+                conn,
+                user_id=int(user.id),
+                workflow_name=f"刻意工作流：{name}",
+                focus_work_type=focus_work_type,
+                bank_id=resolved_bank_id,
+                target_count=target_count,
+                scope=scope,
+                completion=completion,
+                deliberate_context=deliberate_context,
+            )
+            await deliberate_repository.attach_workflow(
+                conn,
+                user_id=int(user.id),
+                run_id=deliberate_run_id,
+                workflow_id=created["id"],
+            )
             return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)

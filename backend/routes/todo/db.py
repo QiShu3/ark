@@ -24,6 +24,57 @@ async def _clear_event_template_store(conn: Any) -> None:
     await conn.execute("DELETE FROM event_template_store_templates WHERE slug LIKE 'seed:%';")
 
 
+async def _ensure_check_constraint(conn: Any, *, table: str, name: str, condition: str) -> None:
+    """Add a check constraint if it is absent.
+
+    Postgres has no ALTER TABLE ... ADD CONSTRAINT IF NOT EXISTS. During dev hot reloads,
+    two startup migrations can briefly overlap, so this block also ignores duplicate_object.
+    """
+    await conn.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_namespace n ON n.oid = t.relnamespace
+                WHERE n.nspname = current_schema()
+                  AND t.relname = '{table}'
+                  AND c.conname = '{name}'
+            ) THEN
+                ALTER TABLE {table} ADD CONSTRAINT {name} CHECK ({condition});
+            END IF;
+        EXCEPTION
+            WHEN duplicate_object THEN
+                NULL;
+        END $$;
+        """
+    )
+
+
+async def _ensure_unique_index(conn: Any, *, table: str, name: str, columns: str) -> None:
+    """Add a unique index if it is absent.
+
+    Older startup migrations may have left the identity relation as a standalone index
+    instead of a table constraint. Using a unique index here is enough for the FK below
+    and avoids duplicate relation failures during hot reloads.
+    """
+    await conn.execute(
+        f"""
+        DO $$
+        BEGIN
+            IF to_regclass('{name}') IS NULL THEN
+                CREATE UNIQUE INDEX {name} ON {table}({columns});
+            END IF;
+        EXCEPTION
+            WHEN duplicate_table THEN
+                NULL;
+        END $$;
+        """
+    )
+
+
 async def _seed_event_template_store(conn: Any) -> None:
     """写入项目内置事件模板（使用 upsert，不覆盖管理员数据）。"""
     utc_plus_8 = timezone(timedelta(hours=8))
@@ -295,13 +346,17 @@ async def init_todo(app: Any) -> None:
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_config_id UUID NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS app_instance_key VARCHAR(160) NULL;")
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS managed_by_app BOOLEAN NOT NULL DEFAULT FALSE;")
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_source_type;")
-        await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app'));"
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_source_type",
+            condition="source_type IN ('user', 'app')",
         )
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_id;")
-        await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));"
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_app_id",
+            condition="app_id IS NULL OR app_id IN ('vocab', 'erc')",
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
@@ -313,14 +368,17 @@ async def init_todo(app: Any) -> None:
         await conn.execute("UPDATE focus_work_runs SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
         await conn.execute("UPDATE tasks SET app_task_type = 'review' WHERE app_task_type = 'erc_review'")
         await conn.execute("UPDATE tasks SET app_task_type = 'practice' WHERE app_task_type = 'erc_practice'")
-        await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'));"
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_app_task_type",
+            condition="app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice')",
         )
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_metadata_consistency;")
-        await conn.execute(
-            """
-            ALTER TABLE tasks
-            ADD CONSTRAINT chk_tasks_app_metadata_consistency CHECK (
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_app_metadata_consistency",
+            condition="""
                 (
                   source_type = 'user'
                   AND managed_by_app = FALSE
@@ -337,38 +395,50 @@ async def init_todo(app: Any) -> None:
                   AND app_task_type IS NOT NULL
                   AND app_config_id IS NOT NULL
                 )
-            );
-            """
+            """,
         )
         await conn.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS task_type VARCHAR(20) NOT NULL DEFAULT 'focus';")
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_type;")
-        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin'));")
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_type",
+            condition="task_type IN ('focus', 'checkin')",
+        )
         await conn.execute("ALTER TABLE tasks DROP COLUMN IF EXISTS category;")
         await conn.execute("UPDATE tasks SET status = 'todo' WHERE status = 'doing';")
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_status;")
-        await conn.execute("ALTER TABLE tasks ADD CONSTRAINT chk_tasks_status CHECK (status IN ('todo', 'done'));")
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_current_cycle_count;")
-        await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_current_cycle_count CHECK (current_cycle_count >= 0);"
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_status",
+            condition="status IN ('todo', 'done')",
         )
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_target_cycle_count;")
-        await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_target_cycle_count CHECK (target_cycle_count >= 0);"
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_current_cycle_count",
+            condition="current_cycle_count >= 0",
         )
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_cycle_period;")
-        await conn.execute(
-            "ALTER TABLE tasks ADD CONSTRAINT chk_tasks_cycle_period CHECK (cycle_period IN ('daily', 'weekly', 'monthly', 'custom'));"
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_target_cycle_count",
+            condition="target_cycle_count >= 0",
         )
-        await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_cycle_every_days;")
-        await conn.execute(
-            """
-            ALTER TABLE tasks
-            ADD CONSTRAINT chk_tasks_cycle_every_days CHECK (
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_cycle_period",
+            condition="cycle_period IN ('daily', 'weekly', 'monthly', 'custom')",
+        )
+        await _ensure_check_constraint(
+            conn,
+            table="tasks",
+            name="chk_tasks_cycle_every_days",
+            condition="""
                 (cycle_period <> 'custom' AND cycle_every_days IS NULL)
                 OR
                 (cycle_period = 'custom' AND cycle_every_days IS NOT NULL AND cycle_every_days >= 1)
-            );
-            """
+            """,
         )
         await conn.execute(
             """
@@ -423,11 +493,11 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS uniq_app_task_configs_identity;")
-        await conn.execute(
-            """
-            ALTER TABLE app_task_configs
-            ADD CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type);
-            """
+        await _ensure_unique_index(
+            conn,
+            table="app_task_configs",
+            name="uniq_app_task_configs_identity",
+            columns="id, user_id, app_id, app_task_type",
         )
         await conn.execute("DROP INDEX IF EXISTS idx_app_task_configs_active_unique;")
         await conn.execute("DROP INDEX IF EXISTS uniq_tasks_active_app_managed;")

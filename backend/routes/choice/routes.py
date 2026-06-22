@@ -1,27 +1,21 @@
 """API endpoints for the unified choice question bank."""
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from routes.auth_routes import get_current_user
+from routes.vocab.repository import list_vocab_snapshots
 
 from .adapters import (
     ensure_choice_set,
     get_erc_choice_filters,
+    list_choice_items,
     list_erc_as_choice_banks,
     list_erc_as_choice_items,
     resolve_choice_set_id,
-)
-from .service import (
-    get_next_review,
-    get_overview,
-    get_set_snapshots,
-    list_mistakes,
-)
-from .service import (
-    submit_review as submit_erc_question_answer,
 )
 from .schemas import (
     ChoiceAnswerSubmitIn,
@@ -37,6 +31,15 @@ from .schemas import (
     ChoicePracticeStartResponse,
     ChoiceReviewNextOut,
     SetSnapshotOut,
+)
+from .service import (
+    get_next_review,
+    get_overview,
+    get_set_snapshots,
+    list_mistakes,
+)
+from .service import (
+    submit_review as submit_erc_question_answer,
 )
 
 router = APIRouter(prefix="/api/choice", tags=["choice"])
@@ -157,7 +160,7 @@ async def route_submit_choice_answer(
         question_id=question_id,
         chosen_option=body.chosen_option,
         time_spent_ms=body.time_spent_ms,
-        mode="practice",
+        mode=body.mode,
     )
     return ChoiceAnswerSubmitOut(**result)
 
@@ -246,8 +249,6 @@ async def route_list_snapshots(
                     deck_id = vd_row["id"]
 
         if deck_id is not None:
-            import json as _json
-            from routes.vocab.repository import list_vocab_snapshots
             rows = await list_vocab_snapshots(
                 conn, user_id=int(user.id), deck_id=deck_id, limit=limit, offset=offset,
             )
@@ -257,11 +258,11 @@ async def route_list_snapshots(
                 due_status = r["due_status"]
                 focus_stats = r["focus_stats"]
                 if isinstance(by_mastery, str):
-                    by_mastery = _json.loads(by_mastery)
+                    by_mastery = json.loads(by_mastery)
                 if isinstance(due_status, str):
-                    due_status = _json.loads(due_status)
+                    due_status = json.loads(due_status)
                 if isinstance(focus_stats, str):
-                    focus_stats = _json.loads(focus_stats)
+                    focus_stats = json.loads(focus_stats)
                 result.append(SetSnapshotOut(
                     id=str(r["id"]),
                     set_id=str(r["deck_id"]),

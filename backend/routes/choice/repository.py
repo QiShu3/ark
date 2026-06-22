@@ -1048,16 +1048,49 @@ async def aggregate_focus_stats(
     """Aggregate focus work stats relevant to a question set."""
     row = await conn.fetchrow(
         """
+        WITH scoped_runs AS (
+          SELECT
+            fwr.id,
+            COALESCE(
+              MAX(fl.duration),
+              GREATEST(EXTRACT(EPOCH FROM (COALESCE(fwr.ended_at, NOW()) - fwr.started_at))::int, 0)
+            )::int AS duration
+          FROM focus_work_runs fwr
+          LEFT JOIN focus_app_work_logs fl
+            ON fl.user_id = fwr.user_id
+           AND fl.workflow_id = fwr.workflow_id
+           AND fl.end_at IS NOT NULL
+          WHERE fwr.user_id = $1
+            AND fwr.focus_work_type IN ('review', 'practice')
+            AND fwr.status = 'completed'
+            AND (
+              fwr.config_snapshot->'choice_scope'->>'bank_id' = $2
+              OR fwr.config_snapshot->>'set_id' = $2
+              OR fwr.config_snapshot->>'article_set_id' = $2
+            )
+          GROUP BY fwr.id
+        )
         SELECT
           COUNT(*)::int AS total_sessions,
           COALESCE(SUM(duration), 0)::int AS total_seconds
-        FROM focus_app_work_logs fl
-        WHERE fl.user_id = $1
-          AND fl.focus_work_type IN ('review', 'practice')
-          AND fl.end_at IS NOT NULL
+        FROM scoped_runs
         """,
         user_id,
+        set_id,
     )
+    if row is None or int(row["total_sessions"] or 0) == 0:
+        row = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(*)::int AS total_sessions,
+              COALESCE(SUM(duration), 0)::int AS total_seconds
+            FROM focus_app_work_logs fl
+            WHERE fl.user_id = $1
+              AND fl.focus_work_type IN ('review', 'practice')
+              AND fl.end_at IS NOT NULL
+            """,
+            user_id,
+        )
 
     # Review accuracy from logs
     acc_row = await conn.fetchrow(
