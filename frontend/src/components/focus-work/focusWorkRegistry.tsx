@@ -38,6 +38,15 @@ function buildRegistry(): Record<string, FocusWorkDefinition> {
     subtitle: '自定义任务',
     render: RENDER_MAP['task_focus'],
   };
+  // built-in: input (暂无独立子应用入口)
+  if (!entries['input']) {
+    entries['input'] = {
+      type: 'input',
+      title: '输入练习',
+      subtitle: '手动输入作答',
+      render: RENDER_MAP['input'],
+    };
+  }
   return entries;
 }
 
