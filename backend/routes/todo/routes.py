@@ -3557,6 +3557,8 @@ def _focus_work_app_metadata(focus_work_type: str | None) -> tuple[str | None, s
         return "vocab", "vocab_today"
     if focus_work_type in {"review", "practice"}:
         return "erc", focus_work_type
+    if focus_work_type == "input":
+        return "input", "input"
     return None, None
 
 
