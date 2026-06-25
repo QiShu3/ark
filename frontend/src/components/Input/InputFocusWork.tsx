@@ -9,9 +9,14 @@ import type { InputArticleDTO, InputQuestionDTO } from '../../lib/input/api';
 type InputFocusWorkProps = FocusWorkRendererProps;
 
 function getBankId(run: FocusWorkRendererProps['run']): string | null {
-  const raw = run.config_snapshot?.input_bank_id;
-  if (typeof raw === 'string' && raw) return raw;
-  const scope = run.config_snapshot?.input_scope;
+  const snap = run.config_snapshot;
+  if (!snap) return null;
+  // Direct bank_id (deliberate workflow stores this)
+  if (typeof snap.bank_id === 'string' && snap.bank_id) return snap.bank_id;
+  // Legacy: input_bank_id
+  if (typeof snap.input_bank_id === 'string' && snap.input_bank_id) return snap.input_bank_id;
+  // Legacy: input_scope.bank_id
+  const scope = snap.input_scope;
   if (scope && typeof scope === 'object' && 'bank_id' in scope) {
     return String((scope as Record<string, unknown>).bank_id || '');
   }
