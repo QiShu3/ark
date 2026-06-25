@@ -4044,6 +4044,29 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> dict[s
             )
             return {"snapshot_id": snapshot_id, "snapshot_type": "vocab_deck"}
 
+        # Input set snapshot
+        if focus_work_type == "input":
+            input_bank_id = config.get("input_bank_id") or config.get("bank_id")
+            if not input_bank_id:
+                return None
+            from routes.input.repository import (
+                aggregate_input_focus_stats,
+                aggregate_input_snapshot,
+                insert_input_snapshot,
+            )
+            data = await aggregate_input_snapshot(conn, user_id=user_id, set_id=input_bank_id)
+            focus = await aggregate_input_focus_stats(conn, user_id=user_id, set_id=input_bank_id)
+            data["focus_stats"] = focus
+            snapshot_id = await insert_input_snapshot(
+                conn,
+                user_id=user_id,
+                set_id=input_bank_id,
+                data=data,
+                trigger_reason="phase_end",
+                focus_run_id=str(run.id),
+            )
+            return {"snapshot_id": snapshot_id, "snapshot_type": "input_set"}
+
         # Choice set snapshot
         scope = config.get("choice_scope") or {}
         bank_id = scope.get("bank_id")

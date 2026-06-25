@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import asyncpg
 
@@ -212,3 +213,128 @@ async def list_all_questions_by_set(
 async def delete_input_set_cascade(conn: asyncpg.Connection, set_id: str) -> bool:
     result = await conn.execute("DELETE FROM input_sets WHERE id = $1::uuid", set_id)
     return result == "DELETE 1"
+
+
+# ---- input_set_snapshots ----
+
+async def aggregate_input_snapshot(
+    conn: asyncpg.Connection, *, user_id: int, set_id: str
+) -> dict[str, Any]:
+    total_row = await conn.fetchrow(
+        """
+        SELECT COUNT(*)::int AS total
+        FROM input_questions q
+        JOIN input_articles a ON a.id = q.article_pk
+        WHERE a.set_id = $1::uuid
+        """,
+        set_id,
+    )
+    total = (total_row["total"] or 0) if total_row else 0
+
+    mode_rows = await conn.fetch(
+        """
+        SELECT q.mode, COUNT(*)::int AS count
+        FROM input_questions q
+        JOIN input_articles a ON a.id = q.article_pk
+        WHERE a.set_id = $1::uuid
+        GROUP BY q.mode
+        """,
+        set_id,
+    )
+    mode_breakdown = {r["mode"]: r["count"] for r in mode_rows}
+
+    return {
+        "total_questions": total,
+        "mode_breakdown": mode_breakdown,
+    }
+
+
+async def aggregate_input_focus_stats(
+    conn: asyncpg.Connection, *, user_id: int, set_id: str
+) -> dict[str, Any]:
+    row = await conn.fetchrow(
+        """
+        SELECT
+          COALESCE(SUM(CAST(fwr.config_snapshot->>'target_question_count' AS int)), 0)::int AS target_count,
+          COALESCE(
+            MAX(EXTRACT(EPOCH FROM (COALESCE(fwr.ended_at, NOW()) - fwr.started_at)))::int, 0
+          ) AS total_seconds
+        FROM focus_work_runs fwr
+        WHERE fwr.user_id = $1
+          AND fwr.focus_work_type = 'input'
+          AND fwr.status IN ('completed', 'content_completed')
+          AND (
+            fwr.config_snapshot->>'input_bank_id' = $2
+            OR fwr.config_snapshot->>'bank_id' = $2
+          )
+        """,
+        user_id,
+        set_id,
+    )
+    return {
+        "total_sessions": 1 if row else 0,
+        "total_minutes": int((row["total_seconds"] or 0) / 60) if row else 0,
+    }
+
+
+async def insert_input_snapshot(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    set_id: str,
+    data: dict[str, Any],
+    trigger_reason: str,
+    focus_run_id: str | None,
+) -> str:
+    row = await conn.fetchrow(
+        """
+        INSERT INTO input_set_snapshots (
+          user_id, set_id, total_questions, answered_count, correct_count,
+          avg_score, total_time_ms, mode_breakdown, wrong_question_ids,
+          focus_stats, trigger_reason, focus_run_id
+        ) VALUES (
+          $1, $2::uuid, $3, $4, $5,
+          $6, $7, $8::jsonb, $9::jsonb,
+          $10::jsonb, $11, $12::uuid
+        )
+        RETURNING id::text
+        """,
+        user_id,
+        set_id,
+        data.get("total_questions", 0),
+        data.get("answered_count", 0),
+        data.get("correct_count", 0),
+        data.get("avg_score"),
+        data.get("total_time_ms", 0),
+        json.dumps(data.get("mode_breakdown", {})),
+        json.dumps(data.get("wrong_question_ids", [])),
+        json.dumps(data.get("focus_stats", {})),
+        trigger_reason,
+        focus_run_id,
+    )
+    return str(row["id"])
+
+
+async def list_input_snapshots(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    set_id: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT id::text, user_id, set_id::text, total_questions, answered_count,
+               correct_count, avg_score, total_time_ms, mode_breakdown,
+               wrong_question_ids, focus_stats, trigger_reason, focus_run_id::text, created_at
+        FROM input_set_snapshots
+        WHERE user_id = $1 AND set_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT $3 OFFSET $4
+        """,
+        user_id,
+        set_id,
+        limit,
+        offset,
+    )

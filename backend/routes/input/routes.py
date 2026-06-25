@@ -146,3 +146,28 @@ async def submit(
             time_spent_ms=body.time_spent_ms,
         )
     return InputSubmitOut(**result)
+
+
+@router.get("/snapshots")
+async def get_snapshots(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+    bank_id: str = Query(...),
+    limit: int = Query(20, ge=1, le=100),
+) -> list[dict[str, Any]]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await repository.list_input_snapshots(
+            conn, user_id=int(user.id), set_id=bank_id, limit=limit
+        )
+    results = []
+    for row in rows:
+        d = dict(row)
+        for key in ("mode_breakdown", "wrong_question_ids", "focus_stats"):
+            if isinstance(d.get(key), str):
+                try:
+                    d[key] = json.loads(d[key])
+                except (json.JSONDecodeError, TypeError):
+                    d[key] = {} if key != "wrong_question_ids" else []
+        results.append(d)
+    return results

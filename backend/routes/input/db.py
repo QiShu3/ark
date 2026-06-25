@@ -72,3 +72,26 @@ async def init_input(conn: asyncpg.Connection) -> None:
     await conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_input_questions_article ON input_questions(article_pk, sort_order);"
     )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS input_set_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+          set_id UUID NOT NULL REFERENCES input_sets(id) ON DELETE CASCADE,
+          total_questions INTEGER NOT NULL DEFAULT 0,
+          answered_count INTEGER NOT NULL DEFAULT 0,
+          correct_count INTEGER NOT NULL DEFAULT 0,
+          avg_score NUMERIC,
+          total_time_ms INTEGER NOT NULL DEFAULT 0,
+          mode_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
+          wrong_question_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+          focus_stats JSONB NOT NULL DEFAULT '{}'::jsonb,
+          trigger_reason TEXT NOT NULL DEFAULT 'phase_end',
+          focus_run_id UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_input_snapshots_user_set ON input_set_snapshots(user_id, set_id, created_at DESC);"
+    )
