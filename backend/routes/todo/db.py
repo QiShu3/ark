@@ -779,8 +779,8 @@ async def init_todo(app: Any) -> None:
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_focus_work_runs_status CHECK (status IN ('running', 'paused', 'content_completed', 'completed', 'abandoned')),
               CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus', 'input')),
-              CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc')),
-              CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'))
+              CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc', 'input')),
+              CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice', 'input'))
             );
             """
         )
@@ -829,11 +829,11 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_id;")
         await conn.execute(
-            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc'));"
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc', 'input'));"
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_task_type;")
         await conn.execute(
-            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice'));"
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('vocab_today', 'review', 'practice', 'input'));"
         )
         await conn.execute(
             """
