@@ -2,6 +2,21 @@
 
 ## 提交记录
 
+### 2026-06-25 · `ad29fe4b` · feat(input): add InputQuestionFocusTemplate component
+
+**用户需求**：实现 Task 9 — Frontend template component
+
+**完成工作**：
+- 创建 `frontend/src/components/focus-work/templates/InputQuestionFocusTemplate.tsx`
+- 渲染文章段落材料（复用 ChoiceQuestionFocusTemplate 的 article 布局模式）
+- 支持填空题（exact/contains/regex 匹配）和主观题（AI 评分）模式
+- 提交后显示结果：填空题显示正确/错误+标准答案，主观题显示得分+反馈
+- 进度管理：answeredCount / targetCount 显示
+- 键盘快捷键：Ctrl+Enter 提交，Enter 下一题（仅填空题正确时）
+- 遵循 focus-work 组件样式约定，使用 CSS 变量而非硬编码颜色
+
+**验证情况**：TypeScript 类型检查通过，ESLint 无新增错误
+
 ### 2026-06-25 · `d484f275` · feat(input): add service layer with fill match and AI grading
 
 **用户需求**：实现 Task 4 — Backend service with fill match + AI grading
