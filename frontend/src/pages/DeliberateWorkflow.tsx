@@ -6,7 +6,7 @@ import Button from '../components/Button';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
 import { fetchChoiceFilters, fetchSetSnapshots } from '../lib/choice/api';
-import type { ChoiceFilters, SetSnapshot } from '../lib/choice/types';
+import type { ChoiceFilters, InputSetSnapshot, SetSnapshot } from '../lib/choice/types';
 import { apiJson } from '../lib/api';
 import {
   createDeliberateWorkflow,
@@ -66,7 +66,7 @@ function latestAccuracy(snapshot: SetSnapshot | null) {
   return Math.round((safeRecord(snapshot.focus_stats).accuracy ?? 0) * 100);
 }
 
-function isInputSnapshot(snapshot: SetSnapshot): boolean {
+function isInputSnapshot(snapshot: SetSnapshot): snapshot is InputSetSnapshot {
   return 'answered_count' in snapshot && 'correct_count' in snapshot;
 }
 
@@ -96,10 +96,10 @@ function SnapshotPanel({ snapshots, kind }: { snapshots: SetSnapshot[]; kind?: s
       <div className="grid gap-3 md:grid-cols-4">
         {isInput ? (
           <>
-            <Metric label="已作答" value={String((latest as any).answered_count ?? 0)} detail={`总量 ${latest.total_questions}`} />
-            <Metric label="正确数" value={String((latest as any).correct_count ?? 0)} detail={`${(latest as any).answered_count > 0 ? Math.round(((latest as any).correct_count / (latest as any).answered_count) * 100) : 0}% 正确率`} />
+            <Metric label="已作答" value={String(latest.answered_count ?? 0)} detail={`总量 ${latest.total_questions}`} />
+            <Metric label="正确数" value={String(latest.correct_count ?? 0)} detail={`${latest.answered_count > 0 ? Math.round((latest.correct_count / latest.answered_count) * 100) : 0}% 正确率`} />
             <Metric label="专注" value={String(focus.total_sessions ?? 0)} detail={`${focus.total_minutes ?? 0} 分钟`} />
-            <Metric label="总题数" value={String(latest.total_questions)} detail={Object.entries((latest as any).mode_breakdown || {}).map(([k, v]) => `${k}: ${v}`).join(', ')} />
+            <Metric label="总题数" value={String(latest.total_questions)} detail={Object.entries(latest.mode_breakdown || {}).map(([k, v]) => `${k}: ${v}`).join(', ')} />
           </>
         ) : (
           <>
@@ -417,6 +417,7 @@ export default function DeliberateWorkflow() {
 
   async function handleDelete(config: DeliberateWorkflowConfig) {
     if (!window.confirm(`删除配置「${config.name}」？`)) return;
+    setError(null);
     try {
       await deleteDeliberateWorkflow(config.id);
       await loadConfigs();
@@ -640,7 +641,7 @@ export default function DeliberateWorkflow() {
 
           {draftMode && activeStep === 1 ? (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
+              <div className="grid grid-cols-3 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
                 {(['choice', 'flashcard', 'input'] as DeliberateKind[]).map((item) => (
                   <button
                     key={item}

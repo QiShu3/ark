@@ -29,7 +29,7 @@ export type DeliberateWorkflowRun = {
   focus_work_type: DeliberateFocusWorkType;
   bank_id?: string | null;
   snapshot_id?: string | null;
-  snapshot_type?: 'choice_set' | 'vocab_deck' | null;
+  snapshot_type?: 'choice_set' | 'vocab_deck' | 'input_set' | null;
   status: DeliberateRunStatus;
   progress_snapshot: Record<string, unknown>;
   config_snapshot?: Record<string, unknown>;

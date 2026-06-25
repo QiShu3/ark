@@ -145,3 +145,9 @@ export type SetSnapshot = {
   focus_run_id?: string | null;
   created_at: string;
 };
+
+export type InputSetSnapshot = SetSnapshot & {
+  answered_count: number;
+  correct_count: number;
+  mode_breakdown: Record<string, number>;
+};
