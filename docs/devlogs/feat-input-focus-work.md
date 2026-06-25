@@ -2,6 +2,21 @@
 
 ## 提交记录
 
+### 2026-06-25 · `ec12e5d` · feat(input): support input type in admin routes and fix paragraph layout
+
+**用户需求**：帮我提交代码
+
+**完成工作**：
+- admin_routes 支持 input 类型的 content bank 列表（`list_content_banks_for_type`）
+- admin_routes 测试配置支持 input 类型（`create_test_focus_config`）
+- 导出 input router
+- workflow phases 白名单添加 `input_bank_id`
+- InputQuestionFocusTemplate 修复无 label 段落的布局（全宽显示）
+
+**验证情况**：提交成功，5 files changed, 33 insertions(+), 15 deletions(-)
+
+---
+
 ### 2026-06-25 · `1c171e4` · feat(input): add InputFocusWork component
 
 **用户需求**：实现 Task 10 — Frontend InputFocusWork component
