@@ -95,3 +95,22 @@ async def init_input(conn: asyncpg.Connection) -> None:
     await conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_input_snapshots_user_set ON input_set_snapshots(user_id, set_id, created_at DESC);"
     )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS input_user_answers (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+          question_id TEXT NOT NULL,
+          set_id UUID NOT NULL REFERENCES input_sets(id) ON DELETE CASCADE,
+          user_input TEXT NOT NULL,
+          is_correct BOOLEAN,
+          score NUMERIC,
+          time_spent_ms INTEGER,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(user_id, question_id, created_at)
+        );
+        """
+    )
+    await conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_input_answers_user_set ON input_user_answers(user_id, set_id, created_at DESC);"
+    )

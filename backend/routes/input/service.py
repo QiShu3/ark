@@ -13,11 +13,13 @@ import asyncpg
 from fastapi import HTTPException
 
 from .repository import (
+    get_input_set_id_by_question,
     get_question_by_id,
     insert_input_article,
     insert_input_paragraph,
     insert_input_question,
     insert_input_set,
+    insert_input_user_answer,
     refresh_set_counts,
 )
 
@@ -130,6 +132,9 @@ async def submit_answer(
 
     q = dict(question)
 
+    # Get set_id for this question
+    set_id = await get_input_set_id_by_question(conn, question_id)
+
     if q["mode"] == "fill":
         correct = match_fill_answer(user_input, q)
         accepted = q.get("accepted_answers") or []
@@ -138,6 +143,20 @@ async def submit_answer(
                 accepted = json.loads(accepted)
             except (json.JSONDecodeError, TypeError):
                 accepted = [accepted]
+
+        # Save answer record
+        if set_id:
+            await insert_input_user_answer(
+                conn,
+                user_id=user_id,
+                question_id=question_id,
+                set_id=set_id,
+                user_input=user_input,
+                is_correct=correct,
+                score=None,
+                time_spent_ms=time_spent_ms,
+            )
+
         return {
             "question_id": question_id,
             "correct": correct,
@@ -151,6 +170,20 @@ async def submit_answer(
         rubric=q.get("rubric", ""),
         reference_answer=q.get("reference_answer", ""),
     )
+
+    # Save answer record for subjective questions
+    if set_id:
+        await insert_input_user_answer(
+            conn,
+            user_id=user_id,
+            question_id=question_id,
+            set_id=set_id,
+            user_input=user_input,
+            is_correct=None,
+            score=result["score"],
+            time_spent_ms=time_spent_ms,
+        )
+
     return {
         "question_id": question_id,
         "score": result["score"],

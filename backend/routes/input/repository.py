@@ -243,9 +243,42 @@ async def aggregate_input_snapshot(
     )
     mode_breakdown = {r["mode"]: r["count"] for r in mode_rows}
 
+    # Get user answer statistics
+    answer_stats = await conn.fetchrow(
+        """
+        SELECT
+          COUNT(*)::int AS answered_count,
+          COUNT(*) FILTER (WHERE is_correct = TRUE)::int AS correct_count,
+          COALESCE(AVG(score), 0)::numeric AS avg_score,
+          COALESCE(SUM(time_spent_ms), 0)::int AS total_time_ms
+        FROM input_user_answers
+        WHERE user_id = $1 AND set_id = $2::uuid
+        """,
+        user_id,
+        set_id,
+    )
+
+    # Get wrong question IDs
+    wrong_rows = await conn.fetch(
+        """
+        SELECT DISTINCT question_id
+        FROM input_user_answers
+        WHERE user_id = $1 AND set_id = $2::uuid AND is_correct = FALSE
+        ORDER BY question_id
+        """,
+        user_id,
+        set_id,
+    )
+    wrong_question_ids = [r["question_id"] for r in wrong_rows]
+
     return {
         "total_questions": total,
         "mode_breakdown": mode_breakdown,
+        "answered_count": answer_stats["answered_count"] if answer_stats else 0,
+        "correct_count": answer_stats["correct_count"] if answer_stats else 0,
+        "avg_score": float(answer_stats["avg_score"]) if answer_stats else None,
+        "total_time_ms": answer_stats["total_time_ms"] if answer_stats else 0,
+        "wrong_question_ids": wrong_question_ids,
     }
 
 
@@ -338,3 +371,44 @@ async def list_input_snapshots(
         limit,
         offset,
     )
+
+
+async def insert_input_user_answer(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    question_id: str,
+    set_id: str,
+    user_input: str,
+    is_correct: bool | None,
+    score: float | None,
+    time_spent_ms: int | None,
+) -> str:
+    row = await conn.fetchrow(
+        """
+        INSERT INTO input_user_answers (user_id, question_id, set_id, user_input, is_correct, score, time_spent_ms)
+        VALUES ($1, $2, $3::uuid, $4, $5, $6, $7)
+        RETURNING id::text
+        """,
+        user_id,
+        question_id,
+        set_id,
+        user_input,
+        is_correct,
+        score,
+        time_spent_ms,
+    )
+    return str(row["id"])
+
+
+async def get_input_set_id_by_question(conn: asyncpg.Connection, question_id: str) -> str | None:
+    row = await conn.fetchrow(
+        """
+        SELECT a.set_id::text AS set_id
+        FROM input_questions q
+        JOIN input_articles a ON a.id = q.article_pk
+        WHERE q.question_id = $1
+        """,
+        question_id,
+    )
+    return row["set_id"] if row else None
