@@ -1,0 +1,129 @@
+{
+  "name": "英语阅读理解填空测试",
+  "articles": [
+    {
+      "article_id": "test_article_001",
+      "title": "The Importance of Sleep",
+      "content": [
+        {
+          "paragraph_no": 1,
+          "text": "Sleep is essential for maintaining good health. During sleep, the body repairs itself and consolidates memories. Adults typically need between seven and nine hours of sleep each night."
+        },
+        {
+          "paragraph_no": 2,
+          "text": "Chronic sleep deprivation has been linked to numerous health problems, including obesity, diabetes, and cardiovascular disease. It can also impair cognitive function and reduce productivity."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "art001_q1",
+          "question_no": 1,
+          "stem": "Adults typically need between ________ hours of sleep each night.",
+          "mode": "fill",
+          "accepted_answers": ["seven and nine", "7 and 9", "seven to nine", "7 to 9"],
+          "match_rule": "contains",
+          "case_sensitive": false,
+          "explanation": "根据第一段最后一句，成年人通常需要7到9小时的睡眠。"
+        },
+        {
+          "question_id": "art001_q2",
+          "question_no": 2,
+          "stem": "During sleep, the body repairs itself and ________ memories.",
+          "mode": "fill",
+          "accepted_answers": ["consolidates"],
+          "match_rule": "exact",
+          "case_sensitive": false,
+          "explanation": "consolidate 意为巩固，这里指睡眠期间身体会巩固记忆。"
+        },
+        {
+          "question_id": "art001_q3",
+          "question_no": 3,
+          "stem": "Chronic sleep deprivation has been linked to obesity, diabetes, and ________ disease.",
+          "mode": "fill",
+          "accepted_answers": ["cardiovascular"],
+          "match_rule": "exact",
+          "case_sensitive": false,
+          "explanation": "心血管疾病(cardiovascular disease)是长期睡眠不足的相关健康问题之一。"
+        }
+      ]
+    },
+    {
+      "article_id": "test_article_002",
+      "title": "Renewable Energy Sources",
+      "content": [
+        {
+          "paragraph_no": 1,
+          "text": "Solar energy is one of the fastest-growing renewable energy sources worldwide. Photovoltaic cells convert sunlight directly into electricity, making it a clean and sustainable option."
+        },
+        {
+          "paragraph_no": 2,
+          "text": "Wind power is another important renewable source. Modern wind turbines can generate enough electricity to power hundreds of homes. Offshore wind farms are becoming increasingly popular due to stronger and more consistent winds at sea."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "art002_q1",
+          "question_no": 1,
+          "stem": "Photovoltaic cells convert ________ directly into electricity.",
+          "mode": "fill",
+          "accepted_answers": ["sunlight", "sun light"],
+          "match_rule": "exact",
+          "case_sensitive": false,
+          "explanation": "光伏电池将阳光直接转化为电能。"
+        },
+        {
+          "question_id": "art002_q2",
+          "question_no": 2,
+          "stem": "Offshore wind farms are popular due to stronger and more ________ winds at sea.",
+          "mode": "fill",
+          "accepted_answers": ["consistent"],
+          "match_rule": "exact",
+          "case_sensitive": false,
+          "explanation": "海上风力发电场更受欢迎是因为海上的风更强劲且更稳定。"
+        },
+        {
+          "question_id": "art002_q3",
+          "question_no": 3,
+          "stem": "用一句话总结太阳能的优势。",
+          "mode": "subjective",
+          "accepted_answers": [],
+          "rubric": "应提到清洁(clean)和可持续(sustainable)这两个关键点",
+          "reference_answer": "太阳能是一种清洁且可持续的能源，光伏电池可以直接将阳光转化为电能。",
+          "explanation": "太阳能的主要优势在于其清洁性和可持续性。"
+        }
+      ]
+    },
+    {
+      "article_id": "test_article_003",
+      "title": "The Water Cycle",
+      "content": [
+        {
+          "paragraph_no": 1,
+          "text": "The water cycle describes how water moves through Earth's systems. Water evaporates from oceans and lakes, forms clouds, and returns to the surface as precipitation."
+        }
+      ],
+      "questions": [
+        {
+          "question_id": "art003_q1",
+          "question_no": 1,
+          "stem": "Water ________ from oceans and lakes to begin the water cycle.",
+          "mode": "fill",
+          "accepted_answers": ["evaporates"],
+          "match_rule": "exact",
+          "case_sensitive": false,
+          "explanation": "水从海洋和湖泊蒸发(evaporates)，这是水循环的第一步。"
+        },
+        {
+          "question_id": "art003_q2",
+          "question_no": 2,
+          "stem": "Water returns to the surface as ________.",
+          "mode": "fill",
+          "accepted_answers": ["precipitation"],
+          "match_rule": "exact",
+          "case_sensitive": false,
+          "explanation": "水以降水(precipitation)的形式返回地表。"
+        }
+      ]
+    }
+  ]
+}

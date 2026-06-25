@@ -1,0 +1,97 @@
+[
+  {
+    "examination": "英语四级模拟",
+    "questions": [
+      {
+        "question_text": "The company's profits have ________ significantly since the new CEO took over.",
+        "options": {
+          "A": "increased",
+          "B": "decreased",
+          "C": "maintained",
+          "D": "disappeared"
+        },
+        "correct_answer": "A"
+      },
+      {
+        "question_text": "She was so tired that she could ________ keep her eyes open.",
+        "options": {
+          "A": "hardly",
+          "B": "nearly",
+          "C": "easily",
+          "D": "certainly"
+        },
+        "correct_answer": "A"
+      },
+      {
+        "question_text": "The experiment was conducted ________ to ensure the results were reliable.",
+        "options": {
+          "A": "carelessly",
+          "B": "carefully",
+          "C": "casually",
+          "D": "hastily"
+        },
+        "correct_answer": "B"
+      }
+    ]
+  },
+  {
+    "examination": "英语四级模拟",
+    "questions": [
+      {
+        "question_text": "______ it rains tomorrow, we will still go hiking.",
+        "options": {
+          "A": "Unless",
+          "B": "Because",
+          "C": "Although",
+          "D": "Since"
+        },
+        "correct_answer": "A"
+      },
+      {
+        "question_text": "The report ________ by the end of last week.",
+        "options": {
+          "A": "has been completed",
+          "B": "had been completed",
+          "C": "was completed",
+          "D": "is completed"
+        },
+        "correct_answer": "B"
+      }
+    ]
+  },
+  {
+    "examination": "英语四级模拟",
+    "questions": [
+      {
+        "question_text": "Neither the teacher nor the students ________ aware of the schedule change.",
+        "options": {
+          "A": "is",
+          "B": "are",
+          "C": "was",
+          "D": "has been"
+        },
+        "correct_answer": "B"
+      },
+      {
+        "question_text": "He spoke ________ everyone in the room could hear him clearly.",
+        "options": {
+          "A": "so loudly that",
+          "B": "too loudly to",
+          "C": "such loudly that",
+          "D": "enough loudly that"
+        },
+        "correct_answer": "A"
+      },
+      {
+        "question_text": "The book ________ I borrowed from the library was fascinating.",
+        "options": {
+          "A": "who",
+          "B": "which",
+          "C": "what",
+          "D": "where"
+        },
+        "correct_answer": "B"
+      }
+    ]
+  }
+]

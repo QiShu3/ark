@@ -1,0 +1,3 @@
+{"this is intentionally broken JSON": "missing closing bracket",
+ "items": [
+   {"word": "test", "translation": "test"}

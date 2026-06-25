@@ -1,0 +1,73 @@
+{
+  "description": "此文件包含多种格式错误，用于测试错误处理逻辑",
+  "test_cases": [
+    {
+      "name": "case_1_missing_questions",
+      "data": [
+        {
+          "examination": "test",
+          "questions": []
+        }
+      ],
+      "expected_error": "题库为空 / questions 应为非空数组"
+    },
+    {
+      "name": "case_2_missing_question_text",
+      "data": [
+        {
+          "questions": [
+            {
+              "options": {"A": "yes", "B": "no"},
+              "correct_answer": "A"
+            }
+          ]
+        }
+      ],
+      "expected_error": "缺少 question_text"
+    },
+    {
+      "name": "case_3_missing_options",
+      "data": [
+        {
+          "questions": [
+            {
+              "question_text": "Is this a test?",
+              "correct_answer": "A"
+            }
+          ]
+        }
+      ],
+      "expected_error": "options 应为非空对象"
+    },
+    {
+      "name": "case_4_answer_not_in_options",
+      "data": [
+        {
+          "questions": [
+            {
+              "question_text": "What is 1+1?",
+              "options": {"A": "1", "B": "3", "C": "4"},
+              "correct_answer": "D"
+            }
+          ]
+        }
+      ],
+      "expected_error": "correct_answer 不在 options 中"
+    },
+    {
+      "name": "case_5_flashcard_missing_word",
+      "data": [
+        {
+          "translation": "some translation",
+          "example": "some example"
+        }
+      ],
+      "expected_error": "缺少 word 字段"
+    },
+    {
+      "name": "case_6_not_json_array",
+      "data": "this is not valid JSON at all {{{",
+      "expected_error": "JSON 解析失败"
+    }
+  ]
+}
