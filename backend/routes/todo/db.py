@@ -1089,7 +1089,7 @@ async def init_todo(app: Any) -> None:
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
-                focus_work_type TEXT NOT NULL CHECK (focus_work_type IN ('vocab_today', 'review', 'practice')),
+                focus_work_type TEXT NOT NULL CHECK (focus_work_type IN ('vocab_today', 'review', 'practice', 'task_focus', 'input')),
                 bank_id TEXT,
                 target_count INTEGER DEFAULT 10,
                 scope_json JSONB,
