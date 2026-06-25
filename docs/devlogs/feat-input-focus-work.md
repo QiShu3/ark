@@ -2,6 +2,30 @@
 
 ## 提交记录
 
+### 2026-06-25 · `692f514` · fix(frontend): add input type label in focusTypeLabel
+
+**用户需求**：选择"输入类专注工作"后显示的还是"选择练习"
+
+**完成工作**：
+- `frontend/src/pages/DeliberateWorkflow.tsx` 的 `focusTypeLabel` 函数添加 `input` 类型处理
+- 返回正确的标签"输入练习"而非默认的"选择练习"
+
+**验证情况**：`pnpm check` 类型检查通过
+
+---
+
+### 2026-06-25 · `9aa44be` · fix(todo): add input type to _focus_work_app_metadata
+
+**用户需求**：选择"输入类专注工作"后显示的还是"选择练习"
+
+**完成工作**：
+- `backend/routes/todo/routes.py` 的 `_focus_work_app_metadata` 函数添加 `input` 类型处理
+- 返回 `("input", "input")` 而非 `(None, None)`
+
+**验证情况**：`uv run ruff check routes/todo/routes.py -q` 通过
+
+---
+
 ### 2026-06-25 · `ec12e5d` · feat(input): support input type in admin routes and fix paragraph layout
 
 **用户需求**：帮我提交代码
