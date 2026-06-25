@@ -2,6 +2,21 @@
 
 ## 提交记录
 
+### 2026-06-25 · `1c171e4` · feat(input): add InputFocusWork component
+
+**用户需求**：实现 Task 10 — Frontend InputFocusWork component
+
+**完成工作**：
+- 创建 `frontend/src/components/Input/InputFocusWork.tsx`
+- 组件接收 FocusWorkRendererProps，从 run.config_snapshot 提取 bank_id
+- 通过 fetchInputNext API 获取下一篇文章，转换 DTO 为 InputArticleItem/InputQuestionItem
+- 传递给 InputQuestionFocusTemplate 模板组件
+- 支持同一文章内多题顺序作答，答完自动加载下一篇
+- 跟踪 correct/wrong 计数用于进度快照
+- 适配实际模板接口（article + currentQuestion 分离式 props）
+
+**验证情况**：`pnpm check` 类型检查通过，`pnpm lint` 无新增错误
+
 ### 2026-06-25 · `ad29fe4b` · feat(input): add InputQuestionFocusTemplate component
 
 **用户需求**：实现 Task 9 — Frontend template component
