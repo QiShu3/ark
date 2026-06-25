@@ -52,6 +52,7 @@ function formatDate(value?: string | null) {
 function focusTypeLabel(type: DeliberateFocusWorkType) {
   if (type === 'vocab_today') return '闪卡';
   if (type === 'review') return '错题复习';
+  if (type === 'input') return '输入练习';
   return '选择练习';
 }
 
