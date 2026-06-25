@@ -4,6 +4,7 @@ import VocabTodayFocusWork from '../Vocab/VocabTodayFocusWork';
 import ReviewFocusWork from '../ERC/ReviewFocusWork';
 import PracticeFocusWork from '../ERC/PracticeFocusWork';
 import TaskFocusWork from './TaskFocusWork';
+import InputFocusWork from '../Input/InputFocusWork';
 
 // 组件映射：专注工作类型 → render 函数（新增子应用时在这里注册组件）
 const RENDER_MAP: Record<string, (props: Parameters<FocusWorkDefinition['render']>[0]) => React.ReactNode> = {
@@ -11,6 +12,7 @@ const RENDER_MAP: Record<string, (props: Parameters<FocusWorkDefinition['render'
   review: (props) => <ReviewFocusWork {...props} />,
   practice: (props) => <PracticeFocusWork {...props} />,
   task_focus: (props) => <TaskFocusWork {...props} />,
+  input: (props) => <InputFocusWork {...props} />,
 };
 
 function buildRegistryEntry(fwDecl: { type: string; label: string }, app: SubAppDeclaration): FocusWorkDefinition {
@@ -36,6 +38,15 @@ function buildRegistry(): Record<string, FocusWorkDefinition> {
     subtitle: '自定义任务',
     render: RENDER_MAP['task_focus'],
   };
+  // built-in: input (暂无独立子应用入口)
+  if (!entries['input']) {
+    entries['input'] = {
+      type: 'input',
+      title: '输入练习',
+      subtitle: '手动输入作答',
+      render: RENDER_MAP['input'],
+    };
+  }
   return entries;
 }
 

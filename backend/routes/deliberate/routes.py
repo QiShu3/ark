@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 
 from routes.auth_routes import _AuthUser, get_current_user
 from routes.choice.repository import list_set_rows as list_choice_set_rows
+from routes.input.repository import list_input_sets
 from routes.vocab.repository import list_vocab_decks
 
 from . import repository
@@ -222,7 +223,20 @@ async def list_deliberate_banks(
                 )
                 for row in rows
             ]
-    raise HTTPException(status_code=400, detail="kind 必须是 flashcard 或 choice")
+        if kind == "input":
+            rows = await list_input_sets(conn)
+            return [
+                DeliberateBankOptionOut(
+                    id=row["id"],
+                    name=row["name"],
+                    kind="input",
+                    count=row["question_count"],
+                    item_count=0,
+                    question_count=row["question_count"],
+                )
+                for row in rows
+            ]
+    raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
 
 
 @router.get("/deliberate-workflows/{config_id}/runs", response_model=list[DeliberateWorkflowRunSummary])

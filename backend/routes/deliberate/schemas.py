@@ -4,10 +4,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-DeliberateKind = Literal["flashcard", "choice"]
-DeliberateFocusWorkType = Literal["vocab_today", "practice", "review"]
+DeliberateKind = Literal["flashcard", "choice", "input"]
+DeliberateFocusWorkType = Literal["vocab_today", "practice", "review", "input"]
 DeliberateRunStatus = Literal["started", "content_completed", "completed", "abandoned"]
-DeliberateSnapshotType = Literal["choice_set", "vocab_deck"]
+DeliberateSnapshotType = Literal["choice_set", "vocab_deck", "input_set"]
 
 
 class DeliberateBankSummary(BaseModel):

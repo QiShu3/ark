@@ -3557,6 +3557,7 @@ def _focus_work_app_metadata(focus_work_type: str | None) -> tuple[str | None, s
         return "vocab", "vocab_today"
     if focus_work_type in {"review", "practice"}:
         return "erc", focus_work_type
+    # input 是独立类型，不关联 vocab/erc 子应用
     return None, None
 
 
@@ -3585,6 +3586,11 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
             config["article_set_id"] = bank_id
         config["target_article_count"] = target_count
         config["daily_article_target"] = target_count
+    elif focus_work_type == "input":
+        if bank_id:
+            config["input_bank_id"] = bank_id
+        config["target_question_count"] = target_count
+        config["daily_question_target"] = target_count
     return config
 
 
@@ -3597,6 +3603,7 @@ def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
         "daily_target_count",
         "set_id",
         "article_set_id",
+        "input_bank_id",
         "target_question_count",
         "daily_question_target",
         "target_article_count",
@@ -4043,6 +4050,29 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> dict[s
                 focus_run_id=str(run.id),
             )
             return {"snapshot_id": snapshot_id, "snapshot_type": "vocab_deck"}
+
+        # Input set snapshot
+        if focus_work_type == "input":
+            input_bank_id = config.get("input_bank_id") or config.get("bank_id")
+            if not input_bank_id:
+                return None
+            from routes.input.repository import (
+                aggregate_input_focus_stats,
+                aggregate_input_snapshot,
+                insert_input_snapshot,
+            )
+            data = await aggregate_input_snapshot(conn, user_id=user_id, set_id=input_bank_id)
+            focus = await aggregate_input_focus_stats(conn, user_id=user_id, set_id=input_bank_id)
+            data["focus_stats"] = focus
+            snapshot_id = await insert_input_snapshot(
+                conn,
+                user_id=user_id,
+                set_id=input_bank_id,
+                data=data,
+                trigger_reason="phase_end",
+                focus_run_id=str(run.id),
+            )
+            return {"snapshot_id": snapshot_id, "snapshot_type": "input_set"}
 
         # Choice set snapshot
         scope = config.get("choice_scope") or {}
@@ -4624,7 +4654,7 @@ async def _create_countup_focus_workflow(
     completion: dict[str, Any] | None,
     deliberate_context: dict[str, Any] | None = None,
 ) -> Any:
-    if focus_work_type not in ("vocab_today", "review", "practice"):
+    if focus_work_type not in ("vocab_today", "review", "practice", "input"):
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")

@@ -8,9 +8,27 @@ import type { SetSnapshot } from '../lib/choice/types';
 type BankItem = {
   id: string;
   name: string;
+  fw_type: string;
   item_type: string;
   item_count: number;
   is_published: boolean;
+};
+
+type InputSnapshot = {
+  id: string;
+  user_id: number;
+  set_id: string;
+  total_questions: number;
+  answered_count: number;
+  correct_count: number;
+  avg_score: number | null;
+  total_time_ms: number;
+  mode_breakdown: Record<string, number>;
+  wrong_question_ids: string[];
+  focus_stats: Record<string, number>;
+  trigger_reason: string;
+  focus_run_id: string | null;
+  created_at: string;
 };
 
 function formatDuration(minutes: number): string {
@@ -113,26 +131,50 @@ export default function SnapshotSubApp() {
   const navigate = useNavigate();
   const [banks, setBanks] = useState<BankItem[]>([]);
   const [selectedBank, setSelectedBank] = useState<string>('');
+  const [selectedBankType, setSelectedBankType] = useState<string>('');
   const [snapshots, setSnapshots] = useState<SetSnapshot[]>([]);
+  const [inputSnapshots, setInputSnapshots] = useState<InputSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     apiJson<BankItem[]>('/api/admin/content-banks').then((list) => {
       setBanks(list);
-      if (list.length > 0) setSelectedBank(list[0].id);
+      if (list.length > 0) {
+        setSelectedBank(list[0].id);
+        setSelectedBankType(list[0].fw_type);
+      }
     }).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!selectedBank) return;
     setLoading(true);
-    fetchSetSnapshots(selectedBank, { limit: 50 })
-      .then(setSnapshots)
-      .catch(() => setSnapshots([]))
-      .finally(() => setLoading(false));
-  }, [selectedBank]);
 
-  const latest = snapshots[0] ?? null;
+    const bank = banks.find(b => b.id === selectedBank);
+    const fwType = bank?.fw_type || '';
+
+    if (fwType === 'input') {
+      apiJson<InputSnapshot[]>(`/api/input/snapshots?bank_id=${selectedBank}&limit=50`)
+        .then(setInputSnapshots)
+        .catch(() => setInputSnapshots([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetchSetSnapshots(selectedBank, { limit: 50 })
+        .then(setSnapshots)
+        .catch(() => setSnapshots([]))
+        .finally(() => setLoading(false));
+    }
+  }, [selectedBank, banks]);
+
+  const handleBankChange = (bankId: string) => {
+    setSelectedBank(bankId);
+    const bank = banks.find(b => b.id === bankId);
+    setSelectedBankType(bank?.fw_type || '');
+  };
+
+  const isInputType = selectedBankType === 'input';
+  const latest = isInputType ? null : (snapshots[0] ?? null);
+  const inputLatest = isInputType ? (inputSnapshots[0] ?? null) : null;
 
   const accuracyTrend = [...snapshots].reverse().map((s) => ({
     label: formatDateShort(s.created_at),
@@ -184,27 +226,122 @@ export default function SnapshotSubApp() {
           <label className="text-sm font-medium text-[var(--ark-text-muted)]">选择题库</label>
           <select
             value={selectedBank}
-            onChange={(e) => setSelectedBank(e.target.value)}
+            onChange={(e) => handleBankChange(e.target.value)}
             className="rounded-lg border border-ark-border bg-ark-surface px-4 py-2.5 text-sm text-[var(--ark-text)] focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)]"
           >
             {banks.map((b) => (
               <option key={b.id} value={b.id}>{b.name} ({b.item_count}题)</option>
             ))}
           </select>
-          <span className="text-xs text-[var(--ark-text-faint)]">{snapshots.length} 条存档</span>
+          <span className="text-xs text-[var(--ark-text-faint)]">
+            {isInputType ? `${inputSnapshots.length} 条存档` : `${snapshots.length} 条存档`}
+          </span>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="text-sm text-[var(--ark-text-muted)]">加载中…</div>
           </div>
-        ) : snapshots.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Layers className="mb-3 h-12 w-12 text-[var(--ark-text-faint)]" />
-            <p className="text-sm text-[var(--ark-text-muted)]">该题库暂无存档记录</p>
-            <p className="mt-1 text-xs text-[var(--ark-text-faint)]">完成专注学习阶段后会自动生成存档</p>
-          </div>
+        ) : isInputType ? (
+          // Input type snapshots
+          inputSnapshots.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Layers className="mb-3 h-12 w-12 text-[var(--ark-text-faint)]" />
+              <p className="text-sm text-[var(--ark-text-muted)]">该题库暂无存档记录</p>
+              <p className="mt-1 text-xs text-[var(--ark-text-faint)]">完成专注学习阶段后会自动生成存档</p>
+            </div>
+          ) : (
+            <>
+              {/* Input summary cards */}
+              {inputLatest && (() => {
+                const f = inputLatest.focus_stats;
+                return (
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+                      <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                        <Layers className="h-4 w-4" /> 总题数
+                      </div>
+                      <div className="mt-2 text-3xl font-semibold text-[var(--ark-text)]">{inputLatest.total_questions}</div>
+                      <div className="mt-1 text-xs text-[var(--ark-text-faint)]">
+                        {Object.entries(inputLatest.mode_breakdown).map(([k, v]) => `${k}: ${v}`).join(', ')}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+                      <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                        <Target className="h-4 w-4" /> 已作答
+                      </div>
+                      <div className="mt-2 text-3xl font-semibold text-emerald-400">{inputLatest.answered_count}</div>
+                      <div className="mt-1 text-xs text-[var(--ark-text-faint)]">
+                        {inputLatest.total_questions > 0 ? Math.round((inputLatest.answered_count / inputLatest.total_questions) * 100) : 0}% 完成率
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+                      <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                        <TrendingUp className="h-4 w-4" /> 正确数
+                      </div>
+                      <div className="mt-2 text-3xl font-semibold text-[var(--ark-text)]">{inputLatest.correct_count}</div>
+                      <div className="mt-1 text-xs text-[var(--ark-text-faint)]">
+                        {inputLatest.answered_count > 0 ? Math.round((inputLatest.correct_count / inputLatest.answered_count) * 100) : 0}% 正确率
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+                      <div className="flex items-center gap-2 text-sm text-[var(--ark-text-muted)]">
+                        <Clock className="h-4 w-4" /> 累计练习
+                      </div>
+                      <div className="mt-2 text-3xl font-semibold text-[var(--ark-text)]">
+                        {formatDuration(Math.round((inputLatest.total_time_ms || 0) / 60000))}
+                      </div>
+                      <div className="mt-1 text-xs text-[var(--ark-text-faint)]">
+                        {f.total_sessions ?? 0} 次专注
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Input snapshots table */}
+              <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-5">
+                <h3 className="mb-4 text-sm font-medium text-[var(--ark-text-muted)]">存档历史</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-ark-border text-left text-xs text-[var(--ark-text-faint)]">
+                        <th className="pb-2 pr-4">时间</th>
+                        <th className="pb-2 pr-4">总题数</th>
+                        <th className="pb-2 pr-4">已作答</th>
+                        <th className="pb-2 pr-4">正确数</th>
+                        <th className="pb-2 pr-4">用时</th>
+                        <th className="pb-2">触发</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inputSnapshots.map((s) => (
+                        <tr key={s.id} className="border-b border-ark-border/50">
+                          <td className="py-2.5 pr-4 text-[var(--ark-text-muted)]">{formatDate(s.created_at)}</td>
+                          <td className="py-2.5 pr-4 text-[var(--ark-text)]">{s.total_questions}</td>
+                          <td className="py-2.5 pr-4 text-emerald-400">{s.answered_count}</td>
+                          <td className="py-2.5 pr-4 text-[var(--ark-text)]">{s.correct_count}</td>
+                          <td className="py-2.5 pr-4 text-[var(--ark-text)]">{formatDuration(Math.round((s.total_time_ms || 0) / 60000))}</td>
+                          <td className="py-2.5 text-[var(--ark-text-faint)]">
+                            {s.trigger_reason === 'phase_end' ? '阶段结束' : s.trigger_reason}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )
         ) : (
+          // Choice type snapshots
+          snapshots.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Layers className="mb-3 h-12 w-12 text-[var(--ark-text-faint)]" />
+              <p className="text-sm text-[var(--ark-text-muted)]">该题库暂无存档记录</p>
+              <p className="mt-1 text-xs text-[var(--ark-text-faint)]">完成专注学习阶段后会自动生成存档</p>
+            </div>
+          ) : (
           <>
             {/* Summary cards */}
             {latest && (() => {
@@ -372,7 +509,7 @@ export default function SnapshotSubApp() {
               </div>
             </div>
           </>
-        )}
+        ))}
       </div>
     </div>
   );

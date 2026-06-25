@@ -24,7 +24,7 @@ type PendingStart = {
 };
 
 function isFocusWorkType(value: unknown): value is FocusWorkType {
-  return value === 'vocab_today' || value === 'review' || value === 'practice' || value === 'task_focus';
+  return value === 'vocab_today' || value === 'review' || value === 'practice' || value === 'task_focus' || value === 'input';
 }
 
 export default function FocusWorkProvider({ children }: FocusWorkProviderProps) {

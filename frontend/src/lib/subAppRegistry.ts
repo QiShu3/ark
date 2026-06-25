@@ -40,7 +40,7 @@ export interface SubAppDeclaration {
 
 // ---- 专注工作类型（从 registry 推导） ----
 
-export type RegisteredFocusWorkType = 'vocab_today' | 'review' | 'practice' | 'task_focus';
+export type RegisteredFocusWorkType = 'vocab_today' | 'review' | 'practice' | 'task_focus' | 'input';
 
 // ---- 图标查找 ----
 
