@@ -20,6 +20,8 @@ from routes.choice import router as choice_router
 from routes.content_bank import init_content_bank
 from routes.deliberate import init_deliberate
 from routes.deliberate import router as deliberate_router
+from routes.input import init_input
+from routes.input import router as input_router
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
 from routes.vocab import init_vocab
@@ -38,6 +40,7 @@ async def _lifespan(app: FastAPI):
     await init_choice(app)
     await init_content_bank(app)
     await init_deliberate(app)
+    await init_input(app)
     try:
         yield
     finally:
@@ -73,6 +76,7 @@ app.include_router(app_registry_router)
 app.include_router(admin_router)
 app.include_router(deliberate_router)
 app.include_router(choice_router)
+app.include_router(input_router)
 
 # Auto-discover and register dynamic sub-app routers
 for _decl in get_all():
