@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from routes.auth_routes import get_current_user
+from routes.auth_routes import _AuthUser, get_current_user
 from routes.choice.adapters import resolve_choice_set_id
 from routes.choice.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
 from routes.choice.repository import aggregate_focus_stats, aggregate_set_snapshot, insert_set_snapshot
@@ -146,6 +146,12 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/todo", tags=["todo"])
+
+
+async def _require_admin(user: Annotated[_AuthUser, Depends(get_current_user)]) -> _AuthUser:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 def _config_payload(config: Any) -> dict[str, object]:
@@ -4752,7 +4758,7 @@ async def start_test_focus_work(
 async def start_deliberate_workflow(
     request: Request,
     body: DeliberateWorkflowStartRequest,
-    user: Annotated[Any, Depends(get_current_user)],
+    user: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> FocusWorkflowOut:
     """启动刻意工作流（正计时模式）。"""
     pool = _pool_from_request(request)

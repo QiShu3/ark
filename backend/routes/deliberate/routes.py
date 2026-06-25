@@ -65,6 +65,24 @@ async def _bank_summary(conn: asyncpg.Connection, *, kind: str, bank_id: str | N
             item_count=row["item_count"],
             question_count=0,
         ).model_dump()
+    if kind == "input":
+        row = await conn.fetchrow(
+            """
+            SELECT id::text AS id, name, question_count
+            FROM input_sets
+            WHERE id = $1::uuid
+            """,
+            bank_id,
+        )
+        if row is None:
+            return None
+        return DeliberateBankSummary(
+            id=row["id"],
+            name=row["name"],
+            kind="input",
+            item_count=0,
+            question_count=row["question_count"],
+        ).model_dump()
     row = await conn.fetchrow(
         """
         SELECT id::text AS id, name, article_count, question_count
