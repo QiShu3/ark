@@ -7,6 +7,7 @@ import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
 import { fetchChoiceFilters, fetchSetSnapshots } from '../lib/choice/api';
 import type { ChoiceFilters, SetSnapshot } from '../lib/choice/types';
+import { apiJson } from '../lib/api';
 import {
   createDeliberateWorkflow,
   deleteDeliberateWorkflow,
@@ -65,7 +66,11 @@ function latestAccuracy(snapshot: SetSnapshot | null) {
   return Math.round((safeRecord(snapshot.focus_stats).accuracy ?? 0) * 100);
 }
 
-function SnapshotPanel({ snapshots }: { snapshots: SetSnapshot[] }) {
+function isInputSnapshot(snapshot: SetSnapshot): boolean {
+  return 'answered_count' in snapshot && 'correct_count' in snapshot;
+}
+
+function SnapshotPanel({ snapshots, kind }: { snapshots: SetSnapshot[]; kind?: string }) {
   const latest = snapshots[0] ?? null;
   const trend = [...snapshots].reverse().slice(-8);
   const maxAccuracy = Math.max(100, ...trend.map((item) => latestAccuracy(item)));
@@ -84,13 +89,26 @@ function SnapshotPanel({ snapshots }: { snapshots: SetSnapshot[] }) {
     );
   }
 
+  const isInput = isInputSnapshot(latest);
+
   return (
     <section className="space-y-4">
       <div className="grid gap-3 md:grid-cols-4">
-        <Metric label="正确率" value={`${latestAccuracy(latest)}%`} detail={`${focus.total_answers ?? 0} 次答题`} />
-        <Metric label="掌握" value={String(mastery.mastered ?? 0)} detail={`总量 ${latest.total_questions}`} />
-        <Metric label="待复习" value={String(due.due_now ?? due.overdue ?? 0)} detail="当前快照" />
-        <Metric label="专注" value={String(focus.total_sessions ?? 0)} detail={`${focus.total_minutes ?? 0} 分钟`} />
+        {isInput ? (
+          <>
+            <Metric label="已作答" value={String((latest as any).answered_count ?? 0)} detail={`总量 ${latest.total_questions}`} />
+            <Metric label="正确数" value={String((latest as any).correct_count ?? 0)} detail={`${(latest as any).answered_count > 0 ? Math.round(((latest as any).correct_count / (latest as any).answered_count) * 100) : 0}% 正确率`} />
+            <Metric label="专注" value={String(focus.total_sessions ?? 0)} detail={`${focus.total_minutes ?? 0} 分钟`} />
+            <Metric label="总题数" value={String(latest.total_questions)} detail={Object.entries((latest as any).mode_breakdown || {}).map(([k, v]) => `${k}: ${v}`).join(', ')} />
+          </>
+        ) : (
+          <>
+            <Metric label="正确率" value={`${latestAccuracy(latest)}%`} detail={`${focus.total_answers ?? 0} 次答题`} />
+            <Metric label="掌握" value={String(mastery.mastered ?? 0)} detail={`总量 ${latest.total_questions}`} />
+            <Metric label="待复习" value={String(due.due_now ?? due.overdue ?? 0)} detail="当前快照" />
+            <Metric label="专注" value={String(focus.total_sessions ?? 0)} detail={`${focus.total_minutes ?? 0} 分钟`} />
+          </>
+        )}
       </div>
       <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
         <div className="mb-4 flex items-center justify-between">
@@ -280,9 +298,15 @@ export default function DeliberateWorkflow() {
       .then(setRuns)
       .catch(() => setRuns([]));
     if (selectedConfig.bank_id) {
-      fetchSetSnapshots(selectedConfig.bank_id, { limit: 30 })
-        .then(setSnapshots)
-        .catch(() => setSnapshots([]));
+      if (selectedConfig.kind === 'input') {
+        apiJson<SetSnapshot[]>(`/api/input/snapshots?bank_id=${selectedConfig.bank_id}&limit=30`)
+          .then(setSnapshots)
+          .catch(() => setSnapshots([]));
+      } else {
+        fetchSetSnapshots(selectedConfig.bank_id, { limit: 30 })
+          .then(setSnapshots)
+          .catch(() => setSnapshots([]));
+      }
     } else {
       setSnapshots([]);
     }
@@ -515,7 +539,7 @@ export default function DeliberateWorkflow() {
             <BarChart3 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
             <h3 className="text-base font-semibold text-ark-text">存档可视化</h3>
           </div>
-          <SnapshotPanel snapshots={snapshots} />
+          <SnapshotPanel snapshots={snapshots} kind={kind} />
         </section>
       </div>
     </div>
