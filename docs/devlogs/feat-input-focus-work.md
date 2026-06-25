@@ -2,6 +2,21 @@
 
 ## 提交记录
 
+### 2026-06-25 · `8f2e339` · feat(snapshot): support input type in content bank list and snapshot visualization
+
+**用户需求**：存档可视化页面看不到 input 类型的存档
+
+**完成工作**：
+- `backend/routes/admin_routes.py` 的 `list_content_banks` 添加 `input_sets` 查询
+- `frontend/src/pages/SnapshotSubApp.tsx` 支持 input 类型快照的展示
+  - 根据 `fw_type` 调用不同的 API（`/api/input/snapshots` 或 `/api/choice/snapshots`）
+  - 显示 input 快照的统计数据（总题数、已作答、正确数、用时）
+  - 显示 input 快照的历史表格
+
+**验证情况**：`pnpm check` 和 `uv run ruff check` 通过
+
+---
+
 ### 2026-06-25 · `692f514` · fix(frontend): add input type label in focusTypeLabel
 
 **用户需求**：选择"输入类专注工作"后显示的还是"选择练习"
