@@ -47,6 +47,7 @@ Backend commands run from `backend/`:
 - Frontend tests use Vitest and Testing Library. Place tests beside pages in `frontend/src/pages/__tests__/` and prefer `*.test.tsx`.
 - Backend tests use pytest. Name files `test_*.py` and keep fixtures in `backend/tests/conftest.py`.
 - Add or update tests for new route behavior, auth flows, and non-trivial UI state changes.
+- Browser automation tests: test methods, reports, and data live in `docs/testing/`.
 
 ## Commit & Pull Request Guidelines
 - Follow the existing commit style: `feat: ...`, `fix: ...`, `chore: ...`, `refactor: ...`, with optional scopes like `feat(frontend): ...`.
