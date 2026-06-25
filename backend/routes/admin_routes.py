@@ -1950,6 +1950,41 @@ async def list_content_banks(
             for r in cs_rows
         ])
 
+        # 3. Query input_sets (input question banks)
+        is_conditions: list[str] = []
+        is_params: list[Any] = []
+        is_idx = 1
+        if search:
+            is_conditions.append(f"s.name ILIKE ${is_idx}")
+            is_params.append(f"%{search}%")
+            is_idx += 1
+        is_where = ("WHERE " + " AND ".join(is_conditions)) if is_conditions else ""
+
+        is_rows = await conn.fetch(
+            f"""
+            SELECT s.id::text, s.name, s.description, s.created_at,
+                   s.question_count AS item_count
+            FROM input_sets s
+            {is_where}
+            ORDER BY s.name
+            """,
+            *is_params,
+        )
+
+        results.extend([
+            ContentBankListItem(
+                id=str(r["id"]),
+                name=r["name"],
+                fw_type="input",
+                item_type="input_question",
+                description=r["description"] or "",
+                item_count=r["item_count"],
+                is_published=True,
+                created_at=r["created_at"].isoformat() if r["created_at"] else "",
+            )
+            for r in is_rows
+        ])
+
     return results
 
 
