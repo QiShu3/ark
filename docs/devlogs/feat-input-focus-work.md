@@ -2,6 +2,23 @@
 
 ## 提交记录
 
+### 2026-06-25 · `8ef5899` · fix(todo): return None app_id for input type in _focus_work_app_metadata
+
+**用户需求**：点击"开始专注"后出现 HTTP 500 错误
+
+**根本原因**：
+- `_focus_work_app_metadata('input')` 返回 `('input', 'input')`
+- 数据库约束 `chk_focus_work_runs_app_id` 只允许 `NULL`, `'vocab'`, `'erc'`
+- 导致 INSERT 失败
+
+**修复方案**：
+- input 是独立类型，不关联 vocab/erc 子应用
+- 修改 `_focus_work_app_metadata` 对 input 类型返回 `(None, None)`
+
+**验证情况**：`uv run ruff check` 通过
+
+---
+
 ### 2026-06-25 · `69e335a` · fix(db): add 'input' to focus_work_runs CHECK constraints
 
 **用户需求**：后端报 CheckViolationError，focus_work_runs 表的约束不允许 app_id='input'
