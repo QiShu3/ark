@@ -2,6 +2,20 @@
 
 ## 提交记录
 
+### 2026-06-25 · `cfccfed` · fix(deliberate): support input type snapshots in workflow visualization
+
+**用户需求**：刻意工作流页面的存档可视化显示为空
+
+**完成工作**：
+- `frontend/src/pages/DeliberateWorkflow.tsx` 修改获取快照逻辑
+  - 根据 `kind` 类型调用不同的 API（input 类型调用 `/api/input/snapshots`）
+  - 修改 `SnapshotPanel` 组件支持 input 类型快照的展示
+  - input 类型显示：已作答、正确数、专注、总题数（含模式分布）
+
+**验证情况**：`pnpm check` 通过，浏览器测试显示正确
+
+---
+
 ### 2026-06-25 · `8f2e339` · feat(snapshot): support input type in content bank list and snapshot visualization
 
 **用户需求**：存档可视化页面看不到 input 类型的存档
