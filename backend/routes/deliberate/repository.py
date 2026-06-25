@@ -63,7 +63,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute("ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_kind;")
         await conn.execute(
-            "ALTER TABLE deliberate_workflow_configs ADD CONSTRAINT chk_deliberate_configs_kind CHECK (kind IN ('flashcard', 'choice'));"
+            "ALTER TABLE deliberate_workflow_configs ADD CONSTRAINT chk_deliberate_configs_kind CHECK (kind IN ('flashcard', 'choice', 'input'));"
         )
         await conn.execute(
             "ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_focus_work_type;"
@@ -72,7 +72,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             """
             ALTER TABLE deliberate_workflow_configs
             ADD CONSTRAINT chk_deliberate_configs_focus_work_type
-            CHECK (focus_work_type IN ('vocab_today', 'practice', 'review'));
+            CHECK (focus_work_type IN ('vocab_today', 'practice', 'review', 'input'));
             """
         )
         await conn.execute(
@@ -113,7 +113,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         )
         await conn.execute("ALTER TABLE deliberate_workflow_runs DROP CONSTRAINT IF EXISTS chk_deliberate_runs_snapshot_type;")
         await conn.execute(
-            "ALTER TABLE deliberate_workflow_runs ADD CONSTRAINT chk_deliberate_runs_snapshot_type CHECK (snapshot_type IS NULL OR snapshot_type IN ('choice_set', 'vocab_deck'));"
+            "ALTER TABLE deliberate_workflow_runs ADD CONSTRAINT chk_deliberate_runs_snapshot_type CHECK (snapshot_type IS NULL OR snapshot_type IN ('choice_set', 'vocab_deck', 'input_set'));"
         )
         await conn.execute(
             "ALTER TABLE deliberate_workflow_runs DROP CONSTRAINT IF EXISTS chk_deliberate_runs_focus_work_type;"
@@ -122,7 +122,7 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             """
             ALTER TABLE deliberate_workflow_runs
             ADD CONSTRAINT chk_deliberate_runs_focus_work_type
-            CHECK (focus_work_type IN ('vocab_today', 'practice', 'review'));
+            CHECK (focus_work_type IN ('vocab_today', 'practice', 'review', 'input'));
             """
         )
         await conn.execute(
