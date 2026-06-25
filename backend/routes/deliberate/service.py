@@ -158,8 +158,25 @@ async def import_deliberate_bank(
     filename: str,
     file_bytes: bytes,
 ) -> BankImportResult:
-    if kind not in {"flashcard", "choice"}:
-        raise HTTPException(status_code=400, detail="kind 必须是 flashcard 或 choice")
+    if kind not in {"flashcard", "choice", "input"}:
+        raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
+    if kind == "input":
+        from routes.input.service import import_input_bank as _import_input_bank
+        result = await _import_input_bank(
+            conn,
+            name=name,
+            description=description,
+            filename=filename,
+            file_bytes=file_bytes,
+        )
+        return BankImportResult(
+            bank_id=result["bank_id"],
+            kind=kind,
+            name=name,
+            item_count=0,
+            question_count=result["question_count"],
+            validation_summary=result["validation_summary"],
+        )
     entries = _load_json_payload(file_bytes, filename)
     digest = hashlib.sha1(file_bytes).hexdigest()[:8]
     if kind == "flashcard":
@@ -215,5 +232,7 @@ def validate_config_shape(kind: str, focus_work_type: str, target_count: int) ->
         raise HTTPException(status_code=400, detail="闪卡工作流必须使用 vocab_today")
     if kind == "choice" and focus_work_type not in {"practice", "review"}:
         raise HTTPException(status_code=400, detail="选择题工作流必须使用 practice 或 review")
+    if kind == "input" and focus_work_type != "input":
+        raise HTTPException(status_code=400, detail="输入题工作流必须使用 input")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")

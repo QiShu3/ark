@@ -1162,7 +1162,7 @@ def _normalize_timer_mode(value: Any, default: FocusTimerMode = "countdown") -> 
 
 def _normalize_focus_work_type(value: Any) -> FocusWorkType | None:
     text = str(value or "").strip()
-    if text in {"vocab_today", "review", "practice", "task_focus"}:
+    if text in {"vocab_today", "review", "practice", "task_focus", "input"}:
         return text  # type: ignore[return-value]
     return None
 
