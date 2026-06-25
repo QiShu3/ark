@@ -160,11 +160,11 @@ export default function DeliberateWorkflow() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
-  const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : choiceMode;
+  const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : kind === 'input' ? 'input' : choiceMode;
   const selectedConfig = configs.find((item) => item.id === selectedId) ?? configs[0] ?? null;
   const selectedBank = banks.find((item) => item.id === bankId) ?? null;
   const bankCountLabel = kind === 'flashcard' ? '词' : '题';
-  const kindLabel = kind === 'flashcard' ? '闪卡' : '选择题';
+  const kindLabel = kind === 'flashcard' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
   const canSave = Boolean(name.trim() && bankId);
   const canUseBank = Boolean(bankId);
   const hasSavedConfig = configs.length > 0;
@@ -616,7 +616,7 @@ export default function DeliberateWorkflow() {
           {draftMode && activeStep === 1 ? (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-                {(['choice', 'flashcard'] as DeliberateKind[]).map((item) => (
+                {(['choice', 'flashcard', 'input'] as DeliberateKind[]).map((item) => (
                   <button
                     key={item}
                     type="button"
@@ -625,7 +625,7 @@ export default function DeliberateWorkflow() {
                       kind === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
                     }`}
                   >
-                    {item === 'choice' ? '选择题' : '闪卡'}
+                    {item === 'choice' ? '选择题' : item === 'flashcard' ? '闪卡' : '输入题'}
                   </button>
                 ))}
               </div>

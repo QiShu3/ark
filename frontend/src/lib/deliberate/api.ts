@@ -1,7 +1,7 @@
 import { apiFetch, apiJson } from '../api';
 
-export type DeliberateKind = 'flashcard' | 'choice';
-export type DeliberateFocusWorkType = 'vocab_today' | 'practice' | 'review';
+export type DeliberateKind = 'flashcard' | 'choice' | 'input';
+export type DeliberateFocusWorkType = 'vocab_today' | 'practice' | 'review' | 'input';
 export type DeliberateRunStatus = 'started' | 'content_completed' | 'completed' | 'abandoned';
 
 export type DeliberateBankSummary = {
