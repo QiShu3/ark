@@ -2,6 +2,28 @@
 
 ## 提交记录
 
+### 2026-06-25 · `047e9b2` · feat(input): save user answers and aggregate stats in snapshots
+
+**用户需求**：存档可视化中"已作答"始终为 0
+
+**根本原因**：
+- 系统没有存储用户的答题记录
+- `aggregate_input_snapshot` 只统计题目数量，不统计答题数据
+
+**完成工作**：
+- `backend/routes/input/db.py` 创建 `input_user_answers` 表
+- `backend/routes/input/repository.py` 添加：
+  - `insert_input_user_answer` 保存答题记录
+  - `get_input_set_id_by_question` 根据题目获取题库 ID
+  - 修改 `aggregate_input_snapshot` 从答题记录表统计数据
+- `backend/routes/input/service.py` 修改 `submit_answer` 函数：
+  - 填空题：保存 `is_correct` 字段
+  - 主观题：保存 `score` 字段
+
+**验证情况**：`uv run ruff check` 通过
+
+---
+
 ### 2026-06-25 · `8ef5899` · fix(todo): return None app_id for input type in _focus_work_app_metadata
 
 **用户需求**：点击"开始专注"后出现 HTTP 500 错误
