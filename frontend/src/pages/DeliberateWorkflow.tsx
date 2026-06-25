@@ -349,7 +349,6 @@ export default function DeliberateWorkflow() {
         description: uploadDescription,
         file: uploadFile,
       });
-      setBankId(result.bank_id);
       setName((current) => current || result.name);
       setUploadFile(null);
       setUploadName('');
