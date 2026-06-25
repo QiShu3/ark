@@ -150,16 +150,28 @@ export default function InputQuestionFocusTemplate({
                     <ContentBlockRenderer blocks={article.materialBlocks} />
                   ) : (
                     article.paragraphs.map((paragraph) => (
-                      <p key={paragraph.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
-                        {paragraph.label ? <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">{paragraph.label}</span> : null}
-                        <span className="font-serif tracking-normal">
-                          {typeof paragraph.text === 'string' ? (
-                            <MarkdownContent content={paragraph.text} inline />
-                          ) : (
-                            paragraph.text
-                          )}
-                        </span>
-                      </p>
+                      paragraph.label ? (
+                        <p key={paragraph.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-6 text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
+                          <span className="select-none text-left text-base font-bold text-[var(--focus-work-text)]">{paragraph.label}</span>
+                          <span className="font-serif tracking-normal">
+                            {typeof paragraph.text === 'string' ? (
+                              <MarkdownContent content={paragraph.text} inline />
+                            ) : (
+                              paragraph.text
+                            )}
+                          </span>
+                        </p>
+                      ) : (
+                        <p key={paragraph.id} className="text-[1.02rem] leading-8 text-[var(--focus-work-text)] lg:text-[1.08rem] lg:leading-9">
+                          <span className="font-serif tracking-normal">
+                            {typeof paragraph.text === 'string' ? (
+                              <MarkdownContent content={paragraph.text} inline />
+                            ) : (
+                              paragraph.text
+                            )}
+                          </span>
+                        </p>
+                      )
                     ))
                   )}
                 </div>

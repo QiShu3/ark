@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 InputQuestionMode = Literal["fill", "subjective"]
 InputMatchRule = Literal["exact", "contains", "regex"]
 

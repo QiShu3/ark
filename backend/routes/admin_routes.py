@@ -23,6 +23,7 @@ from lib.content_selector import derive_content_selector
 from lib.sub_app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
 from routes.choice.repository import list_set_rows as list_erc_set_rows
+from routes.input.repository import list_input_sets
 from routes.vocab.repository import list_vocab_decks
 
 # --- Import logger setup ---
@@ -2272,9 +2273,9 @@ async def create_content_bank(
                     # Choice type: write to choice_sets (skip content_banks)
                     from routes.choice.importer import parse_content_bank_entries
                     from routes.choice.repository import (
-                        upsert_set,
-                        upsert_article_seed,
                         refresh_set_counts,
+                        upsert_article_seed,
+                        upsert_set,
                     )
 
                     # Generate set_key from name
@@ -2944,6 +2945,9 @@ async def list_content_banks_for_type(
             rows = await list_erc_set_rows(conn)
             count_key = "question_count" if focus_work_type == "review" else "article_count"
             return [ContentBankItem(id=r["id"], name=r["name"], count=r[count_key]) for r in rows]
+        elif focus_work_type == "input":
+            rows = await list_input_sets(conn)
+            return [ContentBankItem(id=r["id"], name=r["name"], count=r["question_count"]) for r in rows]
         else:
             raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
 
@@ -3006,7 +3010,7 @@ async def create_test_focus_config(
     completion_json: str = Form(""),
 ) -> TestFocusConfigOut:
     """创建测试专注配置。"""
-    if focus_work_type not in ("vocab_today", "review", "practice"):
+    if focus_work_type not in ("vocab_today", "review", "practice", "input"):
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")

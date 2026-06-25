@@ -4,6 +4,8 @@ from typing import Any
 
 import asyncpg
 
+from .routes import router
+
 
 async def init_input(app: Any) -> None:
     pool = getattr(getattr(app, "state", None), "auth_pool", None)
@@ -18,4 +20,4 @@ async def _init_tables(pool: asyncpg.Pool) -> None:
         await _init_db(conn)
 
 
-__all__ = ["init_input"]
+__all__ = ["init_input", "router"]
