@@ -2,6 +2,28 @@
 
 ## 提交记录
 
+### 2026-06-25 · `69e335a` · fix(db): add 'input' to focus_work_runs CHECK constraints
+
+**用户需求**：后端报 CheckViolationError，focus_work_runs 表的约束不允许 app_id='input'
+
+**完成工作**：
+- `backend/routes/todo/db.py` 修改两个 CHECK 约束：
+  - `chk_focus_work_runs_app_id`：添加 'input' 到允许列表
+  - `chk_focus_work_runs_app_task_type`：添加 'input' 到允许列表
+
+**约束修复汇总**：
+| 表 | 约束 | 状态 |
+|---|---|---|
+| focus_work_runs | chk_focus_work_runs_app_id | ✅ 已修复 |
+| focus_work_runs | chk_focus_work_runs_app_task_type | ✅ 已修复 |
+| focus_app_work_logs | chk_focus_app_work_logs_type | ✅ 已包含 |
+| deliberate_workflow_configs | chk_deliberate_configs_focus_work_type | ✅ 已包含 |
+| deliberate_workflow_runs | chk_deliberate_runs_focus_work_type | ✅ 已包含 |
+
+**验证情况**：`uv run ruff check` 通过
+
+---
+
 ### 2026-06-25 · `cfccfed` · fix(deliberate): support input type snapshots in workflow visualization
 
 **用户需求**：刻意工作流页面的存档可视化显示为空
