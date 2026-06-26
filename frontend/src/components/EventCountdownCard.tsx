@@ -50,8 +50,11 @@ import {
   type WorkflowFormState,
   type WorkflowPreset,
 } from './workflowPresetForm';
-import type { Task } from './taskTypes';
+import type { AppointmentStoredStatus, CompletionPeriodType, Task } from './taskTypes';
 import type { EventItem, EventPlanTemplate, EventTemplateStoreTemplate } from '../lib/events/types';
+import TaskArrangementForm from './events/TaskArrangementForm';
+import AppointmentArrangementForm from './events/AppointmentArrangementForm';
+import ArrangementEditorShell from './events/ArrangementEditorShell';
 
 type EventFormState = {
   name: string;
@@ -92,11 +95,53 @@ type CreateWorkbenchItemState = {
   kind: 'task' | 'appointment';
   title: string;
   content: string;
+  // Task-specific fields (aligned with TaskArrangementFormState)
+  taskType: 'focus' | 'checkin';
+  startDate: string;
+  dueDate: string;
+  periodType: CompletionPeriodType;
+  customPeriodDays: number;
+  maxCompletionsPerPeriod: number;
+  weekdayOnly: boolean;
+  // Appointment-specific fields
+  status: AppointmentStoredStatus;
+  startsAt: string;
+  endsAt: string;
+  repeatRule: string;
+  // Shared fields
+  event: string;
+  eventId: string;
+  timeInheritsFromEvent: boolean;
+  timeOverridden: boolean;
+  // Template scheduling
   offsetDays: number;
 };
 
 type CreateArrangementEditorState = CreateWorkbenchItemState & {
   index: number | null;
+};
+
+const EMPTY_CREATE_WORKBENCH_ITEM: CreateWorkbenchItemState = {
+  clientId: '',
+  kind: 'task',
+  title: '',
+  content: '',
+  taskType: 'focus',
+  startDate: '',
+  dueDate: '',
+  periodType: 'once',
+  customPeriodDays: 1,
+  maxCompletionsPerPeriod: 1,
+  weekdayOnly: false,
+  status: 'pending',
+  startsAt: '',
+  endsAt: '',
+  repeatRule: '',
+  event: '',
+  eventId: '',
+  timeInheritsFromEvent: false,
+  timeOverridden: false,
+  offsetDays: 0,
 };
 
 type TemplateConflictState = {
@@ -264,13 +309,31 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
 
   function buildCreateWorkbenchItems(template: EventPlanTemplate | undefined): CreateWorkbenchItemState[] {
     if (!template) return [];
-    return template.items.map((item) => ({
-      clientId: typeof item.details?.client_id === 'string' ? item.details.client_id : makeCreateArrangementClientId(),
-      kind: item.kind,
-      title: item.title,
-      content: item.content ?? '',
-      offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
-    }));
+    return template.items.map((item) => {
+      const details = item.details ?? {};
+      return {
+        clientId: typeof details.client_id === 'string' ? details.client_id : makeCreateArrangementClientId(),
+        kind: item.kind,
+        title: item.title,
+        content: item.content ?? '',
+        taskType: details.task_type === 'checkin' ? 'checkin' : 'focus',
+        startDate: '',
+        dueDate: '',
+        periodType: (details.period_type as CompletionPeriodType) ?? 'once',
+        customPeriodDays: typeof details.custom_period_days === 'number' ? details.custom_period_days : 1,
+        maxCompletionsPerPeriod: typeof details.max_completions_per_period === 'number' ? details.max_completions_per_period : 1,
+        weekdayOnly: typeof details.weekday_only === 'boolean' ? details.weekday_only : false,
+        status: 'pending' as const,
+        startsAt: '',
+        endsAt: '',
+        repeatRule: '',
+        event: '',
+        eventId: '',
+        timeInheritsFromEvent: typeof details.time_inherits_from_event === 'boolean' ? details.time_inherits_from_event : false,
+        timeOverridden: typeof details.time_overridden === 'boolean' ? details.time_overridden : true,
+        offsetDays: Math.max(0, Math.floor(item.offset_days || 0)),
+      };
+    });
   }
 
   function buildConfiguredApps(template: EventPlanTemplate | undefined): ConfiguredAppState[] {
@@ -317,19 +380,46 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     }));
   }
 
-  function buildTaskOption(
-    id: string,
-    title: string,
-    content: string | null,
-    eventName: string,
-    appTaskType: Task['app_task_type'] = null,
-  ): Task {
+  function buildTaskOption(item: CreateWorkbenchItemState): Task {
     const now = new Date().toISOString();
     return {
-      id,
+      id: item.clientId,
       user_id: 0,
-      title: title || '未命名任务',
-      content,
+      title: item.title || '未命名任务',
+      content: item.content || null,
+      status: 'todo',
+      current_cycle_count: 0,
+      target_cycle_count: 0,
+      cycle_period: 'daily',
+      cycle_every_days: null,
+      event: item.event || createForm.name,
+      event_ids: [],
+      event_id: item.eventId || null,
+      is_recurring: item.periodType !== 'once',
+      period_type: item.periodType,
+      custom_period_days: item.periodType === 'custom_days' ? item.customPeriodDays : null,
+      max_completions_per_period: item.maxCompletionsPerPeriod,
+      weekday_only: item.weekdayOnly,
+      time_inherits_from_event: item.timeInheritsFromEvent,
+      time_overridden: item.timeOverridden,
+      task_type: item.taskType,
+      app_task_type: null,
+      actual_duration: 0,
+      start_date: item.startDate || null,
+      due_date: item.dueDate || null,
+      is_deleted: false,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  function buildAppTaskOption(app: ConfiguredAppState, eventName: string): Task {
+    const now = new Date().toISOString();
+    return {
+      id: app.clientId,
+      user_id: 0,
+      title: getConfiguredAppTaskTitle(app),
+      content: getAppConfigSummary(app),
       status: 'todo',
       current_cycle_count: 0,
       target_cycle_count: 0,
@@ -346,7 +436,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       time_inherits_from_event: false,
       time_overridden: false,
       task_type: 'focus',
-      app_task_type: appTaskType,
+      app_task_type: app.appType,
       actual_duration: 0,
       start_date: null,
       due_date: null,
@@ -363,9 +453,9 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   ): Task[] {
     const manualTaskOptions = items
       .filter((item) => item.kind === 'task')
-      .map((item) => buildTaskOption(item.clientId, item.title, item.content || null, eventName));
+      .map((item) => buildTaskOption(item));
     const appTaskOptions = apps.map((app) => (
-      buildTaskOption(app.clientId, getConfiguredAppTaskTitle(app), getAppConfigSummary(app), eventName, app.appType)
+      buildAppTaskOption(app, eventName)
     ));
     return [...appTaskOptions, ...manualTaskOptions];
   }
@@ -405,12 +495,12 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
 
   function beginAddCreateArrangementItem(kind: CreateWorkbenchItemState['kind']): void {
     setCreateArrangementEditor({
+      ...EMPTY_CREATE_WORKBENCH_ITEM,
       clientId: makeCreateArrangementClientId(),
       kind,
+      event: createForm.name,
+      dueDate: createForm.dueAt,
       index: null,
-      title: '',
-      content: '',
-      offsetDays: 0,
     });
     setError(null);
   }
@@ -433,17 +523,15 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   function saveCreateArrangementItem(): void {
     if (!createArrangementEditor) return;
     const label = createArrangementEditor.kind === 'appointment' ? '日程' : '任务';
-    const nextItem: CreateWorkbenchItemState = {
-      clientId: createArrangementEditor.clientId,
-      kind: createArrangementEditor.kind,
-      title: createArrangementEditor.title.trim(),
-      content: createArrangementEditor.content.trim(),
-      offsetDays: Math.max(0, Math.floor(createArrangementEditor.offsetDays || 0)),
-    };
-    if (!nextItem.title) {
+    if (!createArrangementEditor.title.trim()) {
       setError(`请输入${label}标题`);
       return;
     }
+    const nextItem: CreateWorkbenchItemState = {
+      ...createArrangementEditor,
+      title: createArrangementEditor.title.trim(),
+      content: createArrangementEditor.content.trim(),
+    };
     setCreateWorkbenchItems((current) => {
       if (createArrangementEditor.index === null) return [...current, nextItem];
       return current.map((item, itemIndex) => (
@@ -741,26 +829,23 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     items: CreateWorkbenchItemState[],
   ): Promise<Map<string, string>> {
     const taskIdMap = new Map<string, string>();
-    for (let index = 0; index < items.length; index += 1) {
-      const formItem = items[index];
-      const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-      const scheduledAt = previewWorkbenchItemTime(formItem, selectedTemplate);
+    for (const formItem of items) {
       if (formItem.kind === 'task') {
         const payload: EventArrangementTaskInput = {
           title: formItem.title.trim(),
           content: formItem.content.trim() || null,
           event: createdEvent.name,
           eventId: createdEvent.id,
-          periodType: 'once',
-          customPeriodDays: null,
-          maxCompletionsPerPeriod: 1,
-          weekdayOnly: false,
-          timeInheritsFromEvent: false,
-          timeOverridden: Boolean(scheduledAt),
-          taskType: 'focus',
+          periodType: formItem.periodType,
+          customPeriodDays: formItem.periodType === 'custom_days' ? formItem.customPeriodDays : null,
+          maxCompletionsPerPeriod: formItem.maxCompletionsPerPeriod,
+          weekdayOnly: formItem.weekdayOnly,
+          timeInheritsFromEvent: formItem.timeInheritsFromEvent,
+          timeOverridden: formItem.timeOverridden,
+          taskType: formItem.taskType,
           appTaskType: null,
-          startDate: null,
-          dueDate: scheduledAt,
+          startDate: formItem.startDate || null,
+          dueDate: formItem.dueDate || null,
         };
         const createdTask = await createEventArrangementTask(createdEvent, payload);
         taskIdMap.set(formItem.clientId, createdTask.id);
@@ -768,17 +853,17 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
         const payload: EventArrangementAppointmentInput = {
           title: formItem.title.trim(),
           content: formItem.content.trim() || null,
-          status: 'pending',
-          startsAt: null,
-          endsAt: scheduledAt || '',
-          repeatRule: null,
+          status: formItem.status,
+          startsAt: formItem.startsAt || null,
+          endsAt: formItem.endsAt,
+          repeatRule: formItem.repeatRule.trim() || null,
           eventId: createdEvent.id,
-          periodType: 'once',
-          customPeriodDays: null,
-          maxCompletionsPerPeriod: 1,
-          weekdayOnly: false,
-          timeInheritsFromEvent: false,
-          timeOverridden: true,
+          periodType: formItem.periodType,
+          customPeriodDays: formItem.periodType === 'custom_days' ? formItem.customPeriodDays : null,
+          maxCompletionsPerPeriod: formItem.maxCompletionsPerPeriod,
+          weekdayOnly: formItem.weekdayOnly,
+          timeInheritsFromEvent: formItem.timeInheritsFromEvent,
+          timeOverridden: formItem.timeOverridden,
         };
         await createEventArrangementAppointment(createdEvent, payload);
       }
@@ -795,13 +880,13 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       sort_order: index,
       details: {
         client_id: item.clientId,
-        period_type: 'once',
-        custom_period_days: null,
-        max_completions_per_period: 1,
-        weekday_only: false,
-        time_inherits_from_event: false,
-        time_overridden: true,
-        task_type: item.kind === 'task' ? 'focus' : undefined,
+        period_type: item.periodType,
+        custom_period_days: item.periodType === 'custom_days' ? item.customPeriodDays : null,
+        max_completions_per_period: item.maxCompletionsPerPeriod,
+        weekday_only: item.weekdayOnly,
+        time_inherits_from_event: item.timeInheritsFromEvent,
+        time_overridden: item.timeOverridden,
+        task_type: item.kind === 'task' ? item.taskType : undefined,
       },
     }));
     if (items.some((item) => !item.title)) {
@@ -1541,76 +1626,61 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
 
   function renderCreateArrangementEditor(kind: CreateWorkbenchItemState['kind']) {
     if (!createArrangementEditor || createArrangementEditor.kind !== kind) return null;
-    const label = kind === 'appointment' ? '日程' : '任务';
     const previewTime = previewWorkbenchItemTime(createArrangementEditor, selectedTemplate);
+
     return (
-      <div className="grid gap-2 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
-        <label className="grid gap-1 text-xs text-ark-text-muted">
-          {label}标题
-          <input
-            aria-label={`${label}标题`}
-            value={createArrangementEditor.title}
-            onChange={(event) => setCreateArrangementEditor((current) => (
-              current ? { ...current, title: event.target.value } : current
-            ))}
-            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+      <ArrangementEditorShell
+        kind={kind}
+        isEditing={createArrangementEditor.index !== null}
+        previewTime={previewTime ? formatEventDateTime(previewTime) : undefined}
+        onDelete={createArrangementEditor.index !== null ? deleteCreateArrangementItem : undefined}
+        onCancel={cancelCreateArrangementEditor}
+        onSave={saveCreateArrangementItem}
+      >
+        {kind === 'task' ? (
+          <TaskArrangementForm
+            form={{
+              title: createArrangementEditor.title,
+              content: createArrangementEditor.content,
+              event: createArrangementEditor.event,
+              eventId: createArrangementEditor.eventId,
+              periodType: createArrangementEditor.periodType,
+              customPeriodDays: createArrangementEditor.customPeriodDays,
+              maxCompletionsPerPeriod: createArrangementEditor.maxCompletionsPerPeriod,
+              weekdayOnly: createArrangementEditor.weekdayOnly,
+              timeInheritsFromEvent: createArrangementEditor.timeInheritsFromEvent,
+              timeOverridden: createArrangementEditor.timeOverridden,
+              taskType: createArrangementEditor.taskType,
+              startDate: createArrangementEditor.startDate,
+              dueDate: createArrangementEditor.dueDate,
+            }}
+            eventOptions={events}
+            onChange={(patch) => setCreateArrangementEditor((current) => current ? { ...current, ...patch } : null)}
+            onEventSelect={(eventId) => setCreateArrangementEditor((current) => current ? { ...current, eventId, event: events.find((e) => e.id === eventId)?.name ?? '' } : null)}
           />
-        </label>
-        <label className="grid gap-1 text-xs text-ark-text-muted">
-          {label}备注
-          <input
-            aria-label={`${label}备注`}
-            value={createArrangementEditor.content}
-            onChange={(event) => setCreateArrangementEditor((current) => (
-              current ? { ...current, content: event.target.value } : current
-            ))}
-            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        ) : (
+          <AppointmentArrangementForm
+            form={{
+              title: createArrangementEditor.title,
+              content: createArrangementEditor.content,
+              status: createArrangementEditor.status,
+              startsAt: createArrangementEditor.startsAt,
+              endsAt: createArrangementEditor.endsAt,
+              repeatRule: createArrangementEditor.repeatRule,
+              eventId: createArrangementEditor.eventId,
+              periodType: createArrangementEditor.periodType,
+              customPeriodDays: createArrangementEditor.customPeriodDays,
+              maxCompletionsPerPeriod: createArrangementEditor.maxCompletionsPerPeriod,
+              weekdayOnly: createArrangementEditor.weekdayOnly,
+              timeInheritsFromEvent: createArrangementEditor.timeInheritsFromEvent,
+              timeOverridden: createArrangementEditor.timeOverridden,
+            }}
+            eventOptions={events}
+            onChange={(patch) => setCreateArrangementEditor((current) => current ? { ...current, ...patch } : null)}
+            onEventSelect={(eventId) => setCreateArrangementEditor((current) => current ? { ...current, eventId } : null)}
           />
-        </label>
-        <label className="grid gap-1 text-xs text-ark-text-muted">
-          {label}相对天数
-          <input
-            aria-label={`${label}相对天数`}
-            type="number"
-            min={0}
-            value={createArrangementEditor.offsetDays}
-            onChange={(event) => setCreateArrangementEditor((current) => (
-              current
-                ? { ...current, offsetDays: Math.max(0, Math.floor(Number(event.target.value) || 0)) }
-                : current
-            ))}
-            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-          />
-        </label>
-        {previewTime ? (
-          <div className="text-xs text-ark-text-faint">时间预览 {formatEventDateTime(previewTime)}</div>
-        ) : null}
-        <div className="flex flex-wrap justify-end gap-2">
-          {createArrangementEditor.index !== null ? (
-            <button
-              type="button"
-              onClick={deleteCreateArrangementItem}
-              className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
-            >
-              删除{label}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={cancelCreateArrangementEditor}
-            className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={saveCreateArrangementItem}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
-          >
-            保存{label}
-          </button>
-        </div>
-      </div>
+        )}
+      </ArrangementEditorShell>
     );
   }
 
@@ -1627,6 +1697,21 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
             kind: 'task' as const,
             title: getConfiguredAppTaskTitle(app),
             content: getAppConfigSummary(app),
+            taskType: 'focus' as const,
+            startDate: '',
+            dueDate: '',
+            periodType: 'once' as const,
+            customPeriodDays: 1,
+            maxCompletionsPerPeriod: 1,
+            weekdayOnly: false,
+            status: 'pending' as const,
+            startsAt: '',
+            endsAt: '',
+            repeatRule: '',
+            event: '',
+            eventId: '',
+            timeInheritsFromEvent: false,
+            timeOverridden: false,
             offsetDays: 0,
           },
           index,
@@ -1789,9 +1874,9 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           onClose={closeModal}
           zIndexClassName="z-[70]"
           ariaLabel={showCreateEditor ? '添加事件' : '事件总览'}
-          panelClassName="flex h-[76vh] w-[760px] max-w-[94vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
+          panelClassName="flex h-[calc(100vh-7rem)] w-[1120px] max-w-[96vw] flex-col overflow-hidden rounded-2xl shadow-2xl"
         >
-            <div className="h-14 border-b ark-border flex items-center justify-between px-5 bg-[var(--ark-surface-subtle)]">
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
               <h3 className="text-base font-semibold text-ark-text">
                 {showCreateEditor ? '添加事件' : '事件总览'}
               </h3>

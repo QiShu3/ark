@@ -25,6 +25,9 @@ import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import WorkflowPhaseChips from '../WorkflowPhaseChips';
 import { X } from 'lucide-react';
+import AppointmentArrangementForm from './AppointmentArrangementForm';
+import ArrangementEditorShell from './ArrangementEditorShell';
+import TaskArrangementForm from './TaskArrangementForm';
 import Button from '../Button';
 import {
   cloneWorkflowForm,
@@ -856,366 +859,35 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
   function renderArrangementEditor(kind: ArrangementKind) {
     const activeKind = editingArrangement?.kind ?? newArrangementKind;
     if (activeKind !== kind) return null;
-    const label = kind === 'appointment' ? '日程' : '任务';
     const previewTime = kind === 'appointment'
       ? fromDateTimeLocalValue(appointmentArrangementForm.endsAt)
       : fromDateTimeLocalValue(taskArrangementForm.dueDate);
     return (
-      <div className="grid gap-3 rounded-lg border border-blue-300/20 bg-blue-400/10 p-3">
+      <ArrangementEditorShell
+        kind={kind}
+        isEditing={Boolean(editingArrangement)}
+        isSaving={submitting}
+        previewTime={previewTime ? formatEventDateTime(previewTime) : undefined}
+        onDelete={editingArrangement ? () => void handleDeleteArrangement(editingArrangement) : undefined}
+        onCancel={cancelArrangementEditor}
+        onSave={() => void handleSaveArrangement()}
+      >
         {kind === 'task' ? (
-          <>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              标题
-              <input
-                aria-label="标题"
-                value={taskArrangementForm.title}
-                onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, title: changeEvent.target.value }))}
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                任务类型
-                <select
-                  aria-label="任务类型"
-                  value={taskArrangementForm.taskType}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, taskType: changeEvent.target.value as 'focus' | 'checkin' }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                >
-                  <option value="focus">专注任务</option>
-                  <option value="checkin">快速打卡</option>
-                </select>
-              </label>
-            </div>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              备注
-              <textarea
-                aria-label="备注"
-                value={taskArrangementForm.content}
-                onChange={(changeEvent) => setTaskArrangementForm((state) => ({ ...state, content: changeEvent.target.value }))}
-                className="min-h-16 rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                开始日期
-                <input
-                  aria-label="开始日期"
-                  type="datetime-local"
-                  value={taskArrangementForm.startDate}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, startDate: changeEvent.target.value }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                截止日期
-                <input
-                  aria-label="截止日期"
-                  type="datetime-local"
-                  value={taskArrangementForm.dueDate}
-                  onChange={(changeEvent) => {
-                    const nextValue = changeEvent.target.value;
-                    setTaskArrangementForm((state) => {
-                      const selectedEvent = getEventOption(state.eventId);
-                      const inheritedValue = selectedEvent ? toDateTimeLocalValue(selectedEvent.due_at) : '';
-                      return {
-                        ...state,
-                        dueDate: nextValue,
-                        timeInheritsFromEvent: Boolean(selectedEvent),
-                        timeOverridden: Boolean(selectedEvent) && nextValue !== inheritedValue,
-                      };
-                    });
-                  }}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            </div>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              关联事件
-              <select
-                aria-label="关联事件"
-                value={taskArrangementForm.eventId}
-                onChange={(changeEvent) => (
-                  setTaskArrangementForm((state) => syncTaskEventSelection(state, changeEvent.target.value))
-                )}
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              >
-                <option value="">不绑定事件</option>
-                {eventOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.is_primary ? `当前事件：${option.name}` : option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                完成周期
-                <select
-                  aria-label="完成周期"
-                  value={taskArrangementForm.periodType}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, periodType: changeEvent.target.value as CompletionPeriodType }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                >
-                  <option value="once">一次性</option>
-                  <option value="daily">每天</option>
-                  <option value="weekly">每周</option>
-                  <option value="monthly">每月</option>
-                  <option value="custom_days">自定义天数</option>
-                </select>
-              </label>
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                单周期最多完成次数
-                <input
-                  aria-label="单周期最多完成次数"
-                  type="number"
-                  min={1}
-                  value={taskArrangementForm.maxCompletionsPerPeriod}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, maxCompletionsPerPeriod: Number(changeEvent.target.value) }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            </div>
-            {taskArrangementForm.periodType === 'custom_days' ? (
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                自定义完成周期（天）
-                <input
-                  aria-label="自定义完成周期（天）"
-                  type="number"
-                  min={1}
-                  value={taskArrangementForm.customPeriodDays}
-                  onChange={(changeEvent) => (
-                    setTaskArrangementForm((state) => ({ ...state, customPeriodDays: Number(changeEvent.target.value) }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            ) : null}
-            <label className="flex items-center gap-2 text-xs text-ark-text">
-              <input
-                aria-label="仅工作日可完成"
-                type="checkbox"
-                checked={taskArrangementForm.weekdayOnly}
-                onChange={(changeEvent) => (
-                  setTaskArrangementForm((state) => ({ ...state, weekdayOnly: changeEvent.target.checked }))
-                )}
-                className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
-              />
-              仅工作日可完成
-            </label>
-          </>
+          <TaskArrangementForm
+            form={taskArrangementForm}
+            eventOptions={eventOptions}
+            onChange={(patch) => setTaskArrangementForm((state) => ({ ...state, ...patch }))}
+            onEventSelect={(eventId) => setTaskArrangementForm((state) => syncTaskEventSelection(state, eventId))}
+          />
         ) : (
-          <>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              标题
-              <input
-                aria-label="标题"
-                value={appointmentArrangementForm.title}
-                onChange={(changeEvent) => (
-                  setAppointmentArrangementForm((state) => ({ ...state, title: changeEvent.target.value }))
-                )}
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              />
-            </label>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              状态
-              <select
-                aria-label="状态"
-                value={appointmentArrangementForm.status}
-                onChange={(changeEvent) => (
-                  setAppointmentArrangementForm((state) => ({
-                    ...state,
-                    status: changeEvent.target.value as AppointmentStoredStatus,
-                  }))
-                )}
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              >
-                <option value="pending">待出席</option>
-                <option value="attended">已出席</option>
-                <option value="missed">已错过</option>
-                <option value="cancelled">已取消</option>
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              备注
-              <textarea
-                aria-label="备注"
-                value={appointmentArrangementForm.content}
-                onChange={(changeEvent) => (
-                  setAppointmentArrangementForm((state) => ({ ...state, content: changeEvent.target.value }))
-                )}
-                className="min-h-16 rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                开始时间
-                <input
-                  aria-label="开始时间"
-                  type="datetime-local"
-                  value={appointmentArrangementForm.startsAt}
-                  onChange={(changeEvent) => (
-                    setAppointmentArrangementForm((state) => ({ ...state, startsAt: changeEvent.target.value }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                结束时间
-                <input
-                  aria-label="结束时间"
-                  type="datetime-local"
-                  value={appointmentArrangementForm.endsAt}
-                  onChange={(changeEvent) => {
-                    const nextValue = changeEvent.target.value;
-                    setAppointmentArrangementForm((state) => {
-                      const selectedEvent = getEventOption(state.eventId);
-                      const inheritedValue = selectedEvent ? toDateTimeLocalValue(selectedEvent.due_at) : '';
-                      return {
-                        ...state,
-                        endsAt: nextValue,
-                        timeInheritsFromEvent: Boolean(selectedEvent),
-                        timeOverridden: Boolean(selectedEvent) && nextValue !== inheritedValue,
-                      };
-                    });
-                  }}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            </div>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              关联事件
-              <select
-                aria-label="关联事件"
-                value={appointmentArrangementForm.eventId}
-                onChange={(changeEvent) => (
-                  setAppointmentArrangementForm((state) => syncAppointmentEventSelection(state, changeEvent.target.value))
-                )}
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              >
-                <option value="">不绑定事件</option>
-                {eventOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.is_primary ? `当前事件：${option.name}` : option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs text-ark-text-muted">
-              重复规则
-              <input
-                aria-label="重复规则"
-                value={appointmentArrangementForm.repeatRule}
-                onChange={(changeEvent) => (
-                  setAppointmentArrangementForm((state) => ({ ...state, repeatRule: changeEvent.target.value }))
-                )}
-                placeholder="例如：weekly"
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text placeholder:text-ark-text-faint"
-              />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                完成周期
-                <select
-                  aria-label="完成周期"
-                  value={appointmentArrangementForm.periodType}
-                  onChange={(changeEvent) => (
-                    setAppointmentArrangementForm((state) => ({
-                      ...state,
-                      periodType: changeEvent.target.value as CompletionPeriodType,
-                    }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                >
-                  <option value="once">一次性</option>
-                  <option value="daily">每天</option>
-                  <option value="weekly">每周</option>
-                  <option value="monthly">每月</option>
-                  <option value="custom_days">自定义天数</option>
-                </select>
-              </label>
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                单周期最多完成次数
-                <input
-                  aria-label="单周期最多完成次数"
-                  type="number"
-                  min={1}
-                  value={appointmentArrangementForm.maxCompletionsPerPeriod}
-                  onChange={(changeEvent) => (
-                    setAppointmentArrangementForm((state) => ({
-                      ...state,
-                      maxCompletionsPerPeriod: Number(changeEvent.target.value),
-                    }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            </div>
-            {appointmentArrangementForm.periodType === 'custom_days' ? (
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                自定义完成周期（天）
-                <input
-                  aria-label="自定义完成周期（天）"
-                  type="number"
-                  min={1}
-                  value={appointmentArrangementForm.customPeriodDays}
-                  onChange={(changeEvent) => (
-                    setAppointmentArrangementForm((state) => ({ ...state, customPeriodDays: Number(changeEvent.target.value) }))
-                  )}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            ) : null}
-            <label className="flex items-center gap-2 text-xs text-ark-text">
-              <input
-                aria-label="仅工作日可完成"
-                type="checkbox"
-                checked={appointmentArrangementForm.weekdayOnly}
-                onChange={(changeEvent) => (
-                  setAppointmentArrangementForm((state) => ({ ...state, weekdayOnly: changeEvent.target.checked }))
-                )}
-                className="h-4 w-4 rounded border-ark-border bg-ark-surface-subtle text-blue-500 focus:ring-blue-500/50"
-              />
-              仅工作日可完成
-            </label>
-          </>
+          <AppointmentArrangementForm
+            form={appointmentArrangementForm}
+            eventOptions={eventOptions}
+            onChange={(patch) => setAppointmentArrangementForm((state) => ({ ...state, ...patch }))}
+            onEventSelect={(eventId) => setAppointmentArrangementForm((state) => syncAppointmentEventSelection(state, eventId))}
+          />
         )}
-        {previewTime ? <div className="text-xs text-ark-text-faint">时间预览 {formatEventDateTime(previewTime)}</div> : null}
-        <div className="flex flex-wrap justify-end gap-2">
-          {editingArrangement ? (
-            <button
-              type="button"
-              onClick={() => void handleDeleteArrangement(editingArrangement)}
-              className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/20"
-            >
-              删除{label}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={cancelArrangementEditor}
-            className="rounded-lg border border-ark-border px-3 py-2 text-sm text-ark-text hover:bg-ark-surface-subtle"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSaveArrangement()}
-            disabled={submitting}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-          >
-            保存{label}
-          </button>
-        </div>
-      </div>
+      </ArrangementEditorShell>
     );
   }
 

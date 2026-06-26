@@ -425,9 +425,8 @@ describe('EventCountdownCard', () => {
     expect(screen.getByRole('checkbox', { name: '设为主事件' })).toBeChecked();
     expect(screen.getByRole('button', { name: '第一轮复习' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '第一轮复习' }));
-    expect(screen.getByLabelText('任务标题')).toHaveValue('第一轮复习');
-    expect(screen.getByLabelText('任务备注')).toHaveValue('错题本');
-    expect(screen.getByLabelText('任务相对天数')).toHaveValue(14);
+    expect(screen.getByLabelText('标题')).toHaveValue('第一轮复习');
+    expect(screen.getByLabelText('备注')).toHaveValue('错题本');
     expect(screen.queryByRole('button', { name: '进入模板工作台' })).not.toBeInTheDocument();
   });
 
@@ -602,7 +601,7 @@ describe('EventCountdownCard', () => {
     expect(within(createDialog).getByText('暂无工作流')).toBeInTheDocument();
 
     await user.click(within(createDialog).getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务标题'), '准备资料');
+    await user.type(screen.getByLabelText('标题'), '准备资料');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     await user.click(within(createDialog).getByRole('button', { name: '新建工作流' }));
@@ -869,20 +868,20 @@ describe('EventCountdownCard', () => {
     await user.click(screen.getByRole('button', { name: '添加事件' }));
 
     await user.click(screen.getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务标题'), '准备资料');
-    await user.type(screen.getByLabelText('任务备注'), '先整理清单');
+    await user.type(screen.getByLabelText('标题'), '准备资料');
+    await user.type(screen.getByLabelText('备注'), '先整理清单');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     await user.click(screen.getByRole('button', { name: '添加日程' }));
-    await user.type(screen.getByLabelText('日程标题'), '模拟考试');
+    await user.type(screen.getByLabelText('标题'), '模拟考试');
     await user.click(screen.getByRole('button', { name: '保存日程' }));
 
     expect(screen.getByRole('button', { name: '准备资料' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '模拟考试' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '准备资料' }));
-    await user.clear(screen.getByLabelText('任务标题'));
-    await user.type(screen.getByLabelText('任务标题'), '准备资料清单');
+    await user.clear(screen.getByLabelText('标题'));
+    await user.type(screen.getByLabelText('标题'), '准备资料清单');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
 
     expect(screen.getByRole('button', { name: '准备资料清单' })).toBeInTheDocument();
@@ -946,8 +945,8 @@ describe('EventCountdownCard', () => {
     await user.type(screen.getByLabelText('开始日期'), '2026-05-21');
     await user.type(screen.getByLabelText('到期时间'), '2026-05-25T18:30');
     await user.click(screen.getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务标题'), '准备资料');
-    await user.type(screen.getByLabelText('任务备注'), '先整理清单');
+    await user.type(screen.getByLabelText('标题'), '准备资料');
+    await user.type(screen.getByLabelText('备注'), '先整理清单');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
     await user.click(screen.getByRole('button', { name: '创建事件' }));
 
@@ -978,7 +977,7 @@ describe('EventCountdownCard', () => {
               kind: 'task',
               title: '准备资料',
               content: '先整理清单',
-              offset_days: 3,
+              offset_days: 0,
               sort_order: 0,
             },
           ],
@@ -1009,10 +1008,8 @@ describe('EventCountdownCard', () => {
     await user.type(screen.getByLabelText('开始日期'), '2026-05-20');
     await user.type(screen.getByLabelText('到期时间'), '2026-06-20T10:00');
     await user.click(screen.getByRole('button', { name: '添加任务' }));
-    await user.type(screen.getByLabelText('任务标题'), '准备资料');
-    await user.type(screen.getByLabelText('任务备注'), '先整理清单');
-    await user.clear(screen.getByLabelText('任务相对天数'));
-    await user.type(screen.getByLabelText('任务相对天数'), '3');
+    await user.type(screen.getByLabelText('标题'), '准备资料');
+    await user.type(screen.getByLabelText('备注'), '先整理清单');
     await user.click(screen.getByRole('button', { name: '保存任务' }));
     await user.click(screen.getByRole('button', { name: '保存为模板' }));
 
