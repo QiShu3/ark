@@ -1,25 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
+import { extractRunConfigNumber, toErrorMessage } from '../focus-work/focusWorkUtils';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem } from '../focus-work/templates/choiceQuestionTypes';
 import { fetchChoiceItems, fetchChoiceReviewNext, submitChoiceAnswer } from '../../lib/choice/api';
-import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceReviewNext } from '../../lib/choice/types';
+import { getChoiceScope } from '../../lib/choice/configExtractors';
+import type { ChoiceItem as ChoiceItemDTO, ChoiceReviewNext } from '../../lib/choice/types';
 
 type OptionKey = 'A' | 'B' | 'C' | 'D';
 type ReviewFocusWorkProps = FocusWorkRendererProps;
-
-function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
-  const raw = run.config_snapshot?.choice_scope;
-  if (raw && typeof raw === 'object' && 'bank_id' in raw) return raw as ChoiceScope;
-  return null;
-}
-
-function questionTargetCountFromRun(run: FocusWorkRendererProps['run']) {
-  const rawTarget = Number(run.config_snapshot?.target_question_count ?? run.config_snapshot?.daily_question_target ?? 10);
-  if (!Number.isFinite(rawTarget)) return 10;
-  return Math.max(1, Math.min(200, Math.floor(rawTarget)));
-}
 
 function reviewNextToChoiceQuestion(
   payload: ChoiceReviewNext,
@@ -77,7 +67,7 @@ export default function ReviewFocusWork({
 }: ReviewFocusWorkProps) {
   const choiceScope = getChoiceScope(run);
   const bankId = choiceScope?.bank_id;
-  const targetQuestionCount = questionTargetCountFromRun(run);
+  const targetQuestionCount = extractRunConfigNumber(run, ['target_question_count', 'daily_question_target'], 10, 200);
 
   const [item, setItem] = useState<ChoiceQuestionItem | null>(null);
   const [subtitle, setSubtitle] = useState<string | undefined>(undefined);
@@ -102,7 +92,7 @@ export default function ReviewFocusWork({
       setError(null);
       return nextItem;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '复习题加载失败');
+      setError(toErrorMessage(err, '复习题加载失败'));
       throw err;
     } finally {
       setLoading(false);
@@ -131,7 +121,7 @@ export default function ReviewFocusWork({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : '复习题加载失败');
+        setError(toErrorMessage(err, '复习题加载失败'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

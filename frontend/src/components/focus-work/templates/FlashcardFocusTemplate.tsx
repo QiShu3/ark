@@ -6,6 +6,7 @@ import type {
   FlashcardItem,
   FlashcardRating,
 } from './flashcardTypes';
+import { buildProgressSnapshot, metaClass } from '../focusWorkUtils';
 
 const RATING_ACTIONS: Array<{
   label: string;
@@ -54,21 +55,6 @@ const RATING_ACTIONS: Array<{
   },
 ];
 
-function metaClass(tone: string | undefined) {
-  if (tone === 'blue') return 'border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)]';
-  if (tone === 'amber') return 'border-[var(--focus-work-amber-border)] bg-[var(--focus-work-amber-bg)] text-[var(--focus-work-amber-text)]';
-  if (tone === 'emerald') return 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)]';
-  return 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text)]';
-}
-
-function progressSnapshot(completedCount: number, targetCount: number, noAvailableContent = false) {
-  return {
-    completed_count: completedCount,
-    target_count: targetCount,
-    ...(noAvailableContent ? { no_available_content: completedCount === 0 } : {}),
-  };
-}
-
 export default function FlashcardFocusTemplate({
   item,
   loading,
@@ -100,14 +86,14 @@ export default function FlashcardFocusTemplate({
     if (completedRef.current || disabled) return;
     if (completedCount >= targetCount && targetCount > 0) {
       completedRef.current = true;
-      onContentCompleted(progressSnapshot(completedCount, targetCount));
+      onContentCompleted(buildProgressSnapshot('completed_count', 'target_count', completedCount, targetCount));
     }
   }, [completedCount, disabled, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
     if (completedRef.current || disabled || loading || item || currentItem) return;
     completedRef.current = true;
-    onContentCompleted(progressSnapshot(completedCount, targetCount, true));
+    onContentCompleted(buildProgressSnapshot('completed_count', 'target_count', completedCount, targetCount, completedCount === 0));
   }, [completedCount, currentItem, disabled, item, loading, onContentCompleted, targetCount]);
 
   React.useEffect(() => {

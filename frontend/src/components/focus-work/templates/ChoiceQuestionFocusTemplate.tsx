@@ -8,21 +8,7 @@ import type {
 } from './choiceQuestionTypes';
 import MarkdownContent from '../../MarkdownContent';
 import ContentBlockRenderer from '../ContentBlockRenderer';
-
-function metaClass(tone: string | undefined) {
-  if (tone === 'blue') return 'border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)]';
-  if (tone === 'amber') return 'border-[var(--focus-work-amber-border)] bg-[var(--focus-work-amber-bg)] text-[var(--focus-work-amber-text)]';
-  if (tone === 'emerald') return 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)]';
-  return 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text)]';
-}
-
-function progressSnapshot(answeredCount: number, targetCount: number, noAvailableContent = false) {
-  return {
-    answered_count: answeredCount,
-    target_question_count: targetCount,
-    ...(noAvailableContent ? { no_available_content: answeredCount === 0 } : {}),
-  };
-}
+import { buildProgressSnapshot, metaClass } from '../focusWorkUtils';
 
 export default function ChoiceQuestionFocusTemplate({
   subtitle,
@@ -59,14 +45,14 @@ export default function ChoiceQuestionFocusTemplate({
     if (completedRef.current) return;
     if (answeredCount >= targetCount && targetCount > 0) {
       completedRef.current = true;
-      onContentCompleted(progressSnapshot(answeredCount, targetCount));
+      onContentCompleted(buildProgressSnapshot('answered_count', 'target_question_count', answeredCount, targetCount));
     }
   }, [answeredCount, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
     if (completedRef.current || loading || item || currentItem) return;
     completedRef.current = true;
-    onContentCompleted(progressSnapshot(answeredCount, targetCount, true));
+    onContentCompleted(buildProgressSnapshot('answered_count', 'target_question_count', answeredCount, targetCount, answeredCount === 0));
   }, [answeredCount, currentItem, item, loading, onContentCompleted, targetCount]);
 
   async function handleSubmit() {

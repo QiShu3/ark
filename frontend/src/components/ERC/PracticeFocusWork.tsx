@@ -4,21 +4,10 @@ import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-work/templates/choiceQuestionTypes';
 import { fetchChoiceItems, submitChoiceAnswer } from '../../lib/choice/api';
-import type { ChoiceItem as ChoiceItemDTO, ChoiceScope, ChoiceCompletion } from '../../lib/choice/types';
+import { getChoiceCompletion, getChoiceScope } from '../../lib/choice/configExtractors';
+import type { ChoiceItem as ChoiceItemDTO } from '../../lib/choice/types';
 
 type PracticeFocusWorkProps = FocusWorkRendererProps;
-
-function getChoiceScope(run: FocusWorkRendererProps['run']): ChoiceScope | null {
-  const raw = run.config_snapshot?.choice_scope;
-  if (raw && typeof raw === 'object' && 'bank_id' in raw) return raw as ChoiceScope;
-  return null;
-}
-
-function getChoiceCompletion(run: FocusWorkRendererProps['run']): ChoiceCompletion | null {
-  const raw = run.config_snapshot?.choice_completion;
-  if (raw && typeof raw === 'object' && 'mode' in raw) return raw as ChoiceCompletion;
-  return null;
-}
 
 function choiceTargetQuestionCount(run: FocusWorkRendererProps['run'], totalQuestionCount: number) {
   const completion = getChoiceCompletion(run);

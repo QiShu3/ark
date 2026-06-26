@@ -4,6 +4,7 @@ import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { useVocabTodaySession } from '../../hooks/vocab/useVocabTodaySession';
 import { fetchVocabOverviewCurrentWords, submitVocabContentReview } from '../../lib/vocab/api';
 import type { VocabOverviewCurrentWord, VocabReviewItem } from '../../lib/vocab/types';
+import { extractRunConfigNumber, toErrorMessage } from '../focus-work/focusWorkUtils';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import FlashcardFocusTemplate from '../focus-work/templates/FlashcardFocusTemplate';
 import type { FlashcardItem, FlashcardRating, FlashcardSubmitResult } from '../focus-work/templates/flashcardTypes';
@@ -11,18 +12,6 @@ import type { FlashcardItem, FlashcardRating, FlashcardSubmitResult } from '../f
 const EXTRA_ROUND_LIMIT = 500;
 
 type VocabTodayFocusWorkProps = FocusWorkRendererProps;
-
-function extraTargetCountFromRun(run: FocusWorkRendererProps['run']) {
-  const rawTarget = Number(run.config_snapshot?.target_word_count ?? run.config_snapshot?.daily_target_count ?? 10);
-  if (!Number.isFinite(rawTarget)) return 10;
-  return Math.max(1, Math.min(EXTRA_ROUND_LIMIT, Math.floor(rawTarget)));
-}
-
-function countedTargetCountFromRun(run: FocusWorkRendererProps['run'], fallback: number) {
-  const rawTarget = Number(run.config_snapshot?.target_word_count ?? run.config_snapshot?.daily_target_count ?? fallback);
-  if (!Number.isFinite(rawTarget)) return fallback;
-  return Math.max(0, Math.floor(rawTarget));
-}
 
 function toExtraReviewItem(word: VocabOverviewCurrentWord): VocabReviewItem {
   return {
@@ -84,7 +73,7 @@ export default function VocabTodayFocusWork({
   const completedRef = React.useRef(false);
   const isPaused = disabled;
   const isExtraRun = !run.counts_for_task_completion;
-  const extraTargetCount = React.useMemo(() => extraTargetCountFromRun(run), [run]);
+  const extraTargetCount = React.useMemo(() => extractRunConfigNumber(run, ['target_word_count', 'daily_target_count'], 10, EXTRA_ROUND_LIMIT), [run]);
   const [extraItems, setExtraItems] = React.useState<VocabReviewItem[]>([]);
   const [extraLoadedRunId, setExtraLoadedRunId] = React.useState<string | null>(null);
   const [extraLoading, setExtraLoading] = React.useState(true);
@@ -129,7 +118,7 @@ export default function VocabTodayFocusWork({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setExtraError(err instanceof Error ? err.message : '额外词卡加载失败');
+        setExtraError(toErrorMessage(err, '额外词卡加载失败'));
         setExtraLoadedRunId(run.id);
       })
       .finally(() => {
@@ -198,7 +187,7 @@ export default function VocabTodayFocusWork({
           return { shouldRepeat: false };
         }
       } catch (err) {
-        setExtraError(err instanceof Error ? err.message : '提交失败');
+        setExtraError(toErrorMessage(err, '提交失败'));
         return { shouldRepeat: false };
       } finally {
         setExtraSubmitting(false);
@@ -236,7 +225,7 @@ export default function VocabTodayFocusWork({
     } else {
       onContentCompleted({
         completed_word_count: session.memorizedCount,
-        target_word_count: countedTargetCountFromRun(run, session.memorizedCount),
+        target_word_count: extractRunConfigNumber(run, ['target_word_count', 'daily_target_count'], session.memorizedCount, 10000),
         ...progressSnapshot,
       });
     }
@@ -247,7 +236,7 @@ export default function VocabTodayFocusWork({
     : (session.currentItem ? vocabItemToFlashcardItem(session.currentItem, (session.currentMode as VocabMode) ?? 'study') : null);
 
   const completedCount = isExtraRun ? extraCompletedCount : session.memorizedCount;
-  const targetCount = isExtraRun ? extraTargetCount : countedTargetCountFromRun(run, session.memorizedCount);
+  const targetCount = isExtraRun ? extraTargetCount : extractRunConfigNumber(run, ['target_word_count', 'daily_target_count'], session.memorizedCount, 10000);
   const loading = isExtraRun ? extraLoading : session.loading;
   const error = isExtraRun ? extraError : (session.error ?? null);
   return (
