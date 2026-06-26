@@ -4,6 +4,8 @@ import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy, X } from 'luci
 
 import { apiJson } from '../lib/api';
 import { fetchCurrentFocusWorkflow } from '../lib/focusWorkflow';
+import { useEventArrangements } from '../hooks/useEventArrangements';
+import { usePrimaryEvent } from '../hooks/usePrimaryEvent';
 import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
@@ -169,8 +171,8 @@ export default function HomeRightDashboard() {
   const navigate = useNavigate();
   const [workflow, setWorkflow] = useState<FocusWorkflow | null>(null);
   const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const { primaryEvent } = usePrimaryEvent();
+  const { tasks, appointments, refetch: refetchArrangements } = useEventArrangements(primaryEvent?.id ?? null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [achievementSummary, setAchievementSummary] = useState<AchievementSummary | null>(null);
@@ -187,33 +189,32 @@ export default function HomeRightDashboard() {
   const [visibleAppointmentCount, setVisibleAppointmentCount] = useState(3);
 
   async function loadDashboard() {
-    const [workflowRes, todayFocusRes, tasksRes, appointmentsRes, achievementRes, presetsRes] = await Promise.allSettled([
+    const [workflowRes, todayFocusRes, achievementRes, presetsRes] = await Promise.allSettled([
       fetchCurrentFocusWorkflow<FocusWorkflow>(),
       apiJson<TodayFocusSummary>('/todo/focus/today'),
-      apiJson<Task[]>('/todo/tasks?limit=100'),
-      apiJson<Appointment[]>('/todo/appointments'),
       apiJson<AchievementSummary>('/todo/achievements/summary'),
       apiJson<WorkflowPreset[]>('/todo/focus/workflows'),
     ]);
 
     if (workflowRes.status === 'fulfilled') setWorkflow(workflowRes.value);
     if (todayFocusRes.status === 'fulfilled') setTodayFocusMinutes(todayFocusRes.value.minutes);
-    if (tasksRes.status === 'fulfilled') setTasks(Array.isArray(tasksRes.value) ? tasksRes.value : []);
-    if (appointmentsRes.status === 'fulfilled') setAppointments(Array.isArray(appointmentsRes.value) ? appointmentsRes.value : []);
     if (achievementRes.status === 'fulfilled') setAchievementSummary(achievementRes.value);
     if (presetsRes.status === 'fulfilled') setWorkflowStartPresets(Array.isArray(presetsRes.value) ? presetsRes.value : []);
   }
 
   useEffect(() => {
     void loadDashboard();
-    const reload = () => void loadDashboard();
+    const reload = () => {
+      void loadDashboard();
+      void refetchArrangements();
+    };
     window.addEventListener('ark:reload-focus', reload);
     const refreshTimer = window.setInterval(reload, 60000);
     return () => {
       window.removeEventListener('ark:reload-focus', reload);
       window.clearInterval(refreshTimer);
     };
-  }, []);
+  }, [refetchArrangements]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);

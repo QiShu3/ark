@@ -6,10 +6,10 @@ import { formatEventDateTime, fromDateTimeLocalValue, toDateTimeLocalValue } fro
 import {
   deleteEvent as deleteEventById,
   getEventDeletePreview,
-  getEventWorkbench,
   listEvents,
   updateEvent,
 } from '../../lib/events/api';
+import { useEventArrangements } from '../../hooks/useEventArrangements';
 import {
   createEventArrangementAppointment,
   createEventArrangementTask,
@@ -36,7 +36,7 @@ import {
   type WorkflowFormState,
   type WorkflowPreset,
 } from '../workflowPresetForm';
-import type { EventItem, EventWorkbench } from '../../lib/events/types';
+import type { EventItem } from '../../lib/events/types';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';
 import type { AppTaskType } from '../taskTypes';
 import type { VocabDeck } from '../../lib/vocab/types';
@@ -45,6 +45,7 @@ type EventWorkbenchModalProps = {
   event: EventItem;
   onClose: () => void;
   onChanged?: () => void | Promise<void>;
+  onBack?: () => void;
 };
 
 type EventEditFormState = {
@@ -145,9 +146,8 @@ const EMPTY_APPOINTMENT_ARRANGEMENT_FORM: AppointmentArrangementFormState = {
 
 const EMPTY_EVENT_WORKFLOW_FORM = createDefaultWorkflowForm(false);
 
-export default function EventWorkbenchModal({ event, onClose, onChanged }: EventWorkbenchModalProps) {
-  const [workbench, setWorkbench] = useState<EventWorkbench | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function EventWorkbenchModal({ event, onClose, onChanged, onBack }: EventWorkbenchModalProps) {
+  const { tasks, appointments, loading, error: arrangementsError, refetch: refetchArrangements } = useEventArrangements(event.id);
   const [submitting, setSubmitting] = useState(false);
   const [editingArrangement, setEditingArrangement] = useState<EditingArrangement | null>(null);
   const [newArrangementKind, setNewArrangementKind] = useState<ArrangementKind | null>(null);
@@ -175,27 +175,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
   const [appConfigError, setAppConfigError] = useState<string | null>(null);
   const [appConfigDecks, setAppConfigDecks] = useState<VocabDeck[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void getEventWorkbench(event.id)
-      .then((data) => {
-        if (cancelled) return;
-        setWorkbench(data);
-        setError(null);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : '安排加载失败');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [event.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,7 +232,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     void loadEventWorkflows();
   }, [loadEventWorkflows]);
 
-  const currentEvent = workbench?.event ?? event;
+  const currentEvent = event;
 
   useEffect(() => {
     if (currentEvent) {
@@ -270,8 +249,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     ? arrangementEvents
     : [currentEvent, ...arrangementEvents];
   const eventAchievements = achievementSummary?.event_achievements ?? null;
-  const taskArrangements = workbench?.created_tasks ?? [];
-  const appointmentArrangements = workbench?.created_appointments ?? [];
+  const taskArrangements = tasks;
+  const appointmentArrangements = appointments;
   const appTasks = taskArrangements.filter((t) => t.app_task_type);
 
   useEffect(() => {
@@ -412,67 +391,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setError(null);
   }
 
-  function appendTask(task: Task): void {
-    setWorkbench((current) => (
-      current
-        ? {
-          ...current,
-          created_tasks: current.created_tasks.some((item) => item.id === task.id)
-            ? current.created_tasks.map((item) => (item.id === task.id ? task : item))
-            : [...current.created_tasks, task],
-        }
-        : current
-    ));
-  }
-
-  function replaceTask(task: Task): void {
-    setWorkbench((current) => (
-      current
-        ? { ...current, created_tasks: current.created_tasks.map((item) => (item.id === task.id ? task : item)) }
-        : current
-    ));
-  }
-
-  function removeTask(taskId: string): void {
-    setWorkbench((current) => (
-      current ? { ...current, created_tasks: current.created_tasks.filter((item) => item.id !== taskId) } : current
-    ));
-  }
-
-  function appendAppointment(appointment: Appointment): void {
-    setWorkbench((current) => (
-      current
-        ? {
-          ...current,
-          created_appointments: current.created_appointments.some((item) => item.id === appointment.id)
-            ? current.created_appointments.map((item) => (item.id === appointment.id ? appointment : item))
-            : [...current.created_appointments, appointment],
-        }
-        : current
-    ));
-  }
-
-  function replaceAppointment(appointment: Appointment): void {
-    setWorkbench((current) => (
-      current
-        ? {
-          ...current,
-          created_appointments: current.created_appointments.map((item) => (
-            item.id === appointment.id ? appointment : item
-          )),
-        }
-        : current
-    ));
-  }
-
-  function removeAppointment(appointmentId: string): void {
-    setWorkbench((current) => (
-      current
-        ? { ...current, created_appointments: current.created_appointments.filter((item) => item.id !== appointmentId) }
-        : current
-    ));
-  }
-
   async function handleSaveArrangement(): Promise<void> {
     const kind = editingArrangement?.kind ?? newArrangementKind;
     if (submitting || !kind) return;
@@ -517,9 +435,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           dueDate: taskDueDate,
         };
         if (editingArrangement?.kind === 'task') {
-          replaceTask(await updateEventArrangementTask(currentEvent, editingArrangement.item.id, payload));
+          await updateEventArrangementTask(currentEvent, editingArrangement.item.id, payload);
         } else {
-          appendTask(await createEventArrangementTask(currentEvent, payload));
+          await createEventArrangementTask(currentEvent, payload);
         }
       } else if (appointmentEndsAt) {
         const payload = {
@@ -538,11 +456,12 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
           timeOverridden: appointmentArrangementForm.timeOverridden,
         };
         if (editingArrangement?.kind === 'appointment') {
-          replaceAppointment(await updateEventArrangementAppointment(currentEvent, editingArrangement.item.id, payload));
+          await updateEventArrangementAppointment(currentEvent, editingArrangement.item.id, payload);
         } else {
-          appendAppointment(await createEventArrangementAppointment(currentEvent, payload));
+          await createEventArrangementAppointment(currentEvent, payload);
         }
       }
+      await refetchArrangements();
       cancelArrangementEditor();
       await Promise.resolve(onChanged?.());
     } catch (err) {
@@ -560,11 +479,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     try {
       if (target.kind === 'task') {
         await deleteEventArrangementTask(target.item.id);
-        removeTask(target.item.id);
       } else {
         await deleteEventArrangementAppointment(target.item.id);
-        removeAppointment(target.item.id);
       }
+      await refetchArrangements();
       cancelArrangementEditor();
       await Promise.resolve(onChanged?.());
     } catch (err) {
@@ -574,22 +492,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     }
   }
 
-  function updateCurrentEvent(updatedEvent: EventItem): void {
-    setWorkbench((current) => (
-      current
-        ? { ...current, event: updatedEvent }
-        : { event: updatedEvent, created_tasks: [], created_appointments: [] }
-    ));
-  }
-
   async function handleSetPrimaryEvent(): Promise<void> {
     if (submitting || currentEvent.is_primary) return;
     setSubmitting(true);
     setError(null);
     try {
-      const updatedEvent = await updateEvent(currentEvent.id, { is_primary: true });
+      await updateEvent(currentEvent.id, { is_primary: true });
       await activateEventSubApps(currentEvent.id);
-      updateCurrentEvent(updatedEvent);
       await Promise.resolve(onChanged?.());
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (err) {
@@ -628,7 +537,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       if (eventEditForm.isPrimary) {
         await activateEventSubApps(currentEvent.id);
       }
-      updateCurrentEvent(updatedEvent);
       setEventEditForm({
         name: updatedEvent.name,
         startDate: updatedEvent.start_date,
@@ -884,7 +792,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
     setAppConfigError(null);
     try {
       await deleteEventArrangementTask(taskId);
-      removeTask(taskId);
+      await refetchArrangements();
       await Promise.resolve(onChanged?.());
     } catch (err) {
       setAppConfigError(err instanceof Error ? err.message : '删除失败');
@@ -905,21 +813,16 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       const isChoiceApp = appConfigEditor.appType === 'practice' || appConfigEditor.appType === 'review';
       if (appConfigEditor.editingTaskId && !isChoiceApp) {
         await deleteEventArrangementTask(appConfigEditor.editingTaskId);
-        removeTask(appConfigEditor.editingTaskId);
       }
       const focusDuration = appConfigEditor.focusDurationMin * 60;
       if (appConfigEditor.appType === 'vocab_today') {
-        const result = await initializeVocabAppTask({
+        await initializeVocabAppTask({
           deck_id: appConfigEditor.deckId,
           daily_target_count: appConfigEditor.dailyTargetCount,
           default_focus_duration: focusDuration,
           add_to_today_plan: appConfigEditor.addToTodayPlan,
           event_id: currentEvent.id,
         });
-        if (result.task_id) {
-          const refreshed = await getEventWorkbench(currentEvent.id);
-          setWorkbench(refreshed);
-        }
       } else if (appConfigEditor.appType === 'practice') {
         await saveEventChoiceConfig({
           eventId: currentEvent.id,
@@ -929,8 +832,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             add_to_today_plan: appConfigEditor.addToTodayPlan,
           },
         });
-        const refreshed = await getEventWorkbench(currentEvent.id);
-        setWorkbench(refreshed);
       } else {
         await saveEventChoiceConfig({
           eventId: currentEvent.id,
@@ -941,9 +842,8 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
             add_to_today_plan: appConfigEditor.addToTodayPlan,
           },
         });
-        const refreshed = await getEventWorkbench(currentEvent.id);
-        setWorkbench(refreshed);
       }
+      await refetchArrangements();
       setAppConfigEditor(null);
       await Promise.resolve(onChanged?.());
     } catch (err) {
@@ -1600,7 +1500,23 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
           <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-ark-text-faint">事件总览</div>
+            <div className="text-xs uppercase tracking-[0.24em] text-ark-text-faint">
+              {onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="flex items-center gap-1 text-ark-text-muted hover:text-ark-text transition-colors"
+                  aria-label="返回事件总览"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                  事件总览
+                </button>
+              ) : (
+                '事件总览'
+              )}
+            </div>
             <h2 className="mt-1 text-xl font-semibold">{currentEvent.name}</h2>
           </div>
           <Button
@@ -1615,7 +1531,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged }: Event
 
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? <div className="text-ark-text-muted">加载中...</div> : null}
-          {error ? <div className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</div> : null}
+          {(error || arrangementsError) ? <div className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error || arrangementsError}</div> : null}
 
           <section className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
             <div className="flex flex-col gap-4">

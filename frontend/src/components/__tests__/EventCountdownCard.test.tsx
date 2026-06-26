@@ -1074,7 +1074,7 @@ describe('EventCountdownCard', () => {
     );
   });
 
-  it('opens the overview first when clicking the primary event', async () => {
+  it('opens the workbench directly when clicking the primary event', async () => {
     const user = userEvent.setup();
     (apiJson as Mock).mockImplementation(async (url: string) => {
       if (url === '/todo/events/primary') {
@@ -1136,12 +1136,9 @@ describe('EventCountdownCard', () => {
 
     await user.click(await screen.findByRole('button', { name: /论文投稿/i }));
 
-    const overview = await screen.findByRole('dialog', { name: '事件总览' });
-    expect(overview).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: '安排' })).not.toBeInTheDocument();
-    expect(within(overview).getByText('论文投稿')).toBeInTheDocument();
-    expect(within(overview).getByText('毕业设计')).toBeInTheDocument();
-    expect(within(overview).getByRole('button', { name: '添加事件' })).toBeInTheDocument();
+    const workbench = await screen.findByRole('dialog', { name: '安排' });
+    expect(workbench).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '事件总览' })).not.toBeInTheDocument();
   });
 
   it('opens the selected event workbench from the overview list', async () => {

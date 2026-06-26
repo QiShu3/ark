@@ -1524,6 +1524,14 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     setWorkbenchEvent(event);
   }
 
+  function handleEventClick(): void {
+    if (primaryEvent) {
+      openWorkbench(primaryEvent);
+    } else {
+      openEventOverview();
+    }
+  }
+
   function openEventOverview(): void {
     setError(null);
     setShowCreateEditor(false);
@@ -1746,7 +1754,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       {variant === 'nav' ? (
         <button
           type="button"
-          onClick={openEventOverview}
+          onClick={handleEventClick}
           data-onboarding-anchor="primary-event"
           className="ark-event-nav-trigger ark-focus-ring flex h-[64px] min-w-[172px] max-w-[240px] flex-col justify-center rounded-[24px] px-2 text-left transition-colors"
           aria-label={`打开主事件：${primaryEvent ? primaryEvent.name : '未设置主事件'}，倒计时 ${countdownText}`}
@@ -1761,7 +1769,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       ) : (
         <button
           type="button"
-          onClick={openEventOverview}
+          onClick={handleEventClick}
           data-onboarding-anchor="primary-event"
           className="ark-panel-card ark-focus-ring absolute left-12 top-24 z-20 flex h-44 w-44 flex-col items-center justify-center rounded-full border-[6px] text-[var(--ark-text)] shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-colors hover:bg-[var(--ark-surface-subtle)]"
         >
@@ -2027,6 +2035,10 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           event={workbenchEvent}
           onClose={() => setWorkbenchEvent(null)}
           onChanged={refreshAll}
+          onBack={() => {
+            setWorkbenchEvent(null);
+            openEventOverview();
+          }}
         />
       ) : null}
 
