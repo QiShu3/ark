@@ -138,6 +138,7 @@ async def create_deliberate_workflow(
             kind=payload.kind,
             focus_work_type=payload.focus_work_type,
             bank_id=payload.bank_id,
+            task_id=payload.task_id,
             target_count=payload.target_count,
             scope=payload.scope,
             completion=payload.completion,

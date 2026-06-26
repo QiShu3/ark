@@ -44,6 +44,7 @@ export type DeliberateWorkflowConfig = {
   kind: DeliberateKind;
   focus_work_type: DeliberateFocusWorkType;
   bank_id?: string | null;
+  task_id?: string | null;
   target_count: number;
   scope: Record<string, unknown>;
   completion: Record<string, unknown>;
@@ -58,9 +59,14 @@ export type DeliberateWorkflowPayload = {
   kind: DeliberateKind;
   focus_work_type: DeliberateFocusWorkType;
   bank_id?: string | null;
+  task_id?: string | null;
   target_count: number;
   scope?: Record<string, unknown>;
   completion?: Record<string, unknown>;
+};
+
+export type DeliberateWorkflowPatch = {
+  task_id?: string | null;
 };
 
 export type DeliberateBankUploadResult = {
@@ -88,6 +94,14 @@ export function listDeliberateBanks(kind: DeliberateKind) {
 export function createDeliberateWorkflow(payload: DeliberateWorkflowPayload) {
   return apiJson<DeliberateWorkflowConfig>('/api/admin/deliberate-workflows', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchDeliberateWorkflow(configId: string, payload: DeliberateWorkflowPatch) {
+  return apiJson<DeliberateWorkflowConfig>(`/api/admin/deliberate-workflows/${encodeURIComponent(configId)}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });

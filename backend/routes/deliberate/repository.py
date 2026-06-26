@@ -76,6 +76,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             """
         )
         await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS task_id UUID NULL;"
+        )
+        await conn.execute(
             "ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_target_count;"
         )
         await conn.execute(
@@ -143,6 +146,7 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
         "kind": row["kind"],
         "focus_work_type": row["focus_work_type"],
         "bank_id": row["bank_id"],
+        "task_id": str(row["task_id"]) if row.get("task_id") else None,
         "target_count": int(row["target_count"]),
         "scope": _json_value(row["scope_json"]) or {},
         "completion": _json_value(row["completion_json"]) or {},
@@ -180,7 +184,7 @@ def run_to_dict(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
 async def list_configs(conn: asyncpg.Connection, *, user_id: int) -> list[asyncpg.Record]:
     return await conn.fetch(
         """
-        SELECT id, user_id, name, kind, focus_work_type, bank_id, target_count,
+        SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
                scope_json, completion_json, created_at, updated_at
         FROM deliberate_workflow_configs
         WHERE user_id = $1
@@ -193,7 +197,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int) -> list[asyncp
 async def get_config(conn: asyncpg.Connection, *, user_id: int, config_id: str) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
-        SELECT id, user_id, name, kind, focus_work_type, bank_id, target_count,
+        SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
                scope_json, completion_json, created_at, updated_at
         FROM deliberate_workflow_configs
         WHERE id = $1::uuid AND user_id = $2
@@ -211,6 +215,7 @@ async def create_config(
     kind: str,
     focus_work_type: str,
     bank_id: str | None,
+    task_id: str | None,
     target_count: int,
     scope: dict[str, Any],
     completion: dict[str, Any],
@@ -218,10 +223,10 @@ async def create_config(
     return await conn.fetchrow(
         """
         INSERT INTO deliberate_workflow_configs(
-            user_id, name, kind, focus_work_type, bank_id, target_count, scope_json, completion_json
+            user_id, name, kind, focus_work_type, bank_id, task_id, target_count, scope_json, completion_json
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
-        RETURNING id, user_id, name, kind, focus_work_type, bank_id, target_count,
+        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::jsonb, $9::jsonb)
+        RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
                   scope_json, completion_json, created_at, updated_at
         """,
         user_id,
@@ -229,6 +234,7 @@ async def create_config(
         kind,
         focus_work_type,
         bank_id,
+        task_id,
         target_count,
         _json_param(scope),
         _json_param(completion),
@@ -249,6 +255,7 @@ async def update_config(
         "kind": "kind",
         "focus_work_type": "focus_work_type",
         "bank_id": "bank_id",
+        "task_id": "task_id",
         "target_count": "target_count",
     }
     for key, column in mapping.items():
@@ -269,7 +276,7 @@ async def update_config(
         UPDATE deliberate_workflow_configs
         SET {', '.join(fields)}, updated_at = NOW()
         WHERE id = ${len(values) - 1}::uuid AND user_id = ${len(values)}
-        RETURNING id, user_id, name, kind, focus_work_type, bank_id, target_count,
+        RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
                   scope_json, completion_json, created_at, updated_at
         """,
         *values,

@@ -49,6 +49,7 @@ class DeliberateWorkflowConfigOut(BaseModel):
     kind: DeliberateKind
     focus_work_type: DeliberateFocusWorkType
     bank_id: str | None = None
+    task_id: str | None = None
     target_count: int = Field(default=10, ge=1, le=500)
     scope: dict[str, Any] = Field(default_factory=dict)
     completion: dict[str, Any] = Field(default_factory=dict)
@@ -63,6 +64,7 @@ class DeliberateWorkflowConfigCreate(BaseModel):
     kind: DeliberateKind
     focus_work_type: DeliberateFocusWorkType
     bank_id: str | None = None
+    task_id: str | None = None
     target_count: int = Field(default=10, ge=1, le=500)
     scope: dict[str, Any] = Field(default_factory=dict)
     completion: dict[str, Any] = Field(default_factory=dict)
@@ -73,6 +75,7 @@ class DeliberateWorkflowConfigPatch(BaseModel):
     kind: DeliberateKind | None = None
     focus_work_type: DeliberateFocusWorkType | None = None
     bank_id: str | None = None
+    task_id: str | None = None
     target_count: int | None = Field(default=None, ge=1, le=500)
     scope: dict[str, Any] | None = None
     completion: dict[str, Any] | None = None
