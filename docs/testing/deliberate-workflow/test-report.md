@@ -15,9 +15,9 @@
 
 | 工作流类型 | 测试文件 | 测试工具 | 测试时间 |
 |-----------|---------|---------|---------|
-| VocabTodayFocusWork（词汇今日专注） | `../../output/playwright/test-report.md` | Playwright CLI | 09:45 - 09:55 |
-| ReviewFocusWork（错题复习专注） | `../../output/playwright/ReviewFocusWork-Test-Report.md` | Chrome DevTools MCP | 10:00 - 10:05 |
-| PracticeFocusWork（真题练习专注） | `../../output/practice-focus-work-test/PracticeFocusWork-Test-Report.md` | Chrome DevTools MCP | 10:05 - 10:10 |
+| VocabTodayFocusWork（词汇今日专注） | [VocabTodayFocusWork测试报告](../../output/playwright/test-report.md) | Playwright CLI | 09:45 - 09:55 |
+| ReviewFocusWork（错题复习专注） | [ReviewFocusWork测试报告](../../output/playwright/ReviewFocusWork-Test-Report.md) | Chrome DevTools MCP | 10:00 - 10:05 |
+| PracticeFocusWork（真题练习专注） | [PracticeFocusWork测试报告](../../output/practice-focus-work-test/PracticeFocusWork-Test-Report.md) | Chrome DevTools MCP | 10:05 - 10:10 |
 
 ### 1.2 测试结果汇总
 
@@ -187,9 +187,9 @@
 
 | 报告名称 | 文件路径 |
 |---------|---------|
-| VocabTodayFocusWork 测试报告 | `../../output/playwright/test-report.md` |
-| ReviewFocusWork 测试报告 | `../../output/playwright/ReviewFocusWork-Test-Report.md` |
-| PracticeFocusWork 测试报告 | `../../output/practice-focus-work-test/PracticeFocusWork-Test-Report.md` |
+| VocabTodayFocusWork 测试报告 | [VocabTodayFocusWork测试报告](../../output/playwright/test-report.md) |
+| ReviewFocusWork 测试报告 | [ReviewFocusWork测试报告](../../output/playwright/ReviewFocusWork-Test-Report.md) |
+| PracticeFocusWork 测试报告 | [PracticeFocusWork测试报告](../../output/practice-focus-work-test/PracticeFocusWork-Test-Report.md) |
 
 ### 5.2 测试截图目录
 
