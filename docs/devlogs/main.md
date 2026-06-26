@@ -2,6 +2,23 @@
 
 ## 提交记录
 
+### 2026-06-26 · `c9b2aa2` · refactor(focus-work): extract duplicate utility functions and add browser automation tests
+
+**用户需求**：重构三种刻意工作流组件，提取重复代码，并创建浏览器自动化测试。
+
+**完成工作**：
+- 从 PracticeFocusWork、ReviewFocusWork、VocabTodayFocusWork 中提取重复的工具函数到共享模块
+- 统一各组件的导入路径，消除内联重复逻辑
+- 创建浏览器自动化测试套件，覆盖核心工作流交互
+- 生成测试报告，记录覆盖范围和执行结果
+
+**验证情况**：
+- 所有浏览器自动化测试通过
+- TypeScript 编译成功，无新增错误
+- 既有单元测试未受影响
+
+**变更文件**：10 files changed, 633 insertions(+), 347 deletions(-)
+
 ### 2026-06-22 · `c6fc060a` · feat: add deliberate workflow admin app
 
 **用户需求**：用户希望实现「刻意工作流」管理员子应用，并持续调整为渐进式、可持久化、可切换已保存工作流的体验；期间明确提出“选择题中的练习模式和复习模式的题库不应该是一样的吗？”以及“每次进入该页面都要重新过一遍流程，这不好，我希望可以持久化保存刻意工作流，支持切换刻意工作流和再次新建工作流”。
