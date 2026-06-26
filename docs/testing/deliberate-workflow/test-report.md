@@ -55,7 +55,7 @@
 | 错误处理 | ✅ 通过 | 未选择题库时"下一步"禁用，未填写名称时"保存配置"禁用 |
 
 **截图引用**:
-- `../../output/playwright/step3.png` - 工作参数配置
+- `screenshots/step3.png` - 工作参数配置
 
 ---
 
@@ -79,17 +79,17 @@
 | 错误处理 | ✅ 通过 | 未选择题库时"下一步"禁用，未填写名称时"保存配置"禁用 |
 
 **截图引用**:
-- `../../output/playwright/02-new-workflow-step1-type.png` - 选择类型
-- `../../output/playwright/05-new-workflow-step2-bank-selected.png` - 题库选择
-- `../../output/playwright/07-new-workflow-step3-review-mode.png` - 复习模式
-- `../../output/playwright/08-workflow-saved.png` - 工作流已保存
-- `../../output/playwright/09-focus-work-started.png` - 专注工作流已启动
-- `../../output/playwright/10-review-question.png` - 题目显示
-- `../../output/playwright/11-option-selected.png` - 选项已选择
-- `../../output/playwright/12-answer-submitted.png` - 答案已提交
-- `../../output/playwright/13-next-question-loaded.png` - 下一题加载
-- `../../output/playwright/15-workflow-switched.png` - 工作流切换后
-- `../../output/playwright/16-error-handling-disabled-buttons.png` - 禁用状态验证
+- `screenshots/02-new-workflow-step1-type.png` - 选择类型
+- `screenshots/05-new-workflow-step2-bank-selected.png` - 题库选择
+- `screenshots/07-new-workflow-step3-review-mode.png` - 复习模式
+- `screenshots/08-workflow-saved.png` - 工作流已保存
+- `screenshots/09-focus-work-started.png` - 专注工作流已启动
+- `screenshots/10-review-question.png` - 题目显示
+- `screenshots/11-option-selected.png` - 选项已选择
+- `screenshots/12-answer-submitted.png` - 答案已提交
+- `screenshots/13-next-question-loaded.png` - 下一题加载
+- `screenshots/15-workflow-switched.png` - 工作流切换后
+- `screenshots/16-error-handling-disabled-buttons.png` - 禁用状态验证
 
 ---
 
@@ -114,18 +114,18 @@
 | 错误处理 - 空名称 | ✅ 通过 | 未填写名称时"保存配置"按钮禁用 |
 
 **截图引用**:
-- `../../output/practice-focus-work-test/01-initial-page.png` - 初始页面
-- `../../output/practice-focus-work-test/02-step1-select-type.png` - 选择类型
-- `../../output/practice-focus-work-test/03-step2-select-bank.png` - 选择题库
-- `../../output/practice-focus-work-test/04-step3-parameters.png` - 设置参数
-- `../../output/practice-focus-work-test/05-step4-workflow-saved.png` - 工作流已保存
-- `../../output/practice-focus-work-test/06-practice-focus-work-running.png` - 专注工作流运行中
-- `../../output/practice-focus-work-test/07-answer-submitted.png` - 答案已提交
-- `../../output/practice-focus-work-test/08-next-question.png` - 下一题
-- `../../output/practice-focus-work-test/09-second-answer-correct.png` - 第二题答案正确
-- `../../output/practice-focus-work-test/10-p1-config-switch.png` - 配置切换
-- `../../output/practice-focus-work-test/11-p1-error-handling-empty-bank.png` - 空题库错误处理
-- `../../output/practice-focus-work-test/12-p1-error-handling-empty-name.png` - 空名称错误处理
+- `screenshots/01-initial-page.png` - 初始页面
+- `screenshots/02-step1-select-type.png` - 选择类型
+- `screenshots/03-step2-select-bank.png` - 选择题库
+- `screenshots/04-step3-parameters.png` - 设置参数
+- `screenshots/05-step4-workflow-saved.png` - 工作流已保存
+- `screenshots/06-practice-focus-work-running.png` - 专注工作流运行中
+- `screenshots/07-answer-submitted.png` - 答案已提交
+- `screenshots/08-next-question.png` - 下一题
+- `screenshots/09-second-answer-correct.png` - 第二题答案正确
+- `screenshots/10-p1-config-switch.png` - 配置切换
+- `screenshots/11-p1-error-handling-empty-bank.png` - 空题库错误处理
+- `screenshots/12-p1-error-handling-empty-name.png` - 空名称错误处理
 
 ---
 
@@ -195,9 +195,9 @@
 
 | 工作流类型 | 截图目录 |
 |-----------|---------|
-| VocabTodayFocusWork | `../../output/playwright/` |
-| ReviewFocusWork | `../../output/playwright/` |
-| PracticeFocusWork | `../../output/practice-focus-work-test/` |
+| VocabTodayFocusWork | `screenshots/` |
+| ReviewFocusWork | `screenshots/` |
+| PracticeFocusWork | `screenshots/` |
 
 ---
 
