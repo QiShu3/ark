@@ -287,26 +287,55 @@ async def aggregate_input_focus_stats(
 ) -> dict[str, Any]:
     row = await conn.fetchrow(
         """
+        WITH scoped_runs AS (
+          SELECT
+            fwr.id,
+            COALESCE(
+              MAX(fl.duration),
+              GREATEST(EXTRACT(EPOCH FROM (COALESCE(fwr.ended_at, NOW()) - fwr.started_at))::int, 0)
+            )::int AS duration
+          FROM focus_work_runs fwr
+          LEFT JOIN focus_app_work_logs fl
+            ON fl.user_id = fwr.user_id
+           AND fl.workflow_id = fwr.workflow_id
+           AND fl.end_at IS NOT NULL
+          WHERE fwr.user_id = $1
+            AND fwr.focus_work_type = 'input'
+            AND fwr.status IN ('completed', 'content_completed')
+            AND (
+              fwr.config_snapshot->>'input_bank_id' = $2
+              OR fwr.config_snapshot->>'bank_id' = $2
+            )
+          GROUP BY fwr.id
+        )
         SELECT
-          COALESCE(SUM(CAST(fwr.config_snapshot->>'target_question_count' AS int)), 0)::int AS target_count,
-          COALESCE(
-            MAX(EXTRACT(EPOCH FROM (COALESCE(fwr.ended_at, NOW()) - fwr.started_at)))::int, 0
-          ) AS total_seconds
-        FROM focus_work_runs fwr
-        WHERE fwr.user_id = $1
-          AND fwr.focus_work_type = 'input'
-          AND fwr.status IN ('completed', 'content_completed')
-          AND (
-            fwr.config_snapshot->>'input_bank_id' = $2
-            OR fwr.config_snapshot->>'bank_id' = $2
-          )
+          COUNT(*)::int AS total_sessions,
+          COALESCE(SUM(duration), 0)::int AS total_seconds
+        FROM scoped_runs
         """,
         user_id,
         set_id,
     )
+    if row is None or int(row["total_sessions"] or 0) == 0:
+        row = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(*)::int AS total_sessions,
+              COALESCE(SUM(duration), 0)::int AS total_seconds
+            FROM focus_app_work_logs fl
+            WHERE fl.user_id = $1
+              AND fl.focus_work_type = 'input'
+              AND fl.end_at IS NOT NULL
+            """,
+            user_id,
+        )
+
+    total_sessions = (row["total_sessions"] or 0) if row else 0
+    seconds = (row["total_seconds"] or 0) if row else 0
+
     return {
-        "total_sessions": 1 if row else 0,
-        "total_minutes": int((row["total_seconds"] or 0) / 60) if row else 0,
+        "total_sessions": total_sessions,
+        "total_minutes": round(seconds / 60),
     }
 
 

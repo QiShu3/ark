@@ -117,23 +117,13 @@ const ercDeclaration: SubAppDeclaration = {
   ],
 };
 
-const snapshotDeclaration: SubAppDeclaration = {
-  id: 'snapshot',
-  name: '存档分析',
-  description: '查看题库存档与掌握度趋势',
-  icon: 'bar-chart',
-  route: '/snapshot',
-  adminOnly: true,
-  sections: ['hero', 'asset'],
-  focusWorks: [],
-};
+
 
 // ---- Registry ----
 
 export const subAppRegistry: Record<string, SubAppDeclaration> = {
   vocab: vocabDeclaration,
   erc: ercDeclaration,
-  snapshot: snapshotDeclaration,
 };
 
 /** All registered sub-apps as an array (for iteration) */

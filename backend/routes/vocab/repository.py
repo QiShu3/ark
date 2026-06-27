@@ -1341,10 +1341,52 @@ async def aggregate_vocab_focus_stats(conn: asyncpg.Connection, *, user_id: int,
     """Aggregate focus/review stats for a vocab deck."""
     row = await conn.fetchrow(
         """
+        WITH scoped_runs AS (
+          SELECT
+            fwr.id,
+            COALESCE(
+              MAX(fl.duration),
+              GREATEST(EXTRACT(EPOCH FROM (COALESCE(fwr.ended_at, NOW()) - fwr.started_at))::int, 0)
+            )::int AS duration
+          FROM focus_work_runs fwr
+          LEFT JOIN focus_app_work_logs fl
+            ON fl.user_id = fwr.user_id
+           AND fl.workflow_id = fwr.workflow_id
+           AND fl.end_at IS NOT NULL
+          WHERE fwr.user_id = $1
+            AND fwr.focus_work_type = 'vocab_today'
+            AND fwr.status = 'completed'
+            AND fwr.config_snapshot->>'deck_id' = $2
+          GROUP BY fwr.id
+        )
+        SELECT
+          COUNT(*)::int AS total_sessions,
+          COALESCE(SUM(duration), 0)::int AS total_seconds
+        FROM scoped_runs
+        """,
+        user_id,
+        deck_id,
+    )
+    if row is None or int(row["total_sessions"] or 0) == 0:
+        row = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(*)::int AS total_sessions,
+              COALESCE(SUM(duration), 0)::int AS total_seconds
+            FROM focus_app_work_logs fl
+            WHERE fl.user_id = $1
+              AND fl.focus_work_type = 'vocab_today'
+              AND fl.end_at IS NOT NULL
+            """,
+            user_id,
+        )
+
+    acc_row = await conn.fetchrow(
+        """
         SELECT
           COUNT(*)::int AS total_reviews,
-          COUNT(*) FILTER ( WHERE last_result = 'correct' )::int AS correct_count,
-          COUNT(*) FILTER ( WHERE last_result = 'wrong' )::int AS wrong_count
+          COUNT(*) FILTER (WHERE last_result = 'correct')::int AS correct_count,
+          COUNT(*) FILTER (WHERE last_result = 'wrong')::int AS wrong_count
         FROM vocab_user_word_progress
         WHERE user_id = $1 AND deck_id = $2::uuid
           AND last_review_at IS NOT NULL
@@ -1352,13 +1394,17 @@ async def aggregate_vocab_focus_stats(conn: asyncpg.Connection, *, user_id: int,
         user_id,
         deck_id,
     )
-    if not row or row["total_reviews"] == 0:
-        return {"total_reviews": 0, "accuracy": 0}
-    total = row["total_reviews"]
-    correct = row["correct_count"]
+
+    total_sessions = (row["total_sessions"] or 0) if row else 0
+    seconds = (row["total_seconds"] or 0) if row else 0
+    total_reviews = (acc_row["total_reviews"] or 0) if acc_row else 0
+    correct = (acc_row["correct_count"] or 0) if acc_row else 0
+
     return {
-        "total_reviews": total,
-        "accuracy": round(correct / total, 4) if total else 0,
+        "total_sessions": total_sessions,
+        "total_minutes": round(seconds / 60),
+        "total_reviews": total_reviews,
+        "accuracy": round(correct / total_reviews, 4) if total_reviews > 0 else 0,
     }
 
 
