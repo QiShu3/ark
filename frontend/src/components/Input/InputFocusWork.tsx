@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import InputQuestionFocusTemplate from '../focus-work/templates/InputQuestionFocusTemplate';
@@ -76,6 +76,8 @@ export default function InputFocusWork({ run, disabled, onContentCompleted }: In
   const [answeredCount, setAnsweredCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongIds, setWrongIds] = useState<string[]>([]);
+  const answeredQuestionsRef = useRef<Array<{ question_id: string; correct: boolean; time_spent: number; input_type: string }>>([]);
+  const startTimeRef = useRef<number>(Date.now());
 
   const currentQuestion = article?.questions[questionIndex] ?? null;
 
@@ -134,6 +136,12 @@ export default function InputFocusWork({ run, disabled, onContentCompleted }: In
       } else if (res.correct === false) {
         setWrongIds((prev) => [...prev, questionItem.id]);
       }
+      answeredQuestionsRef.current.push({
+        question_id: questionItem.id,
+        correct: res.correct === true,
+        time_spent: Date.now() - startTime,
+        input_type: questionItem.mode || 'text',
+      });
       return {
         correct: res.correct ?? undefined,
         acceptedAnswers: res.accepted_answers,
@@ -146,12 +154,22 @@ export default function InputFocusWork({ run, disabled, onContentCompleted }: In
 
   const handleContentCompleted = useCallback(
     (progressSnapshot?: Record<string, unknown>) => {
+      const answered = answeredQuestionsRef.current;
+      const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
       onContentCompleted({
         question_count: answeredCount,
         correct_count: correctCount,
         wrong_question_ids: wrongIds,
         target_question_count: targetCount,
         ...progressSnapshot,
+        run_summary: {
+          total_questions: targetCount,
+          answered_count: answeredCount,
+          correct_count: correctCount,
+          accuracy: answeredCount > 0 ? correctCount / answeredCount : 0,
+          duration_seconds: durationSeconds,
+          question_details: answered,
+        },
       });
     },
     [answeredCount, correctCount, wrongIds, targetCount, onContentCompleted],

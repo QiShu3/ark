@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Archive, BarChart3, CheckCircle2, Database, FileUp, Link, Play, Plus, Save, Settings2, Trash2, Workflow } from 'lucide-react';
+import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, FileUp, Link, Play, Plus, Save, Settings2, Trash2, Workflow, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import AppModalFrame from '../components/AppModalFrame';
 import Button from '../components/Button';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
@@ -12,6 +13,7 @@ import { apiJson } from '../lib/api';
 import {
   createDeliberateWorkflow,
   deleteDeliberateWorkflow,
+  getDeliberateRun,
   listDeliberateBanks,
   listDeliberateRuns,
   listDeliberateWorkflows,
@@ -168,6 +170,10 @@ export default function DeliberateWorkflow() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState(false);
+  const [modalRunId, setModalRunId] = useState<string | null>(null);
+  const [modalRun, setModalRun] = useState<DeliberateWorkflowRun | null>(null);
+  const [loadingModalRun, setLoadingModalRun] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
@@ -464,6 +470,38 @@ export default function DeliberateWorkflow() {
     setError(null);
   }
 
+  const handleRunClick = useCallback(async (runId: string) => {
+    setModalRunId(runId);
+    setModalRun(null);
+    setLoadingModalRun(true);
+    setExpandedSections(new Set(['overview']));
+    try {
+      const run = await getDeliberateRun(runId);
+      setModalRun(run);
+    } catch {
+      setModalRun(null);
+    } finally {
+      setLoadingModalRun(false);
+    }
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setModalRunId(null);
+    setModalRun(null);
+  }, []);
+
+  const toggleSection = useCallback((section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  }, []);
+
   const steps: { id: StepId; title: string; summary: string; locked: boolean; icon: ReactNode }[] = [
     {
       id: 1,
@@ -546,7 +584,12 @@ export default function DeliberateWorkflow() {
           ) : (
             <div className="space-y-2">
               {runs.slice(0, 6).map((run) => (
-                <div key={run.id} className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2">
+                <button
+                  key={run.id}
+                  type="button"
+                  onClick={() => void handleRunClick(run.id)}
+                  className="flex w-full items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-left transition hover:border-ark-accent/50 hover:bg-ark-surface"
+                >
                   <div>
                     <div className="text-sm font-medium text-ark-text">{statusLabel[run.status]}</div>
                     <div className="text-xs text-ark-text-faint">{formatDate(run.created_at)}</div>
@@ -555,7 +598,7 @@ export default function DeliberateWorkflow() {
                     <div>{run.snapshot_id ? '已关联存档' : '暂无存档'}</div>
                     <div>{run.focus_run_id ? 'focus run 已记录' : '等待轮次'}</div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -924,6 +967,15 @@ export default function DeliberateWorkflow() {
           {draftMode && activeStep === 4 ? savedWorkflowContent : null}
         </section>
       </div>
+
+      {/* 运行档案详情弹窗 */}
+      <RunDetailModal
+        run={modalRun}
+        loading={loadingModalRun}
+        expandedSections={expandedSections}
+        onToggleSection={toggleSection}
+        onClose={handleCloseModal}
+      />
     </SubAppPageShell>
   );
 }
@@ -956,5 +1008,293 @@ function SelectionSummary({
         <span className="mt-0.5 block truncate text-xs text-ark-text-muted">{detail}</span>
       </span>
     </div>
+  );
+}
+
+function formatDuration(seconds?: number): string {
+  if (!seconds) return '0s';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+}
+
+function VocabRunSummary({ summary }: { summary: Record<string, unknown> }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="已复习" value={String((summary.reviewed_count as number) ?? 0)} detail={`共 ${(summary.total_words as number) ?? 0} 词`} />
+        <Metric label="已掌握" value={String((summary.memorized_count as number) ?? 0)} detail={`${summary.correct_rate ? Math.round((summary.correct_rate as number) * 100) : 0}% 正确率`} />
+        <Metric label="新学" value={String((summary.new_count as number) ?? 0)} detail="本轮新增" />
+        <Metric label="用时" value={formatDuration(summary.duration_seconds as number)} detail="本轮总用时" />
+      </div>
+    </div>
+  );
+}
+
+function ChoiceRunSummary({ summary }: { summary: Record<string, unknown> }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="已答题" value={String((summary.answered_count as number) ?? 0)} detail={`共 ${(summary.total_questions as number) ?? 0} 题`} />
+        <Metric label="正确" value={String((summary.correct_count as number) ?? 0)} detail={`${summary.accuracy ? Math.round((summary.accuracy as number) * 100) : 0}% 正确率`} />
+        <Metric label="用时" value={formatDuration(summary.duration_seconds as number)} detail="本轮总用时" />
+        <Metric label="正确率" value={`${summary.accuracy ? Math.round((summary.accuracy as number) * 100) : 0}%`} detail="答题正确率" />
+      </div>
+      {summary.question_details && Array.isArray(summary.question_details) && summary.question_details.length > 0 && (
+        <div className="rounded-md bg-ark-surface-subtle p-3">
+          <div className="mb-2 text-xs font-medium text-ark-text-muted">答题详情</div>
+          <div className="max-h-40 space-y-1 overflow-y-auto text-sm">
+            {(summary.question_details as Array<Record<string, unknown>>).slice(0, 20).map((q, i) => (
+              <div key={i} className="flex justify-between">
+                <span className="text-ark-text">{String(q.question_id ?? `Q${i + 1}`)}</span>
+                <span className={q.correct ? 'text-green-500' : 'text-red-400'}>
+                  {q.correct ? '正确' : '错误'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InputRunSummary({ summary }: { summary: Record<string, unknown> }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="已答题" value={String((summary.answered_count as number) ?? 0)} detail={`共 ${(summary.total_questions as number) ?? 0} 题`} />
+        <Metric label="正确" value={String((summary.correct_count as number) ?? 0)} detail={`${summary.accuracy ? Math.round((summary.accuracy as number) * 100) : 0}% 正确率`} />
+        <Metric label="用时" value={formatDuration(summary.duration_seconds as number)} detail="本轮总用时" />
+        <Metric label="正确率" value={`${summary.accuracy ? Math.round((summary.accuracy as number) * 100) : 0}%`} detail="答题正确率" />
+      </div>
+      {summary.question_details && Array.isArray(summary.question_details) && summary.question_details.length > 0 && (
+        <div className="rounded-md bg-ark-surface-subtle p-3">
+          <div className="mb-2 text-xs font-medium text-ark-text-muted">答题详情</div>
+          <div className="max-h-40 space-y-1 overflow-y-auto text-sm">
+            {(summary.question_details as Array<Record<string, unknown>>).slice(0, 20).map((q, i) => (
+              <div key={i} className="flex justify-between">
+                <span className="text-ark-text">{String(q.question_id ?? `Q${i + 1}`)}</span>
+                <span className={q.correct ? 'text-green-500' : 'text-red-400'}>
+                  {q.correct ? '正确' : '错误'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RunDetailModal({
+  run,
+  loading,
+  expandedSections,
+  onToggleSection,
+  onClose,
+}: {
+  run: DeliberateWorkflowRun | null;
+  loading: boolean;
+  expandedSections: Set<string>;
+  onToggleSection: (section: string) => void;
+  onClose: () => void;
+}) {
+  const configSnapshot = run?.config_snapshot || {};
+  const progressSnapshot = run?.progress_snapshot || {};
+  const runSummary = (progressSnapshot as Record<string, unknown>)?.run_summary as Record<string, unknown> | undefined;
+  const focusWorkType = configSnapshot.focus_work_type as string | undefined;
+
+  const startTime = run?.created_at ? new Date(run.created_at) : null;
+  const endTime = run?.completed_at ? new Date(run.completed_at) : null;
+  const duration = startTime && endTime
+    ? Math.round((endTime.getTime() - startTime.getTime()) / 60000)
+    : null;
+
+  return (
+    <AppModalFrame open={Boolean(run || loading)} onClose={onClose} ariaLabel="运行档案详情">
+      <div className="w-[640px] max-w-[92vw] space-y-4 rounded-xl border border-ark-border bg-ark-surface p-5 shadow-xl">
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between border-b border-ark-border pb-3">
+          <h3 className="text-lg font-semibold text-ark-text">运行档案详情</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="py-8 text-center text-sm text-ark-text-muted">加载中...</div>
+        ) : !run ? (
+          <div className="py-8 text-center text-sm text-ark-text-muted">加载失败</div>
+        ) : (
+          <div className="space-y-4">
+            {/* 执行概览 - 默认展开 */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => onToggleSection('overview')}
+                className="flex w-full items-center gap-2 text-left"
+              >
+                {expandedSections.has('overview') ? (
+                  <ChevronDown className="h-4 w-4 text-ark-text-muted" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-ark-text-muted" />
+                )}
+                <span className="text-sm font-medium text-ark-text">执行概览</span>
+              </button>
+
+              {expandedSections.has('overview') && (
+                <div className="grid gap-3 pl-6 md:grid-cols-4">
+                  <div className="rounded-md bg-ark-surface-subtle p-3">
+                    <div className="text-xs text-ark-text-muted">状态</div>
+                    <div className="mt-1 text-sm font-medium text-ark-text">{statusLabel[run.status]}</div>
+                  </div>
+                  <div className="rounded-md bg-ark-surface-subtle p-3">
+                    <div className="text-xs text-ark-text-muted">启动时间</div>
+                    <div className="mt-1 text-sm font-medium text-ark-text">{formatDate(run.created_at)}</div>
+                  </div>
+                  <div className="rounded-md bg-ark-surface-subtle p-3">
+                    <div className="text-xs text-ark-text-muted">完成时间</div>
+                    <div className="mt-1 text-sm font-medium text-ark-text">
+                      {run.completed_at ? formatDate(run.completed_at) : '未完成'}
+                    </div>
+                  </div>
+                  <div className="rounded-md bg-ark-surface-subtle p-3">
+                    <div className="text-xs text-ark-text-muted">耗时</div>
+                    <div className="mt-1 text-sm font-medium text-ark-text">
+                      {duration !== null ? `${duration} 分钟` : '计算中'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 配置快照 - 默认折叠 */}
+            {run.config_snapshot && Object.keys(run.config_snapshot).length > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleSection('config')}
+                  className="flex w-full items-center gap-2 text-left"
+                >
+                  {expandedSections.has('config') ? (
+                    <ChevronDown className="h-4 w-4 text-ark-text-muted" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-ark-text-muted" />
+                  )}
+                  <span className="text-sm font-medium text-ark-text">配置快照</span>
+                </button>
+
+                {expandedSections.has('config') && (
+                  <div className="space-y-2 pl-6 text-sm">
+                    {configSnapshot.name && (
+                      <div className="flex gap-2">
+                        <span className="text-ark-text-muted">配置名称:</span>
+                        <span className="text-ark-text">{String(configSnapshot.name)}</span>
+                      </div>
+                    )}
+                    {configSnapshot.bank_id && (
+                      <div className="flex gap-2">
+                        <span className="text-ark-text-muted">题库ID:</span>
+                        <span className="font-mono text-xs text-ark-text">{String(configSnapshot.bank_id)}</span>
+                      </div>
+                    )}
+                    {configSnapshot.target_count && (
+                      <div className="flex gap-2">
+                        <span className="text-ark-text-muted">目标题数:</span>
+                        <span className="text-ark-text">{String(configSnapshot.target_count)}</span>
+                      </div>
+                    )}
+                    {configSnapshot.scope && typeof configSnapshot.scope === 'object' && Object.keys(configSnapshot.scope as Record<string, unknown>).length > 0 && (
+                      <div className="mt-2">
+                        <div className="mb-1 text-ark-text-muted">筛选条件:</div>
+                        <div className="rounded-md bg-ark-surface-subtle p-2 font-mono text-xs text-ark-text">
+                          {JSON.stringify(configSnapshot.scope, null, 2)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 本次专注详情 */}
+            {runSummary && Object.keys(runSummary).length > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleSection('summary')}
+                  className="flex w-full items-center gap-2 text-left"
+                >
+                  {expandedSections.has('summary') ? (
+                    <ChevronDown className="h-4 w-4 text-ark-text-muted" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-ark-text-muted" />
+                  )}
+                  <span className="text-sm font-medium text-ark-text">本次专注详情</span>
+                </button>
+
+                {expandedSections.has('summary') && (
+                  <div className="pl-6 space-y-3">
+                    {focusWorkType === 'vocab_today' && (
+                      <VocabRunSummary summary={runSummary} />
+                    )}
+                    {(focusWorkType === 'practice' || focusWorkType === 'review') && (
+                      <ChoiceRunSummary summary={runSummary} />
+                    )}
+                    {focusWorkType === 'input' && (
+                      <InputRunSummary summary={runSummary} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 执行进度 - 默认折叠 */}
+            {run.progress_snapshot && Object.keys(run.progress_snapshot).length > 0 && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleSection('progress')}
+                  className="flex w-full items-center gap-2 text-left"
+                >
+                  {expandedSections.has('progress') ? (
+                    <ChevronDown className="h-4 w-4 text-ark-text-muted" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-ark-text-muted" />
+                  )}
+                  <span className="text-sm font-medium text-ark-text">执行进度</span>
+                </button>
+
+                {expandedSections.has('progress') && (
+                  <div className="pl-6">
+                    <div className="rounded-md bg-ark-surface-subtle p-3 font-mono text-xs text-ark-text">
+                      {JSON.stringify(progressSnapshot, null, 2)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 关联信息 */}
+            {(run.snapshot_id || run.focus_run_id) && (
+              <div className="flex gap-4 border-t border-ark-border pt-3 text-xs text-ark-text-muted">
+                {run.snapshot_id && (
+                  <div>存档ID: <span className="font-mono">{run.snapshot_id}</span></div>
+                )}
+                {run.focus_run_id && (
+                  <div>专注运行ID: <span className="font-mono">{run.focus_run_id}</span></div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </AppModalFrame>
   );
 }

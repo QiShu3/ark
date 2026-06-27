@@ -125,6 +125,10 @@ export function startDeliberateWorkflow(configId: string) {
   });
 }
 
+export function getDeliberateRun(runId: string) {
+  return apiJson<DeliberateWorkflowRun>(`/api/admin/deliberate-runs/${encodeURIComponent(runId)}`);
+}
+
 export async function uploadDeliberateBank(params: {
   kind: DeliberateKind;
   name: string;

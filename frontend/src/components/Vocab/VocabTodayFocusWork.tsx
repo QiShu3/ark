@@ -221,12 +221,28 @@ export default function VocabTodayFocusWork({
         target_word_count: extraTargetCount,
         extra_round: true,
         ...progressSnapshot,
+        run_summary: {
+          total_words: extraTargetCount,
+          reviewed_count: extraCompletedCount,
+          memorized_count: extraCompletedCount,
+          new_count: 0,
+          correct_rate: 0,
+          duration_seconds: 0,
+        },
       });
     } else {
       onContentCompleted({
         completed_word_count: session.memorizedCount,
         target_word_count: extractRunConfigNumber(run, ['target_word_count', 'daily_target_count'], session.memorizedCount, 10000),
         ...progressSnapshot,
+        run_summary: {
+          total_words: extractRunConfigNumber(run, ['target_word_count', 'daily_target_count'], session.memorizedCount, 10000),
+          reviewed_count: session.memorizedCount,
+          memorized_count: session.memorizedCount,
+          new_count: 0,
+          correct_rate: 0,
+          duration_seconds: 0,
+        },
       });
     }
   }, [extraCompletedCount, extraTargetCount, isExtraRun, onContentCompleted, run.config_snapshot, session.memorizedCount]);

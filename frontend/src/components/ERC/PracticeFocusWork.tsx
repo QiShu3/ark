@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
@@ -84,17 +84,30 @@ export default function PracticeFocusWork({
   const [completedCorrectCount, setCompletedCorrectCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const answeredQuestionsRef = useRef<Array<{ question_id: string; correct: boolean; subject?: string; year?: number; tag?: string }>>([]);
+  const startTimeRef = useRef<number>(Date.now());
   const totalChoiceQuestionCount = choiceItems.reduce((sum, item) => sum + item.question_count, 0);
   const targetQuestionCount = choiceTargetQuestionCount(run, totalChoiceQuestionCount);
 
   const completePractice = useCallback(() => {
+    const answered = answeredQuestionsRef.current;
+    const correctCount = answered.filter((q) => q.correct).length;
+    const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
     onContentCompleted({
       article_count: choiceItems.length,
       target_article_count: targetQuestionCount,
       correct_count: completedCorrectCount,
       question_count: answeredCount,
+      run_summary: {
+        total_questions: totalChoiceQuestionCount,
+        answered_count: answeredCount,
+        correct_count: correctCount,
+        accuracy: answeredCount > 0 ? correctCount / answeredCount : 0,
+        duration_seconds: durationSeconds,
+        question_details: answered,
+      },
     });
-  }, [answeredCount, completedCorrectCount, choiceItems.length, onContentCompleted, targetQuestionCount]);
+  }, [answeredCount, completedCorrectCount, choiceItems.length, onContentCompleted, targetQuestionCount, totalChoiceQuestionCount]);
 
   const loadItems = useCallback(async () => {
     if (!bankId) {
@@ -135,6 +148,13 @@ export default function PracticeFocusWork({
     const result = await submitChoiceAnswer(q.id, optionKey, 'practice');
     setAnsweredCount((prev) => prev + 1);
     if (result.is_correct) setCompletedCorrectCount((prev) => prev + 1);
+    answeredQuestionsRef.current.push({
+      question_id: q.id,
+      correct: result.is_correct,
+      subject: currentItem.subject_area || choiceScope?.subjects?.[0],
+      year: choiceScope?.years?.[0],
+      tag: currentItem.tags?.[0],
+    });
     return {
       correctOptionKey: result.is_correct ? optionKey : result.correct_option,
       explanationBlocks: q.explanation_blocks.length > 0 ? q.explanation_blocks : undefined,

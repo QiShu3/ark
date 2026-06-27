@@ -74,6 +74,8 @@ export default function ReviewFocusWork({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const answeredQuestionIdsRef = useRef<Set<string>>(new Set());
+  const answeredQuestionsRef = useRef<Array<{ question_id: string; correct: boolean; subject?: string; year?: number }>>([]);
+  const startTimeRef = useRef<number>(Date.now());
   const [answeredCount, setAnsweredCount] = useState(0);
   const [allItems, setAllItems] = useState<ChoiceItemDTO[]>([]);
 
@@ -145,11 +147,32 @@ export default function ReviewFocusWork({
       targetCount={targetQuestionCount}
       disabled={disabled}
       onLoadNext={loadNextReviewItem}
-      onContentCompleted={onContentCompleted}
+      onContentCompleted={(progressSnapshot) => {
+        const answered = answeredQuestionsRef.current;
+        const correctCount = answered.filter((q) => q.correct).length;
+        const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+        onContentCompleted({
+          ...progressSnapshot,
+          run_summary: {
+            total_questions: targetQuestionCount,
+            answered_count: answeredCount,
+            correct_count: correctCount,
+            accuracy: answeredCount > 0 ? correctCount / answeredCount : 0,
+            duration_seconds: durationSeconds,
+            question_details: answered,
+          },
+        });
+      }}
       onSubmitAnswer={async (choiceItem, optionKey) => {
         const result = await submitChoiceAnswer(choiceItem.id, optionKey, 'review');
         answeredQuestionIdsRef.current.add(choiceItem.id);
         setAnsweredCount((count) => count + 1);
+        answeredQuestionsRef.current.push({
+          question_id: choiceItem.id,
+          correct: result.is_correct,
+          subject: choiceScope?.subjects?.[0],
+          year: choiceScope?.years?.[0],
+        });
         setError(null);
         return {
           correctOptionKey: result.is_correct ? optionKey : result.correct_option,

@@ -1,4 +1,5 @@
 import type React from 'react';
+import type { ReactNode } from 'react';
 
 import type { FocusPhaseRuntimeState, FocusWorkRendererProps } from './focusWorkTypes';
 import type { FocusWorkDefinition } from './focusWorkTypes';
@@ -18,6 +19,7 @@ type ActionPanelProps = {
   secondaryLabel?: string;
   secondaryDisabled?: boolean;
   onSecondary?: () => void;
+  children?: ReactNode;
 };
 
 function ActionPanel({
@@ -30,12 +32,18 @@ function ActionPanel({
   secondaryLabel,
   secondaryDisabled,
   onSecondary,
+  children,
 }: ActionPanelProps) {
   return (
     <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center p-8 text-center">
       <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">{label}</div>
       <h3 className="mt-4 text-xl font-semibold text-[var(--focus-work-text)]">{heading}</h3>
       <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">{description}</p>
+      {children && (
+        <div className="mt-4 text-left">
+          {children}
+        </div>
+      )}
       <div className="mt-8 flex w-full flex-col justify-center gap-4 sm:flex-row">
         <button type="button" disabled={primaryDisabled} onClick={onPrimary} className={primaryButtonClass}>
           {primaryLabel}
@@ -46,6 +54,89 @@ function ActionPanel({
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function RunSummaryCard({ summary, focusWorkType }: { summary: Record<string, unknown>; focusWorkType?: string }) {
+  if (!summary || Object.keys(summary).length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-ark-border bg-ark-surface p-4 text-sm">
+      <div className="mb-3 text-xs font-medium text-ark-text-muted">本轮专注数据</div>
+
+      {focusWorkType === 'vocab_today' && (
+        <div className="grid grid-cols-4 gap-3">
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">{String((summary.reviewed_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">已复习</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-green-500">{String((summary.memorized_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">已掌握</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-yellow-500">{String((summary.new_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">新学</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">
+              {summary.correct_rate ? `${Math.round((summary.correct_rate as number) * 100)}%` : '0%'}
+            </div>
+            <div className="text-xs text-ark-text-muted">正确率</div>
+          </div>
+        </div>
+      )}
+
+      {(focusWorkType === 'practice' || focusWorkType === 'review') && (
+        <div className="grid grid-cols-4 gap-3">
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">{String((summary.answered_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">已答题</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-green-500">{String((summary.correct_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">正确</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">
+              {summary.accuracy ? `${Math.round((summary.accuracy as number) * 100)}%` : '0%'}
+            </div>
+            <div className="text-xs text-ark-text-muted">正确率</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">
+              {summary.duration_seconds ? `${Math.round((summary.duration_seconds as number) / 60)}m` : '0m'}
+            </div>
+            <div className="text-xs text-ark-text-muted">用时</div>
+          </div>
+        </div>
+      )}
+
+      {focusWorkType === 'input' && (
+        <div className="grid grid-cols-4 gap-3">
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">{String((summary.answered_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">已答题</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-green-500">{String((summary.correct_count as number) ?? 0)}</div>
+            <div className="text-xs text-ark-text-muted">正确</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">
+              {summary.accuracy ? `${Math.round((summary.accuracy as number) * 100)}%` : '0%'}
+            </div>
+            <div className="text-xs text-ark-text-muted">正确率</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-ark-text">
+              {summary.duration_seconds ? `${Math.round((summary.duration_seconds as number) / 60)}m` : '0m'}
+            </div>
+            <div className="text-xs text-ark-text-muted">用时</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -80,6 +171,8 @@ export default function FocusWorkbenchPanel({
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
   const noAvailableContent = runHasNoAvailableContent(activeRun);
+  const runSummary = (activeRun?.progress_snapshot as Record<string, unknown> | undefined)?.run_summary as Record<string, unknown> | undefined;
+  const focusWorkType = activeRun?.config_snapshot?.focus_work_type as string | undefined;
 
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
     return (
@@ -91,9 +184,13 @@ export default function FocusWorkbenchPanel({
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
         secondaryLabel="再来一轮"
-        secondaryDisabled={busy}
+        secondaryDisabled={true}
         onSecondary={onCreateExtraRun}
-      />
+      >
+        {runSummary && Object.keys(runSummary).length > 0 && (
+          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
+        )}
+      </ActionPanel>
     );
   }
 
@@ -120,9 +217,13 @@ export default function FocusWorkbenchPanel({
         primaryDisabled={busy}
         onPrimary={onEndPhase}
         secondaryLabel="再来一轮"
-        secondaryDisabled={busy}
+        secondaryDisabled={true}
         onSecondary={onCreateExtraRun}
-      />
+      >
+        {runSummary && Object.keys(runSummary).length > 0 && (
+          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
+        )}
+      </ActionPanel>
     );
   }
 
@@ -136,9 +237,13 @@ export default function FocusWorkbenchPanel({
         primaryDisabled={busy}
         onPrimary={onEndPhase}
         secondaryLabel="再来一轮"
-        secondaryDisabled={busy}
+        secondaryDisabled={true}
         onSecondary={onCreateExtraRun}
-      />
+      >
+        {runSummary && Object.keys(runSummary).length > 0 && (
+          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
+        )}
+      </ActionPanel>
     );
   }
 
