@@ -3919,7 +3919,7 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
         }
         
         # Update focus_work_runs.progress_snapshot so frontend can read mastery_check
-        focus_run_id = _record_get(run, "id") or getattr(run, "id", None)
+        focus_run_id = getattr(run, "id", None)
         if focus_run_id:
             await conn.execute(
                 """
@@ -4135,7 +4135,13 @@ async def complete_focus_workflow_run_content(
                 run_id=run_id,
                 progress_snapshot=dict(body.progress_snapshot),
             )
-            await _mark_deliberate_content_completed(conn, int(user.id), run)
+            try:
+                await _mark_deliberate_content_completed(conn, int(user.id), run)
+            except Exception as e:
+                import traceback
+                print(f"ERROR in _mark_deliberate_content_completed: {e}")
+                traceback.print_exc()
+                raise
             await _close_open_focus_app_work_log(
                 conn,
                 int(user.id),
