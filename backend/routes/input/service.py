@@ -263,7 +263,12 @@ def _rewrite_image_paths(raw_articles: list[dict[str, Any]], set_id: str) -> Non
     def _replace(text: str) -> str:
         if not text or not isinstance(text, str):
             return text
-        return _IMAGE_MD_PATTERN.sub(rf"![\1]({prefix}\2)", text)
+        def _rewrite(match):
+            alt = match.group(1)
+            path = match.group(2)
+            filename = path.split("/")[-1] if "/" in path else path
+            return f"![{alt}]({prefix}{filename})"
+        return _IMAGE_MD_PATTERN.sub(_rewrite, text)
 
     for article in raw_articles:
         for i, p in enumerate(article.get("content", [])):
