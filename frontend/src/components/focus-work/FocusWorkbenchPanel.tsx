@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import type { FocusPhaseRuntimeState, FocusWorkRendererProps } from './focusWorkTypes';
 import type { FocusWorkDefinition } from './focusWorkTypes';
@@ -200,51 +200,35 @@ export default function FocusWorkbenchPanel({
   const masteryCheck = (progressSnapshot?.mastery_check ?? runSummary?.mastery_check) as Record<string, unknown> | undefined;
   const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
 
-  const [selectedChildId, setSelectedChildId] = useState<string>(() => {
-    if (forkChildren && forkChildren.length > 0) {
-      const recommended = forkChildren.find(c => c.is_recommended);
-      return recommended?.config_id || forkChildren[0].config_id;
-    }
-    return '';
-  });
-
   const hasChildren = forkChildren && forkChildren.length > 0;
 
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
-    const handleFork = () => {
-      if (hasChildren && onForkWithChild) {
-        onForkWithChild(selectedChildId);
-      } else if (onFork) {
-        onFork();
-      }
-    };
-
     return (
       <ActionPanel
         label="Round Complete"
         heading="本轮专注工作已完成"
-        description={hasMasteryCheckFailed ? "检验未通过。你可以fork到弱项进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
-        primaryLabel={hasMasteryCheckFailed ? "完成任务并结束阶段" : "完成任务并结束阶段"}
+        description={hasMasteryCheckFailed ? "检验未通过。你可以选择fork到其他专注工作进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
+        primaryLabel="完成任务并结束阶段"
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
-        secondaryLabel={hasMasteryCheckFailed ? "fork到弱项" : "再来一轮"}
-        secondaryDisabled={hasMasteryCheckFailed ? busy || !(onFork || onForkWithChild) : true}
-        onSecondary={hasMasteryCheckFailed ? handleFork : onCreateExtraRun}
       >
         {hasMasteryCheckFailed && hasChildren && (
-          <div className="mb-3">
-            <label className="mb-1 block text-xs text-[var(--focus-work-text-muted)]">fork 到：</label>
-            <select
-              value={selectedChildId}
-              onChange={(e) => setSelectedChildId(e.target.value)}
-              className="w-full rounded border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-2 py-1 text-sm text-[var(--focus-work-text)]"
-            >
-              {forkChildren.map((child) => (
-                <option key={child.config_id} value={child.config_id}>
-                  {child.label || child.config_id}
-                </option>
-              ))}
-            </select>
+          <div className="mb-3 space-y-2">
+            <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到：</div>
+            {forkChildren.map((child) => (
+              <button
+                key={child.config_id}
+                type="button"
+                disabled={busy}
+                onClick={() => onForkWithChild?.(child.config_id)}
+                className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
+              >
+                <div className="font-medium">{child.label || child.config_id}</div>
+                {child.is_recommended && (
+                  <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
+                )}
+              </button>
+            ))}
           </div>
         )}
         {runSummary && Object.keys(runSummary).length > 0 && (
@@ -255,40 +239,32 @@ export default function FocusWorkbenchPanel({
   }
 
   if (phaseRuntimeState === 'extra_run_completed') {
-    const handleFork = () => {
-      if (hasChildren && onForkWithChild) {
-        onForkWithChild(selectedChildId);
-      } else if (onFork) {
-        onFork();
-      }
-    };
-
     return (
       <ActionPanel
         label="Round Complete"
         heading="本轮专注已完成"
-        description={hasMasteryCheckFailed ? "检验未通过。你可以fork到弱项进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
-        primaryLabel={hasMasteryCheckFailed ? "完成任务并结束阶段" : "完成任务并结束阶段"}
+        description={hasMasteryCheckFailed ? "检验未通过。你可以选择fork到其他专注工作进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
+        primaryLabel="完成任务并结束阶段"
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
-        secondaryLabel={hasMasteryCheckFailed ? "fork到弱项" : "再来一轮"}
-        secondaryDisabled={hasMasteryCheckFailed ? busy || !(onFork || onForkWithChild) : true}
-        onSecondary={hasMasteryCheckFailed ? handleFork : onCreateExtraRun}
       >
         {hasMasteryCheckFailed && hasChildren && (
-          <div className="mb-3">
-            <label className="mb-1 block text-xs text-[var(--focus-work-text-muted)]">fork 到：</label>
-            <select
-              value={selectedChildId}
-              onChange={(e) => setSelectedChildId(e.target.value)}
-              className="w-full rounded border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-2 py-1 text-sm text-[var(--focus-work-text)]"
-            >
-              {forkChildren.map((child) => (
-                <option key={child.config_id} value={child.config_id}>
-                  {child.label || child.config_id}
-                </option>
-              ))}
-            </select>
+          <div className="mb-3 space-y-2">
+            <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到：</div>
+            {forkChildren.map((child) => (
+              <button
+                key={child.config_id}
+                type="button"
+                disabled={busy}
+                onClick={() => onForkWithChild?.(child.config_id)}
+                className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
+              >
+                <div className="font-medium">{child.label || child.config_id}</div>
+                {child.is_recommended && (
+                  <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
+                )}
+              </button>
+            ))}
           </div>
         )}
         {runSummary && Object.keys(runSummary).length > 0 && (
