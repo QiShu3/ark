@@ -91,6 +91,45 @@ export function listDeliberateBanks(kind: DeliberateKind) {
   return apiJson<DeliberateBankOption[]>(`/api/admin/deliberate-workflows/banks?kind=${encodeURIComponent(kind)}`);
 }
 
+export type BankPreviewQuestion = {
+  id: string;
+  question_id: string;
+  stem: string;
+  type: string;
+  options: Record<string, string> | null;
+  answer: string;
+  subject: string;
+};
+
+export type BankPreviewData = {
+  bank_id: string;
+  name: string;
+  kind: DeliberateKind;
+  total_count: number;
+  subjects: string[];
+  questions: BankPreviewQuestion[];
+};
+
+export type BankQuestionsResponse = BankPreviewData & {
+  page: number;
+  limit: number;
+};
+
+export function fetchBankPreview(bankId: string) {
+  return apiJson<BankPreviewData>(`/api/admin/deliberate-workflows/banks/${encodeURIComponent(bankId)}/preview`);
+}
+
+export function fetchBankQuestions(bankId: string, params: { page?: number; limit?: number; search?: string } = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  if (params.search) searchParams.set('search', params.search);
+  const qs = searchParams.toString();
+  return apiJson<BankQuestionsResponse>(
+    `/api/admin/deliberate-workflows/banks/${encodeURIComponent(bankId)}/questions${qs ? `?${qs}` : ''}`
+  );
+}
+
 export function createDeliberateWorkflow(payload: DeliberateWorkflowPayload) {
   return apiJson<DeliberateWorkflowConfig>('/api/admin/deliberate-workflows', {
     method: 'POST',

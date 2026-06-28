@@ -1177,3 +1177,79 @@ async def list_set_snapshots(
         limit,
         offset,
     )
+
+
+async def list_questions_by_set(
+    conn: asyncpg.Connection,
+    *,
+    set_id: str,
+    limit: int = 200,
+    offset: int = 0,
+    search: str | None = None,
+) -> list[asyncpg.Record]:
+    """批量获取 choice 题库中的题目，支持分页和搜索。"""
+    if search:
+        search_pattern = f"%{search}%"
+        return await conn.fetch(
+            """
+            SELECT q.id::text AS question_pk, q.question_id, q.question_no, q.stem,
+                   q.options_json, q.answer, q.explanation, q.question_type,
+                   q.evidence_json,
+                   a.article_id, a.exam, a.year, a.title AS article_title
+            FROM choice_questions q
+            JOIN choice_articles a ON a.id = q.article_pk
+            WHERE a.set_id = $1::uuid
+              AND (q.stem ILIKE $4 OR a.title ILIKE $4)
+            ORDER BY a.sort_order ASC, q.sort_order ASC, q.question_no ASC
+            LIMIT $2 OFFSET $3
+            """,
+            set_id,
+            limit,
+            offset,
+            search_pattern,
+        )
+    else:
+        return await conn.fetch(
+            """
+            SELECT q.id::text AS question_pk, q.question_id, q.question_no, q.stem,
+                   q.options_json, q.answer, q.explanation, q.question_type,
+                   q.evidence_json,
+                   a.article_id, a.exam, a.year, a.title AS article_title
+            FROM choice_questions q
+            JOIN choice_articles a ON a.id = q.article_pk
+            WHERE a.set_id = $1::uuid
+            ORDER BY a.sort_order ASC, q.sort_order ASC, q.question_no ASC
+            LIMIT $2 OFFSET $3
+            """,
+            set_id,
+            limit,
+            offset,
+        )
+
+
+async def count_questions_by_set(conn: asyncpg.Connection, *, set_id: str) -> int:
+    """统计 choice 题库中的题目总数。"""
+    row = await conn.fetchrow(
+        """
+        SELECT COUNT(*)::int AS total
+        FROM choice_questions q
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE a.set_id = $1::uuid
+        """,
+        set_id,
+    )
+    return int(row["total"]) if row else 0
+
+
+async def get_subjects_by_set(conn: asyncpg.Connection, *, set_id: str) -> list[str]:
+    """获取 choice 题库中涉及的科目/考试类型。"""
+    rows = await conn.fetch(
+        """
+        SELECT DISTINCT exam
+        FROM choice_articles
+        WHERE set_id = $1::uuid AND exam != ''
+        ORDER BY exam
+        """,
+        set_id,
+    )
+    return [row["exam"] for row in rows]

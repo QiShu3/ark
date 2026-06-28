@@ -6,9 +6,14 @@ import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 
 from routes.auth_routes import _AuthUser, get_current_user
-from routes.choice.repository import list_set_rows as list_choice_set_rows
-from routes.input.repository import list_input_sets
-from routes.vocab.repository import list_vocab_decks
+from routes.choice.repository import (
+    count_questions_by_set as count_choice_questions,
+    get_subjects_by_set as get_choice_subjects,
+    list_questions_by_set as list_choice_questions,
+    list_set_rows as list_choice_set_rows,
+)
+from routes.input.repository import list_all_questions_by_set as list_input_questions, list_input_sets
+from routes.vocab.repository import list_admin_deck_words_paginated as list_vocab_words, list_vocab_decks
 
 from . import repository
 from .schemas import (
@@ -284,3 +289,205 @@ async def get_deliberate_run(
     if row is None:
         raise HTTPException(status_code=404, detail="运行档案不存在")
     return DeliberateWorkflowRunOut(**repository.run_to_dict(row))
+
+
+@router.get("/deliberate-workflows/banks/{bank_id}/preview")
+async def get_bank_preview(
+    bank_id: str,
+    request: Request,
+    admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> dict[str, Any]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        choice_row = await conn.fetchrow(
+            "SELECT id::text AS id, name, question_count FROM choice_sets WHERE id = $1::uuid",
+            bank_id,
+        )
+        if choice_row:
+            questions = await list_choice_questions(conn, set_id=bank_id, limit=10, offset=0)
+            total = await count_choice_questions(conn, set_id=bank_id)
+            subjects = await get_choice_subjects(conn, set_id=bank_id)
+            return {
+                "bank_id": bank_id,
+                "name": choice_row["name"],
+                "kind": "choice",
+                "total_count": total,
+                "subjects": subjects,
+                "questions": [
+                    {
+                        "id": q["question_pk"],
+                        "question_id": q["question_id"],
+                        "stem": q["stem"],
+                        "type": "choice",
+                        "options": q["options_json"],
+                        "answer": q["answer"],
+                        "subject": q.get("exam", ""),
+                        "evidence": q.get("evidence_json", {}),
+                        "explanation": q.get("explanation", ""),
+                    }
+                    for q in questions
+                ],
+            }
+
+        input_row = await conn.fetchrow(
+            "SELECT id::text AS id, name, question_count FROM input_sets WHERE id = $1::uuid",
+            bank_id,
+        )
+        if input_row:
+            questions = await list_input_questions(conn, set_id=bank_id, limit=10, offset=0)
+            return {
+                "bank_id": bank_id,
+                "name": input_row["name"],
+                "kind": "input",
+                "total_count": input_row["question_count"],
+                "subjects": [],
+                "questions": [
+                    {
+                        "id": q["id"],
+                        "question_id": q["question_id"],
+                        "stem": q["stem"],
+                        "type": q["mode"],
+                        "options": None,
+                        "answer": ", ".join(q.get("accepted_answers", [])),
+                        "subject": q.get("article_title", ""),
+                        "reference_answer": q.get("reference_answer", ""),
+                        "explanation": q.get("explanation", ""),
+                    }
+                    for q in questions
+                ],
+            }
+
+        vocab_row = await conn.fetchrow(
+            "SELECT id::text AS id, name, word_count FROM vocab_decks WHERE id = $1::uuid",
+            bank_id,
+        )
+        if vocab_row:
+            words = await list_vocab_words(conn, deck_id=bank_id, limit=10, offset=0)
+            return {
+                "bank_id": bank_id,
+                "name": vocab_row["name"],
+                "kind": "flashcard",
+                "total_count": vocab_row["word_count"],
+                "subjects": [],
+                "questions": [
+                    {
+                        "id": w["id"],
+                        "question_id": w["word"],
+                        "stem": w["word"],
+                        "type": "word",
+                        "options": None,
+                        "answer": w.get("us_pronunciation", ""),
+                        "subject": "",
+                    }
+                    for w in words
+                ],
+            }
+
+    raise HTTPException(status_code=404, detail="题库不存在")
+
+
+@router.get("/deliberate-workflows/banks/{bank_id}/questions")
+async def list_bank_questions(
+    bank_id: str,
+    request: Request,
+    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: str = Query(""),
+) -> dict[str, Any]:
+    pool = _pool(request)
+    offset = (page - 1) * limit
+    async with pool.acquire() as conn:
+        choice_row = await conn.fetchrow(
+            "SELECT id::text AS id, name, question_count FROM choice_sets WHERE id = $1::uuid",
+            bank_id,
+        )
+        if choice_row:
+            questions = await list_choice_questions(
+                conn, set_id=bank_id, limit=limit, offset=offset, search=search or None
+            )
+            total = await count_choice_questions(conn, set_id=bank_id)
+            return {
+                "bank_id": bank_id,
+                "name": choice_row["name"],
+                "kind": "choice",
+                "total_count": total,
+                "page": page,
+                "limit": limit,
+                "questions": [
+                    {
+                        "id": q["question_pk"],
+                        "question_id": q["question_id"],
+                        "stem": q["stem"],
+                        "type": "choice",
+                        "options": q["options_json"],
+                        "answer": q["answer"],
+                        "subject": q.get("exam", ""),
+                        "evidence": q.get("evidence_json", {}),
+                        "explanation": q.get("explanation", ""),
+                    }
+                    for q in questions
+                ],
+            }
+
+        input_row = await conn.fetchrow(
+            "SELECT id::text AS id, name, question_count FROM input_sets WHERE id = $1::uuid",
+            bank_id,
+        )
+        if input_row:
+            questions = await list_input_questions(
+                conn, set_id=bank_id, limit=limit, offset=offset
+            )
+            return {
+                "bank_id": bank_id,
+                "name": input_row["name"],
+                "kind": "input",
+                "total_count": input_row["question_count"],
+                "page": page,
+                "limit": limit,
+                "questions": [
+                    {
+                        "id": q["id"],
+                        "question_id": q["question_id"],
+                        "stem": q["stem"],
+                        "type": q["mode"],
+                        "options": None,
+                        "answer": ", ".join(q.get("accepted_answers", [])),
+                        "subject": q.get("article_title", ""),
+                        "reference_answer": q.get("reference_answer", ""),
+                        "explanation": q.get("explanation", ""),
+                    }
+                    for q in questions
+                ],
+            }
+
+        vocab_row = await conn.fetchrow(
+            "SELECT id::text AS id, name, word_count FROM vocab_decks WHERE id = $1::uuid",
+            bank_id,
+        )
+        if vocab_row:
+            words = await list_vocab_words(
+                conn, deck_id=bank_id, limit=limit, offset=offset, search=search or None
+            )
+            return {
+                "bank_id": bank_id,
+                "name": vocab_row["name"],
+                "kind": "flashcard",
+                "total_count": vocab_row["word_count"],
+                "page": page,
+                "limit": limit,
+                "questions": [
+                    {
+                        "id": w["id"],
+                        "question_id": w["word"],
+                        "stem": w["word"],
+                        "type": "word",
+                        "options": None,
+                        "answer": w.get("us_pronunciation", ""),
+                        "subject": "",
+                    }
+                    for w in words
+                ],
+            }
+
+    raise HTTPException(status_code=404, detail="题库不存在")

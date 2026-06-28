@@ -3,6 +3,7 @@ import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, 
 import { useNavigate } from 'react-router-dom';
 
 import AppModalFrame from '../components/AppModalFrame';
+import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
@@ -571,6 +572,15 @@ export default function DeliberateWorkflow() {
         </div>
       ) : null}
 
+      {selectedConfig?.bank_id && (
+        <BankPreview
+          bankId={selectedConfig.bank_id}
+          bankKind={selectedConfig.kind}
+          bankName={selectedConfig.bank_summary?.name ?? ''}
+          totalCount={selectedConfig.bank_summary?.question_count ?? selectedConfig.bank_summary?.item_count ?? 0}
+        />
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-3">
           <div className="flex items-center gap-2">
@@ -803,6 +813,14 @@ export default function DeliberateWorkflow() {
                     title={selectedBank?.name ?? '未选择题库'}
                     detail={selectedBank ? `${selectedBank.count} ${bankCountLabel}` : '可以上传新题库，或选择一份已有题库资产'}
                   />
+                  {selectedBank && (
+                    <BankPreview
+                      bankId={selectedBank.id}
+                      bankKind={kind}
+                      bankName={selectedBank.name}
+                      totalCount={selectedBank.count}
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -842,6 +860,14 @@ export default function DeliberateWorkflow() {
                   >
                     校验并上传
                   </Button>
+                  {bankId && selectedBank && (
+                    <BankPreview
+                      bankId={bankId}
+                      bankKind={kind}
+                      bankName={selectedBank.name}
+                      totalCount={selectedBank.count}
+                    />
+                  )}
                 </div>
               )}
 
