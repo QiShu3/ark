@@ -16,7 +16,6 @@ function metaClass(tone: string | undefined) {
 }
 
 export default function InputQuestionFocusTemplate({
-  subtitle,
   article,
   currentQuestion,
   loading,
@@ -126,8 +125,6 @@ export default function InputQuestionFocusTemplate({
 
         {question ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            {subtitle ? <p className="text-sm text-[var(--focus-work-text-muted)]">{subtitle}</p> : null}
-
             {/* Article material */}
             {article && (article.paragraphs.length > 0 || article.materialBlocks?.length) ? (
               <article aria-label="阅读原文" className="flex flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { getCheckInStatus, CheckInStatus } from '../lib/api';
+import { getCheckInStatus } from '../lib/api';
 import MultiWeekCalendarModal from './MultiWeekCalendarModal';
 
 interface CalendarWidgetProps {
@@ -9,7 +9,6 @@ interface CalendarWidgetProps {
 
 const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
   const [checkedDates, setCheckedDates] = useState<Set<string>>(new Set());
-  const [checkInState, setCheckInState] = useState<CheckInStatus | null>(null);
   const [showMultiWeekCalendar, setShowMultiWeekCalendar] = useState(false);
   const [modalInitialDate, setModalInitialDate] = useState<Date | undefined>(undefined);
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -18,7 +17,6 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
     const load = () => {
       getCheckInStatus()
         .then(res => {
-          setCheckInState(res);
           setCheckedDates(new Set(res.checked_dates));
         })
         .catch(console.error);
@@ -84,10 +82,6 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
-  const isCheckedInToday = checkInState?.is_checked_in_today ?? false;
-  const currentStreak = checkInState?.current_streak ?? 0;
-  const statusLabelText = `${isCheckedInToday ? '今日已打卡' : '今日还未打卡'} · 连续 ${currentStreak} 天`;
-
   return (
     <>
       <div
@@ -128,12 +122,6 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ className = '' }) => {
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </span>
-        </div>
-
-        {/* 今日打卡状态 */}
-        <div className="mb-1.5 flex items-center text-sm font-medium text-[var(--ark-text-muted)]">
-          <span className="mr-1.5 h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-          {statusLabelText}
         </div>
 
         {/* 星期头部 */}

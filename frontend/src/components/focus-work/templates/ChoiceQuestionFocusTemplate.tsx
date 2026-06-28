@@ -11,7 +11,6 @@ import ContentBlockRenderer from '../ContentBlockRenderer';
 import { buildProgressSnapshot, metaClass } from '../focusWorkUtils';
 
 export default function ChoiceQuestionFocusTemplate({
-  subtitle,
   item,
   loading,
   error,
@@ -106,9 +105,6 @@ export default function ChoiceQuestionFocusTemplate({
 
         {currentItem ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            {subtitle ? (
-              <p className="text-sm text-[var(--focus-work-text-muted)]">{subtitle}</p>
-            ) : null}
             {(currentItem.material || currentItem.materialBlocks?.length) ? (
               <article aria-label="阅读原文" className="flex flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8">
                 <div className="mb-5 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-4">

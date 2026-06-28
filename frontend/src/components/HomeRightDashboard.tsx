@@ -554,10 +554,6 @@ export default function HomeRightDashboard() {
                   style={{ width: `${progressVisualPercent}%` }}
                 />
               </div>
-              <div className="text-xs text-[var(--ark-text-faint)] flex items-center justify-between">
-                <span>已完成 {todayFocusMinutes} 分钟 / {DAILY_GOAL_MINUTES} 分钟</span>
-                <span>目标已达成 {progressPercent}%</span>
-              </div>
             </div>
           )}
         </HomeCard>
@@ -650,7 +646,6 @@ export default function HomeRightDashboard() {
               <BarChart3 className="h-7 w-7" aria-hidden="true" />
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">数据分析</span>
-            <span className="mt-1 truncate text-xs font-medium text-[var(--ark-text-faint)]">学习数据可视化</span>
           </HomeCard>
 
           <HomeCard
@@ -665,7 +660,6 @@ export default function HomeRightDashboard() {
               <Trophy className="h-7 w-7" aria-hidden="true" />
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">成就</span>
-            <span className="mt-1 max-w-full truncate text-xs font-medium text-[var(--ark-text-faint)]">解锁成长里程碑</span>
           </HomeCard>
 
           <HomeCard
@@ -679,7 +673,6 @@ export default function HomeRightDashboard() {
               <Box className="h-7 w-7" aria-hidden="true" />
             </span>
             <span className="text-base font-semibold text-[var(--ark-text)]">应用中心</span>
-            <span className="mt-1 max-w-full truncate text-xs font-medium text-[var(--ark-text-faint)]">更多学习工具</span>
           </HomeCard>
         </section>
       </div>

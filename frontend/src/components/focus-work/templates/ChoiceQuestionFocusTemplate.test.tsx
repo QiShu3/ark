@@ -53,9 +53,10 @@ describe('ChoiceQuestionFocusTemplate', () => {
     renderTemplate();
 
     expect(screen.queryByText('ERC REVIEW')).not.toBeInTheDocument();
-    expect(screen.getByText('2025 年 Text 2 · Test Article')).toBeInTheDocument();
+    expect(screen.queryByText('2025 年 Text 2 · Test Article')).not.toBeInTheDocument();
     expect(screen.getByText('错题复习')).toBeInTheDocument();
     expect(screen.getByLabelText('阅读原文')).toBeInTheDocument();
+    expect(screen.getByText('Reading Passage')).toBeInTheDocument();
     expect(screen.getByText('Context paragraph.')).toBeInTheDocument();
     expect(screen.getByText('Question 26?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'AA1' })).toBeInTheDocument();
