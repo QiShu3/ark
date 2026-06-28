@@ -3886,13 +3886,31 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
             raw = config.get("pass_criteria_json") or {}
             pass_criteria = _config_payload(raw)
     
-    progress_snapshot = run.progress_snapshot or {}
-    accuracy = progress_snapshot.get("accuracy", 0)
+    # Read accuracy from deliberate_workflow_runs.progress_snapshot
+    deliberate_progress = deliberate_run.get("progress_snapshot") or {}
+    if isinstance(deliberate_progress, str):
+        try:
+            deliberate_progress = json.loads(deliberate_progress)
+        except json.JSONDecodeError:
+            deliberate_progress = {}
+    
+    # Also read from focus_work_runs.progress_snapshot
+    focus_run_progress = run.progress_snapshot or {}
+    
+    # Try to get accuracy from either source
+    accuracy = focus_run_progress.get("accuracy", 0)
+    if not accuracy:
+        accuracy = deliberate_progress.get("accuracy", 0)
+    if not accuracy:
+        # Try to get from run_summary
+        run_summary = focus_run_progress.get("run_summary") or deliberate_progress.get("run_summary") or {}
+        accuracy = run_summary.get("accuracy", 0)
+    
     if isinstance(accuracy, (int, float)):
         threshold = pass_criteria.get("threshold", 0) if isinstance(pass_criteria, dict) else 0
         mode = pass_criteria.get("mode", "accuracy") if isinstance(pass_criteria, dict) else "accuracy"
         
-        progress_snapshot["mastery_check"] = {
+        mastery_check = {
             "enabled": bool(pass_criteria),
             "mode": mode,
             "threshold": threshold,
@@ -3900,26 +3918,28 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
             "passed": accuracy >= threshold if threshold > 0 else True,
         }
         
-        # Also update focus_work_runs.progress_snapshot so frontend can read mastery_check
+        # Update focus_work_runs.progress_snapshot so frontend can read mastery_check
         focus_run_id = _record_get(run, "id") or getattr(run, "id", None)
         if focus_run_id:
             await conn.execute(
                 """
                 UPDATE focus_work_runs
-                SET progress_snapshot = progress_snapshot || $1
+                SET progress_snapshot = COALESCE(progress_snapshot, '{}'::jsonb) || $1
                 WHERE id = $2 AND user_id = $3
                 """,
-                json.dumps({"mastery_check": progress_snapshot["mastery_check"]}),
+                json.dumps({"mastery_check": mastery_check}),
                 focus_run_id,
                 user_id,
             )
-    
-    await deliberate_repository.mark_content_completed(
-        conn,
-        user_id=user_id,
-        run_id=deliberate_run_id,
-        progress_snapshot=progress_snapshot,
-    )
+        
+        # Update deliberate_workflow_runs.progress_snapshot
+        deliberate_progress["mastery_check"] = mastery_check
+        await deliberate_repository.mark_content_completed(
+            conn,
+            user_id=user_id,
+            run_id=deliberate_run_id,
+            progress_snapshot=deliberate_progress,
+        )
 
 
 async def _mark_deliberate_completed(
