@@ -4035,7 +4035,12 @@ async def _build_run_metadata(
                 user_id,
             )
             if config_row and config_row["children_json"]:
-                config_snapshot["children"] = _config_payload(config_row["children_json"])
+                children = config_row["children_json"]
+                if isinstance(children, str):
+                    import json
+                    children = json.loads(children)
+                if isinstance(children, list):
+                    config_snapshot["children"] = children
 
     if focus_work_type is None:
         focus_work_type = "task_focus"
