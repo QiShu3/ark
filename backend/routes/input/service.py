@@ -214,11 +214,15 @@ def _parse_articles(raw_articles: list[dict[str, Any]], set_key: str) -> list[di
                     "text": p,
                 })
 
+        paragraphs_text = [p["text"] for p in paragraphs]
+
         questions = []
         for qidx, q in enumerate(questions_raw, start=1):
             if not isinstance(q, dict):
                 continue
             stem = str(q.get("stem") or "").strip()
+            if not stem:
+                stem = "\n".join(paragraphs_text).strip() if paragraphs_text else ""
             if not stem:
                 continue
             mode = q.get("mode", "fill")
