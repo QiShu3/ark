@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
 import secrets
+import zipfile
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,8 +34,19 @@ def _slugify(text: str, fallback: str) -> str:
 
 
 def _load_json_payload(file_bytes: bytes, filename: str) -> list[dict[str, Any]]:
-    if not filename.lower().endswith(".json"):
-        raise HTTPException(status_code=400, detail={"message": "当前仅支持 JSON 文件", "errors": ["文件扩展名必须是 .json"]})
+    if filename.lower().endswith(".zip"):
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
+                json_names = [n for n in zf.namelist() if n.lower().endswith(".json")]
+                if not json_names:
+                    raise HTTPException(status_code=400, detail={"message": "ZIP 中未找到 JSON 文件", "errors": ["ZIP 包内必须包含至少一个 .json 文件"]})
+                file_bytes = zf.read(json_names[0])
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail={"message": "ZIP 文件损坏", "errors": ["无法解析 ZIP 文件"]})
+    
+    if not filename.lower().endswith((".json", ".zip")):
+        raise HTTPException(status_code=400, detail={"message": "当前仅支持 JSON 或 ZIP 文件", "errors": ["文件扩展名必须是 .json 或 .zip"]})
+    
     try:
         payload = json.loads(file_bytes.decode("utf-8"))
     except UnicodeDecodeError as exc:

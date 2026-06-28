@@ -828,10 +828,10 @@ export default function DeliberateWorkflow() {
                     <Field label="题库名称">
                       <input value={uploadName} onChange={(event) => setUploadName(event.target.value)} className={inputClass} />
                     </Field>
-                    <Field label="JSON 文件">
+                    <Field label="JSON 或 ZIP 文件">
                       <input
                         type="file"
-                        accept=".json,application/json"
+                        accept=".json,application/json,.zip,application/zip"
                         onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
                         className="block w-full text-sm text-ark-text-muted file:mr-3 file:rounded-md file:border file:border-ark-border file:bg-ark-surface-subtle file:px-3 file:py-2 file:text-sm file:text-ark-text"
                       />
