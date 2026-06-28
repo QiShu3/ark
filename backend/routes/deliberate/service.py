@@ -54,7 +54,7 @@ def _load_json_payload(file_bytes: bytes, filename: str) -> list[dict[str, Any]]
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail={"message": "JSON 解析失败", "errors": [str(exc)]}) from exc
     if isinstance(payload, dict):
-        for key in ("items", "words", "entries", "questions"):
+        for key in ("items", "words", "entries", "questions", "articles"):
             value = payload.get(key)
             if isinstance(value, list):
                 payload = value
