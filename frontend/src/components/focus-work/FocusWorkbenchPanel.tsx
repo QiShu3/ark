@@ -58,10 +58,10 @@ function ActionPanel({
   );
 }
 
-function RunSummaryCard({ summary, focusWorkType }: { summary: Record<string, unknown>; focusWorkType?: string }) {
+function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { summary: Record<string, unknown>; focusWorkType?: string; masteryCheckFromProgress?: Record<string, unknown> | null }) {
   if (!summary || Object.keys(summary).length === 0) return null;
 
-  const masteryCheck = summary.mastery_check as Record<string, unknown> | undefined;
+  const masteryCheck = masteryCheckFromProgress ?? summary.mastery_check as Record<string, unknown> | undefined;
   const hasMasteryCheck = masteryCheck && masteryCheck.enabled === true;
 
   return (
@@ -194,9 +194,10 @@ export default function FocusWorkbenchPanel({
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
   const noAvailableContent = runHasNoAvailableContent(activeRun);
-  const runSummary = (activeRun?.progress_snapshot as Record<string, unknown> | undefined)?.run_summary as Record<string, unknown> | undefined;
+  const progressSnapshot = activeRun?.progress_snapshot as Record<string, unknown> | undefined;
+  const runSummary = progressSnapshot?.run_summary as Record<string, unknown> | undefined;
   const focusWorkType = activeRun?.config_snapshot?.focus_work_type as string | undefined;
-  const masteryCheck = runSummary?.mastery_check as Record<string, unknown> | undefined;
+  const masteryCheck = (progressSnapshot?.mastery_check ?? runSummary?.mastery_check) as Record<string, unknown> | undefined;
   const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
 
   const [selectedChildId, setSelectedChildId] = useState<string>(() => {
@@ -247,7 +248,7 @@ export default function FocusWorkbenchPanel({
           </div>
         )}
         {runSummary && Object.keys(runSummary).length > 0 && (
-          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
+          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
         )}
       </ActionPanel>
     );
@@ -280,7 +281,7 @@ export default function FocusWorkbenchPanel({
         onSecondary={onCreateExtraRun}
       >
         {runSummary && Object.keys(runSummary).length > 0 && (
-          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
+          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
         )}
       </ActionPanel>
     );
@@ -300,7 +301,7 @@ export default function FocusWorkbenchPanel({
         onSecondary={onCreateExtraRun}
       >
         {runSummary && Object.keys(runSummary).length > 0 && (
-          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
+          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
         )}
       </ActionPanel>
     );

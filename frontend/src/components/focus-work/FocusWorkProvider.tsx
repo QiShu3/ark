@@ -301,7 +301,10 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     if (snapshot.state !== 'focus' || !activeDefinition) return;
     if (snapshot.pending_task_selection || snapshot.is_paused) return;
     if (activeRun || derivedPhaseRuntimeState) return;
-    const mode = snapshot.task_id || snapshot.runtime_task_id ? 'counted' : 'extra';
+    const hasTaskId = snapshot.task_id || snapshot.runtime_task_id;
+    const currentPhase = snapshot.phases?.[snapshot.current_phase_index ?? 0];
+    const isDeliberate = currentPhase && 'deliberate_config_id' in currentPhase;
+    const mode = hasTaskId || isDeliberate ? 'counted' : 'extra';
     void createRun(mode);
   }, [
     activeDefinition,
