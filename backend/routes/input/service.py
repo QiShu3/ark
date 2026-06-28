@@ -221,12 +221,10 @@ def _parse_articles(raw_articles: list[dict[str, Any]], set_key: str) -> list[di
             if not isinstance(q, dict):
                 continue
             stem = str(q.get("stem") or "").strip()
-            if not stem:
-                stem = "\n".join(paragraphs_text).strip() if paragraphs_text else ""
-            if not stem:
-                continue
             mode = q.get("mode", "fill")
             if mode not in ("fill", "subjective"):
+                continue
+            if mode == "fill" and not stem:
                 continue
             accepted = q.get("acceptedAnswers") or q.get("accepted_answers") or []
             if mode == "fill" and not accepted:
