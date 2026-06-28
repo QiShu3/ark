@@ -4040,6 +4040,16 @@ async def _build_run_metadata(
                     import json
                     children = json.loads(children)
                 if isinstance(children, list):
+                    # Fill in missing labels from config names
+                    for child in children:
+                        if not child.get("label") and child.get("config_id"):
+                            child_config = await conn.fetchrow(
+                                "SELECT name FROM deliberate_workflow_configs WHERE id = $1 AND user_id = $2",
+                                child["config_id"],
+                                user_id,
+                            )
+                            if child_config:
+                                child["label"] = child_config["name"]
                     config_snapshot["children"] = children
 
     if focus_work_type is None:
