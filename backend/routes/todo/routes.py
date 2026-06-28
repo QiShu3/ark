@@ -137,6 +137,7 @@ from .schemas import (
     FocusWorkflowStartAppWorkRequest,
     FocusWorkRunContentCompleteRequest,
     FocusWorkRunCreateRequest,
+    FocusWorkForkRequest,
     TaskCreateRequest,
     TaskFocusStats,
     TaskOut,
@@ -3653,11 +3654,37 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
     deliberate_run_id = _deliberate_run_id_from_focus_run(run)
     if not deliberate_run_id:
         return
+    
+    deliberate_run = await deliberate_repository.get_run(conn, user_id=user_id, run_id=str(deliberate_run_id))
+    if not deliberate_run:
+        return
+    
+    config_id = deliberate_run.get("config_id")
+    pass_criteria = {}
+    if config_id:
+        config = await deliberate_repository.get_config(conn, user_id=user_id, config_id=str(config_id))
+        if config:
+            pass_criteria = config.get("pass_criteria_json") or {}
+    
+    progress_snapshot = run.progress_snapshot or {}
+    accuracy = progress_snapshot.get("accuracy", 0)
+    if isinstance(accuracy, (int, float)):
+        threshold = pass_criteria.get("threshold", 0)
+        mode = pass_criteria.get("mode", "accuracy")
+        
+        progress_snapshot["mastery_check"] = {
+            "enabled": bool(pass_criteria),
+            "mode": mode,
+            "threshold": threshold,
+            "accuracy": accuracy,
+            "passed": accuracy >= threshold if threshold > 0 else True,
+        }
+    
     await deliberate_repository.mark_content_completed(
         conn,
         user_id=user_id,
         run_id=deliberate_run_id,
-        progress_snapshot=run.progress_snapshot or {},
+        progress_snapshot=progress_snapshot,
     )
 
 
@@ -3866,6 +3893,52 @@ async def complete_focus_workflow_run_content(
                 workflow_id=row["id"],
                 run_id=run.id,
                 phase_runtime_state=_runtime_state_for_completed_run(run.counts_for_task_completion),
+            )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+
+
+@router.post("/focus/workflow/runs/fork", response_model=FocusWorkflowOut)
+async def fork_focus_workflow_run(
+    request: Request,
+    body: FocusWorkForkRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+
+            parent_run = await _fetch_focus_work_run_summary(conn, user_id=int(user.id), run_id=body.parent_run_id)
+            if parent_run is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="父专注轮次不存在")
+
+            config_snapshot = {
+                "focus_work_type": body.focus_work_type,
+                "bank_id": body.bank_id,
+                "scope": body.scope,
+            }
+
+            run = await _create_focus_work_run(
+                conn,
+                user_id=int(user.id),
+                workflow_id=row["id"],
+                phase_index=_safe_int(_row_value(row, "current_phase_index", 0), 0),
+                task_id=None,
+                focus_work_type=body.focus_work_type,
+                app_id=None,
+                app_task_type=None,
+                counts_for_task_completion=False,
+                record_focus=True,
+                config_snapshot=config_snapshot,
+                source_run_id=body.parent_run_id,
+            )
+            next_row = await _set_workflow_active_run(
+                conn,
+                workflow_id=row["id"],
+                run_id=run.id,
+                phase_runtime_state="running_run",
             )
             return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
 

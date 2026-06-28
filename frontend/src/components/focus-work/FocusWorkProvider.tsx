@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { apiJson } from '../../lib/api';
-import { fetchCurrentFocusWorkflow } from '../../lib/focusWorkflow';
+import { fetchCurrentFocusWorkflow, forkFocusWorkRun } from '../../lib/focusWorkflow';
 import AppModalFrame from '../AppModalFrame';
 import FocusWorkModalShell from './FocusWorkModalShell';
 import FocusWorkbenchPanel from './FocusWorkbenchPanel';
@@ -9,6 +9,7 @@ import { getFocusWorkDefinition } from './focusWorkRegistry';
 import {
   START_FOCUS_WORK_EVENT,
   type FocusPhaseRuntimeState,
+  type FocusWorkRunSummary,
   type FocusWorkSnapshot,
   type FocusWorkStartDetail,
   type FocusWorkType,
@@ -240,6 +241,38 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       });
   }
 
+  async function forkToWeakArea(parentRun: FocusWorkRunSummary) {
+    const runSummary = (parentRun.progress_snapshot as Record<string, unknown> | undefined)?.run_summary as Record<string, unknown> | undefined;
+    const masteryCheck = runSummary?.mastery_check as Record<string, unknown> | undefined;
+    const questionDetails = runSummary?.question_details as Array<Record<string, unknown>> | undefined;
+
+    const wrongQuestions = questionDetails?.filter(q => q.correct === false) ?? [];
+    const subjects = [...new Set(wrongQuestions.map(q => q.subject as string).filter(Boolean))];
+
+    const scope: Record<string, unknown> = {};
+    if (subjects.length > 0) {
+      scope.subjects = subjects;
+    }
+
+    try {
+      setBusy(true);
+      await forkFocusWorkRun({
+        parent_run_id: parentRun.id,
+        focus_work_type: parentRun.focus_work_type,
+        bank_id: parentRun.config_snapshot?.bank_id as string | undefined,
+        scope,
+      });
+      const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to fork focus work', err);
+      alert(err instanceof Error ? err.message : 'fork失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   React.useEffect(() => {
     if (!snapshot || busy || creatingRunRef.current) return;
     if (snapshot.state !== 'focus' || !activeDefinition) return;
@@ -320,6 +353,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
             onEndPhase={() => void endPhase()}
             onExtendPhase={() => void extendPhase()}
             onCreateExtraRun={() => void createRun('extra')}
+            onFork={activeRun ? () => void forkToWeakArea(activeRun) : undefined}
             onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
           />
         </FocusWorkModalShell>

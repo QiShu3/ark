@@ -635,3 +635,10 @@ class FocusWorkRunContentCompleteRequest(BaseModel):
 
 class FocusWorkflowExtendPhaseRequest(BaseModel):
     extend_seconds: int = Field(default=300, ge=60, le=24 * 60 * 60)
+
+
+class FocusWorkForkRequest(BaseModel):
+    parent_run_id: UUID
+    focus_work_type: FocusWorkType
+    bank_id: str | None = None
+    scope: dict[str, Any] = Field(default_factory=dict)

@@ -147,6 +147,7 @@ async def create_deliberate_workflow(
             target_count=payload.target_count,
             scope=payload.scope,
             completion=payload.completion,
+            pass_criteria=payload.pass_criteria,
         )
         return await _config_out(conn, row, user_id=int(admin.id))
 
@@ -261,6 +262,56 @@ async def list_deliberate_banks(
                 for row in rows
             ]
     raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
+
+
+@router.delete("/deliberate-workflows/banks/{bank_id}")
+async def delete_deliberate_bank(
+    bank_id: str,
+    request: Request,
+    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    kind: str = Query(...),
+) -> dict[str, str]:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if kind == "flashcard":
+                await conn.execute(
+                    "DELETE FROM vocab_words WHERE deck_id = $1::uuid",
+                    bank_id,
+                )
+                result = await conn.execute(
+                    "DELETE FROM vocab_decks WHERE id = $1::uuid",
+                    bank_id,
+                )
+            elif kind == "choice":
+                await conn.execute(
+                    "DELETE FROM choice_questions WHERE article_id IN (SELECT id FROM choice_articles WHERE set_id = $1::uuid)",
+                    bank_id,
+                )
+                await conn.execute(
+                    "DELETE FROM choice_articles WHERE set_id = $1::uuid",
+                    bank_id,
+                )
+                result = await conn.execute(
+                    "DELETE FROM choice_sets WHERE id = $1::uuid",
+                    bank_id,
+                )
+            elif kind == "input":
+                await conn.execute(
+                    "DELETE FROM input_questions WHERE set_id = $1::uuid",
+                    bank_id,
+                )
+                result = await conn.execute(
+                    "DELETE FROM input_sets WHERE id = $1::uuid",
+                    bank_id,
+                )
+            else:
+                raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
+
+            if result == "DELETE 0":
+                raise HTTPException(status_code=404, detail="题库不存在")
+
+    return {"detail": "题库已删除"}
 
 
 @router.get("/deliberate-workflows/{config_id}/runs", response_model=list[DeliberateWorkflowRunSummary])

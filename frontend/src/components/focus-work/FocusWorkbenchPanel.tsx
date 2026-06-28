@@ -61,9 +61,26 @@ function ActionPanel({
 function RunSummaryCard({ summary, focusWorkType }: { summary: Record<string, unknown>; focusWorkType?: string }) {
   if (!summary || Object.keys(summary).length === 0) return null;
 
+  const masteryCheck = summary.mastery_check as Record<string, unknown> | undefined;
+  const hasMasteryCheck = masteryCheck && masteryCheck.enabled === true;
+
   return (
     <div className="rounded-lg border border-ark-border bg-ark-surface p-4 text-sm">
       <div className="mb-3 text-xs font-medium text-ark-text-muted">本轮专注数据</div>
+
+      {hasMasteryCheck && (
+        <div className={`mb-3 rounded-md p-3 ${masteryCheck.passed === true ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-ark-text-muted">检验结果</span>
+            <span className={`text-sm font-semibold ${masteryCheck.passed === true ? 'text-green-500' : 'text-red-400'}`}>
+              {masteryCheck.passed === true ? '通过' : '未通过'}
+            </span>
+          </div>
+          <div className="mt-1 text-xs text-ark-text-muted">
+            正确率 {Math.round((masteryCheck.accuracy as number) * 100)}% / {Math.round((masteryCheck.threshold as number) * 100)}%
+          </div>
+        </div>
+      )}
 
       {focusWorkType === 'vocab_today' && (
         <div className="grid grid-cols-4 gap-3">
@@ -155,6 +172,7 @@ type FocusWorkbenchPanelProps = {
   onEndPhase: () => void;
   onExtendPhase: () => void;
   onCreateExtraRun: () => void;
+  onFork?: () => void;
   onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
 };
 
@@ -168,24 +186,27 @@ export default function FocusWorkbenchPanel({
   onEndPhase,
   onExtendPhase,
   onCreateExtraRun,
+  onFork,
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
   const noAvailableContent = runHasNoAvailableContent(activeRun);
   const runSummary = (activeRun?.progress_snapshot as Record<string, unknown> | undefined)?.run_summary as Record<string, unknown> | undefined;
   const focusWorkType = activeRun?.config_snapshot?.focus_work_type as string | undefined;
+  const masteryCheck = runSummary?.mastery_check as Record<string, unknown> | undefined;
+  const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
 
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
     return (
       <ActionPanel
         label="Round Complete"
         heading="本轮专注工作已完成"
-        description="本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"
-        primaryLabel="完成任务并结束阶段"
+        description={hasMasteryCheckFailed ? "检验未通过。你可以fork到弱项进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
+        primaryLabel={hasMasteryCheckFailed ? "完成任务并结束阶段" : "完成任务并结束阶段"}
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
-        secondaryLabel="再来一轮"
-        secondaryDisabled={true}
-        onSecondary={onCreateExtraRun}
+        secondaryLabel={hasMasteryCheckFailed ? "fork到弱项" : "再来一轮"}
+        secondaryDisabled={hasMasteryCheckFailed ? busy || !onFork : true}
+        onSecondary={hasMasteryCheckFailed ? onFork : onCreateExtraRun}
       >
         {runSummary && Object.keys(runSummary).length > 0 && (
           <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />

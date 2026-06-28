@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import AppModalFrame from '../components/AppModalFrame';
 import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
+import CreateFocusWorkModal from '../components/deliberate/CreateFocusWorkModal';
+import EditFocusWorkModal from '../components/deliberate/EditFocusWorkModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
 import type { Task } from '../components/taskTypes';
@@ -13,6 +15,7 @@ import type { ChoiceFilters, InputSetSnapshot, SetSnapshot } from '../lib/choice
 import { apiJson } from '../lib/api';
 import {
   createDeliberateWorkflow,
+  deleteDeliberateBank,
   deleteDeliberateWorkflow,
   getDeliberateRun,
   listDeliberateBanks,
@@ -175,6 +178,8 @@ export default function DeliberateWorkflow() {
   const [modalRun, setModalRun] = useState<DeliberateWorkflowRun | null>(null);
   const [loadingModalRun, setLoadingModalRun] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<DeliberateWorkflowConfig | null>(null);
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
@@ -187,6 +192,8 @@ export default function DeliberateWorkflow() {
   const [status, setStatus] = useState<'all' | 'unstarted' | 'mistake' | 'due_review'>('all');
   const [mode, setMode] = useState<'sequential' | 'random' | 'review'>('sequential');
   const [completionMode, setCompletionMode] = useState<CompletionMode>('question_count');
+  const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(false);
+  const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(80);
   const [uploadName, setUploadName] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -216,6 +223,8 @@ export default function DeliberateWorkflow() {
     setStatus('all');
     setMode('sequential');
     setCompletionMode('question_count');
+    setPassCriteriaEnabled(false);
+    setPassCriteriaThreshold(80);
     setUploadName('');
     setUploadDescription('');
     setUploadFile(null);
@@ -355,6 +364,14 @@ export default function DeliberateWorkflow() {
     return { mode: 'question_count', question_count: targetCount };
   }, [completionMode, kind, targetCount]);
 
+  const passCriteria = useMemo(() => {
+    if (!passCriteriaEnabled) return {};
+    return {
+      mode: 'accuracy',
+      threshold: passCriteriaThreshold / 100,
+    };
+  }, [passCriteriaEnabled, passCriteriaThreshold]);
+
   async function handleUpload() {
     if (!uploadName.trim() || !uploadFile) {
       setError('请填写题库名称并选择 JSON 文件');
@@ -407,6 +424,7 @@ export default function DeliberateWorkflow() {
         target_count: targetCount,
         scope,
         completion,
+        pass_criteria: passCriteria,
       });
       setName('');
       await loadConfigs(created.id);
@@ -443,6 +461,60 @@ export default function DeliberateWorkflow() {
       await loadConfigs();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除配置失败');
+    }
+  }
+
+  async function handleDeleteBank(bankId: string, bankName: string) {
+    if (!window.confirm(`删除题库「${bankName}」？此操作不可撤销。`)) return;
+    setError(null);
+    try {
+      await deleteDeliberateBank(bankId, kind);
+      await loadBanks(kind);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除题库失败');
+    }
+  }
+
+  async function handleCreateFocusWork(data: {
+    name: string;
+    kind: DeliberateKind;
+    focus_work_type: DeliberateFocusWorkType;
+    bank_id: string;
+    target_count: number;
+    scope: Record<string, unknown>;
+    completion: Record<string, unknown>;
+    pass_criteria: Record<string, unknown>;
+  }) {
+    setSaving(true);
+    setError(null);
+    try {
+      await createDeliberateWorkflow(data);
+      await loadConfigs();
+      setShowCreateModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEditSave(patch: {
+    name?: string;
+    bank_id?: string;
+    target_count?: number;
+    pass_criteria?: Record<string, unknown>;
+  }) {
+    if (!editingConfig) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await patchDeliberateWorkflow(editingConfig.id, patch);
+      await loadConfigs(editingConfig.id);
+      setEditingConfig(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -543,122 +615,274 @@ export default function DeliberateWorkflow() {
       暂无已保存工作流
     </div>
   ) : (
-    <div className="space-y-5">
-      {selectedConfig ? (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
-          <SelectionSummary
-            icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
-            title={selectedConfig.name}
-            detail={`${focusTypeLabel(selectedConfig.focus_work_type)} · ${selectedConfig.bank_summary?.name ?? '未绑定题库'} · 目标 ${selectedConfig.target_count}`}
-          />
-          <div className="flex items-end gap-2">
-            <Button
-              variant="primary"
-              loading={startingId === selectedConfig.id}
-              loadingText="启动中"
-              leftIcon={<Play className="h-4 w-4" />}
-              onClick={() => void handleStart(selectedConfig)}
-            >
-              开始专注
-            </Button>
-            <Button
-              variant="ghost"
-              leftIcon={<Trash2 className="h-4 w-4" />}
-              onClick={() => void handleDelete(selectedConfig)}
-            >
-              删除
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {selectedConfig?.bank_id && (
-        <BankPreview
-          bankId={selectedConfig.bank_id}
-          bankKind={selectedConfig.kind}
-          bankName={selectedConfig.bank_summary?.name ?? ''}
-          totalCount={selectedConfig.bank_summary?.question_count ?? selectedConfig.bank_summary?.item_count ?? 0}
-        />
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Archive className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-            <h3 className="text-base font-semibold text-ark-text">运行档案</h3>
-          </div>
-          {runs.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
-              当前配置暂无运行档案
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {runs.slice(0, 6).map((run) => (
-                <button
-                  key={run.id}
-                  type="button"
-                  onClick={() => void handleRunClick(run.id)}
-                  className="flex w-full items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-left transition hover:border-ark-accent/50 hover:bg-ark-surface"
-                >
-                  <div>
-                    <div className="text-sm font-medium text-ark-text">{statusLabel[run.status]}</div>
-                    <div className="text-xs text-ark-text-faint">{formatDate(run.created_at)}</div>
-                  </div>
-                  <div className="text-right text-xs text-ark-text-muted">
-                    <div>{run.snapshot_id ? '已关联存档' : '暂无存档'}</div>
-                    <div>{run.focus_run_id ? 'focus run 已记录' : '等待轮次'}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Link className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-            <h3 className="text-base font-semibold text-ark-text">绑定任务</h3>
-          </div>
-          {tasksLoading ? (
-            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
-              加载任务列表…
-            </div>
-          ) : (
-            <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
-              <label className="mb-1.5 block text-xs font-medium text-ark-text-muted">关联任务</label>
-              <select
-                aria-label="绑定任务"
-                value={selectedConfig?.task_id ?? ''}
-                onChange={(e) => void handleTaskSelect(selectedConfig!.id, e.target.value || null)}
-                disabled={!selectedConfig || updatingTaskId}
-                className="w-full rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">未绑定任务</option>
-                {tasks
-                  .filter((t) => t.status !== 'done' && !t.is_deleted)
-                  .map((task) => (
-                    <option key={task.id} value={task.id}>{task.title}</option>
-                  ))}
-              </select>
-              {selectedTask ? (
-                <div className="mt-3 rounded-lg border border-ark-border bg-ark-surface px-3 py-2 text-sm text-ark-text">
-                  <div className="text-xs text-ark-text-muted">已绑定</div>
-                  <div className="mt-0.5 truncate font-medium">{selectedTask.title}</div>
-                </div>
-              ) : selectedConfig?.task_id ? (
-                <div className="mt-3 text-xs text-ark-text-faint">任务已不存在或已完成</div>
-              ) : null}
-            </div>
-          )}
-        </section>
-      </div>
-
-      <section className="space-y-3">
+    <div className="space-y-8">
+      {/* 区域1：题库管理 */}
+      <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-          <h3 className="text-base font-semibold text-ark-text">存档可视化</h3>
+          <Database className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+          <h3 className="text-lg font-semibold text-ark-text">题库管理</h3>
         </div>
-        <SnapshotPanel snapshots={snapshots} kind={kind} />
+
+        {/* 题库类型切换 */}
+        <div className="grid grid-cols-3 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
+          {(['choice', 'flashcard', 'input'] as DeliberateKind[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                setKind(item);
+                void loadBanks(item);
+              }}
+              className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                kind === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
+              }`}
+            >
+              {item === 'choice' ? '选择题' : item === 'flashcard' ? '闪卡' : '输入题'}
+            </button>
+          ))}
+        </div>
+
+        {/* 题库列表 */}
+        <div className="space-y-2">
+          {banks.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+              暂无题库，请上传新题库
+            </div>
+          ) : (
+            banks.map((bank) => (
+              <div
+                key={bank.id}
+                className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-ark-text">{bank.name}</div>
+                  <div className="text-xs text-ark-text-muted">
+                    {bank.count} {kind === 'flashcard' ? '词' : '题'}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<Trash2 className="h-4 w-4" />}
+                    onClick={() => void handleDeleteBank(bank.id, bank.name)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 上传新题库 */}
+        <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+          <h4 className="mb-3 text-sm font-medium text-ark-text">上传新题库</h4>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="题库名称">
+              <input
+                value={uploadName}
+                onChange={(event) => setUploadName(event.target.value)}
+                className={inputClass}
+                placeholder="输入题库名称"
+              />
+            </Field>
+            <Field label="JSON 或 ZIP 文件">
+              <input
+                type="file"
+                accept=".json,application/json,.zip,application/zip"
+                onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-ark-text-muted file:mr-3 file:rounded-md file:border file:border-ark-border file:bg-ark-surface-subtle file:px-3 file:py-2 file:text-sm file:text-ark-text"
+              />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="描述">
+                <textarea
+                  value={uploadDescription}
+                  onChange={(event) => setUploadDescription(event.target.value)}
+                  className={`${inputClass} min-h-16`}
+                  placeholder="题库描述（可选）"
+                />
+              </Field>
+            </div>
+          </div>
+          {uploadErrors.length > 0 && (
+            <div className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-400">
+              {uploadErrors.map((err, i) => <div key={i}>{err}</div>)}
+            </div>
+          )}
+          <div className="mt-3">
+            <Button
+              variant="secondary"
+              loading={uploading}
+              loadingText="上传中"
+              leftIcon={<FileUp className="h-4 w-4" />}
+              onClick={() => void handleUpload()}
+            >
+              上传题库
+            </Button>
+          </div>
+        </div>
+
+        {/* 存档可视化 */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+            <h4 className="text-base font-semibold text-ark-text">存档可视化</h4>
+          </div>
+          <SnapshotPanel snapshots={snapshots} kind={kind} />
+        </div>
+      </section>
+
+      {/* 区域2：专注工作管理 */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Workflow className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+            <h3 className="text-lg font-semibold text-ark-text">专注工作管理</h3>
+          </div>
+          <Button
+            variant="primary"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => setShowCreateModal(true)}
+          >
+            新建专注工作
+          </Button>
+        </div>
+
+        {/* 专注工作列表 */}
+        <div className="space-y-2">
+          {configs.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+              暂无专注工作配置，请新建
+            </div>
+          ) : (
+            configs.map((config) => (
+              <div
+                key={config.id}
+                className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
+                  selectedId === config.id
+                    ? 'border-ark-accent bg-ark-surface'
+                    : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-ark-text">{config.name}</div>
+                  <div className="text-xs text-ark-text-muted">
+                    {focusTypeLabel(config.focus_work_type)} · {config.bank_summary?.name ?? '未绑定题库'} · 目标 {config.target_count}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={startingId === config.id}
+                    loadingText="启动中"
+                    leftIcon={<Play className="h-3 w-3" />}
+                    onClick={() => void handleStart(config)}
+                  >
+                    开始
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingConfig(config)}
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<Trash2 className="h-3 w-3" />}
+                    onClick={() => void handleDelete(config)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* 区域3：工作流编排 */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Settings2 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+          <h3 className="text-lg font-semibold text-ark-text">工作流编排</h3>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Link className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+              <h4 className="text-base font-semibold text-ark-text">绑定任务</h4>
+            </div>
+            {tasksLoading ? (
+              <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+                加载任务列表…
+              </div>
+            ) : (
+              <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+                <label className="mb-1.5 block text-xs font-medium text-ark-text-muted">关联任务</label>
+                <select
+                  aria-label="绑定任务"
+                  value={selectedConfig?.task_id ?? ''}
+                  onChange={(e) => void handleTaskSelect(selectedConfig!.id, e.target.value || null)}
+                  disabled={!selectedConfig || updatingTaskId}
+                  className="w-full rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">未绑定任务</option>
+                  {tasks
+                    .filter((t) => t.status !== 'done' && !t.is_deleted)
+                    .map((task) => (
+                      <option key={task.id} value={task.id}>{task.title}</option>
+                    ))}
+                </select>
+                {selectedTask ? (
+                  <div className="mt-3 rounded-lg border border-ark-border bg-ark-surface px-3 py-2 text-sm text-ark-text">
+                    <div className="text-xs text-ark-text-muted">已绑定</div>
+                    <div className="mt-0.5 truncate font-medium">{selectedTask.title}</div>
+                  </div>
+                ) : selectedConfig?.task_id ? (
+                  <div className="mt-3 text-xs text-ark-text-faint">任务已不存在或已完成</div>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
+      </section>
+
+      {/* 区域4：运行档案 */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Archive className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+          <h3 className="text-lg font-semibold text-ark-text">运行档案</h3>
+        </div>
+        {runs.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+            当前配置暂无运行档案
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {runs.slice(0, 6).map((run) => (
+              <button
+                key={run.id}
+                type="button"
+                onClick={() => void handleRunClick(run.id)}
+                className="flex w-full items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-left transition hover:border-ark-accent/50 hover:bg-ark-surface"
+              >
+                <div>
+                  <div className="text-sm font-medium text-ark-text">{statusLabel[run.status]}</div>
+                  <div className="text-xs text-ark-text-faint">{formatDate(run.created_at)}</div>
+                </div>
+                <div className="text-right text-xs text-ark-text-muted">
+                  <div>{run.snapshot_id ? '已关联存档' : '暂无存档'}</div>
+                  <div>{run.focus_run_id ? 'focus run 已记录' : '等待轮次'}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -667,8 +891,8 @@ export default function DeliberateWorkflow() {
     <SubAppPageShell maxWidth="6xl">
       <div className="space-y-6">
         <SubAppPageHeader
-          title="刻意工作流"
-          description="按顺序完成题库资产、工作参数、专注运行和存档复盘。"
+          title="刻意学习流"
+          description="管理题库、专注工作和工作流，通过刻意练习提升学习效果。"
           breadcrumb="Admin"
           backTo="/apps"
           backLabel="返回应用中心"
@@ -931,6 +1155,38 @@ export default function DeliberateWorkflow() {
                     </select>
                   </Field>
                 ) : null}
+
+                {kind !== 'flashcard' ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={passCriteriaEnabled}
+                          onChange={(e) => setPassCriteriaEnabled(e.target.checked)}
+                          className="rounded border-ark-border"
+                        />
+                        <span className="text-sm font-medium text-ark-text-muted">启用通过标准</span>
+                      </label>
+                    </div>
+                    {passCriteriaEnabled ? (
+                      <Field label="正确率阈值 (%)">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min={50}
+                            max={100}
+                            step={5}
+                            value={passCriteriaThreshold}
+                            onChange={(e) => setPassCriteriaThreshold(Number(e.target.value))}
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-medium text-ark-text w-12 text-right">{passCriteriaThreshold}%</span>
+                        </div>
+                      </Field>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               {kind === 'choice' ? (
@@ -1002,6 +1258,29 @@ export default function DeliberateWorkflow() {
         onToggleSection={toggleSection}
         onClose={handleCloseModal}
       />
+
+      {/* 新建专注工作弹窗 */}
+      {showCreateModal && (
+        <CreateFocusWorkModal
+          banks={banks}
+          filters={filters}
+          saving={saving}
+          onSave={handleCreateFocusWork}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* 编辑专注工作弹窗 */}
+      {editingConfig && (
+        <EditFocusWorkModal
+          config={editingConfig}
+          banks={banks}
+          filters={filters}
+          saving={saving}
+          onSave={handleEditSave}
+          onClose={() => setEditingConfig(null)}
+        />
+      )}
     </SubAppPageShell>
   );
 }

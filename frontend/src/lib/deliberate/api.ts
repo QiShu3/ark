@@ -48,6 +48,7 @@ export type DeliberateWorkflowConfig = {
   target_count: number;
   scope: Record<string, unknown>;
   completion: Record<string, unknown>;
+  pass_criteria: Record<string, unknown>;
   bank_summary?: DeliberateBankSummary | null;
   latest_run?: DeliberateWorkflowRun | null;
   created_at: string;
@@ -63,10 +64,19 @@ export type DeliberateWorkflowPayload = {
   target_count: number;
   scope?: Record<string, unknown>;
   completion?: Record<string, unknown>;
+  pass_criteria?: Record<string, unknown>;
 };
 
 export type DeliberateWorkflowPatch = {
+  name?: string;
+  kind?: DeliberateKind;
+  focus_work_type?: DeliberateFocusWorkType;
+  bank_id?: string | null;
   task_id?: string | null;
+  target_count?: number;
+  scope?: Record<string, unknown>;
+  completion?: Record<string, unknown>;
+  pass_criteria?: Record<string, unknown>;
 };
 
 export type DeliberateBankUploadResult = {
@@ -89,6 +99,12 @@ export function listDeliberateWorkflows() {
 
 export function listDeliberateBanks(kind: DeliberateKind) {
   return apiJson<DeliberateBankOption[]>(`/api/admin/deliberate-workflows/banks?kind=${encodeURIComponent(kind)}`);
+}
+
+export function deleteDeliberateBank(bankId: string, kind: DeliberateKind) {
+  return apiJson<{ detail: string }>(`/api/admin/deliberate-workflows/banks/${encodeURIComponent(bankId)}?kind=${encodeURIComponent(kind)}`, {
+    method: 'DELETE',
+  });
 }
 
 export type BankPreviewQuestion = {
@@ -166,6 +182,19 @@ export function startDeliberateWorkflow(configId: string) {
 
 export function getDeliberateRun(runId: string) {
   return apiJson<DeliberateWorkflowRun>(`/api/admin/deliberate-runs/${encodeURIComponent(runId)}`);
+}
+
+export function forkFocusWorkRun(params: {
+  parent_run_id: string;
+  focus_work_type: string;
+  bank_id?: string;
+  scope?: Record<string, unknown>;
+}) {
+  return apiJson('/todo/focus/workflow/runs/fork', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
 }
 
 export async function uploadDeliberateBank(params: {
