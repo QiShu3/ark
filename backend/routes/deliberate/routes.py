@@ -134,6 +134,12 @@ async def create_deliberate_workflow(
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> DeliberateWorkflowConfigOut:
     validate_config_shape(payload.kind, payload.focus_work_type, payload.target_count)
+    
+    # Ensure completion.question_count matches target_count
+    completion = dict(payload.completion)
+    if completion.get("mode") == "question_count" and "question_count" not in completion:
+        completion["question_count"] = payload.target_count
+    
     pool = _pool(request)
     async with pool.acquire() as conn:
         row = await repository.create_config(
@@ -146,7 +152,7 @@ async def create_deliberate_workflow(
             task_id=payload.task_id,
             target_count=payload.target_count,
             scope=payload.scope,
-            completion=payload.completion,
+            completion=completion,
             pass_criteria=payload.pass_criteria,
         )
         return await _config_out(conn, row, user_id=int(admin.id))
@@ -174,6 +180,14 @@ async def update_deliberate_workflow(
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> DeliberateWorkflowConfigOut:
     patch = payload.model_dump(exclude_unset=True)
+    
+    # Ensure completion.question_count matches target_count
+    if "target_count" in patch or "completion" in patch:
+        current_completion = patch.get("completion") or {}
+        target_count = patch.get("target_count")
+        if target_count and current_completion.get("mode") == "question_count" and "question_count" not in current_completion:
+            patch["completion"] = {**current_completion, "question_count": target_count}
+    
     pool = _pool(request)
     async with pool.acquire() as conn:
         current = await repository.get_config(conn, user_id=int(admin.id), config_id=config_id)
