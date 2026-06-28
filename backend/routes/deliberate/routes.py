@@ -152,6 +152,20 @@ async def create_deliberate_workflow(
         return await _config_out(conn, row, user_id=int(admin.id))
 
 
+@router.get("/deliberate-workflows/{config_id}", response_model=DeliberateWorkflowConfigOut)
+async def get_deliberate_workflow(
+    config_id: str,
+    request: Request,
+    admin: Annotated[_AuthUser, Depends(_require_admin)],
+) -> DeliberateWorkflowConfigOut:
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        row = await repository.get_config(conn, user_id=int(admin.id), config_id=config_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="配置不存在")
+        return await _config_out(conn, row, user_id=int(admin.id))
+
+
 @router.patch("/deliberate-workflows/{config_id}", response_model=DeliberateWorkflowConfigOut)
 async def update_deliberate_workflow(
     config_id: str,
