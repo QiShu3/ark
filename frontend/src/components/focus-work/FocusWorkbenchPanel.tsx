@@ -255,24 +255,11 @@ export default function FocusWorkbenchPanel({
   }
 
   if (phaseRuntimeState === 'extra_run_completed') {
-    if (noAvailableContent) {
-      return (
-        <ActionPanel
-          label="No Content"
-          heading="暂无可加练内容"
-          description="当前词书没有可用于额外轮次的单词。可以结束当前阶段，或先补充词书内容后再回来练习。"
-          primaryLabel="结束阶段"
-          primaryDisabled={busy}
-          onPrimary={onEndPhase}
-        />
-      );
-    }
-
     return (
       <ActionPanel
-        label="Extra Round"
-        heading="本轮额外专注已完成"
-        description="本轮不计入任务完成。你可以结束当前阶段，或在同一阶段再来一轮。"
+        label="Counted Run"
+        heading="本轮专注已完成"
+        description="本轮专注已记录。你可以结束当前阶段，或在同一阶段再来一轮。"
         primaryLabel="结束阶段"
         primaryDisabled={busy}
         onPrimary={onEndPhase}

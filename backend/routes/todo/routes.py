@@ -4149,7 +4149,7 @@ async def fork_focus_workflow_run(
                 focus_work_type=body.focus_work_type,
                 app_id=None,
                 app_task_type=None,
-                counts_for_task_completion=False,
+                counts_for_task_completion=True,
                 record_focus=True,
                 config_snapshot=config_snapshot,
                 source_run_id=body.parent_run_id,
