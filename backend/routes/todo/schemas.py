@@ -35,6 +35,7 @@ FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
 FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
 FocusWorkRunStatus = Literal["running", "paused", "content_completed", "completed", "abandoned"]
 FocusWorkRunMode = Literal["counted", "extra"]
+WorkflowRecordStatus = Literal["running", "completed", "abandoned"]
 FocusPhaseRuntimeState = Literal[
     "running_run",
     "counted_run_completed_confirming",
@@ -642,3 +643,30 @@ class FocusWorkForkRequest(BaseModel):
     focus_work_type: FocusWorkType
     bank_id: str | None = None
     scope: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowRecordNodeOut(BaseModel):
+    id: str
+    run_id: UUID | None = None
+    config_id: str | None = None
+    name: str
+    focus_work_type: FocusWorkType | None = None
+    status: str
+    accuracy: float | None = None
+    children: list["WorkflowRecordNodeOut"] = Field(default_factory=list)
+    created_at: datetime | None = None
+
+
+class WorkflowRecordOut(BaseModel):
+    id: UUID
+    workflow_id: UUID
+    workflow_name: str | None = None
+    nodes: list[WorkflowRecordNodeOut] = Field(default_factory=list)
+    status: WorkflowRecordStatus
+    started_at: datetime
+    completed_at: datetime | None = None
+    created_at: datetime
+
+
+class DeliberateWorkflowMultiStartRequest(BaseModel):
+    config_ids: list[str] = Field(min_length=1)

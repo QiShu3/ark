@@ -106,6 +106,7 @@ from .schemas import (
     AppointmentOut,
     AppointmentUpdateRequest,
     AppTaskStatusOut,
+    DeliberateWorkflowMultiStartRequest,
     ERCAppTaskInitRequest,
     ERCConfigSaveRequest,
     ERCConfigStatusOut,
@@ -144,6 +145,8 @@ from .schemas import (
     TaskStatus,
     TaskUpdateRequest,
     VocabAppTaskInitRequest,
+    WorkflowRecordNodeOut,
+    WorkflowRecordOut,
 )
 
 router = APIRouter(prefix="/todo", tags=["todo"])
@@ -3518,7 +3521,223 @@ async def start_focus_workflow_app_work(
                     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已有活动工作流") from exc
                 if created is None:
                     raise HTTPException(status_code=500, detail="开始专注工作失败")
-                return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)
+
+
+@router.get("/focus/workflow/records", response_model=list[WorkflowRecordOut])
+async def list_workflow_records(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> list[WorkflowRecordOut]:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT wr.id, wr.workflow_id, fw.workflow_name, wr.nodes, wr.status,
+                   wr.started_at, wr.completed_at, wr.created_at
+            FROM workflow_records wr
+            LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
+            WHERE wr.user_id = $1
+            ORDER BY wr.created_at DESC
+            """,
+            int(user.id),
+        )
+        return [
+            WorkflowRecordOut(
+                id=row["id"],
+                workflow_id=row["workflow_id"],
+                workflow_name=row["workflow_name"],
+                nodes=list(row["nodes"]) if row["nodes"] else [],
+                status=row["status"],
+                started_at=row["started_at"],
+                completed_at=row["completed_at"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
+
+@router.get("/focus/workflow/records/{record_id}", response_model=WorkflowRecordOut)
+async def get_workflow_record(
+    request: Request,
+    record_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> WorkflowRecordOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT wr.id, wr.workflow_id, fw.workflow_name, wr.nodes, wr.status,
+                   wr.started_at, wr.completed_at, wr.created_at
+            FROM workflow_records wr
+            LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
+            WHERE wr.id = $1 AND wr.user_id = $2
+            """,
+            record_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="工作流记录不存在")
+        return WorkflowRecordOut(
+            id=row["id"],
+            workflow_id=row["workflow_id"],
+            workflow_name=row["workflow_name"],
+            nodes=list(row["nodes"]) if row["nodes"] else [],
+            status=row["status"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            created_at=row["created_at"],
+        )
+
+
+async def _create_workflow_record(conn: Any, user_id: int, workflow_id: UUID) -> Any:
+    return await conn.fetchrow(
+        """
+        INSERT INTO workflow_records (workflow_id, user_id, nodes, status)
+        VALUES ($1, $2, '[]'::jsonb, 'running')
+        RETURNING id, workflow_id, nodes, status, started_at, completed_at, created_at
+        """,
+        workflow_id,
+        user_id,
+    )
+
+
+async def _add_workflow_record_node(
+    conn: Any,
+    user_id: int,
+    workflow_id: UUID,
+    node: dict[str, Any],
+) -> None:
+    await conn.execute(
+        """
+        UPDATE workflow_records
+        SET nodes = nodes || $1::jsonb, updated_at = NOW()
+        WHERE workflow_id = $2 AND user_id = $3 AND status = 'running'
+        """,
+        json.dumps([node], ensure_ascii=False),
+        workflow_id,
+        user_id,
+    )
+
+
+async def _complete_workflow_record(
+    conn: Any,
+    user_id: int,
+    workflow_id: UUID,
+    status: str = "completed",
+) -> None:
+    await conn.execute(
+        """
+        UPDATE workflow_records
+        SET status = $1, completed_at = NOW(), updated_at = NOW()
+        WHERE workflow_id = $2 AND user_id = $3 AND status = 'running'
+        """,
+        status,
+        workflow_id,
+        user_id,
+    )
+
+
+@router.post("/focus/workflow/start-multi-deliberate", response_model=FocusWorkflowOut)
+async def start_multi_deliberate_workflow(
+    request: Request,
+    body: DeliberateWorkflowMultiStartRequest,
+    user: Annotated[_AuthUser, Depends(_require_admin)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE focus_workflows SET status = 'stopped', ended_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND status = 'active'",
+                int(user.id),
+            )
+
+            configs = []
+            for config_id in body.config_ids:
+                config_row = await deliberate_repository.get_config(conn, user_id=int(user.id), config_id=config_id)
+                if config_row is None:
+                    raise HTTPException(status_code=404, detail=f"配置不存在: {config_id}")
+                configs.append(config_row)
+
+            phases = []
+            for i, config_row in enumerate(configs):
+                name = str(config_row["name"])
+                kind = str(config_row["kind"])
+                focus_work_type = str(config_row["focus_work_type"])
+                bank_id = config_row["bank_id"]
+                target_count = int(config_row["target_count"])
+                scope = _config_payload(config_row["scope_json"])
+                completion = _config_payload(config_row["completion_json"])
+
+                validate_config_shape(kind, focus_work_type, target_count)
+                resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
+                if resolved_bank_id and focus_work_type in {"review", "practice"}:
+                    scope = dict(scope or {})
+                    scope["bank_id"] = resolved_bank_id
+
+                phase = {
+                    "phase_type": "focus",
+                    "duration": 3600,
+                    "timer_mode": "countup",
+                    "task_id": None,
+                    "focus_work_type": focus_work_type,
+                    "is_temporary": True,
+                    "record_focus": True,
+                    "config_id": config_id,
+                    "deliberate_name": name,
+                    "deliberate_kind": kind,
+                    **_test_focus_phase_config(focus_work_type, resolved_bank_id, target_count),
+                }
+                if scope is not None:
+                    phase["choice_scope"] = scope
+                if completion is not None:
+                    phase["choice_completion"] = completion
+                phases.append(phase)
+                
+                if i < len(configs) - 1:
+                    phases.append({
+                        "phase_type": "break",
+                        "duration": 300,
+                        "timer_mode": None,
+                        "task_id": None,
+                        "focus_work_type": None,
+                        "is_temporary": True,
+                        "record_focus": True,
+                    })
+
+            first_phase = phases[0]
+            workflow_name = "刻意学习流：" + " → ".join(str(c["name"]) for c in configs)
+            created = await conn.fetchrow(
+                """
+                INSERT INTO focus_workflows(
+                    user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                    focus_duration, break_duration, current_phase, phase_started_at,
+                    phase_planned_duration, pending_confirmation, pending_task_selection, status,
+                    active_focus_work_type, focus_work_display_state, focus_work_result,
+                    focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                )
+                VALUES ($1, NULL, NULL, $2, $3::jsonb, 0, $4, $5, 'focus', NOW(), $4, FALSE, FALSE,
+                        'active', $6, 'fullscreen', NULL, NULL, FALSE, NULL, $7)
+                RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                          focus_duration, break_duration, current_phase, phase_started_at,
+                          phase_planned_duration, pending_confirmation, pending_task_selection,
+                          active_focus_work_type, focus_work_display_state, focus_work_result,
+                          focus_work_progress_snapshot, is_paused, paused_at, record_focus
+                """,
+                int(user.id),
+                workflow_name,
+                _to_jsonb_param(phases),
+                60,
+                60,
+                str(first_phase.get("focus_work_type", "")),
+                True,
+            )
+            if created is None:
+                raise HTTPException(status_code=500, detail="创建工作流失败")
+
+            await _create_workflow_record(conn, int(user.id), created["id"])
+
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)
 
             if str(row["current_phase"]) == "focus":
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前已经处于专注状态")

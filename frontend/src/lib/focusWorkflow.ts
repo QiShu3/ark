@@ -23,3 +23,42 @@ export function forkFocusWorkRun(params: {
     body: JSON.stringify(params),
   });
 }
+
+export interface WorkflowRecordNode {
+  id: string;
+  run_id?: string;
+  config_id?: string;
+  name: string;
+  focus_work_type?: string;
+  status: string;
+  accuracy?: number;
+  children: WorkflowRecordNode[];
+  created_at?: string;
+}
+
+export interface WorkflowRecord {
+  id: string;
+  workflow_id: string;
+  workflow_name?: string;
+  nodes: WorkflowRecordNode[];
+  status: 'running' | 'completed' | 'abandoned';
+  started_at: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export function fetchWorkflowRecords(): Promise<WorkflowRecord[]> {
+  return apiJson<WorkflowRecord[]>('/todo/focus/workflow/records');
+}
+
+export function fetchWorkflowRecord(recordId: string): Promise<WorkflowRecord> {
+  return apiJson<WorkflowRecord>(`/todo/focus/workflow/records/${recordId}`);
+}
+
+export function startMultiDeliberateWorkflow(configIds: string[]) {
+  return apiJson('/todo/focus/workflow/start-multi-deliberate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config_ids: configIds }),
+  });
+}

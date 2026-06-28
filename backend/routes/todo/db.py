@@ -1079,6 +1079,28 @@ async def init_todo(app: Any) -> None:
             "ALTER TABLE event_template_store_templates ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false"
         )
 
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS parent_run_id UUID NULL;")
+        await conn.execute("ALTER TABLE focus_work_runs ADD COLUMN IF NOT EXISTS fork_reason TEXT NULL;")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS workflow_records (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              workflow_id UUID NOT NULL REFERENCES focus_workflows(id) ON DELETE CASCADE,
+              user_id BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              nodes JSONB NOT NULL DEFAULT '[]'::jsonb,
+              status VARCHAR(20) NOT NULL DEFAULT 'running',
+              started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              completed_at TIMESTAMPTZ NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_workflow_records_status CHECK (status IN ('running', 'completed', 'abandoned'))
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflow_records_user_started ON workflow_records(user_id, started_at DESC);"
+        )
+
         # Test focus work configs (admin-only)
         await conn.execute("ALTER TABLE test_focus_configs DROP CONSTRAINT IF EXISTS test_focus_configs_focus_work_type_check;")
         await conn.execute("UPDATE test_focus_configs SET focus_work_type = 'review' WHERE focus_work_type = 'erc_review'")

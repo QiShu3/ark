@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, FileUp, Link, Play, Plus, Save, Settings2, Trash2, Workflow, X } from 'lucide-react';
+import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, FileUp, Link, Play, Plus, Save, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import AppModalFrame from '../components/AppModalFrame';
@@ -7,6 +7,7 @@ import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
 import CreateFocusWorkModal from '../components/deliberate/CreateFocusWorkModal';
 import EditFocusWorkModal from '../components/deliberate/EditFocusWorkModal';
+import UploadBankModal from '../components/deliberate/UploadBankModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
 import type { Task } from '../components/taskTypes';
@@ -31,6 +32,11 @@ import {
   type DeliberateWorkflowConfig,
   type DeliberateWorkflowRun,
 } from '../lib/deliberate/api';
+import {
+  fetchWorkflowRecords,
+  startMultiDeliberateWorkflow,
+  type WorkflowRecord,
+} from '../lib/focusWorkflow';
 
 type CompletionMode = 'question_count' | 'exhaust_scope';
 type StepId = 1 | 2 | 3 | 4;
@@ -167,7 +173,6 @@ export default function DeliberateWorkflow() {
   const [uploading, setUploading] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [activeStep, setActiveStep] = useState<StepId>(1);
   const [assetMode, setAssetMode] = useState<AssetMode>('upload');
   const [draftMode, setDraftMode] = useState(false);
@@ -179,7 +184,15 @@ export default function DeliberateWorkflow() {
   const [loadingModalRun, setLoadingModalRun] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<DeliberateWorkflowConfig | null>(null);
+  const [workflowRecords, setWorkflowRecords] = useState<WorkflowRecord[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [selectedConfigIds, setSelectedConfigIds] = useState<string[]>([]);
+  const [startingMulti, setStartingMulti] = useState(false);
+  const [snapshotBankId, setSnapshotBankId] = useState<string>('');
+  const [snapshotBankKind, setSnapshotBankKind] = useState<DeliberateKind>('choice');
+  const [allBanks, setAllBanks] = useState<{ id: string; name: string; count: number; kind: DeliberateKind }[]>([]);
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
@@ -194,9 +207,6 @@ export default function DeliberateWorkflow() {
   const [completionMode, setCompletionMode] = useState<CompletionMode>('question_count');
   const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(false);
   const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(80);
-  const [uploadName, setUploadName] = useState('');
-  const [uploadDescription, setUploadDescription] = useState('');
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : kind === 'input' ? 'input' : choiceMode;
   const selectedConfig = configs.find((item) => item.id === selectedId) ?? configs[0] ?? null;
@@ -225,10 +235,6 @@ export default function DeliberateWorkflow() {
     setCompletionMode('question_count');
     setPassCriteriaEnabled(false);
     setPassCriteriaThreshold(80);
-    setUploadName('');
-    setUploadDescription('');
-    setUploadFile(null);
-    setUploadErrors([]);
     setError(null);
   }, []);
 
@@ -301,6 +307,29 @@ export default function DeliberateWorkflow() {
   }, [kind, loadBanks]);
 
   useEffect(() => {
+    if (banks.length > 0 && !snapshotBankId) {
+      setSnapshotBankId(banks[0].id);
+      setSnapshotBankKind(kind);
+    }
+  }, [banks, snapshotBankId, kind]);
+
+  useEffect(() => {
+    const loadAllBanks = async () => {
+      const results: { id: string; name: string; count: number; kind: DeliberateKind }[] = [];
+      for (const k of ['choice', 'flashcard', 'input'] as DeliberateKind[]) {
+        try {
+          const data = await listDeliberateBanks(k);
+          for (const bank of data) {
+            results.push({ id: bank.id, name: bank.name, count: bank.count, kind: k });
+          }
+        } catch {}
+      }
+      setAllBanks(results);
+    };
+    void loadAllBanks();
+  }, []);
+
+  useEffect(() => {
     if (kind !== 'choice' || !bankId) {
       setFilters(null);
       return;
@@ -313,26 +342,28 @@ export default function DeliberateWorkflow() {
   useEffect(() => {
     if (!selectedConfig) {
       setRuns([]);
-      setSnapshots([]);
       return;
     }
     listDeliberateRuns(selectedConfig.id)
       .then(setRuns)
       .catch(() => setRuns([]));
-    if (selectedConfig.bank_id) {
-      if (selectedConfig.kind === 'input') {
-        apiJson<SetSnapshot[]>(`/api/input/snapshots?bank_id=${selectedConfig.bank_id}&limit=30`)
-          .then(setSnapshots)
-          .catch(() => setSnapshots([]));
-      } else {
-        fetchSetSnapshots(selectedConfig.bank_id, { limit: 30 })
-          .then(setSnapshots)
-          .catch(() => setSnapshots([]));
-      }
-    } else {
-      setSnapshots([]);
-    }
   }, [selectedConfig]);
+
+  useEffect(() => {
+    if (!snapshotBankId) {
+      setSnapshots([]);
+      return;
+    }
+    if (snapshotBankKind === 'input') {
+      apiJson<SetSnapshot[]>(`/api/input/snapshots?bank_id=${snapshotBankId}&limit=30`)
+        .then(setSnapshots)
+        .catch(() => setSnapshots([]));
+    } else {
+      fetchSetSnapshots(snapshotBankId, { limit: 30 })
+        .then(setSnapshots)
+        .catch(() => setSnapshots([]));
+    }
+  }, [snapshotBankId, snapshotBankKind]);
 
   useEffect(() => {
     setTasksLoading(true);
@@ -340,6 +371,14 @@ export default function DeliberateWorkflow() {
       .then(setTasks)
       .catch(() => setTasks([]))
       .finally(() => setTasksLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setLoadingRecords(true);
+    fetchWorkflowRecords()
+      .then(setWorkflowRecords)
+      .catch(() => setWorkflowRecords([]))
+      .finally(() => setLoadingRecords(false));
   }, []);
 
   const scope = useMemo(() => {
@@ -372,33 +411,26 @@ export default function DeliberateWorkflow() {
     };
   }, [passCriteriaEnabled, passCriteriaThreshold]);
 
-  async function handleUpload() {
-    if (!uploadName.trim() || !uploadFile) {
-      setError('请填写题库名称并选择 JSON 文件');
-      return;
-    }
+  async function handleUploadBank(data: {
+    kind: DeliberateKind;
+    name: string;
+    description: string;
+    file: File;
+  }) {
     setUploading(true);
     setError(null);
-    setUploadErrors([]);
     try {
       const result = await uploadDeliberateBank({
-        kind,
-        name: uploadName.trim(),
-        description: uploadDescription,
-        file: uploadFile,
+        kind: data.kind,
+        name: data.name,
+        description: data.description,
+        file: data.file,
       });
-      setName((current) => current || result.name);
-      setUploadFile(null);
-      setUploadName('');
-      setUploadDescription('');
-      await loadBanks(kind);
-      setBankId(result.bank_id);
-      setAssetMode('existing');
-      setActiveStep(3);
+      await loadBanks(data.kind);
+      setSnapshotBankId(result.bank_id);
+      setSnapshotBankKind(data.kind);
     } catch (err) {
-      const rich = err as DeliberateUploadError;
-      setError(rich.message || '上传题库失败');
-      setUploadErrors(rich.errors || []);
+      throw err;
     } finally {
       setUploading(false);
     }
@@ -563,6 +595,32 @@ export default function DeliberateWorkflow() {
     setModalRun(null);
   }, []);
 
+  const handleToggleConfigSelection = useCallback((configId: string) => {
+    setSelectedConfigIds(prev => 
+      prev.includes(configId) 
+        ? prev.filter(id => id !== configId)
+        : [...prev, configId]
+    );
+  }, []);
+
+  const handleStartMultiWorkflow = useCallback(async () => {
+    if (selectedConfigIds.length === 0) {
+      setError('请至少选择一个专注工作配置');
+      return;
+    }
+    setStartingMulti(true);
+    setError(null);
+    try {
+      await startMultiDeliberateWorkflow(selectedConfigIds);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '启动多配置工作流失败');
+    } finally {
+      setStartingMulti(false);
+    }
+  }, [selectedConfigIds, navigate]);
+
   const toggleSection = useCallback((section: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
@@ -675,62 +733,54 @@ export default function DeliberateWorkflow() {
           )}
         </div>
 
-        {/* 上传新题库 */}
-        <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
-          <h4 className="mb-3 text-sm font-medium text-ark-text">上传新题库</h4>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="题库名称">
-              <input
-                value={uploadName}
-                onChange={(event) => setUploadName(event.target.value)}
-                className={inputClass}
-                placeholder="输入题库名称"
-              />
-            </Field>
-            <Field label="JSON 或 ZIP 文件">
-              <input
-                type="file"
-                accept=".json,application/json,.zip,application/zip"
-                onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-                className="block w-full text-sm text-ark-text-muted file:mr-3 file:rounded-md file:border file:border-ark-border file:bg-ark-surface-subtle file:px-3 file:py-2 file:text-sm file:text-ark-text"
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="描述">
-                <textarea
-                  value={uploadDescription}
-                  onChange={(event) => setUploadDescription(event.target.value)}
-                  className={`${inputClass} min-h-16`}
-                  placeholder="题库描述（可选）"
-                />
-              </Field>
-            </div>
-          </div>
-          {uploadErrors.length > 0 && (
-            <div className="mt-2 rounded-md bg-red-500/10 p-2 text-xs text-red-400">
-              {uploadErrors.map((err, i) => <div key={i}>{err}</div>)}
-            </div>
-          )}
-          <div className="mt-3">
-            <Button
-              variant="secondary"
-              loading={uploading}
-              loadingText="上传中"
-              leftIcon={<FileUp className="h-4 w-4" />}
-              onClick={() => void handleUpload()}
-            >
-              上传题库
-            </Button>
-          </div>
+        {/* 上传新题库按钮 */}
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            leftIcon={<Upload className="h-4 w-4" />}
+            onClick={() => setShowUploadModal(true)}
+          >
+            上传新题库
+          </Button>
         </div>
 
         {/* 存档可视化 */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-            <h4 className="text-base font-semibold text-ark-text">存档可视化</h4>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+              <h4 className="text-base font-semibold text-ark-text">存档可视化</h4>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-ark-text-muted">题库:</span>
+              <select
+                value={snapshotBankId}
+                onChange={(e) => {
+                  const newBankId = e.target.value;
+                  setSnapshotBankId(newBankId);
+                  const bank = allBanks.find(b => b.id === newBankId);
+                  if (bank) {
+                    setSnapshotBankKind(bank.kind);
+                  }
+                }}
+                className="rounded-md border border-ark-border bg-ark-input px-2 py-1 text-xs text-ark-text focus:outline-none focus:ring-1 focus:ring-[var(--ark-focus-ring)]"
+              >
+                <option value="">选择题库</option>
+                {allBanks.map((bank) => (
+                  <option key={bank.id} value={bank.id}>
+                    {bank.name} ({bank.count} {bank.kind === 'flashcard' ? '词' : '题'})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <SnapshotPanel snapshots={snapshots} kind={kind} />
+          {snapshotBankId ? (
+            <SnapshotPanel snapshots={snapshots} kind={snapshotBankKind} />
+          ) : (
+            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+              请选择题库查看存档可视化
+            </div>
+          )}
         </div>
       </section>
 
@@ -807,11 +857,67 @@ export default function DeliberateWorkflow() {
 
       {/* 区域3：工作流编排 */}
       <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Settings2 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-          <h3 className="text-lg font-semibold text-ark-text">工作流编排</h3>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Settings2 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+            <h3 className="text-lg font-semibold text-ark-text">工作流编排</h3>
+          </div>
+          <Button
+            variant="primary"
+            loading={startingMulti}
+            loadingText="启动中"
+            disabled={selectedConfigIds.length === 0}
+            leftIcon={<Play className="h-4 w-4" />}
+            onClick={() => void handleStartMultiWorkflow()}
+          >
+            启动组合工作流 ({selectedConfigIds.length})
+          </Button>
         </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Workflow className="h-5 w-5 text-ark-accent" aria-hidden="true" />
+              <h4 className="text-base font-semibold text-ark-text">选择专注工作（按顺序执行）</h4>
+            </div>
+            <div className="space-y-2">
+              {configs.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+                  暂无专注工作配置，请先创建
+                </div>
+              ) : (
+                configs.map((config, index) => (
+                  <div
+                    key={config.id}
+                    className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition cursor-pointer ${
+                      selectedConfigIds.includes(config.id)
+                        ? 'border-ark-accent bg-ark-surface'
+                        : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
+                    }`}
+                    onClick={() => handleToggleConfigSelection(config.id)}
+                  >
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-ark-border bg-ark-surface text-xs font-medium text-ark-text-muted">
+                      {selectedConfigIds.includes(config.id) 
+                        ? selectedConfigIds.indexOf(config.id) + 1 
+                        : index + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-ark-text">{config.name}</div>
+                      <div className="text-xs text-ark-text-muted">
+                        {focusTypeLabel(config.focus_work_type)} · {config.bank_summary?.name ?? '未绑定题库'} · 目标 {config.target_count}
+                      </div>
+                    </div>
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-ark-border">
+                      {selectedConfigIds.includes(config.id) && (
+                        <CheckCircle2 className="h-4 w-4 text-ark-accent" />
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Link className="h-5 w-5 text-ark-accent" aria-hidden="true" />
@@ -858,31 +964,88 @@ export default function DeliberateWorkflow() {
           <Archive className="h-5 w-5 text-ark-accent" aria-hidden="true" />
           <h3 className="text-lg font-semibold text-ark-text">运行档案</h3>
         </div>
-        {runs.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
-            当前配置暂无运行档案
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {runs.slice(0, 6).map((run) => (
-              <button
-                key={run.id}
-                type="button"
-                onClick={() => void handleRunClick(run.id)}
-                className="flex w-full items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-left transition hover:border-ark-accent/50 hover:bg-ark-surface"
-              >
-                <div>
-                  <div className="text-sm font-medium text-ark-text">{statusLabel[run.status]}</div>
-                  <div className="text-xs text-ark-text-faint">{formatDate(run.created_at)}</div>
-                </div>
-                <div className="text-right text-xs text-ark-text-muted">
-                  <div>{run.snapshot_id ? '已关联存档' : '暂无存档'}</div>
-                  <div>{run.focus_run_id ? 'focus run 已记录' : '等待轮次'}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+        
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-3">
+            <h4 className="text-base font-semibold text-ark-text">单配置运行</h4>
+            {runs.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+                当前配置暂无运行档案
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {runs.slice(0, 6).map((run) => (
+                  <button
+                    key={run.id}
+                    type="button"
+                    onClick={() => void handleRunClick(run.id)}
+                    className="flex w-full items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2 text-left transition hover:border-ark-accent/50 hover:bg-ark-surface"
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-ark-text">{statusLabel[run.status]}</div>
+                      <div className="text-xs text-ark-text-faint">{formatDate(run.created_at)}</div>
+                    </div>
+                    <div className="text-right text-xs text-ark-text-muted">
+                      <div>{run.snapshot_id ? '已关联存档' : '暂无存档'}</div>
+                      <div>{run.focus_run_id ? 'focus run 已记录' : '等待轮次'}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h4 className="text-base font-semibold text-ark-text">组合工作流记录</h4>
+            {loadingRecords ? (
+              <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+                加载工作流记录…
+              </div>
+            ) : workflowRecords.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+                暂无组合工作流记录
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {workflowRecords.slice(0, 6).map((record) => (
+                  <div
+                    key={record.id}
+                    className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-ark-text">
+                        {record.workflow_name || '组合工作流'}
+                      </div>
+                      <div className="text-xs text-ark-text-muted">
+                        {record.status === 'completed' ? '已完成' : record.status === 'running' ? '进行中' : '已放弃'}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-ark-text-faint">
+                      {formatDate(record.started_at)}
+                      {record.completed_at && ` → ${formatDate(record.completed_at)}`}
+                    </div>
+                    {record.nodes.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {record.nodes.map((node, i) => (
+                          <div key={node.id} className="flex items-center gap-2 text-xs text-ark-text-muted">
+                            <span className="font-mono">{i + 1}.</span>
+                            <span>{node.name}</span>
+                            <span className="text-ark-text-faint">
+                              {node.status === 'completed' ? '✓' : node.status === 'running' ? '→' : '✗'}
+                            </span>
+                            {node.accuracy != null && (
+                              <span className="text-ark-accent">{Math.round(node.accuracy * 100)}%</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </section>
     </div>
   );
@@ -1048,42 +1211,15 @@ export default function DeliberateWorkflow() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="题库名称">
-                      <input value={uploadName} onChange={(event) => setUploadName(event.target.value)} className={inputClass} />
-                    </Field>
-                    <Field label="JSON 或 ZIP 文件">
-                      <input
-                        type="file"
-                        accept=".json,application/json,.zip,application/zip"
-                        onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
-                        className="block w-full text-sm text-ark-text-muted file:mr-3 file:rounded-md file:border file:border-ark-border file:bg-ark-surface-subtle file:px-3 file:py-2 file:text-sm file:text-ark-text"
-                      />
-                    </Field>
-                    <div className="sm:col-span-2">
-                      <Field label="描述">
-                        <textarea
-                          value={uploadDescription}
-                          onChange={(event) => setUploadDescription(event.target.value)}
-                          className={`${inputClass} min-h-20`}
-                        />
-                      </Field>
-                    </div>
+                  <div className="flex justify-center">
+                    <Button
+                      variant="secondary"
+                      leftIcon={<Upload className="h-4 w-4" />}
+                      onClick={() => setShowUploadModal(true)}
+                    >
+                      上传新题库
+                    </Button>
                   </div>
-                  {uploadErrors.length ? (
-                    <div className="max-h-36 overflow-y-auto rounded-lg border border-ark-border bg-ark-surface-subtle p-3 text-xs text-ark-text-muted">
-                      {uploadErrors.map((item) => <div key={item}>{item}</div>)}
-                    </div>
-                  ) : null}
-                  <Button
-                    variant="secondary"
-                    loading={uploading}
-                    loadingText="校验中"
-                    leftIcon={<FileUp className="h-4 w-4" />}
-                    onClick={() => void handleUpload()}
-                  >
-                    校验并上传
-                  </Button>
                   {bankId && selectedBank && (
                     <BankPreview
                       bankId={bankId}
@@ -1279,6 +1415,16 @@ export default function DeliberateWorkflow() {
           saving={saving}
           onSave={handleEditSave}
           onClose={() => setEditingConfig(null)}
+        />
+      )}
+
+      {/* 上传题库弹窗 */}
+      {showUploadModal && (
+        <UploadBankModal
+          kind={kind}
+          uploading={uploading}
+          onUpload={handleUploadBank}
+          onClose={() => setShowUploadModal(false)}
         />
       )}
     </SubAppPageShell>
