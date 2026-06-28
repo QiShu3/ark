@@ -105,27 +105,40 @@ async def get_next(
         if not questions:
             return InputNextOut(has_item=False, article=None, current_question_index=0)
 
-        articles_map: dict[str, dict[str, Any]] = {}
-        for q in questions:
-            akey = q["article_id"]
-            if akey not in articles_map:
-                paragraphs = await repository.list_paragraphs_by_article(conn, q["article_pk"])
-                articles_map[akey] = {
-                    "id": q["article_pk"],
-                    "article_id": akey,
-                    "title": q.get("article_title") or "",
-                    "paragraphs": [
-                        {"id": str(p["id"]), "paragraph_no": p["paragraph_no"], "text": p["text"]}
-                        for p in paragraphs
-                    ],
-                    "questions": [],
-                }
-            articles_map[akey]["questions"].append(_question_to_dict(q))
+        answered_row = await conn.fetchrow(
+            """
+            SELECT ARRAY_AGG(DISTINCT question_id) AS answered_ids
+            FROM input_user_answers
+            WHERE user_id = $1 AND set_id = $2::uuid
+            """,
+            int(user.id),
+            bank_id,
+        )
+        answered_ids = set(answered_row["answered_ids"] or []) if answered_row and answered_row["answered_ids"] else set()
 
-        first_article = next(iter(articles_map.values()))
+        unanswered_questions = [q for q in questions if q["question_id"] not in answered_ids]
+        if not unanswered_questions:
+            unanswered_questions = questions
+
+        import random
+        selected_question = random.choice(unanswered_questions)
+
+        akey = selected_question["article_id"]
+        paragraphs = await repository.list_paragraphs_by_article(conn, selected_question["article_pk"])
+        article = {
+            "id": selected_question["article_pk"],
+            "article_id": akey,
+            "title": selected_question.get("article_title") or "",
+            "paragraphs": [
+                {"id": str(p["id"]), "paragraph_no": p["paragraph_no"], "text": p["text"]}
+                for p in paragraphs
+            ],
+            "questions": [_question_to_dict(selected_question)],
+        }
+
         return InputNextOut(
             has_item=True,
-            article=first_article,
+            article=article,
             current_question_index=0,
         )
 

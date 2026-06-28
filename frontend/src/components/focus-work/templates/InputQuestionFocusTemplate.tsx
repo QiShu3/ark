@@ -217,20 +217,22 @@ export default function InputQuestionFocusTemplate({
                   </div>
                 </div>
 
-                {/* Stem */}
-                <div className="mt-4">
-                  {question.stemBlocks?.length ? (
-                    <ContentBlockRenderer blocks={question.stemBlocks} />
-                  ) : (
-                    <div className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">
-                      {typeof question.stem === 'string' ? (
-                        <MarkdownContent content={question.stem} inline />
-                      ) : (
-                        question.stem
-                      )}
-                    </div>
-                  )}
-                </div>
+                {/* Stem - only show if stem is not empty */}
+                {question.stem && (
+                  <div className="mt-4">
+                    {question.stemBlocks?.length ? (
+                      <ContentBlockRenderer blocks={question.stemBlocks} />
+                    ) : (
+                      <div className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">
+                        {typeof question.stem === 'string' ? (
+                          <MarkdownContent content={question.stem} inline />
+                        ) : (
+                          question.stem
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Input area */}
                 <div className="mt-4">
