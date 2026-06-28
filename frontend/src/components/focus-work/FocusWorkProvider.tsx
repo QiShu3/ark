@@ -301,11 +301,12 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     if (snapshot.state !== 'focus' || !activeDefinition) return;
     if (snapshot.pending_task_selection || snapshot.is_paused) return;
     if (activeRun || derivedPhaseRuntimeState) return;
-    const hasTaskId = snapshot.task_id || snapshot.runtime_task_id;
-    const currentPhase = snapshot.phases?.[snapshot.current_phase_index ?? 0];
-    const isDeliberate = currentPhase && 'deliberate_config_id' in currentPhase;
-    const mode = hasTaskId || isDeliberate ? 'counted' : 'extra';
-    void createRun(mode);
+      const hasTaskId = snapshot.task_id || snapshot.runtime_task_id;
+      const currentPhase = snapshot.phases?.[snapshot.current_phase_index ?? 0];
+      const isDeliberate = currentPhase && 'deliberate_config_id' in currentPhase;
+      // 所有专注工作都创建计数轮次，去掉"额外阶段"概念
+      const mode: 'counted' | 'extra' = 'counted';
+      void createRun(mode);
   }, [
     activeDefinition,
     activeRun,
