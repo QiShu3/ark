@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import type { FocusPhaseRuntimeState, FocusWorkRendererProps } from './focusWorkTypes';
 import type { FocusWorkDefinition } from './focusWorkTypes';
@@ -173,6 +173,8 @@ type FocusWorkbenchPanelProps = {
   onExtendPhase: () => void;
   onCreateExtraRun: () => void;
   onFork?: () => void;
+  onForkWithChild?: (childConfigId: string) => void;
+  forkChildren?: { config_id: string; label: string; is_recommended: boolean }[];
   onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
 };
 
@@ -187,6 +189,8 @@ export default function FocusWorkbenchPanel({
   onExtendPhase,
   onCreateExtraRun,
   onFork,
+  onForkWithChild,
+  forkChildren,
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
   const noAvailableContent = runHasNoAvailableContent(activeRun);
@@ -195,7 +199,25 @@ export default function FocusWorkbenchPanel({
   const masteryCheck = runSummary?.mastery_check as Record<string, unknown> | undefined;
   const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
 
+  const [selectedChildId, setSelectedChildId] = useState<string>(() => {
+    if (forkChildren && forkChildren.length > 0) {
+      const recommended = forkChildren.find(c => c.is_recommended);
+      return recommended?.config_id || forkChildren[0].config_id;
+    }
+    return '';
+  });
+
+  const hasChildren = forkChildren && forkChildren.length > 0;
+
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
+    const handleFork = () => {
+      if (hasChildren && onForkWithChild) {
+        onForkWithChild(selectedChildId);
+      } else if (onFork) {
+        onFork();
+      }
+    };
+
     return (
       <ActionPanel
         label="Round Complete"
@@ -205,9 +227,25 @@ export default function FocusWorkbenchPanel({
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
         secondaryLabel={hasMasteryCheckFailed ? "fork到弱项" : "再来一轮"}
-        secondaryDisabled={hasMasteryCheckFailed ? busy || !onFork : true}
-        onSecondary={hasMasteryCheckFailed ? onFork : onCreateExtraRun}
+        secondaryDisabled={hasMasteryCheckFailed ? busy || !(onFork || onForkWithChild) : true}
+        onSecondary={hasMasteryCheckFailed ? handleFork : onCreateExtraRun}
       >
+        {hasMasteryCheckFailed && hasChildren && (
+          <div className="mb-3">
+            <label className="mb-1 block text-xs text-[var(--focus-work-text-muted)]">fork 到：</label>
+            <select
+              value={selectedChildId}
+              onChange={(e) => setSelectedChildId(e.target.value)}
+              className="w-full rounded border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-2 py-1 text-sm text-[var(--focus-work-text)]"
+            >
+              {forkChildren.map((child) => (
+                <option key={child.config_id} value={child.config_id}>
+                  {child.label || child.config_id}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {runSummary && Object.keys(runSummary).length > 0 && (
           <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} />
         )}

@@ -535,6 +535,7 @@ export default function DeliberateWorkflow() {
     bank_id?: string;
     target_count?: number;
     pass_criteria?: Record<string, unknown>;
+    children?: { config_id: string; label: string; is_recommended: boolean }[];
   }) {
     if (!editingConfig) return;
     setSaving(true);
@@ -1410,6 +1411,7 @@ export default function DeliberateWorkflow() {
       {editingConfig && (
         <EditFocusWorkModal
           config={editingConfig}
+          allConfigs={configs}
           banks={banks}
           filters={filters}
           saving={saving}

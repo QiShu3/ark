@@ -59,6 +59,7 @@ const mockConfig: DeliberateWorkflowConfig = {
   scope: {},
   completion: { mode: 'question_count', question_count: 20 },
   pass_criteria: {},
+  children: [],
   bank_summary: { id: 'bank-1', name: '408题库', kind: 'choice', item_count: 100, question_count: 100 },
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',

@@ -49,10 +49,17 @@ export type DeliberateWorkflowConfig = {
   scope: Record<string, unknown>;
   completion: Record<string, unknown>;
   pass_criteria: Record<string, unknown>;
+  children: DeliberateWorkflowChild[];
   bank_summary?: DeliberateBankSummary | null;
   latest_run?: DeliberateWorkflowRun | null;
   created_at: string;
   updated_at: string;
+};
+
+export type DeliberateWorkflowChild = {
+  config_id: string;
+  label: string;
+  is_recommended: boolean;
 };
 
 export type DeliberateWorkflowPayload = {
@@ -65,6 +72,7 @@ export type DeliberateWorkflowPayload = {
   scope?: Record<string, unknown>;
   completion?: Record<string, unknown>;
   pass_criteria?: Record<string, unknown>;
+  children?: DeliberateWorkflowChild[];
 };
 
 export type DeliberateWorkflowPatch = {
@@ -77,6 +85,7 @@ export type DeliberateWorkflowPatch = {
   scope?: Record<string, unknown>;
   completion?: Record<string, unknown>;
   pass_criteria?: Record<string, unknown>;
+  children?: DeliberateWorkflowChild[];
 };
 
 export type DeliberateBankUploadResult = {

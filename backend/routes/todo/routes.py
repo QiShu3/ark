@@ -3547,7 +3547,7 @@ async def list_workflow_records(
                 id=row["id"],
                 workflow_id=row["workflow_id"],
                 workflow_name=row["workflow_name"],
-                nodes=list(row["nodes"]) if row["nodes"] else [],
+                nodes=row["nodes"] if isinstance(row["nodes"], list) else [],
                 status=row["status"],
                 started_at=row["started_at"],
                 completed_at=row["completed_at"],
@@ -3582,7 +3582,7 @@ async def get_workflow_record(
             id=row["id"],
             workflow_id=row["workflow_id"],
             workflow_name=row["workflow_name"],
-            nodes=list(row["nodes"]) if row["nodes"] else [],
+            nodes=row["nodes"] if isinstance(row["nodes"], list) else [],
             status=row["status"],
             started_at=row["started_at"],
             completed_at=row["completed_at"],
@@ -3883,13 +3883,14 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
     if config_id:
         config = await deliberate_repository.get_config(conn, user_id=user_id, config_id=str(config_id))
         if config:
-            pass_criteria = config.get("pass_criteria_json") or {}
+            raw = config.get("pass_criteria_json") or {}
+            pass_criteria = _config_payload(raw)
     
     progress_snapshot = run.progress_snapshot or {}
     accuracy = progress_snapshot.get("accuracy", 0)
     if isinstance(accuracy, (int, float)):
-        threshold = pass_criteria.get("threshold", 0)
-        mode = pass_criteria.get("mode", "accuracy")
+        threshold = pass_criteria.get("threshold", 0) if isinstance(pass_criteria, dict) else 0
+        mode = pass_criteria.get("mode", "accuracy") if isinstance(pass_criteria, dict) else "accuracy"
         
         progress_snapshot["mastery_check"] = {
             "enabled": bool(pass_criteria),

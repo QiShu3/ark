@@ -82,6 +82,9 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS task_id UUID NULL;"
         )
         await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS children_json JSONB NOT NULL DEFAULT '[]'::jsonb;"
+        )
+        await conn.execute(
             "ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_target_count;"
         )
         await conn.execute(
@@ -154,6 +157,7 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
         "scope": _json_value(row["scope_json"]) or {},
         "completion": _json_value(row["completion_json"]) or {},
         "pass_criteria": _json_value(row["pass_criteria_json"]) or {},
+        "children": _json_value(row["children_json"]) or [],
         "bank_summary": bank_summary,
         "latest_run": latest_run,
         "created_at": _iso(row["created_at"]),
@@ -189,7 +193,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int) -> list[asyncp
     return await conn.fetch(
         """
         SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-               scope_json, completion_json, pass_criteria_json, created_at, updated_at
+               scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
         FROM deliberate_workflow_configs
         WHERE user_id = $1
         ORDER BY updated_at DESC, created_at DESC
@@ -202,7 +206,7 @@ async def get_config(conn: asyncpg.Connection, *, user_id: int, config_id: str) 
     return await conn.fetchrow(
         """
         SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-               scope_json, completion_json, pass_criteria_json, created_at, updated_at
+               scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
         FROM deliberate_workflow_configs
         WHERE id = $1::uuid AND user_id = $2
         """,
@@ -224,15 +228,16 @@ async def create_config(
     scope: dict[str, Any],
     completion: dict[str, Any],
     pass_criteria: dict[str, Any],
+    children: list[dict[str, Any]] | None = None,
 ) -> asyncpg.Record:
     return await conn.fetchrow(
         """
         INSERT INTO deliberate_workflow_configs(
-            user_id, name, kind, focus_work_type, bank_id, task_id, target_count, scope_json, completion_json, pass_criteria_json
+            user_id, name, kind, focus_work_type, bank_id, task_id, target_count, scope_json, completion_json, pass_criteria_json, children_json
         )
-        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::jsonb, $9::jsonb, $10::jsonb)
+        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb)
         RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-                  scope_json, completion_json, pass_criteria_json, created_at, updated_at
+                  scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
         """,
         user_id,
         name,
@@ -244,6 +249,7 @@ async def create_config(
         _json_param(scope),
         _json_param(completion),
         _json_param(pass_criteria),
+        _json_param(children or []),
     )
 
 
@@ -277,6 +283,9 @@ async def update_config(
     if "pass_criteria" in patch:
         values.append(_json_param(patch["pass_criteria"]))
         fields.append(f"pass_criteria_json = ${len(values)}::jsonb")
+    if "children" in patch:
+        values.append(_json_param(patch["children"]))
+        fields.append(f"children_json = ${len(values)}::jsonb")
     if not fields:
         return await get_config(conn, user_id=user_id, config_id=config_id)
     values.extend([config_id, user_id])
@@ -286,7 +295,7 @@ async def update_config(
         SET {', '.join(fields)}, updated_at = NOW()
         WHERE id = ${len(values) - 1}::uuid AND user_id = ${len(values)}
         RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-                  scope_json, completion_json, pass_criteria_json, created_at, updated_at
+                  scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
         """,
         *values,
     )

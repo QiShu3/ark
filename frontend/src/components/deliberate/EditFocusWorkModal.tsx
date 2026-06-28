@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
-import type { DeliberateWorkflowConfig, DeliberateKind, DeliberateFocusWorkType, DeliberateBankOption } from '../../lib/deliberate/api';
+import type { DeliberateWorkflowConfig, DeliberateKind, DeliberateFocusWorkType, DeliberateBankOption, DeliberateWorkflowChild } from '../../lib/deliberate/api';
 import type { ChoiceFilters } from '../../lib/choice/types';
 
 type EditFocusWorkModalProps = {
   config: DeliberateWorkflowConfig;
+  allConfigs: DeliberateWorkflowConfig[];
   banks: DeliberateBankOption[];
   filters: ChoiceFilters | null;
   saving: boolean;
@@ -16,6 +17,7 @@ type EditFocusWorkModalProps = {
     bank_id?: string;
     target_count?: number;
     pass_criteria?: Record<string, unknown>;
+    children?: DeliberateWorkflowChild[];
   }) => Promise<void>;
   onClose: () => void;
 };
@@ -25,6 +27,7 @@ const inputClass =
 
 export default function EditFocusWorkModal({
   config,
+  allConfigs,
   banks,
   filters,
   saving,
@@ -40,9 +43,37 @@ export default function EditFocusWorkModal({
   const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(
     Math.round(((config.pass_criteria?.threshold as number) ?? 0.8) * 100)
   );
+  const [children, setChildren] = useState<DeliberateWorkflowChild[]>(
+    config.children || []
+  );
 
   const kindLabel = config.kind === 'flashcard' ? '闪卡' : config.kind === 'input' ? '输入题' : '选择题';
   const bankCountLabel = config.kind === 'flashcard' ? '词' : '题';
+
+  const availableConfigs = allConfigs.filter(c => c.id !== config.id);
+
+  function addChild() {
+    setChildren(prev => [...prev, {
+      config_id: availableConfigs[0]?.id || '',
+      label: '',
+      is_recommended: prev.length === 0,
+    }]);
+  }
+
+  function removeChild(index: number) {
+    setChildren(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function updateChild(index: number, updates: Partial<DeliberateWorkflowChild>) {
+    setChildren(prev => prev.map((child, i) => i === index ? { ...child, ...updates } : child));
+  }
+
+  function setRecommended(index: number) {
+    setChildren(prev => prev.map((child, i) => ({
+      ...child,
+      is_recommended: i === index,
+    })));
+  }
 
   async function handleSave() {
     const passCriteria = passCriteriaEnabled
@@ -54,6 +85,7 @@ export default function EditFocusWorkModal({
       bank_id: bankId || null,
       target_count: targetCount,
       pass_criteria: passCriteria,
+      children: children.filter(c => c.config_id),
     });
   }
 
@@ -142,6 +174,63 @@ export default function EditFocusWorkModal({
               )}
             </div>
           )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-ark-text-muted">子节点（fork 目标）</label>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Plus className="h-3 w-3" />}
+                onClick={addChild}
+                disabled={availableConfigs.length === 0}
+              >
+                添加
+              </Button>
+            </div>
+            {children.length === 0 ? (
+              <p className="text-xs text-ark-text-faint">检验未通过时，可 fork 到其他专注工作进行针对性练习</p>
+            ) : (
+              <div className="space-y-2">
+                {children.map((child, index) => (
+                  <div key={index} className="flex items-center gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-2">
+                    <select
+                      value={child.config_id}
+                      onChange={(e) => updateChild(index, { config_id: e.target.value })}
+                      className="flex-1 rounded border border-ark-border bg-ark-input px-2 py-1 text-xs text-ark-text"
+                    >
+                      {availableConfigs.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={child.label}
+                      onChange={(e) => updateChild(index, { label: e.target.value })}
+                      placeholder="标签"
+                      className="w-20 rounded border border-ark-border bg-ark-input px-2 py-1 text-xs text-ark-text"
+                    />
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="recommended"
+                        checked={child.is_recommended}
+                        onChange={() => setRecommended(index)}
+                        className="rounded border-ark-border"
+                      />
+                      <span className="text-xs text-ark-text-muted">推荐</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeChild(index)}
+                      className="rounded p-1 text-ark-text-muted hover:text-red-400"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 border-t border-ark-border pt-4">

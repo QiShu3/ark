@@ -54,6 +54,7 @@ class DeliberateWorkflowConfigOut(BaseModel):
     scope: dict[str, Any] = Field(default_factory=dict)
     completion: dict[str, Any] = Field(default_factory=dict)
     pass_criteria: dict[str, Any] = Field(default_factory=dict)
+    children: list[dict[str, Any]] = Field(default_factory=list)
     bank_summary: DeliberateBankSummary | None = None
     latest_run: DeliberateWorkflowRunSummary | None = None
     created_at: str
@@ -70,6 +71,7 @@ class DeliberateWorkflowConfigCreate(BaseModel):
     scope: dict[str, Any] = Field(default_factory=dict)
     completion: dict[str, Any] = Field(default_factory=dict)
     pass_criteria: dict[str, Any] = Field(default_factory=dict)
+    children: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DeliberateWorkflowConfigPatch(BaseModel):
@@ -82,6 +84,7 @@ class DeliberateWorkflowConfigPatch(BaseModel):
     scope: dict[str, Any] | None = None
     completion: dict[str, Any] | None = None
     pass_criteria: dict[str, Any] | None = None
+    children: list[dict[str, Any]] | None = None
 
 
 class DeliberateBankUploadOut(BaseModel):

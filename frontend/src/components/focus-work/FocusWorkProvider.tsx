@@ -273,6 +273,29 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     }
   }
 
+  async function forkToChild(parentRun: FocusWorkRunSummary, childConfigId: string) {
+    try {
+      setBusy(true);
+      const response = await apiJson(`/api/admin/deliberate-workflows/${childConfigId}`);
+      const childConfig = response as Record<string, unknown>;
+
+      await forkFocusWorkRun({
+        parent_run_id: parentRun.id,
+        focus_work_type: childConfig.focus_work_type as string,
+        bank_id: childConfig.bank_id as string | undefined,
+        scope: (childConfig.scope as Record<string, unknown>) || {},
+      });
+      const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to fork to child', err);
+      alert(err instanceof Error ? err.message : 'fork失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   React.useEffect(() => {
     if (!snapshot || busy || creatingRunRef.current) return;
     if (snapshot.state !== 'focus' || !activeDefinition) return;
@@ -354,6 +377,8 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
             onExtendPhase={() => void extendPhase()}
             onCreateExtraRun={() => void createRun('extra')}
             onFork={activeRun ? () => void forkToWeakArea(activeRun) : undefined}
+            onForkWithChild={activeRun ? (childId) => void forkToChild(activeRun, childId) : undefined}
+            forkChildren={activeRun?.config_snapshot?.children as { config_id: string; label: string; is_recommended: boolean }[] | undefined}
             onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
           />
         </FocusWorkModalShell>
