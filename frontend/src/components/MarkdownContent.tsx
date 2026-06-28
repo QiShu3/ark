@@ -13,10 +13,36 @@ type MarkdownContentProps = {
 };
 
 function buildComponents(inline: boolean | undefined): Components {
+  function resolveImageSrc(src: string | undefined): string {
+    if (!src) return '';
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
+      return src;
+    }
+    if (src.startsWith('/uploads/')) {
+      return `${window.location.origin}${src}`;
+    }
+    return src;
+  }
+
   return {
     p({ children }) {
       if (inline) return <>{children}</>;
       return <p>{children}</p>;
+    },
+
+    img({ src, alt, ...props }) {
+      const resolvedSrc = resolveImageSrc(src);
+      return (
+        <img
+          src={resolvedSrc}
+          alt={alt || ''}
+          className="max-h-64 rounded-md border border-ark-border object-contain"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+          {...props}
+        />
+      );
     },
 
     code({ className, children, ...props }) {

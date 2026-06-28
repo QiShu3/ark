@@ -266,9 +266,11 @@ def _rewrite_image_paths(raw_articles: list[dict[str, Any]], set_id: str) -> Non
         return _IMAGE_MD_PATTERN.sub(rf"![\1]({prefix}\2)", text)
 
     for article in raw_articles:
-        for p in article.get("content", []):
+        for i, p in enumerate(article.get("content", [])):
             if isinstance(p, dict) and "text" in p:
                 p["text"] = _replace(p["text"])
+            elif isinstance(p, str):
+                article["content"][i] = _replace(p)
         for q in article.get("questions", []):
             if isinstance(q, dict):
                 q["stem"] = _replace(q.get("stem", ""))
