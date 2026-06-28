@@ -3892,13 +3892,27 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
         threshold = pass_criteria.get("threshold", 0) if isinstance(pass_criteria, dict) else 0
         mode = pass_criteria.get("mode", "accuracy") if isinstance(pass_criteria, dict) else "accuracy"
         
-        progress_snapshot["mastery_check"] = {
-            "enabled": bool(pass_criteria),
-            "mode": mode,
-            "threshold": threshold,
-            "accuracy": accuracy,
-            "passed": accuracy >= threshold if threshold > 0 else True,
-        }
+    progress_snapshot["mastery_check"] = {
+        "enabled": bool(pass_criteria),
+        "mode": mode,
+        "threshold": threshold,
+        "accuracy": accuracy,
+        "passed": accuracy >= threshold if threshold > 0 else True,
+    }
+    
+    # Also update focus_work_runs.progress_snapshot so frontend can read mastery_check
+    focus_run_id = _record_get(run, "id") or getattr(run, "id", None)
+    if focus_run_id:
+        await conn.execute(
+            """
+            UPDATE focus_work_runs
+            SET progress_snapshot = progress_snapshot || $1
+            WHERE id = $2 AND user_id = $3
+            """,
+            json.dumps({"mastery_check": progress_snapshot["mastery_check"]}),
+            focus_run_id,
+            user_id,
+        )
     
     await deliberate_repository.mark_content_completed(
         conn,
