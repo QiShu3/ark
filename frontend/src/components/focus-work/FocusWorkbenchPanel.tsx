@@ -255,18 +255,42 @@ export default function FocusWorkbenchPanel({
   }
 
   if (phaseRuntimeState === 'extra_run_completed') {
+    const handleFork = () => {
+      if (hasChildren && onForkWithChild) {
+        onForkWithChild(selectedChildId);
+      } else if (onFork) {
+        onFork();
+      }
+    };
+
     return (
       <ActionPanel
-        label="Counted Run"
+        label="Round Complete"
         heading="本轮专注已完成"
-        description="本轮专注已记录。你可以结束当前阶段，或在同一阶段再来一轮。"
-        primaryLabel="结束阶段"
-        primaryDisabled={busy}
-        onPrimary={onEndPhase}
-        secondaryLabel="再来一轮"
-        secondaryDisabled={true}
-        onSecondary={onCreateExtraRun}
+        description={hasMasteryCheckFailed ? "检验未通过。你可以fork到弱项进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
+        primaryLabel={hasMasteryCheckFailed ? "完成任务并结束阶段" : "完成任务并结束阶段"}
+        primaryDisabled={busy || !activeRun}
+        onPrimary={onCompleteTaskAndEndPhase}
+        secondaryLabel={hasMasteryCheckFailed ? "fork到弱项" : "再来一轮"}
+        secondaryDisabled={hasMasteryCheckFailed ? busy || !(onFork || onForkWithChild) : true}
+        onSecondary={hasMasteryCheckFailed ? handleFork : onCreateExtraRun}
       >
+        {hasMasteryCheckFailed && hasChildren && (
+          <div className="mb-3">
+            <label className="mb-1 block text-xs text-[var(--focus-work-text-muted)]">fork 到：</label>
+            <select
+              value={selectedChildId}
+              onChange={(e) => setSelectedChildId(e.target.value)}
+              className="w-full rounded border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-2 py-1 text-sm text-[var(--focus-work-text)]"
+            >
+              {forkChildren.map((child) => (
+                <option key={child.config_id} value={child.config_id}>
+                  {child.label || child.config_id}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {runSummary && Object.keys(runSummary).length > 0 && (
           <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
         )}
