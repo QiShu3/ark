@@ -4025,6 +4025,17 @@ async def _build_run_metadata(
         config_snapshot["phase_index"] = current_index
         config_snapshot.update(_phase_config_snapshot(current_phase))
         app_id, app_task_type = _focus_work_app_metadata(focus_work_type)
+        
+        # Load children from deliberate_workflow_configs if deliberate_config_id exists
+        deliberate_config_id = config_snapshot.get("deliberate_config_id")
+        if deliberate_config_id:
+            config_row = await conn.fetchrow(
+                "SELECT children_json FROM deliberate_workflow_configs WHERE id = $1 AND user_id = $2",
+                deliberate_config_id,
+                user_id,
+            )
+            if config_row and config_row["children_json"]:
+                config_snapshot["children"] = _config_payload(config_row["children_json"])
 
     if focus_work_type is None:
         focus_work_type = "task_focus"
