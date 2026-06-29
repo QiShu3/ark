@@ -197,6 +197,8 @@ export default function DeliberateWorkflow() {
   const [presetName, setPresetName] = useState('');
   const [savingPreset, setSavingPreset] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingPresetName, setEditingPresetName] = useState('');
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
@@ -678,6 +680,36 @@ export default function DeliberateWorkflow() {
     }
   }
 
+  async function handleUpdatePreset() {
+    if (!editingPresetId || !editingPresetName.trim()) return;
+    setSavingPreset(true);
+    try {
+      const preset = workflowPresets.find(p => p.id === editingPresetId);
+      if (!preset) return;
+
+      await apiJson(`/todo/focus/workflows/${editingPresetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingPresetName.trim(),
+          phases: preset.phases,
+          focus_duration: preset.focus_duration,
+          break_duration: preset.break_duration,
+          default_focus_timer_mode: preset.default_focus_timer_mode,
+          is_default: preset.is_default,
+        }),
+      });
+      setEditingPresetId(null);
+      setEditingPresetName('');
+      const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
+      setWorkflowPresets(presets);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新编排失败');
+    } finally {
+      setSavingPreset(false);
+    }
+  }
+
   const toggleSection = useCallback((section: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
@@ -927,50 +959,137 @@ export default function DeliberateWorkflow() {
           </Button>
         </div>
 
-        {/* 编排持久化 */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <select
-            value={selectedPresetId}
-            onChange={(e) => handleLoadPreset(e.target.value)}
-            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-          >
-            <option value="">加载已保存的编排…</option>
-            {workflowPresets
-              .filter(p => p.phases.some(ph => ph.phase_type === 'deliberate_group'))
-              .map(preset => (
-                <option key={preset.id} value={preset.id}>{preset.name}</option>
-              ))}
-          </select>
-          {selectedPresetId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              leftIcon={<Trash2 className="h-3 w-3" />}
-              onClick={() => void handleDeletePreset(selectedPresetId)}
-            >
-              删除
-            </Button>
-          )}
-          <div className="flex items-center gap-2 ml-auto">
-            <input
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="编排名称"
-              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text w-40"
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Save className="h-3 w-3" />}
-              loading={savingPreset}
-              disabled={!presetName.trim() || selectedConfigIds.length === 0}
-              onClick={() => void handleSavePreset()}
-            >
-              保存编排
-            </Button>
+        {/* 已保存编排列表 */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-ark-text-muted">已保存的编排</h4>
+            <div className="flex items-center gap-2">
+              <input
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="编排名称"
+                className="rounded-lg border border-ark-border bg-ark-input px-3 py-1.5 text-sm text-ark-text w-40"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Save className="h-3 w-3" />}
+                loading={savingPreset}
+                disabled={!presetName.trim() || selectedConfigIds.length === 0}
+                onClick={() => void handleSavePreset()}
+              >
+                保存当前编排
+              </Button>
+            </div>
           </div>
+
+          {workflowPresets.filter(p => p.phases.some(ph => ph.phase_type === 'deliberate_group')).length === 0 ? (
+            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
+              暂无已保存的编排，请先保存
+            </div>
+          ) : (
+            workflowPresets
+              .filter(p => p.phases.some(ph => ph.phase_type === 'deliberate_group'))
+              .map(preset => {
+                const groupPhase = preset.phases.find(ph => ph.phase_type === 'deliberate_group');
+                const configNames = groupPhase?.config_names ?? [];
+                const isEditing = editingPresetId === preset.id;
+
+                return (
+                  <div
+                    key={preset.id}
+                    className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
+                      selectedPresetId === preset.id
+                        ? 'border-ark-accent bg-ark-surface'
+                        : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={editingPresetName}
+                            onChange={(e) => setEditingPresetName(e.target.value)}
+                            className="rounded border border-ark-border bg-ark-input px-2 py-1 text-sm text-ark-text"
+                            autoFocus
+                          />
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => void handleUpdatePreset()}
+                            loading={savingPreset}
+                          >
+                            保存
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingPresetId(null);
+                              setEditingPresetName('');
+                            }}
+                          >
+                            取消
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-sm font-medium text-ark-text">{preset.name}</div>
+                          <div className="text-xs text-ark-text-muted">
+                            {configNames.length} 个配置：{configNames.join(' → ')}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {!isEditing && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          leftIcon={<Play className="h-3 w-3" />}
+                          onClick={() => {
+                            handleLoadPreset(preset.id);
+                            void handleStartMultiWorkflow();
+                          }}
+                        >
+                          启动
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            handleLoadPreset(preset.id);
+                          }}
+                        >
+                          加载
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingPresetId(preset.id);
+                            setEditingPresetName(preset.name);
+                          }}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Trash2 className="h-3 w-3" />}
+                          onClick={() => void handleDeletePreset(preset.id)}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+          )}
         </div>
 
+        {/* 选择专注工作面板 */}
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="space-y-3">
             <div className="flex items-center gap-2">
