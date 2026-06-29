@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
+from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -158,23 +159,23 @@ async def create_deliberate_workflow(
         return await _config_out(conn, row, user_id=int(admin.id))
 
 
-@router.get("/deliberate-workflows/{config_id}", response_model=DeliberateWorkflowConfigOut)
+@router.get("/deliberate-workflows/{config_id:uuid}", response_model=DeliberateWorkflowConfigOut)
 async def get_deliberate_workflow(
-    config_id: str,
+    config_id: UUID,
     request: Request,
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> DeliberateWorkflowConfigOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        row = await repository.get_config(conn, user_id=int(admin.id), config_id=config_id)
+        row = await repository.get_config(conn, user_id=int(admin.id), config_id=str(config_id))
         if row is None:
             raise HTTPException(status_code=404, detail="配置不存在")
         return await _config_out(conn, row, user_id=int(admin.id))
 
 
-@router.patch("/deliberate-workflows/{config_id}", response_model=DeliberateWorkflowConfigOut)
+@router.patch("/deliberate-workflows/{config_id:uuid}", response_model=DeliberateWorkflowConfigOut)
 async def update_deliberate_workflow(
-    config_id: str,
+    config_id: UUID,
     payload: DeliberateWorkflowConfigPatch,
     request: Request,
     admin: Annotated[_AuthUser, Depends(_require_admin)],
@@ -190,28 +191,28 @@ async def update_deliberate_workflow(
     
     pool = _pool(request)
     async with pool.acquire() as conn:
-        current = await repository.get_config(conn, user_id=int(admin.id), config_id=config_id)
+        current = await repository.get_config(conn, user_id=int(admin.id), config_id=str(config_id))
         if current is None:
             raise HTTPException(status_code=404, detail="配置不存在")
         next_kind = patch.get("kind", current["kind"])
         next_type = patch.get("focus_work_type", current["focus_work_type"])
         next_count = patch.get("target_count", current["target_count"])
         validate_config_shape(next_kind, next_type, int(next_count))
-        row = await repository.update_config(conn, user_id=int(admin.id), config_id=config_id, patch=patch)
+        row = await repository.update_config(conn, user_id=int(admin.id), config_id=str(config_id), patch=patch)
         if row is None:
             raise HTTPException(status_code=404, detail="配置不存在")
         return await _config_out(conn, row, user_id=int(admin.id))
 
 
-@router.delete("/deliberate-workflows/{config_id}")
+@router.delete("/deliberate-workflows/{config_id:uuid}")
 async def delete_deliberate_workflow(
-    config_id: str,
+    config_id: UUID,
     request: Request,
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> dict[str, str]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        ok = await repository.delete_config(conn, user_id=int(admin.id), config_id=config_id)
+        ok = await repository.delete_config(conn, user_id=int(admin.id), config_id=str(config_id))
     if not ok:
         raise HTTPException(status_code=404, detail="配置不存在")
     return {"detail": "配置已删除"}
@@ -342,17 +343,18 @@ async def delete_deliberate_bank(
     return {"detail": "题库已删除"}
 
 
-@router.get("/deliberate-workflows/{config_id}/runs", response_model=list[DeliberateWorkflowRunSummary])
+@router.get("/deliberate-workflows/{config_id:uuid}/runs", response_model=list[DeliberateWorkflowRunSummary])
 async def list_deliberate_runs(
-    config_id: str,
+    config_id: UUID,
     request: Request,
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> list[DeliberateWorkflowRunSummary]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        if await repository.get_config(conn, user_id=int(admin.id), config_id=config_id) is None:
+        config_id_str = str(config_id)
+        if await repository.get_config(conn, user_id=int(admin.id), config_id=config_id_str) is None:
             raise HTTPException(status_code=404, detail="配置不存在")
-        rows = await repository.list_runs_for_config(conn, user_id=int(admin.id), config_id=config_id)
+        rows = await repository.list_runs_for_config(conn, user_id=int(admin.id), config_id=config_id_str)
     return [DeliberateWorkflowRunSummary(**repository.run_to_summary(row)) for row in rows]
 
 

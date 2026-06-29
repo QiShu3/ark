@@ -281,6 +281,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
 
       await forkFocusWorkRun({
         parent_run_id: parentRun.id,
+        child_config_id: childConfigId,
         focus_work_type: childConfig.focus_work_type as string,
         bank_id: childConfig.bank_id as string | undefined,
         scope: (childConfig.scope as Record<string, unknown>) || {},

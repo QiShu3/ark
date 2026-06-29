@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type React from 'react';
 import type { ReactNode } from 'react';
 
@@ -311,11 +312,11 @@ export default function FocusWorkbenchPanel({
   }
 
   if (activeRun && activeDefinition) {
-    return activeDefinition.render({
+    return <Fragment key={activeRun.id}>{activeDefinition.render({
       run: activeRun,
       disabled: isPaused,
       onContentCompleted,
-    });
+    })}</Fragment>;
   }
 
   return (

@@ -4200,15 +4200,103 @@ async def fork_focus_workflow_run(
             if parent_run is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="父专注轮次不存在")
 
+            fork_focus_work_type = body.focus_work_type
+            fork_bank_id = body.bank_id
+            fork_scope = body.scope
+            fork_completion = body.completion
+            fork_pass_criteria = body.pass_criteria
+            deliberate_context: dict[str, Any] = {}
+            child_phase_updates: dict[str, Any] = {}
+            child_config_id = str(body.child_config_id) if body.child_config_id is not None else None
+            if child_config_id:
+                child_config = await deliberate_repository.get_config(
+                    conn,
+                    user_id=int(user.id),
+                    config_id=child_config_id,
+                )
+                if child_config is None:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="子专注工作配置不存在")
+
+                child_name = str(child_config["name"])
+                child_kind = str(child_config["kind"])
+                child_focus_work_type = str(child_config["focus_work_type"])
+                child_bank_id = child_config["bank_id"]
+                child_target_count = int(child_config["target_count"])
+                child_scope = _config_payload(child_config["scope_json"])
+                child_completion = _config_payload(child_config["completion_json"])
+                child_pass_criteria = _config_payload(child_config["pass_criteria_json"])
+
+                validate_config_shape(child_kind, child_focus_work_type, child_target_count)
+                resolved_child_bank_id = await _resolve_countup_focus_bank_id(
+                    conn,
+                    child_focus_work_type,
+                    child_bank_id,
+                )
+                if resolved_child_bank_id and child_focus_work_type in {"review", "practice"}:
+                    child_scope = dict(child_scope or {})
+                    child_scope["bank_id"] = resolved_child_bank_id
+                if not child_completion:
+                    child_completion = {"mode": "question_count", "question_count": child_target_count}
+
+                deliberate_run_snapshot = {
+                    "config_id": child_config_id,
+                    "name": child_name,
+                    "kind": child_kind,
+                    "focus_work_type": child_focus_work_type,
+                    "bank_id": resolved_child_bank_id,
+                    "target_count": child_target_count,
+                    "scope": child_scope,
+                    "completion": child_completion,
+                }
+                deliberate_run = await deliberate_repository.create_run(
+                    conn,
+                    user_id=int(user.id),
+                    config_id=child_config_id,
+                    focus_work_type=child_focus_work_type,
+                    bank_id=resolved_child_bank_id,
+                    config_snapshot=deliberate_run_snapshot,
+                )
+                await deliberate_repository.attach_workflow(
+                    conn,
+                    user_id=int(user.id),
+                    run_id=str(deliberate_run["id"]),
+                    workflow_id=row["id"],
+                )
+
+                fork_focus_work_type = child_focus_work_type
+                fork_bank_id = resolved_child_bank_id
+                fork_scope = child_scope
+                fork_completion = child_completion
+                fork_pass_criteria = child_pass_criteria
+                deliberate_context = {
+                    "deliberate_run_id": str(deliberate_run["id"]),
+                    "deliberate_config_id": child_config_id,
+                    "deliberate_kind": child_kind,
+                    "deliberate_name": child_name,
+                }
+                child_phase_updates = {
+                    "config_id": child_config_id,
+                    "deliberate_name": child_name,
+                    "deliberate_kind": child_kind,
+                }
+
             config_snapshot = {
-                "focus_work_type": body.focus_work_type,
-                "bank_id": body.bank_id,
-                "scope": body.scope,
+                "focus_work_type": fork_focus_work_type,
+                "bank_id": fork_bank_id,
+                "scope": fork_scope,
             }
-            if body.completion:
-                config_snapshot["choice_completion"] = body.completion
-            if body.pass_criteria:
-                config_snapshot["pass_criteria"] = body.pass_criteria
+            target_count = None
+            if fork_completion:
+                target_count = _safe_int(fork_completion.get("question_count"), 0)
+            config_snapshot.update(_test_focus_phase_config(fork_focus_work_type, fork_bank_id, target_count or 10))
+            if fork_scope is not None:
+                config_snapshot["choice_scope"] = fork_scope
+            if fork_completion:
+                config_snapshot["choice_completion"] = fork_completion
+            if fork_pass_criteria:
+                config_snapshot["pass_criteria"] = fork_pass_criteria
+            if deliberate_context:
+                config_snapshot.update(deliberate_context)
 
             run = await _create_focus_work_run(
                 conn,
@@ -4216,7 +4304,7 @@ async def fork_focus_workflow_run(
                 workflow_id=row["id"],
                 phase_index=_safe_int(_row_value(row, "current_phase_index", 0), 0),
                 task_id=None,
-                focus_work_type=body.focus_work_type,
+                focus_work_type=fork_focus_work_type,
                 app_id=None,
                 app_task_type=None,
                 counts_for_task_completion=True,
@@ -4224,6 +4312,44 @@ async def fork_focus_workflow_run(
                 config_snapshot=config_snapshot,
                 source_run_id=body.parent_run_id,
             )
+            if deliberate_context:
+                await deliberate_repository.attach_focus_run(
+                    conn,
+                    user_id=int(user.id),
+                    run_id=str(deliberate_context["deliberate_run_id"]),
+                    focus_run_id=run.id,
+                )
+                phases = _normalize_workflow_phases(
+                    _row_value(row, "phases", []),
+                    fallback_focus_duration=int(_row_value(row, "focus_duration", 60)),
+                    fallback_break_duration=int(_row_value(row, "break_duration", 60)),
+                )
+                current_index = _safe_int(_row_value(row, "current_phase_index", 0), 0)
+                if 0 <= current_index < len(phases):
+                    next_phase = dict(phases[current_index])
+                    next_phase.update(child_phase_updates)
+                    next_phase.update(deliberate_context)
+                    next_phase["focus_work_type"] = fork_focus_work_type
+                    next_phase["record_focus"] = True
+                    next_phase.update(_test_focus_phase_config(fork_focus_work_type, fork_bank_id, target_count or 10))
+                    if fork_scope is not None:
+                        next_phase["choice_scope"] = fork_scope
+                    if fork_completion:
+                        next_phase["choice_completion"] = fork_completion
+                    phases[current_index] = next_phase
+                    await conn.execute(
+                        """
+                        UPDATE focus_workflows
+                        SET phases = $1::jsonb,
+                            active_focus_work_type = $2,
+                            focus_work_display_state = 'fullscreen',
+                            updated_at = NOW()
+                        WHERE id = $3
+                        """,
+                        _to_jsonb_param(phases),
+                        fork_focus_work_type,
+                        row["id"],
+                    )
             next_row = await _set_workflow_active_run(
                 conn,
                 workflow_id=row["id"],
@@ -4302,16 +4428,17 @@ async def complete_focus_workflow_run_task_and_end_phase(
             run = await _fetch_focus_work_run_summary(conn, user_id=int(user.id), run_id=run_id)
             if run is None or run.workflow_id != row["id"]:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="专注轮次不存在")
-            if not run.counts_for_task_completion or run.task_id is None:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次不计入任务完成")
             if run.status != "content_completed":
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次尚未自然完成")
-            await _record_task_completion_from_run(
-                conn,
-                user_id=int(user.id),
-                task_id=run.task_id,
-                completed_at=datetime.now(UTC),
-            )
+            if run.counts_for_task_completion and run.task_id is not None:
+                await _record_task_completion_from_run(
+                    conn,
+                    user_id=int(user.id),
+                    task_id=run.task_id,
+                    completed_at=datetime.now(UTC),
+                )
+            elif run.task_id is not None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次不计入任务完成")
             completed_run = await _complete_focus_work_run(
                 conn,
                 user_id=int(user.id),

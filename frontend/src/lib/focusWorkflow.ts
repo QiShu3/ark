@@ -13,6 +13,7 @@ export function fetchCurrentFocusWorkflow<T = unknown>(): Promise<T> {
 
 export function forkFocusWorkRun(params: {
   parent_run_id: string;
+  child_config_id?: string;
   focus_work_type: string;
   bank_id?: string;
   scope?: Record<string, unknown>;

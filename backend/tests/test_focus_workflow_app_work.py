@@ -18,6 +18,7 @@ from routes.todo_routes import (
     _build_run_metadata,
     _content_bank_article_seed,
     _content_bank_word_seed,
+    complete_focus_workflow_run_task_and_end_phase,
     _resolve_erc_app_set_id,
     _resolve_vocab_app_deck_id,
 )
@@ -53,6 +54,38 @@ class FakeWorkflowConn:
                 created_at=datetime.now(UTC),
             )
         raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+
+class FakeAcquireCtx:
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def __aenter__(self):
+        return self.conn
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class FakeTransactionCtx:
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class FakePool:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def acquire(self):
+        return FakeAcquireCtx(self.conn)
+
+
+class TransactionalConn:
+    def transaction(self):
+        return FakeTransactionCtx()
 
 
 def test_focus_workflow_phase_accepts_focus_work_type():
@@ -161,6 +194,112 @@ def test_row_to_focus_workflow_reads_phase_runtime_state_and_active_run_id():
 
     assert out.phase_runtime_state == "running_run"
     assert str(out.active_run_id) == "00000000-0000-0000-0000-000000000101"
+
+
+@pytest.mark.asyncio
+async def test_complete_task_and_end_phase_allows_unbound_deliberate_run(monkeypatch):
+    workflow_id = uuid4()
+    run_id = uuid4()
+    calls: list[str] = []
+
+    workflow_row = Row(id=workflow_id)
+    run = Row(
+        id=run_id,
+        workflow_id=workflow_id,
+        task_id=None,
+        counts_for_task_completion=True,
+        status="content_completed",
+        progress_snapshot={"answered": 1},
+    )
+    completed_run = Row(
+        id=run_id,
+        workflow_id=workflow_id,
+        task_id=None,
+        counts_for_task_completion=True,
+        status="completed",
+        progress_snapshot={"answered": 1},
+        config_snapshot={},
+    )
+    expected = FocusWorkflowOut(state="normal")
+
+    async def fake_fetch_active_workflow_row(_conn, user_id):
+        assert user_id == 1
+        calls.append("fetch_workflow")
+        return workflow_row
+
+    async def fake_fetch_run_summary(_conn, *, user_id, run_id: UUID):
+        assert user_id == 1
+        assert run_id == run["id"]
+        calls.append("fetch_run")
+        return run
+
+    async def fake_record_task_completion(*_args, **_kwargs):
+        raise AssertionError("unbound deliberate runs must not record task completion")
+
+    async def fake_complete_run(_conn, *, user_id, run_id: UUID, completion_reason: str):
+        assert user_id == 1
+        assert run_id == run["id"]
+        assert completion_reason == "task_confirmed"
+        calls.append("complete_run")
+        return completed_run
+
+    async def fake_close_focus_log(_conn, user_id):
+        assert user_id == 1
+        calls.append("close_focus_log")
+
+    async def fake_close_app_log(_conn, user_id, *, result, progress_snapshot):
+        assert user_id == 1
+        assert result == "completed"
+        assert progress_snapshot == {"answered": 1}
+        calls.append("close_app_log")
+
+    async def fake_snapshot(_conn, user_id, snapshot_run):
+        assert user_id == 1
+        assert snapshot_run is completed_run
+        calls.append("snapshot")
+        return None
+
+    async def fake_mark_deliberate_completed(_conn, user_id, snapshot_run, snapshot_info):
+        assert user_id == 1
+        assert snapshot_run is completed_run
+        assert snapshot_info is None
+        calls.append("mark_deliberate_completed")
+
+    async def fake_advance(_conn, row, user_id, *, skip_breaks):
+        assert row is workflow_row
+        assert user_id == 1
+        assert skip_breaks is False
+        calls.append("advance")
+        return expected
+
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _request: FakePool(TransactionalConn()))
+    monkeypatch.setattr("routes.todo_routes._fetch_active_workflow_row", fake_fetch_active_workflow_row)
+    monkeypatch.setattr("routes.todo_routes._fetch_focus_work_run_summary", fake_fetch_run_summary)
+    monkeypatch.setattr("routes.todo_routes._record_task_completion_from_run", fake_record_task_completion)
+    monkeypatch.setattr("routes.todo_routes._complete_focus_work_run", fake_complete_run)
+    monkeypatch.setattr("routes.todo_routes._close_open_focus_log", fake_close_focus_log)
+    monkeypatch.setattr("routes.todo_routes._close_open_focus_app_work_log", fake_close_app_log)
+    monkeypatch.setattr("routes.todo_routes._maybe_snapshot_focus_run", fake_snapshot)
+    monkeypatch.setattr("routes.todo_routes._mark_deliberate_completed", fake_mark_deliberate_completed)
+    monkeypatch.setattr("routes.todo_routes._advance_focus_workflow_to_next_phase", fake_advance)
+
+    result = await complete_focus_workflow_run_task_and_end_phase(
+        request=object(),
+        run_id=run_id,
+        user=Row(id=1),
+    )
+
+    assert result is expected
+    assert calls == [
+        "fetch_workflow",
+        "fetch_run",
+        "complete_run",
+        "close_focus_log",
+        "close_app_log",
+        "snapshot",
+        "mark_deliberate_completed",
+        "advance",
+    ]
 
 
 def test_normalize_workflow_phases_preserves_focus_work_type():
