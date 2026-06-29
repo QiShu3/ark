@@ -6,11 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import VocabTodayFocusWork from './VocabTodayFocusWork';
 import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
-const { fetchVocabOverviewCurrentWords, submitVocabContentReview, useVocabDeck, useVocabTodaySession } = vi.hoisted(() => ({
+const { fetchVocabOverviewCurrentWords, submitVocabContentReview, useVocabDeck } = vi.hoisted(() => ({
   fetchVocabOverviewCurrentWords: vi.fn(),
   submitVocabContentReview: vi.fn(),
   useVocabDeck: vi.fn(),
-  useVocabTodaySession: vi.fn(),
 }));
 
 vi.mock('../../lib/vocab/api', () => ({
@@ -22,10 +21,6 @@ vi.mock('../../hooks/vocab/useVocabDeck', () => ({
   useVocabDeck,
 }));
 
-vi.mock('../../hooks/vocab/useVocabTodaySession', () => ({
-  useVocabTodaySession,
-}));
-
 function mockReadyCompletedSession() {
   useVocabDeck.mockReturnValue({
     decks: [],
@@ -35,36 +30,6 @@ function mockReadyCompletedSession() {
     setActiveDeck: vi.fn(),
     confirmInheritance: vi.fn(),
     dismissInheritance: vi.fn(),
-  });
-  useVocabTodaySession.mockReturnValue({
-    ready: true,
-    loading: false,
-    error: null,
-    isBatchReview: false,
-    currentItem: {
-      id: 'word-1',
-      word: 'apple',
-      deck_id: 'deck-1',
-      us_pronunciation: 'ˈæpəl',
-      uk_pronunciation: 'ˈæpəl',
-      translations: [{ pos: 'n.', translation: '苹果' }],
-      phrases: [],
-      sentences: [],
-      prompt_type: 'en_to_zh',
-      review_mode: 'review',
-      mastery_score: 42,
-    },
-    currentBatchNumber: 1,
-    totalBatchCount: 1,
-    memorizedCount: 10,
-    currentMode: 'study',
-    submitting: false,
-    batchReviewCount: 0,
-    batchReviewGroups: [],
-    batchReviewActionLabel: '继续',
-    continueBatchReview: vi.fn(),
-    submit: vi.fn(),
-    lastResult: null,
   });
 }
 
@@ -88,6 +53,28 @@ function extraRun(configSnapshot: Record<string, unknown> = {}): FocusWorkRunSum
   };
 }
 
+function overviewWord(
+  overrides: Partial<{
+    id: string;
+    deck_id: string;
+    deck_name: string;
+    word: string;
+    mastery_state: 'unstarted' | 'learning' | 'mastered';
+    translation: string;
+  }> = {},
+) {
+  return {
+    id: overrides.id ?? 'word-1',
+    deck_id: overrides.deck_id ?? 'deck-1',
+    deck_name: overrides.deck_name ?? 'Default',
+    word: overrides.word ?? 'apple',
+    us_pronunciation: null,
+    uk_pronunciation: null,
+    mastery_state: overrides.mastery_state ?? 'unstarted',
+    translations: [{ pos: 'n.', translation: overrides.translation ?? '苹果' }],
+  };
+}
+
 describe('VocabTodayFocusWork', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -105,24 +92,7 @@ describe('VocabTodayFocusWork', () => {
   });
 
   it('does not emit content completion while focus work is paused', async () => {
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      isBatchReview: false,
-      currentItem: null,
-      currentBatchNumber: 0,
-      totalBatchCount: 0,
-      memorizedCount: 10,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
-    });
+    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -138,38 +108,10 @@ describe('VocabTodayFocusWork', () => {
     });
   });
 
-  it('renders learning view when deck has items', () => {
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      currentItem: {
-        id: 'word-1',
-        deck_id: 'deck-1',
-        word: 'apple',
-        us_pronunciation: 'ˈæp.əl',
-        uk_pronunciation: 'ˈæp.əl',
-        translations: [{ pos: 'n.', translation: '苹果' }],
-        phrases: [],
-        sentences: [],
-        prompt_type: 'en_to_zh',
-        review_mode: 'study',
-        mastery_score: 0,
-      },
-      currentBatchNumber: 1,
-      totalBatchCount: 1,
-      memorizedCount: 0,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
-    });
+  it('renders an open-ended vocab card from the deck content pool', async () => {
+    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
 
-    const { getByText } = render(
+    render(
       <VocabTodayFocusWork
         run={focusRun()}
         disabled={false}
@@ -177,30 +119,12 @@ describe('VocabTodayFocusWork', () => {
       />,
     );
 
-    expect(getByText('apple')).toBeInTheDocument();
-    expect(getByText('第 1 批 / 共 1 批')).toBeInTheDocument();
+    expect(await screen.findByText('apple')).toBeInTheDocument();
+    expect(screen.getByText('已完成 0')).toBeInTheDocument();
+    expect(fetchVocabOverviewCurrentWords).toHaveBeenCalledWith('deck-1', 'all');
   });
 
-  it('emits content completion when no words are left', async () => {
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      isBatchReview: false,
-      currentItem: null,
-      currentBatchNumber: 0,
-      totalBatchCount: 0,
-      memorizedCount: 0,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
-    });
-
+  it('does not emit content completion when no open-ended words are available', async () => {
     const onContentCompleted = vi.fn();
 
     render(
@@ -212,34 +136,13 @@ describe('VocabTodayFocusWork', () => {
     );
 
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith(
-        expect.objectContaining({
-          completed_word_count: 0,
-          target_word_count: 100,
-        }),
-      );
+      expect(screen.getByText('暂无可练习词卡')).toBeInTheDocument();
+      expect(onContentCompleted).not.toHaveBeenCalled();
     });
   });
 
-  it('uses the daily target count when a counted run has no explicit target word count', async () => {
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      isBatchReview: false,
-      currentItem: null,
-      currentBatchNumber: 0,
-      totalBatchCount: 0,
-      memorizedCount: 20,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
-    });
+  it('ignores counted run target config and keeps the vocab focus work open-ended', async () => {
+    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -250,35 +153,42 @@ describe('VocabTodayFocusWork', () => {
       />,
     );
 
+    expect(await screen.findByText('apple')).toBeInTheDocument();
+    expect(screen.getByText('已完成 0')).toBeInTheDocument();
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith(
-        expect.objectContaining({
-          completed_word_count: 20,
-          target_word_count: 24,
-        }),
-      );
+      expect(onContentCompleted).not.toHaveBeenCalled();
     });
   });
 
-  it('loads deck words for extra runs when the today queue is already empty', async () => {
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      isBatchReview: false,
-      currentItem: null,
-      currentBatchNumber: 0,
-      totalBatchCount: 0,
-      memorizedCount: 10,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
+  it('submits counted vocab cards without completing the focus work content', async () => {
+    const user = userEvent.setup();
+    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
+    const onContentCompleted = vi.fn();
+
+    render(
+      <VocabTodayFocusWork
+        run={focusRun({ target_word_count: 1 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
+      />,
+    );
+
+    await screen.findByText('apple');
+    await user.click(screen.getByRole('button', { name: /记住了/ }));
+
+    await waitFor(() => {
+      expect(submitVocabContentReview).toHaveBeenCalledWith({
+        deck_id: 'deck-1',
+        word_id: 'word-1',
+        result: 'good',
+        review_mode: 'study',
+        prompt_type: 'en_to_zh',
+      });
     });
+    expect(onContentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('loads deck words for extra runs when the today queue is already empty', async () => {
     fetchVocabOverviewCurrentWords.mockResolvedValue([
       {
         id: 'word-extra',
@@ -369,24 +279,6 @@ describe('VocabTodayFocusWork', () => {
   });
 
   it('uses the daily target count for extra run word selection', async () => {
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      isBatchReview: false,
-      currentItem: null,
-      currentBatchNumber: 0,
-      totalBatchCount: 0,
-      memorizedCount: 10,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
-    });
     fetchVocabOverviewCurrentWords.mockResolvedValue([
       {
         id: 'word-extra-1',
@@ -434,24 +326,6 @@ describe('VocabTodayFocusWork', () => {
 
   it('completes an extra run after the extra deck words are submitted', async () => {
     const user = userEvent.setup();
-    useVocabTodaySession.mockReturnValue({
-      ready: true,
-      loading: false,
-      error: null,
-      isBatchReview: false,
-      currentItem: null,
-      currentBatchNumber: 0,
-      totalBatchCount: 0,
-      memorizedCount: 10,
-      currentMode: 'study',
-      submitting: false,
-      batchReviewCount: 0,
-      batchReviewGroups: [],
-      batchReviewActionLabel: '继续',
-      continueBatchReview: vi.fn(),
-      submit: vi.fn(),
-      lastResult: null,
-    });
     fetchVocabOverviewCurrentWords.mockResolvedValue([
       {
         id: 'word-extra',

@@ -50,7 +50,6 @@ export default function ChoiceQuestionFocusTemplate({
 
   React.useEffect(() => {
     if (completedRef.current || loading || item || currentItem) return;
-    if (answeredCount === 0 && !error) return;
     completedRef.current = true;
     onContentCompleted(buildProgressSnapshot('answered_count', 'target_question_count', answeredCount, targetCount, answeredCount === 0));
   }, [answeredCount, currentItem, error, item, loading, onContentCompleted, targetCount]);
@@ -85,9 +84,11 @@ export default function ChoiceQuestionFocusTemplate({
     }
   }
 
+  const hasMaterial = Boolean(currentItem?.material || currentItem?.materialBlocks?.length);
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-1 pb-2">
-      <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden">
+      <div className="mx-auto flex h-full w-full max-w-7xl flex-col overflow-hidden">
         {error || localError ? <p className="mb-4 text-sm text-[var(--focus-work-rose-text)]">{error ?? localError}</p> : null}
 
         {loading ? <p className="text-sm text-[var(--focus-work-text-muted)]">复习题加载中...</p> : null}
@@ -105,9 +106,9 @@ export default function ChoiceQuestionFocusTemplate({
         ) : null}
 
         {currentItem ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            {(currentItem.material || currentItem.materialBlocks?.length) ? (
-              <article aria-label="阅读原文" className="flex flex-1 flex-col rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:p-8">
+          <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden ${hasMaterial ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]' : ''}`}>
+            {hasMaterial ? (
+              <article aria-label="阅读原文" className="flex min-h-0 max-h-[46vh] flex-col overflow-hidden rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:max-h-none lg:p-8">
                 <div className="mb-5 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-4">
                   <h2 className="flex items-center gap-2.5 text-xl font-bold text-[var(--focus-work-text)] font-serif lg:text-2xl">
                     <BookOpen className="h-5.5 w-5.5 text-[var(--focus-work-blue-text)]" />
@@ -143,8 +144,8 @@ export default function ChoiceQuestionFocusTemplate({
               </article>
             ) : null}
 
-            <section className="flex flex-col justify-between rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-sm">
-              <div>
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-sm">
+              <div className="min-h-0 overflow-y-auto pr-1">
                 <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="min-w-0">

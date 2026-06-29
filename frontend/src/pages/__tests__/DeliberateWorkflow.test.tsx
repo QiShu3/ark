@@ -16,6 +16,11 @@ vi.mock('../../lib/deliberate/api', () => ({
   uploadDeliberateBank: vi.fn(),
 }));
 
+vi.mock('../../lib/focusWorkflow', () => ({
+  fetchWorkflowRecords: vi.fn().mockResolvedValue([]),
+  startMultiDeliberateWorkflow: vi.fn(),
+}));
+
 vi.mock('../../lib/choice/api', () => ({
   fetchSetSnapshots: vi.fn().mockResolvedValue([]),
   fetchChoiceFilters: vi.fn().mockResolvedValue({ years: [], subjects: [], tags: [], total_questions: 0 }),
@@ -44,6 +49,8 @@ import {
   uploadDeliberateBank,
 } from '../../lib/deliberate/api';
 import { fetchChoiceFilters, fetchSetSnapshots } from '../../lib/choice/api';
+import { apiJson } from '../../lib/api';
+import { startMultiDeliberateWorkflow } from '../../lib/focusWorkflow';
 
 import DeliberateWorkflow from '../DeliberateWorkflow';
 
@@ -103,6 +110,8 @@ describe('DeliberateWorkflow', () => {
     (listDeliberateRuns as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (fetchSetSnapshots as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (fetchChoiceFilters as ReturnType<typeof vi.fn>).mockResolvedValue({ years: [], subjects: [], tags: [], total_questions: 0 });
+    (apiJson as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (startMultiDeliberateWorkflow as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
   it('renders the page title', async () => {
@@ -197,6 +206,43 @@ describe('DeliberateWorkflow', () => {
     fireEvent.click(screen.getByText('开始专注'));
 
     await waitFor(() => expect(startDeliberateWorkflow).toHaveBeenCalledWith('cfg-1'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
+  });
+
+  it('starts a saved orchestration directly with preset config ids', async () => {
+    const firstConfig = { ...mockConfig, id: 'cfg-a', name: 'test3', kind: 'flashcard' as const, focus_work_type: 'vocab_today' as const };
+    const secondConfig = { ...mockConfig, id: 'cfg-b', name: 'test2' };
+    (listDeliberateWorkflows as ReturnType<typeof vi.fn>).mockResolvedValue([firstConfig, secondConfig]);
+    (apiJson as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') {
+        return Promise.resolve([
+          {
+            id: 'preset-1',
+            user_id: 1,
+            name: '完整流程测试',
+            focus_duration: 3600,
+            break_duration: 300,
+            phases: [{
+              phase_type: 'deliberate_group',
+              duration: 3600,
+              timer_mode: 'countup',
+              config_ids: ['cfg-a', 'cfg-b'],
+              config_names: ['test3', 'test2'],
+            }],
+            is_default: false,
+            created_at: '2025-01-01T00:00:00Z',
+            updated_at: '2025-01-01T00:00:00Z',
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+    await screen.findByText('完整流程测试');
+    fireEvent.click(screen.getByRole('button', { name: '启动' }));
+
+    await waitFor(() => expect(startMultiDeliberateWorkflow).toHaveBeenCalledWith(['cfg-a', 'cfg-b']));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
   });
 

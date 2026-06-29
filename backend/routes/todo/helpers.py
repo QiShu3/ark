@@ -1525,6 +1525,42 @@ async def _abandon_active_focus_work_run(
     )
 
 
+async def _add_workflow_record_node(
+    conn: Any,
+    user_id: int,
+    workflow_id: UUID,
+    node: dict[str, Any],
+) -> None:
+    await conn.execute(
+        """
+        UPDATE workflow_records
+        SET nodes = nodes || $1::jsonb, updated_at = NOW()
+        WHERE workflow_id = $2 AND user_id = $3 AND status = 'running'
+        """,
+        json.dumps([node], ensure_ascii=False),
+        workflow_id,
+        user_id,
+    )
+
+
+async def _complete_workflow_record(
+    conn: Any,
+    user_id: int,
+    workflow_id: UUID,
+    status: str = "completed",
+) -> None:
+    await conn.execute(
+        """
+        UPDATE workflow_records
+        SET status = $1, completed_at = NOW(), updated_at = NOW()
+        WHERE workflow_id = $2 AND user_id = $3 AND status = 'running'
+        """,
+        status,
+        workflow_id,
+        user_id,
+    )
+
+
 def _validate_appointment_times(starts_at: datetime | None, ends_at: datetime) -> None:
     if starts_at is not None and starts_at > ends_at:
         raise HTTPException(
@@ -2233,7 +2269,14 @@ async def _set_workflow_current_phase(
     )
 
 
-async def _complete_focus_workflow(conn: Any, workflow_id: UUID, workflow_name: str) -> FocusWorkflowOut:
+async def _complete_focus_workflow(
+    conn: Any,
+    workflow_id: UUID,
+    workflow_name: str,
+    user_id: int,
+    *,
+    record_status: str = "completed",
+) -> FocusWorkflowOut:
     await conn.execute(
         """
         UPDATE focus_workflows
@@ -2242,6 +2285,7 @@ async def _complete_focus_workflow(conn: Any, workflow_id: UUID, workflow_name: 
         """,
         workflow_id,
     )
+    await _complete_workflow_record(conn, user_id, workflow_id, status=record_status)
     return _row_to_focus_workflow(None, completed_workflow_name=workflow_name)
 
 
@@ -2251,6 +2295,7 @@ async def _advance_focus_workflow_to_next_phase(
     user_id: int,
     *,
     skip_breaks: bool,
+    completion_status: str = "completed",
 ) -> FocusWorkflowOut:
     try:
         phases = _normalize_workflow_phases(
@@ -2360,7 +2405,13 @@ async def _advance_focus_workflow_to_next_phase(
             is_task_completed_today=is_task_completed_today,
             task_blocked_reason=task_blocked_reason,
         )
-    return await _complete_focus_workflow(conn, workflow_id, workflow_name)
+    return await _complete_focus_workflow(
+        conn,
+        workflow_id,
+        workflow_name,
+        user_id,
+        record_status=completion_status,
+    )
 
 
 async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record | None:
@@ -2560,6 +2611,7 @@ async def _stop_active_focus(conn: Any, user_id: int) -> None:
                 """,
                 workflow_row["id"],
             )
+            await _complete_workflow_record(conn, user_id, workflow_row["id"], status="abandoned")
         return
 
     now = datetime.now(UTC)
@@ -2586,6 +2638,7 @@ async def _stop_active_focus(conn: Any, user_id: int) -> None:
             """,
             workflow_row["id"],
         )
+        await _complete_workflow_record(conn, user_id, workflow_row["id"], status="abandoned")
     if row is not None:
         await conn.execute(
             """

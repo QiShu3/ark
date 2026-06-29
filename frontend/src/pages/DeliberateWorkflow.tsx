@@ -602,15 +602,15 @@ export default function DeliberateWorkflow() {
     );
   }, []);
 
-  const handleStartMultiWorkflow = useCallback(async () => {
-    if (selectedConfigIds.length === 0) {
+  const handleStartMultiWorkflow = useCallback(async (configIds = selectedConfigIds) => {
+    if (configIds.length === 0) {
       setError('请至少选择一个专注工作配置');
       return;
     }
     setStartingMulti(true);
     setError(null);
     try {
-      await startMultiDeliberateWorkflow(selectedConfigIds);
+      await startMultiDeliberateWorkflow(configIds);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       navigate('/');
     } catch (err) {
@@ -664,6 +664,11 @@ export default function DeliberateWorkflow() {
     if (groupPhase?.config_ids) {
       setSelectedConfigIds(groupPhase.config_ids);
     }
+  }
+
+  function getPresetConfigIds(preset: WorkflowPreset) {
+    const groupPhase = preset.phases.find(phase => phase.phase_type === 'deliberate_group');
+    return groupPhase?.config_ids ?? [];
   }
 
   async function handleDeletePreset(presetId: string) {
@@ -1048,8 +1053,10 @@ export default function DeliberateWorkflow() {
                           size="sm"
                           leftIcon={<Play className="h-3 w-3" />}
                           onClick={() => {
-                            handleLoadPreset(preset.id);
-                            void handleStartMultiWorkflow();
+                            const configIds = getPresetConfigIds(preset);
+                            setSelectedPresetId(preset.id);
+                            setSelectedConfigIds(configIds);
+                            void handleStartMultiWorkflow(configIds);
                           }}
                         >
                           启动

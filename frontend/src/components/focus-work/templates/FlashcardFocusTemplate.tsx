@@ -84,7 +84,7 @@ export default function FlashcardFocusTemplate({
 
   React.useEffect(() => {
     if (completedRef.current || disabled) return;
-    if (completedCount >= targetCount && targetCount > 0) {
+    if (targetCount != null && completedCount >= targetCount && targetCount > 0) {
       completedRef.current = true;
       onContentCompleted(buildProgressSnapshot('completed_count', 'target_count', completedCount, targetCount));
     }
@@ -92,6 +92,7 @@ export default function FlashcardFocusTemplate({
 
   React.useEffect(() => {
     if (completedRef.current || disabled || loading || item || currentItem) return;
+    if (targetCount == null) return;
     if (completedCount === 0 && !error) return;
     completedRef.current = true;
     onContentCompleted(buildProgressSnapshot('completed_count', 'target_count', completedCount, targetCount, completedCount === 0));
@@ -156,7 +157,9 @@ export default function FlashcardFocusTemplate({
 
   const progressLabel = batchNumber != null && totalBatches != null
     ? `第 ${batchNumber} 批 / 共 ${totalBatches} 批`
-    : `${completedCount} / ${targetCount}`;
+    : targetCount != null
+      ? `${completedCount} / ${targetCount}`
+      : `已完成 ${completedCount}`;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden px-1 pb-2">

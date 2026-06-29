@@ -136,16 +136,15 @@ from .schemas import (
     FocusWorkflowResultRequest,
     FocusWorkflowSelectTaskRequest,
     FocusWorkflowStartAppWorkRequest,
+    FocusWorkForkRequest,
     FocusWorkRunContentCompleteRequest,
     FocusWorkRunCreateRequest,
-    FocusWorkForkRequest,
     TaskCreateRequest,
     TaskFocusStats,
     TaskOut,
     TaskStatus,
     TaskUpdateRequest,
     VocabAppTaskInitRequest,
-    WorkflowRecordNodeOut,
     WorkflowRecordOut,
 )
 
@@ -3638,6 +3637,35 @@ async def _complete_workflow_record(
     )
 
 
+async def _record_completed_focus_work_node(conn: Any, user_id: int, run: Any) -> None:
+    workflow_id = getattr(run, "workflow_id", None)
+    if workflow_id is None:
+        return
+    progress = getattr(run, "progress_snapshot", None) or {}
+    config = getattr(run, "config_snapshot", None) or {}
+    name = str(config.get("deliberate_name") or config.get("name") or "专注工作")
+    accuracy = progress.get("accuracy")
+    if not isinstance(accuracy, (int, float)):
+        run_summary = progress.get("run_summary")
+        if isinstance(run_summary, dict):
+            accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate")
+    raw_config_id = config.get("deliberate_config_id") or config.get("config_id")
+    raw_focus_work_type = getattr(run, "focus_work_type", None)
+    node = {
+        "id": str(getattr(run, "id")),
+        "run_id": str(getattr(run, "id")),
+        "config_id": str(raw_config_id) if raw_config_id is not None else None,
+        "name": name,
+        "focus_work_type": str(raw_focus_work_type) if raw_focus_work_type is not None else None,
+        "status": "completed",
+        "children": [],
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    if isinstance(accuracy, (int, float)):
+        node["accuracy"] = float(accuracy)
+    await _add_workflow_record_node(conn, user_id, workflow_id, node)
+
+
 @router.post("/focus/workflow/start-multi-deliberate", response_model=FocusWorkflowOut)
 async def start_multi_deliberate_workflow(
     request: Request,
@@ -3647,10 +3675,16 @@ async def start_multi_deliberate_workflow(
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
+            existing = await conn.fetchrow(
+                "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
+                int(user.id),
+            )
             await conn.execute(
                 "UPDATE focus_workflows SET status = 'stopped', ended_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND status = 'active'",
                 int(user.id),
             )
+            if existing is not None:
+                await _complete_workflow_record(conn, int(user.id), existing["id"], status="abandoned")
 
             configs = []
             for config_id in body.config_ids:
@@ -3693,7 +3727,7 @@ async def start_multi_deliberate_workflow(
                 if completion is not None:
                     phase["choice_completion"] = completion
                 phases.append(phase)
-                
+
                 if i < len(configs) - 1:
                     phases.append({
                         "phase_type": "break",
@@ -3738,40 +3772,6 @@ async def start_multi_deliberate_workflow(
             await _create_workflow_record(conn, int(user.id), created["id"])
 
             return await _row_to_focus_workflow_with_task_check(conn, int(user.id), created)
-
-            if str(row["current_phase"]) == "focus":
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前已经处于专注状态")
-            if bool(row.get("pending_task_selection", False) if hasattr(row, "get") else False):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段需要先选择任务")
-
-            phases = _normalize_workflow_phases(
-                row.get("phases") if hasattr(row, "get") else row["phases"],
-                fallback_focus_duration=int(row["focus_duration"]),
-                fallback_break_duration=int(row["break_duration"]),
-            )
-            current_index = _safe_int(
-                row.get("current_phase_index", 0) if hasattr(row, "get") else row["current_phase_index"], 0
-            )
-            insert_index = current_index + 1
-            next_phases = [*phases[:insert_index], focus_phase, break_phase, *phases[insert_index:]]
-            await conn.execute(
-                "UPDATE focus_workflows SET phases = $1::jsonb, updated_at = NOW() WHERE id = $2",
-                _to_jsonb_param(next_phases),
-                row["id"],
-            )
-            next_row = await _set_workflow_current_phase(
-                conn,
-                row["id"],
-                phase_index=insert_index,
-                phase=focus_phase,
-                task_id=None,
-                runtime_task_id=None,
-                pending_task_selection=False,
-                active_focus_work_type=body.focus_work_type,
-                focus_work_display_state="fullscreen",
-                record_focus=bool(body.record_focus),
-            )
-            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
 
 
 def _runtime_state_for_completed_run(counts_for_task_completion: bool) -> str:
@@ -3886,11 +3886,11 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
     deliberate_run_id = _deliberate_run_id_from_focus_run(run)
     if not deliberate_run_id:
         return
-    
+
     deliberate_run = await deliberate_repository.get_run(conn, user_id=user_id, run_id=str(deliberate_run_id))
     if not deliberate_run:
         return
-    
+
     config_id = deliberate_run.get("config_id")
     pass_criteria = {}
     if config_id:
@@ -3898,7 +3898,7 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
         if config:
             raw = config.get("pass_criteria_json") or {}
             pass_criteria = _config_payload(raw)
-    
+
     # Read accuracy from deliberate_workflow_runs.progress_snapshot
     deliberate_progress = deliberate_run.get("progress_snapshot") or {}
     if isinstance(deliberate_progress, str):
@@ -3906,10 +3906,10 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
             deliberate_progress = json.loads(deliberate_progress)
         except json.JSONDecodeError:
             deliberate_progress = {}
-    
+
     # Also read from focus_work_runs.progress_snapshot
     focus_run_progress = run.progress_snapshot or {}
-    
+
     # Try to get accuracy from either source
     accuracy = focus_run_progress.get("accuracy", 0)
     if not accuracy:
@@ -3918,11 +3918,11 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
         # Try to get from run_summary
         run_summary = focus_run_progress.get("run_summary") or deliberate_progress.get("run_summary") or {}
         accuracy = run_summary.get("accuracy", 0)
-    
+
     if isinstance(accuracy, (int, float)):
         threshold = pass_criteria.get("threshold", 0) if isinstance(pass_criteria, dict) else 0
         mode = pass_criteria.get("mode", "accuracy") if isinstance(pass_criteria, dict) else "accuracy"
-        
+
         mastery_check = {
             "enabled": bool(pass_criteria),
             "mode": mode,
@@ -3930,7 +3930,7 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
             "accuracy": accuracy,
             "passed": accuracy >= threshold if threshold > 0 else True,
         }
-        
+
         # Update focus_work_runs.progress_snapshot so frontend can read mastery_check
         focus_run_id = getattr(run, "id", None)
         if focus_run_id:
@@ -3944,7 +3944,7 @@ async def _mark_deliberate_content_completed(conn: Any, user_id: int, run: Any) 
                 focus_run_id,
                 user_id,
             )
-        
+
         # Update deliberate_workflow_runs.progress_snapshot
         deliberate_progress["mastery_check"] = mastery_check
         await deliberate_repository.mark_content_completed(
@@ -4038,7 +4038,7 @@ async def _build_run_metadata(
         config_snapshot["phase_index"] = current_index
         config_snapshot.update(_phase_config_snapshot(current_phase))
         app_id, app_task_type = _focus_work_app_metadata(focus_work_type)
-        
+
         # Load children from deliberate_workflow_configs if deliberate_config_id exists
         deliberate_config_id = config_snapshot.get("deliberate_config_id")
         if deliberate_config_id:
@@ -4458,6 +4458,7 @@ async def complete_focus_workflow_run_task_and_end_phase(
                 run_id=run.id,
                 completion_reason="task_confirmed",
             )
+            await _record_completed_focus_work_node(conn, int(user.id), completed_run)
             await _close_open_focus_log(conn, int(user.id))
             await _close_open_focus_app_work_log(
                 conn,
@@ -4467,7 +4468,13 @@ async def complete_focus_workflow_run_task_and_end_phase(
             )
             snapshot_info = await _maybe_snapshot_focus_run(conn, int(user.id), completed_run)
             await _mark_deliberate_completed(conn, int(user.id), completed_run, snapshot_info)
-            next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+            next_out = await _advance_focus_workflow_to_next_phase(
+                conn,
+                row,
+                int(user.id),
+                skip_breaks=False,
+                completion_status="completed",
+            )
     return next_out
 
 
@@ -4500,6 +4507,7 @@ async def end_focus_workflow_phase(
                     run_id=active_run.id,
                     completion_reason=reason,
                 )
+                await _record_completed_focus_work_node(conn, int(user.id), active_run)
                 app_work_result = "completed"
                 app_work_progress_snapshot = active_run.progress_snapshot or {}
             elif active_run is not None and active_run.status in {"running", "paused"}:
@@ -4510,6 +4518,7 @@ async def end_focus_workflow_phase(
                         run_id=active_run.id,
                         completion_reason="phase_time_expired_ended",
                     )
+                    await _record_completed_focus_work_node(conn, int(user.id), active_run)
                     app_work_result = "completed"
                     app_work_progress_snapshot = active_run.progress_snapshot or {}
                 else:
@@ -4525,7 +4534,13 @@ async def end_focus_workflow_phase(
             if active_run is not None and app_work_result == "completed":
                 snapshot_info = await _maybe_snapshot_focus_run(conn, int(user.id), active_run)
                 await _mark_deliberate_completed(conn, int(user.id), active_run, snapshot_info)
-            next_out = await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+            next_out = await _advance_focus_workflow_to_next_phase(
+                conn,
+                row,
+                int(user.id),
+                skip_breaks=False,
+                completion_status="completed" if app_work_result == "completed" else "abandoned",
+            )
     return next_out
 
 
@@ -4701,7 +4716,13 @@ async def skip_focus_workflow_phase(
                 )
 
             # 直接推进到下一阶段，跳过手动待确认状态
-            return await _advance_focus_workflow_to_next_phase(conn, row, int(user.id), skip_breaks=False)
+            return await _advance_focus_workflow_to_next_phase(
+                conn,
+                row,
+                int(user.id),
+                skip_breaks=False,
+                completion_status="abandoned",
+            )
 
 
 @router.post("/focus/workflow/confirm", response_model=FocusWorkflowOut)
@@ -4944,6 +4965,7 @@ async def stop_focus(
                         """,
                         workflow_row["id"],
                     )
+                    await _complete_workflow_record(conn, int(user.id), workflow_row["id"], status="abandoned")
                     return {"msg": "Workflow stopped", "stopped": True}
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无进行中的专注")
             now = datetime.now(UTC)
@@ -4970,6 +4992,7 @@ async def stop_focus(
                     """,
                     workflow_row["id"],
                 )
+                await _complete_workflow_record(conn, int(user.id), workflow_row["id"], status="abandoned")
             await conn.execute(
                 """
                 UPDATE tasks
@@ -5178,6 +5201,7 @@ async def _create_countup_focus_workflow(
             "UPDATE focus_workflows SET status = 'stopped', ended_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND status = 'active'",
             user_id,
         )
+        await _complete_workflow_record(conn, user_id, existing["id"], status="abandoned")
 
     resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
     focus_phase = {
