@@ -1,5 +1,9 @@
 # main 分支开发日志
 
+## 分支分片索引
+
+- [feature/deliberate-workflow-persist](./feature-deliberate-workflow-persist.md) — 刻意工作流编排持久化
+
 ## 提交记录
 
 ### 2026-06-26 · `c9b2aa2` · refactor(focus-work): extract duplicate utility functions and add browser automation tests
