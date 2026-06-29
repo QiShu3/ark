@@ -1659,6 +1659,16 @@ def _normalize_workflow_phases(
                     ):
                         if key in phase:
                             normalized[key] = phase[key]
+            elif phase_type == "deliberate_group":
+                normalized["timer_mode"] = None
+                normalized["task_id"] = None
+                normalized["focus_work_type"] = None
+                normalized["is_temporary"] = is_temporary
+                normalized["record_focus"] = record_focus
+                if isinstance(phase, dict):
+                    for key in ("config_ids", "config_names"):
+                        if key in phase:
+                            normalized[key] = phase[key]
             items.append(normalized)
     if not items:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作流至少需要一个阶段")
