@@ -6,14 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import VocabTodayFocusWork from './VocabTodayFocusWork';
 import type { FocusWorkRunSummary } from '../focus-work/focusWorkTypes';
 
-const { fetchVocabOverviewCurrentWords, submitVocabContentReview, useVocabDeck } = vi.hoisted(() => ({
-  fetchVocabOverviewCurrentWords: vi.fn(),
+const { fetchVocabFocusQueue, submitVocabContentReview, useVocabDeck } = vi.hoisted(() => ({
+  fetchVocabFocusQueue: vi.fn(),
   submitVocabContentReview: vi.fn(),
   useVocabDeck: vi.fn(),
 }));
 
 vi.mock('../../lib/vocab/api', () => ({
-  fetchVocabOverviewCurrentWords,
+  fetchVocabFocusQueue,
   submitVocabContentReview,
 }));
 
@@ -53,32 +53,34 @@ function extraRun(configSnapshot: Record<string, unknown> = {}): FocusWorkRunSum
   };
 }
 
-function overviewWord(
+function focusQueueItem(
   overrides: Partial<{
     id: string;
     deck_id: string;
-    deck_name: string;
     word: string;
-    mastery_state: 'unstarted' | 'learning' | 'mastered';
+    review_mode: 'study' | 'review' | 'learning' | 'mistake';
     translation: string;
   }> = {},
 ) {
   return {
     id: overrides.id ?? 'word-1',
     deck_id: overrides.deck_id ?? 'deck-1',
-    deck_name: overrides.deck_name ?? 'Default',
     word: overrides.word ?? 'apple',
     us_pronunciation: null,
     uk_pronunciation: null,
-    mastery_state: overrides.mastery_state ?? 'unstarted',
     translations: [{ pos: 'n.', translation: overrides.translation ?? '苹果' }],
+    phrases: [],
+    sentences: [],
+    prompt_type: 'en_to_zh',
+    review_mode: overrides.review_mode ?? 'study',
+    mastery_score: 0,
   };
 }
 
 describe('VocabTodayFocusWork', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchVocabOverviewCurrentWords.mockResolvedValue([]);
+    fetchVocabFocusQueue.mockResolvedValue([]);
     submitVocabContentReview.mockResolvedValue({
       mastery_score: 10,
       next_review_at: '2026-06-10T00:00:00Z',
@@ -92,7 +94,7 @@ describe('VocabTodayFocusWork', () => {
   });
 
   it('does not emit content completion while focus work is paused', async () => {
-    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem()]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -108,8 +110,8 @@ describe('VocabTodayFocusWork', () => {
     });
   });
 
-  it('renders an open-ended vocab card from the deck content pool', async () => {
-    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
+  it('renders a vocab card from the FSRS focus queue', async () => {
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem()]);
 
     render(
       <VocabTodayFocusWork
@@ -120,11 +122,11 @@ describe('VocabTodayFocusWork', () => {
     );
 
     expect(await screen.findByText('apple')).toBeInTheDocument();
-    expect(screen.getByText('已完成 0')).toBeInTheDocument();
-    expect(fetchVocabOverviewCurrentWords).toHaveBeenCalledWith('deck-1', 'all');
+    expect(screen.getByText('0 / 10')).toBeInTheDocument();
+    expect(fetchVocabFocusQueue).toHaveBeenCalledWith('deck-1', 10);
   });
 
-  it('does not emit content completion when no open-ended words are available', async () => {
+  it('does not emit content completion when no focus queue words are available', async () => {
     const onContentCompleted = vi.fn();
 
     render(
@@ -141,8 +143,8 @@ describe('VocabTodayFocusWork', () => {
     });
   });
 
-  it('ignores counted run target config and keeps the vocab focus work open-ended', async () => {
-    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
+  it('uses counted run target config as the FSRS queue limit', async () => {
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem()]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -154,15 +156,16 @@ describe('VocabTodayFocusWork', () => {
     );
 
     expect(await screen.findByText('apple')).toBeInTheDocument();
-    expect(screen.getByText('已完成 0')).toBeInTheDocument();
+    expect(screen.getByText('0 / 24')).toBeInTheDocument();
+    expect(fetchVocabFocusQueue).toHaveBeenCalledWith('deck-1', 24);
     await waitFor(() => {
       expect(onContentCompleted).not.toHaveBeenCalled();
     });
   });
 
-  it('submits counted vocab cards without completing the focus work content', async () => {
+  it('submits counted vocab cards through content reviews and completes the round', async () => {
     const user = userEvent.setup();
-    fetchVocabOverviewCurrentWords.mockResolvedValue([overviewWord()]);
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem()]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -185,22 +188,46 @@ describe('VocabTodayFocusWork', () => {
         prompt_type: 'en_to_zh',
       });
     });
+    await waitFor(() => {
+      expect(onContentCompleted).toHaveBeenCalled();
+    });
+  });
+
+  it('requeues the current card when FSRS asks to repeat today', async () => {
+    const user = userEvent.setup();
+    fetchVocabFocusQueue.mockResolvedValue([
+      focusQueueItem({ id: 'word-1', word: 'apple', translation: '苹果' }),
+      focusQueueItem({ id: 'word-2', word: 'brave', translation: '勇敢的', review_mode: 'review' }),
+    ]);
+    submitVocabContentReview.mockResolvedValueOnce({
+      mastery_score: 0,
+      next_review_at: '2026-06-10T00:00:00Z',
+      wrong_count: 1,
+      correct_count: 0,
+      interval_days: 0,
+      result: 'again',
+      should_repeat_today: true,
+    });
+    const onContentCompleted = vi.fn();
+
+    render(
+      <VocabTodayFocusWork
+        run={focusRun({ target_word_count: 2 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
+      />,
+    );
+
+    await screen.findByText('apple');
+    await user.click(screen.getByRole('button', { name: /没记住/ }));
+
+    expect(await screen.findByText('brave')).toBeInTheDocument();
+    expect(screen.getByText('0 / 2')).toBeInTheDocument();
     expect(onContentCompleted).not.toHaveBeenCalled();
   });
 
   it('loads deck words for extra runs when the today queue is already empty', async () => {
-    fetchVocabOverviewCurrentWords.mockResolvedValue([
-      {
-        id: 'word-extra',
-        deck_id: 'deck-1',
-        deck_name: 'Default',
-        word: 'brave',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'unstarted',
-        translations: [{ pos: 'adj.', translation: '勇敢的' }],
-      },
-    ]);
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem({ id: 'word-extra', word: 'brave', translation: '勇敢的' })]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -216,18 +243,7 @@ describe('VocabTodayFocusWork', () => {
   });
 
   it('honors large configured targets for extra runs', async () => {
-    fetchVocabOverviewCurrentWords.mockResolvedValue([
-      {
-        id: 'word-extra',
-        deck_id: 'deck-1',
-        deck_name: 'Default',
-        word: 'brave',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'unstarted',
-        translations: [{ pos: 'adj.', translation: '勇敢的' }],
-      },
-    ]);
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem({ id: 'word-extra', word: 'brave', translation: '勇敢的' })]);
 
     render(
       <VocabTodayFocusWork
@@ -239,6 +255,7 @@ describe('VocabTodayFocusWork', () => {
 
     expect(await screen.findByText('brave')).toBeInTheDocument();
     expect(screen.getByText('0 / 100')).toBeInTheDocument();
+    expect(fetchVocabFocusQueue).toHaveBeenCalledWith('deck-1', 100);
   });
 
   it('uses the configured deck for extra runs while the global deck is still loading', async () => {
@@ -253,18 +270,7 @@ describe('VocabTodayFocusWork', () => {
       loading: true,
       error: null,
     });
-    fetchVocabOverviewCurrentWords.mockResolvedValue([
-      {
-        id: 'word-extra',
-        deck_id: 'deck-config',
-        deck_name: 'Configured',
-        word: 'brave',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'unstarted',
-        translations: [{ pos: 'adj.', translation: '勇敢的' }],
-      },
-    ]);
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem({ id: 'word-extra', deck_id: 'deck-config', word: 'brave', translation: '勇敢的' })]);
 
     render(
       <VocabTodayFocusWork
@@ -275,41 +281,13 @@ describe('VocabTodayFocusWork', () => {
     );
 
     expect(await screen.findByText('brave')).toBeInTheDocument();
-    expect(fetchVocabOverviewCurrentWords).toHaveBeenCalledWith('deck-config', 'all');
+    expect(fetchVocabFocusQueue).toHaveBeenCalledWith('deck-config', 10);
   });
 
   it('uses the daily target count for extra run word selection', async () => {
-    fetchVocabOverviewCurrentWords.mockResolvedValue([
-      {
-        id: 'word-extra-1',
-        deck_id: 'deck-1',
-        deck_name: 'Default',
-        word: 'brave',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'unstarted',
-        translations: [{ pos: 'adj.', translation: '勇敢的' }],
-      },
-      {
-        id: 'word-extra-2',
-        deck_id: 'deck-1',
-        deck_name: 'Default',
-        word: 'clear',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'learning',
-        translations: [{ pos: 'adj.', translation: '清楚的' }],
-      },
-      {
-        id: 'word-extra-3',
-        deck_id: 'deck-1',
-        deck_name: 'Default',
-        word: 'distant',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'mastered',
-        translations: [{ pos: 'adj.', translation: '遥远的' }],
-      },
+    fetchVocabFocusQueue.mockResolvedValue([
+      focusQueueItem({ id: 'word-extra-1', word: 'brave', translation: '勇敢的' }),
+      focusQueueItem({ id: 'word-extra-2', word: 'clear', translation: '清楚的', review_mode: 'learning' }),
     ]);
 
     render(
@@ -322,22 +300,12 @@ describe('VocabTodayFocusWork', () => {
 
     expect(await screen.findByText('brave')).toBeInTheDocument();
     expect(screen.getByText('0 / 2')).toBeInTheDocument();
+    expect(fetchVocabFocusQueue).toHaveBeenCalledWith('deck-1', 2);
   });
 
   it('completes an extra run after the extra deck words are submitted', async () => {
     const user = userEvent.setup();
-    fetchVocabOverviewCurrentWords.mockResolvedValue([
-      {
-        id: 'word-extra',
-        deck_id: 'deck-1',
-        deck_name: 'Default',
-        word: 'brave',
-        us_pronunciation: null,
-        uk_pronunciation: null,
-        mastery_state: 'unstarted',
-        translations: [{ pos: 'adj.', translation: '勇敢的' }],
-      },
-    ]);
+    fetchVocabFocusQueue.mockResolvedValue([focusQueueItem({ id: 'word-extra', word: 'brave', translation: '勇敢的' })]);
     const onContentCompleted = vi.fn();
 
     render(
@@ -359,11 +327,11 @@ describe('VocabTodayFocusWork', () => {
         review_mode: 'study',
         prompt_type: 'en_to_zh',
       });
-      expect(onContentCompleted).toHaveBeenCalledWith({
+      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({
         completed_word_count: 1,
         target_word_count: 1,
         extra_round: true,
-      });
+      }));
     });
   });
 });

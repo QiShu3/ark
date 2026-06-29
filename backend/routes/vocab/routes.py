@@ -24,6 +24,7 @@ from .schemas import (
     VocabWordDetailOut,
 )
 from .service import (
+    get_focus_queue,
     get_inheritance_preview,
     get_learning_queue,
     get_overview,
@@ -143,6 +144,17 @@ async def route_list_overview_current_words(
         target_deck_id=target_deck_id,
     )
     return [VocabOverviewCurrentWordOut(**item) for item in items]
+
+
+@router.get("/decks/{deck_id}/focus-queue", response_model=list[VocabReviewQueueItemOut])
+async def route_get_focus_queue(
+    request: Request,
+    deck_id: str,
+    user: Annotated[Any, Depends(get_current_user)],
+    limit: int = Query(default=10, ge=1, le=500),
+) -> list[VocabReviewQueueItemOut]:
+    queue = await get_focus_queue(_pool_from_request(request), user_id=int(user.id), deck_id=deck_id, limit=limit)
+    return [VocabReviewQueueItemOut(**item) for item in queue]
 
 
 @router.get("/decks/{deck_id}/study", response_model=list[VocabReviewQueueItemOut])

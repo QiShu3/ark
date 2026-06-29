@@ -72,6 +72,10 @@ export function fetchVocabOverviewCurrentWords(
   return apiJson<VocabOverviewCurrentWord[]>(`/api/vocab/decks/${deckId}/overview/current-words?${query.toString()}`);
 }
 
+export function fetchVocabFocusQueue(deckId: string, limit = 10) {
+  return apiJson<VocabReviewItem[]>(`/api/vocab/decks/${deckId}/focus-queue?limit=${limit}`);
+}
+
 export function fetchVocabStudyQueue(deckId: string, limit = 10) {
   return apiJson<VocabReviewItem[]>(`/api/vocab/decks/${deckId}/study?limit=${limit}`);
 }

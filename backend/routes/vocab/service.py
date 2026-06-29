@@ -27,6 +27,7 @@ from .repository import (
     list_deck_mastery_rows,
     list_deck_word_rows,
     list_due_review_candidate_rows,
+    list_future_review_candidate_rows,
     list_inheritable_mastered_progress_rows,
     list_mastered_word_rows,
     list_mistake_rows,
@@ -48,7 +49,7 @@ _DECK_DISPLAY_NAME_MAP = {
     "gaozhong": "高中",
     "kaoyan": "考研",
 }
-_LEARNING_STATE_VALUES = {1, 3}
+_LEARNING_STATE_VALUES = {1, 3, "1", "3", "learning", "Learning", "relearning", "Relearning"}
 _REVIEW_STATE_VALUES = {"2", "review", "Review"}
 
 
@@ -266,6 +267,92 @@ async def _build_today_plan_items(
         )
 
     return selected
+
+
+def _unique_rows_by_id(rows: list[dict], seen_word_ids: set[str]) -> list[dict]:
+    selected: list[dict] = []
+    for row in rows:
+        word_id = str(row["id"])
+        if word_id in seen_word_ids:
+            continue
+        seen_word_ids.add(word_id)
+        selected.append(row)
+    return selected
+
+
+async def _rows_to_review_items(
+    conn: asyncpg.Connection,
+    rows: list[dict],
+    *,
+    review_mode: str,
+) -> list[dict]:
+    items: list[dict] = []
+    for row in rows:
+        word_id = str(row["id"])
+        translations = await list_word_translations(conn, word_id=word_id)
+        phrases = await list_word_phrases(conn, word_id=word_id)
+        sentences = await list_word_sentences(conn, word_id=word_id)
+        payload = _detail_payload(row, translations=translations, phrases=phrases, sentences=sentences)
+        payload["prompt_type"] = "en_to_zh"
+        payload["review_mode"] = review_mode
+        items.append(payload)
+    return items
+
+
+async def get_focus_queue(pool: asyncpg.Pool, *, user_id: int, deck_id: str, limit: int = 10) -> list[dict]:
+    async with pool.acquire() as conn:
+        grouped_decks = _group_deck_rows(await list_vocab_decks(conn))
+        deck_group = _resolve_deck_group(grouped_decks, deck_id)
+        member_deck_ids = list(deck_group["member_deck_ids"])
+
+        bounded_limit = max(1, min(int(limit), 500))
+        due_rows = [dict(row) for row in await list_due_review_candidate_rows(conn, user_id=user_id, deck_ids=member_deck_ids)]
+        learning_pool, review_pool = _split_due_rows(due_rows)
+        selected_learning, learning_left = _take_rows(learning_pool, bounded_limit)
+        remaining = bounded_limit - len(selected_learning)
+        selected_review, review_left = _take_rows(review_pool, remaining)
+        selected_rows = selected_learning + selected_review
+        seen_word_ids = {str(row["id"]) for row in selected_rows}
+
+        remaining = bounded_limit - len(selected_rows)
+        selected_new: list[dict] = []
+        for member_deck_id in member_deck_ids:
+            if remaining <= 0:
+                break
+            rows = await list_study_queue_rows(conn, user_id=user_id, deck_id=member_deck_id, limit=remaining)
+            new_rows = _unique_rows_by_id([dict(row) for row in rows], seen_word_ids)
+            selected_new.extend(new_rows)
+            remaining = bounded_limit - len(selected_rows) - len(selected_new)
+
+        selected_rows.extend(selected_new)
+        remaining = bounded_limit - len(selected_rows)
+        if remaining > 0:
+            fallback_due_rows = _unique_rows_by_id(learning_left + review_left, seen_word_ids)
+            selected_rows.extend(fallback_due_rows[:remaining])
+
+        remaining = bounded_limit - len(selected_rows)
+        if remaining > 0:
+            future_rows = await list_future_review_candidate_rows(
+                conn,
+                user_id=user_id,
+                deck_ids=member_deck_ids,
+                limit=remaining,
+            )
+            selected_rows.extend(_unique_rows_by_id([dict(row) for row in future_rows], seen_word_ids)[:remaining])
+
+        learning_ids = {str(row["id"]) for row in selected_learning}
+        new_ids = {str(row["id"]) for row in selected_new}
+        items: list[dict] = []
+        for row in selected_rows:
+            row_id = str(row["id"])
+            if row_id in learning_ids:
+                review_mode = "learning"
+            elif row_id in new_ids:
+                review_mode = "study"
+            else:
+                review_mode = "review"
+            items.extend(await _rows_to_review_items(conn, [row], review_mode=review_mode))
+        return items
 
 
 def _aggregate_group_mastery(deck_group: dict, deck_stats: dict[str, dict]) -> dict[str, int | str]:

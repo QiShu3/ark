@@ -654,6 +654,159 @@ async def test_get_study_queue_reads_pending_new_items_from_today_plan(monkeypat
     assert [item["word"] for item in items] == ["abruptly", "absorb"]
 
 
+@pytest.mark.asyncio
+async def test_get_focus_queue_prioritizes_due_fsrs_then_new_without_today_plan(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        stamp = datetime(2026, 5, 5, tzinfo=UTC)
+        return [
+            {"id": "deck-1", "key": "cet4_1", "name": "CET4_1", "description": "", "word_count": 100, "created_at": stamp, "updated_at": stamp},
+        ]
+
+    async def fail_today_plan_call(*_args, **_kwargs):
+        raise AssertionError("focus queue must not touch today plan")
+
+    async def fake_list_due_review_candidate_rows(_conn, *, user_id: int, deck_ids: list[str]):
+        assert user_id == 1
+        assert deck_ids == ["deck-1"]
+        return [
+            {
+                "id": "learning-1",
+                "deck_id": "deck-1",
+                "word": "adapt",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "mastery_score": 1,
+                "next_review_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "fsrs_card_json": {"state": "1"},
+            },
+            {
+                "id": "review-1",
+                "deck_id": "deck-1",
+                "word": "balance",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "mastery_score": 4,
+                "next_review_at": datetime(2026, 5, 5, tzinfo=UTC),
+                "fsrs_card_json": {"state": "2"},
+            },
+        ]
+
+    async def fake_list_study_queue_rows(_conn, *, user_id: int, deck_id: str, limit: int):
+        assert user_id == 1
+        assert deck_id == "deck-1"
+        assert limit == 1
+        return [
+            {
+                "id": "new-1",
+                "deck_id": "deck-1",
+                "word": "candid",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "mastery_score": 0,
+            }
+        ]
+
+    async def fake_list_future_review_candidate_rows(*_args, **_kwargs):
+        return []
+
+    async def fake_list_word_translations(_conn, *, word_id: str):
+        return [{"pos": "n", "translation": f"{word_id}-translation"}]
+
+    async def fake_empty(_conn, *, word_id: str):
+        return []
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "_ensure_today_plan", fail_today_plan_call)
+    monkeypatch.setattr(vocab_service, "get_daily_plan_item", fail_today_plan_call)
+    monkeypatch.setattr(vocab_service, "update_daily_plan_item", fail_today_plan_call)
+    monkeypatch.setattr(vocab_service, "list_due_review_candidate_rows", fake_list_due_review_candidate_rows)
+    monkeypatch.setattr(vocab_service, "list_study_queue_rows", fake_list_study_queue_rows)
+    monkeypatch.setattr(vocab_service, "list_future_review_candidate_rows", fake_list_future_review_candidate_rows)
+    monkeypatch.setattr(vocab_service, "list_word_translations", fake_list_word_translations)
+    monkeypatch.setattr(vocab_service, "list_word_phrases", fake_empty)
+    monkeypatch.setattr(vocab_service, "list_word_sentences", fake_empty)
+
+    items = await vocab_service.get_focus_queue(_Pool(), user_id=1, deck_id="cet4", limit=3)
+
+    assert [(item["word"], item["review_mode"]) for item in items] == [
+        ("adapt", "learning"),
+        ("balance", "review"),
+        ("candid", "study"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_focus_queue_falls_back_to_future_fsrs_reviews(monkeypatch) -> None:
+    class _PoolAcquire:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Pool:
+        def acquire(self):
+            return _PoolAcquire()
+
+    async def fake_list_vocab_decks(_conn):
+        stamp = datetime(2026, 5, 5, tzinfo=UTC)
+        return [
+            {"id": "deck-1", "key": "cet4_1", "name": "CET4_1", "description": "", "word_count": 100, "created_at": stamp, "updated_at": stamp},
+        ]
+
+    async def fake_list_due_review_candidate_rows(*_args, **_kwargs):
+        return []
+
+    async def fake_list_study_queue_rows(*_args, **_kwargs):
+        return []
+
+    async def fake_list_future_review_candidate_rows(_conn, *, user_id: int, deck_ids: list[str], limit: int):
+        assert user_id == 1
+        assert deck_ids == ["deck-1"]
+        assert limit == 2
+        return [
+            {
+                "id": "future-1",
+                "deck_id": "deck-1",
+                "word": "defer",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "mastery_score": 5,
+                "next_review_at": datetime(2026, 5, 7, tzinfo=UTC),
+                "fsrs_card_json": {"state": "2"},
+            }
+        ]
+
+    async def fake_list_word_translations(_conn, *, word_id: str):
+        return [{"pos": "v", "translation": f"{word_id}-translation"}]
+
+    async def fake_empty(_conn, *, word_id: str):
+        return []
+
+    monkeypatch.setattr(vocab_service, "list_vocab_decks", fake_list_vocab_decks)
+    monkeypatch.setattr(vocab_service, "list_due_review_candidate_rows", fake_list_due_review_candidate_rows)
+    monkeypatch.setattr(vocab_service, "list_study_queue_rows", fake_list_study_queue_rows)
+    monkeypatch.setattr(vocab_service, "list_future_review_candidate_rows", fake_list_future_review_candidate_rows)
+    monkeypatch.setattr(vocab_service, "list_word_translations", fake_list_word_translations)
+    monkeypatch.setattr(vocab_service, "list_word_phrases", fake_empty)
+    monkeypatch.setattr(vocab_service, "list_word_sentences", fake_empty)
+
+    items = await vocab_service.get_focus_queue(_Pool(), user_id=1, deck_id="cet4", limit=2)
+
+    assert [(item["word"], item["review_mode"]) for item in items] == [("defer", "review")]
+
+
 @pytest.mark.parametrize(
     ("result_value", "expected_status", "expected_repeat"),
     [("again", "pending", True), ("easy", "done", False)],

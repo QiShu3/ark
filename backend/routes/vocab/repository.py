@@ -736,6 +736,42 @@ async def list_due_review_candidate_rows(
     )
 
 
+async def list_future_review_candidate_rows(
+    conn: asyncpg.Connection,
+    *,
+    user_id: int,
+    deck_ids: list[str],
+    limit: int,
+) -> list[asyncpg.Record]:
+    return await conn.fetch(
+        """
+        SELECT
+          w.id::text AS id,
+          w.deck_id::text AS deck_id,
+          w.word,
+          w.us_pronunciation,
+          w.uk_pronunciation,
+          COALESCE(p.mastery_score, 0) AS mastery_score,
+          p.next_review_at,
+          p.fsrs_card_json
+        FROM vocab_words w
+        JOIN vocab_user_word_progress p
+          ON p.word_id = w.id
+         AND p.user_id = $1
+        WHERE w.deck_id = ANY($2::uuid[])
+          AND p.next_review_at IS NOT NULL
+          AND p.next_review_at > NOW()
+          AND p.is_suspended = FALSE
+          AND COALESCE(p.fsrs_card_json ->> 'state', '') IN ('2', 'review', 'Review')
+        ORDER BY p.next_review_at ASC, w.sort_order ASC
+        LIMIT $3
+        """,
+        user_id,
+        deck_ids,
+        limit,
+    )
+
+
 async def list_study_queue_rows(
     conn: asyncpg.Connection,
     *,

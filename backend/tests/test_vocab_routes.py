@@ -162,6 +162,45 @@ def test_vocab_overview_current_words_route_returns_items(monkeypatch) -> None:
     assert response.json()[0]["mastery_state"] == "mastered"
 
 
+def test_vocab_focus_queue_route_returns_items(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(vocab_router)
+    app.dependency_overrides[get_current_user] = lambda: _User()
+    seen_payloads: list[dict] = []
+
+    async def fake_get_focus_queue(*_args, **kwargs):
+        seen_payloads.append(kwargs)
+        return [
+            {
+                "id": "word-1",
+                "deck_id": "cet6",
+                "word": "prosperity",
+                "us_pronunciation": None,
+                "uk_pronunciation": None,
+                "translations": [{"pos": "n.", "translation": "繁荣"}],
+                "phrases": [],
+                "sentences": [],
+                "prompt_type": "en_to_zh",
+                "review_mode": "review",
+                "mastery_score": 5,
+            }
+        ]
+
+    from routes.vocab import routes as vocab_routes
+
+    monkeypatch.setattr(vocab_routes, "get_focus_queue", fake_get_focus_queue)
+    monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
+    client = TestClient(app)
+
+    response = client.get("/api/vocab/decks/cet6/focus-queue?limit=24")
+
+    assert response.status_code == 200
+    assert response.json()[0]["word"] == "prosperity"
+    assert response.json()[0]["review_mode"] == "review"
+    assert seen_payloads[0]["deck_id"] == "cet6"
+    assert seen_payloads[0]["limit"] == 24
+
+
 def test_vocab_inheritance_preview_route_returns_count(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(vocab_router)
