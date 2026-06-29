@@ -1148,6 +1148,8 @@ def _normalize_phase_type(value: Any) -> PhaseType | None:
         return "focus"
     if text == "break":
         return "break"
+    if text == "deliberate_group":
+        return "deliberate_group"
     return None
 
 
@@ -1663,9 +1665,9 @@ def _normalize_workflow_phases(
     for idx, phase in enumerate(items):
         phase_type = phase["phase_type"]
         duration = int(phase["duration"])
-        if phase_type not in {"focus", "break"}:
+        if phase_type not in {"focus", "break", "deliberate_group"}:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="阶段类型必须是 focus 或 break"
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="阶段类型必须是 focus、break 或 deliberate_group"
             )
         if duration < 60:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="阶段时长不能小于 60 秒")
@@ -1675,12 +1677,12 @@ def _normalize_workflow_phases(
             phase["focus_work_type"] = None
             phase["is_temporary"] = False
             phase["record_focus"] = True
-        if idx > 0 and items[idx - 1]["phase_type"] == phase_type:
+        if phase_type != "deliberate_group" and idx > 0 and items[idx - 1]["phase_type"] == phase_type:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="相邻阶段必须交替 focus/break"
             )
-    if items[0]["phase_type"] != "focus":
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作流必须以 focus 阶段开始")
+    if items[0]["phase_type"] not in {"focus", "deliberate_group"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作流必须以 focus 或 deliberate_group 阶段开始")
     return items
 
 

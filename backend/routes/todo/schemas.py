@@ -28,7 +28,7 @@ CompletionPeriodType = Literal["once", "daily", "weekly", "monthly", "custom_day
 AppointmentStoredStatus = Literal["pending", "attended", "missed", "cancelled"]
 AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed", "cancelled"]
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
-PhaseType = Literal["focus", "break"]
+PhaseType = Literal["focus", "break", "deliberate_group"]
 FocusTimerMode = Literal["countdown", "countup"]
 FocusWorkType = Literal["vocab_today", "review", "practice", "task_focus", "input"]
 FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
@@ -513,13 +513,15 @@ class AppTaskStatusOut(BaseModel):
 
 
 class FocusWorkflowPhase(BaseModel):
-    phase_type: Literal["focus", "break"]
+    phase_type: Literal["focus", "break", "deliberate_group"]
     duration: int = Field(ge=60, le=24 * 60 * 60)
     timer_mode: FocusTimerMode | None = None
     task_id: UUID | None = None
     focus_work_type: FocusWorkType | None = None
     is_temporary: bool = False
     record_focus: bool = True
+    config_ids: list[str] | None = None
+    config_names: list[str] | None = None
 
 
 class FocusWorkRunSummaryOut(BaseModel):
