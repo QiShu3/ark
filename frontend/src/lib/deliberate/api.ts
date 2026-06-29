@@ -198,6 +198,8 @@ export function forkFocusWorkRun(params: {
   focus_work_type: string;
   bank_id?: string;
   scope?: Record<string, unknown>;
+  completion?: Record<string, unknown>;
+  pass_criteria?: Record<string, unknown>;
 }) {
   return apiJson('/todo/focus/workflow/runs/fork', {
     method: 'POST',

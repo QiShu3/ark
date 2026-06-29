@@ -284,6 +284,8 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
         focus_work_type: childConfig.focus_work_type as string,
         bank_id: childConfig.bank_id as string | undefined,
         scope: (childConfig.scope as Record<string, unknown>) || {},
+        completion: (childConfig.completion as Record<string, unknown>) || {},
+        pass_criteria: (childConfig.pass_criteria as Record<string, unknown>) || {},
       });
       const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
       setSnapshot(next);

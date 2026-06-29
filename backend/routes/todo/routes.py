@@ -4205,6 +4205,10 @@ async def fork_focus_workflow_run(
                 "bank_id": body.bank_id,
                 "scope": body.scope,
             }
+            if body.completion:
+                config_snapshot["choice_completion"] = body.completion
+            if body.pass_criteria:
+                config_snapshot["pass_criteria"] = body.pass_criteria
 
             run = await _create_focus_work_run(
                 conn,

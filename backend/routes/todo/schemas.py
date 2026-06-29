@@ -643,6 +643,8 @@ class FocusWorkForkRequest(BaseModel):
     focus_work_type: FocusWorkType
     bank_id: str | None = None
     scope: dict[str, Any] = Field(default_factory=dict)
+    completion: dict[str, Any] = Field(default_factory=dict)
+    pass_criteria: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowRecordNodeOut(BaseModel):
