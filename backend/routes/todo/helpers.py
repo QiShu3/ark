@@ -1620,6 +1620,8 @@ def _normalize_workflow_phases(
                 focus_work_type = phase.focus_work_type
                 is_temporary = bool(phase.is_temporary)
                 record_focus = bool(phase.record_focus)
+                config_ids = phase.config_ids if isinstance(phase.config_ids, list) else None
+                config_names = phase.config_names if isinstance(phase.config_names, list) else None
             elif isinstance(phase, dict):
                 phase_type = str(phase.get("phase_type") or "").strip()
                 duration = _parse_duration(phase.get("duration"))
@@ -1628,6 +1630,8 @@ def _normalize_workflow_phases(
                 focus_work_type = phase.get("focus_work_type")
                 is_temporary = bool(phase.get("is_temporary", False))
                 record_focus = bool(phase.get("record_focus", True))
+                config_ids = phase.get("config_ids") if isinstance(phase.get("config_ids"), list) else None
+                config_names = phase.get("config_names") if isinstance(phase.get("config_names"), list) else None
             else:
                 continue
             normalized: dict[str, Any] = {"phase_type": phase_type, "duration": duration}
@@ -1665,10 +1669,8 @@ def _normalize_workflow_phases(
                 normalized["focus_work_type"] = None
                 normalized["is_temporary"] = is_temporary
                 normalized["record_focus"] = record_focus
-                if isinstance(phase, dict):
-                    for key in ("config_ids", "config_names"):
-                        if key in phase:
-                            normalized[key] = phase[key]
+                normalized["config_ids"] = config_ids
+                normalized["config_names"] = config_names
             items.append(normalized)
     if not items:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="工作流至少需要一个阶段")
