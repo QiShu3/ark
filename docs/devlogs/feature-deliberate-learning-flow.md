@@ -1,5 +1,31 @@
 # feature/deliberate-learning-flow
 
+## 2026-06-29 14:42:13 +0800 · 7d4414cbe455120971dfdc1e4a6944aa355bf926 · fix(deliberate): honor focus work question scope
+
+### 用户提出的需求
+
+> 专注工作管理中的，是不是有个 开始 button ，这个button会涉及到下面的工作流吗？
+> 这里的题库怎么没有根据上面的类型做出区分？不管我选择哪个类型，可选择的题库都是一样的。
+> 然后如果我删除掉专注工作管理中的唯一一个专注工作，这页面就会发生大改变，你可以试一下。怎么会这样？觉得这个逻辑有问题，至少题库应该还在。
+> 你怎么没有按照专注工作的配置来？还是显示600多条题目，我明明只配置了10道题目。
+> 然后我发现每次专注工作都是重复的题目，不会从上次完成后的专注工作继续。不是有存档吗，你看看怎么回事？
+
+### 本次完成的工作
+
+- 修复新建/编辑专注工作弹窗的题库列表，按当前选择的类型分别加载选择题、闪卡和输入题题库，并在切换类型时重置不匹配的题库与筛选。
+- 修复删除唯一专注工作后 `/deliberate-workflow` 直接切到新建向导、隐藏题库管理和存档可视化的问题；无专注工作时页面仍保留题库与存档区域，仅专注工作区显示空状态。
+- 修复选择题专注练习未遵守目标题数的问题，后端 practice 配置写入 `target_question_count` / `daily_question_target`，前端题号、结束条件和完成摘要都按配置的题数计算。
+- 修复下一次专注练习重复从题库开头取题的问题：`/api/choice/items` 支持按当前用户排除已答题目，练习页默认按未完成题目继续加载，并保留年份、科目、标签筛选。
+- 增加前后端回归测试，覆盖目标题数兜底、继续未答题加载和后端过滤已答题题目的分支。
+
+### 验证情况
+
+- `frontend`: `pnpm test -- PracticeFocusWork.test.tsx` 通过，7 passed；仅出现已有 Node engine warning。
+- `frontend`: `pnpm check` 通过；仅出现已有 Node engine warning。
+- `backend`: `uv run pytest tests/test_choice_adapter.py -q` 通过，19 passed。
+- `backend`: `uv run pytest tests/test_focus_workflow_app_work.py -q` 通过，27 passed。
+- `backend`: `uv run ruff check routes/choice/adapters.py routes/choice/routes.py tests/test_choice_adapter.py` 通过。
+
 ## 2026-06-29 12:02:32 +0800 · a050e233d73eb1ade223bf7e74cfc1dde0481a56 · fix(deliberate): complete forked focus workflow runs
 
 ### 用户提出的需求
