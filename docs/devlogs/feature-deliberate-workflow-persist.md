@@ -35,3 +35,28 @@
 - 既有功能未受影响
 
 **变更文件**：5 files changed, 132 insertions(+), 13 deletions(-)
+
+---
+
+### 2026-06-29 · `2649d51` · fix: stabilize deliberate workflow focus runs
+
+**用户需求**：测试工作流编排完整流程，修复启动保存编排后直接跳到结算页、背单词专注工作受今日工作量限制、选择题选项不可见，以及组合工作流结算缺少 Fork 的问题；在继续重构前先提交当前代码。
+
+**完成工作**：
+- 修复保存编排列表里的“启动”按钮直接使用预设内 `config_ids`，避免 React 状态尚未刷新时启动空编排
+- 为工作流记录补充运行节点追加和完成/放弃状态同步，专注工作完成、跳过、停止时能正确维护 `workflow_records`
+- 将背单词专注工作调整为开放式从题库循环取题，移除“今日工作量”作为专注工作本身的结算条件
+- 调整闪卡模板支持无目标数量模式，进度显示为已完成数量而非目标进度
+- 优化选择题专注工作阅读题布局，使题干与选项在结算前可见可操作
+- 增加/更新针对保存编排启动、背单词开放式流程、选择题模板的测试覆盖
+
+**验证情况**：
+- `cd backend && uv run ruff check routes/todo/routes.py routes/todo/helpers.py` 通过
+- `cd backend && uv run pytest tests/test_todo_routes.py -q` 通过，102 passed
+- `cd frontend && pnpm check` 通过
+- `cd frontend && pnpm test -- DeliberateWorkflow.test.tsx -t "starts a saved orchestration directly"` 通过
+- `cd frontend && pnpm test -- VocabTodayFocusWork.test.tsx` 通过，10 tests
+- `cd frontend && pnpm test -- ChoiceQuestionFocusTemplate.test.tsx` 通过，8 tests
+- 浏览器验证保存编排启动后进入背单词卡片，选择题 A/B/C/D 选项可见
+
+**变更文件**：9 files changed, 374 insertions(+), 287 deletions(-)
