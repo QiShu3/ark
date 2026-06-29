@@ -1720,19 +1720,42 @@ def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
                 if phase_type is not None and duration >= 60:
                     raw_config_ids = phase.get("config_ids")
                     raw_config_names = phase.get("config_names")
+                    timer_mode_val = (
+                        _phase_timer_mode_value(phase, default_focus_timer_mode=default_focus_timer_mode)
+                        if phase_type == "focus"
+                        else None
+                    )
+                    task_id_val = _phase_task_id_value(phase) if phase_type == "focus" else None
+                    focus_work_type_val = _phase_focus_work_type_value(phase) if phase_type == "focus" else None
+                    is_temporary_val = bool(phase.get("is_temporary", False)) if phase_type == "focus" else False
+                    record_focus_val = bool(phase.get("record_focus", True))
+                    config_ids_val = raw_config_ids if isinstance(raw_config_ids, list) else None
+                    config_names_val = raw_config_names if isinstance(raw_config_names, list) else None
+
+                    extra_fields = {}
+                    for key in (
+                        "deck_id", "target_word_count", "daily_target_count", "set_id",
+                        "article_set_id", "input_bank_id", "target_question_count",
+                        "daily_question_target", "target_article_count", "daily_article_target",
+                        "task_title", "choice_scope", "choice_completion",
+                        "deliberate_run_id", "deliberate_config_id", "deliberate_kind", "deliberate_name",
+                        "config_id",
+                    ):
+                        if key in phase:
+                            extra_fields[key] = phase[key]
+
                     phases.append(
                         FocusWorkflowPhase(
                             phase_type=phase_type,
                             duration=duration,
-                            timer_mode=_phase_timer_mode_value(phase, default_focus_timer_mode=default_focus_timer_mode)
-                            if phase_type == "focus"
-                            else None,
-                            task_id=_phase_task_id_value(phase) if phase_type == "focus" else None,
-                            focus_work_type=_phase_focus_work_type_value(phase) if phase_type == "focus" else None,
-                            is_temporary=bool(phase.get("is_temporary", False)) if phase_type == "focus" else False,
-                            record_focus=bool(phase.get("record_focus", True)),
-                            config_ids=raw_config_ids if isinstance(raw_config_ids, list) else None,
-                            config_names=raw_config_names if isinstance(raw_config_names, list) else None,
+                            timer_mode=timer_mode_val,
+                            task_id=task_id_val,
+                            focus_work_type=focus_work_type_val,
+                            is_temporary=is_temporary_val,
+                            record_focus=record_focus_val,
+                            config_ids=config_ids_val,
+                            config_names=config_names_val,
+                            **extra_fields,
                         )
                     )
     return phases
