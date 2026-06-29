@@ -762,7 +762,7 @@ export default function HomeRightDashboard() {
 
             <div className="rounded-xl border border-ark-border bg-ark-surface-subtle px-4 py-4">
               <WorkflowPhaseChips
-                phases={selectedWorkflowPhases}
+                phases={selectedWorkflowPhases.filter((p): p is typeof p & { phase_type: 'focus' | 'break' } => p.phase_type === 'focus' || p.phase_type === 'break')}
                 getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
                 maxTaskWidthClassName="max-w-[150px]"
               />

@@ -920,15 +920,17 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       focus_duration: workflow.focus_duration,
       break_duration: workflow.break_duration,
       default_focus_timer_mode: workflow.default_focus_timer_mode,
-      phases: workflow.phases.map((phase) => ({
-        phase_type: phase.phase_type,
-        duration: phase.duration,
-        timer_mode: phase.timer_mode,
-        task_id: phase.task_id,
-        focus_work_type: phase.focus_work_type,
-        is_temporary: phase.is_temporary,
-        record_focus: phase.record_focus,
-      })),
+      phases: workflow.phases
+        .filter((phase) => phase.phase_type === 'focus' || phase.phase_type === 'break')
+        .map((phase) => ({
+          phase_type: phase.phase_type as 'focus' | 'break',
+          duration: phase.duration,
+          timer_mode: phase.timer_mode,
+          task_id: phase.task_id,
+          focus_work_type: phase.focus_work_type,
+          is_temporary: phase.is_temporary,
+          record_focus: phase.record_focus,
+        })),
     }));
   }
 
@@ -1805,7 +1807,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 >
                   <div className="truncate text-sm font-medium text-ark-text">{workflow.name}</div>
                   <WorkflowPhaseChips
-                    phases={workflow.phases}
+                    phases={workflow.phases.filter((p): p is typeof p & { phase_type: 'focus' | 'break' } => p.phase_type === 'focus' || p.phase_type === 'break')}
                     className="mt-2"
                     getTaskTitle={(taskId) => createWorkflowTaskOptions.find((task) => task.id === taskId)?.title}
                   />

@@ -970,7 +970,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
                   >
                     <div className="truncate text-sm font-semibold text-ark-text tracking-wide">{workflow.name}</div>
                     <WorkflowPhaseChips
-                      phases={workflow.phases}
+                      phases={workflow.phases.filter((p): p is typeof p & { phase_type: 'focus' | 'break' } => p.phase_type === 'focus' || p.phase_type === 'break')}
                       className="mt-2.5"
                       getTaskTitle={(taskId) => taskArrangements.find((task) => task.id === taskId)?.title}
                     />

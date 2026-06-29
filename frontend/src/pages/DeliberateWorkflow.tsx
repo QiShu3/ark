@@ -11,6 +11,7 @@ import UploadBankModal from '../components/deliberate/UploadBankModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
 import type { Task } from '../components/taskTypes';
+import type { WorkflowPreset } from '../components/workflowPresetForm';
 import { fetchChoiceFilters, fetchSetSnapshots } from '../lib/choice/api';
 import type { ChoiceFilters, InputSetSnapshot, SetSnapshot } from '../lib/choice/types';
 import { apiJson } from '../lib/api';
@@ -192,6 +193,10 @@ export default function DeliberateWorkflow() {
   const [snapshotBankId, setSnapshotBankId] = useState<string>('');
   const [snapshotBankKind, setSnapshotBankKind] = useState<DeliberateKind>('choice');
   const [allBanks, setAllBanks] = useState<{ id: string; name: string; count: number; kind: DeliberateKind }[]>([]);
+  const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>([]);
+  const [presetName, setPresetName] = useState('');
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [selectedPresetId, setSelectedPresetId] = useState('');
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
@@ -376,6 +381,12 @@ export default function DeliberateWorkflow() {
       .then(setWorkflowRecords)
       .catch(() => setWorkflowRecords([]))
       .finally(() => setLoadingRecords(false));
+  }, []);
+
+  useEffect(() => {
+    apiJson<WorkflowPreset[]>('/todo/focus/workflows')
+      .then(setWorkflowPresets)
+      .catch(() => setWorkflowPresets([]));
   }, []);
 
   const scope = useMemo(() => {
@@ -606,6 +617,66 @@ export default function DeliberateWorkflow() {
       setStartingMulti(false);
     }
   }, [selectedConfigIds, navigate]);
+
+  async function handleSavePreset() {
+    if (!presetName.trim() || selectedConfigIds.length === 0) return;
+    setSavingPreset(true);
+    try {
+      const selectedNames = selectedConfigIds.map(id => {
+        const config = configs.find(c => c.id === id);
+        return config?.name ?? id;
+      });
+      await apiJson('/todo/focus/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: presetName.trim(),
+          phases: [{
+            phase_type: 'deliberate_group',
+            duration: 3600,
+            timer_mode: 'countup',
+            config_ids: selectedConfigIds,
+            config_names: selectedNames,
+          }],
+          focus_duration: 3600,
+          break_duration: 300,
+          default_focus_timer_mode: 'countup',
+          is_default: false,
+        }),
+      });
+      setPresetName('');
+      const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
+      setWorkflowPresets(presets);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存编排失败');
+    } finally {
+      setSavingPreset(false);
+    }
+  }
+
+  function handleLoadPreset(presetId: string) {
+    setSelectedPresetId(presetId);
+    const preset = workflowPresets.find(p => p.id === presetId);
+    if (!preset) return;
+    const groupPhase = preset.phases.find(p => p.phase_type === 'deliberate_group');
+    if (groupPhase?.config_ids) {
+      setSelectedConfigIds(groupPhase.config_ids);
+    }
+  }
+
+  async function handleDeletePreset(presetId: string) {
+    if (!window.confirm('确认删除该编排？')) return;
+    try {
+      await apiJson(`/todo/focus/workflows/${presetId}`, { method: 'DELETE' });
+      const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
+      setWorkflowPresets(presets);
+      if (selectedPresetId === presetId) {
+        setSelectedPresetId('');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除编排失败');
+    }
+  }
 
   const toggleSection = useCallback((section: string) => {
     setExpandedSections(prev => {
@@ -854,6 +925,50 @@ export default function DeliberateWorkflow() {
           >
             启动组合工作流 ({selectedConfigIds.length})
           </Button>
+        </div>
+
+        {/* 编排持久化 */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={selectedPresetId}
+            onChange={(e) => handleLoadPreset(e.target.value)}
+            className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
+          >
+            <option value="">加载已保存的编排…</option>
+            {workflowPresets
+              .filter(p => p.phases.some(ph => ph.phase_type === 'deliberate_group'))
+              .map(preset => (
+                <option key={preset.id} value={preset.id}>{preset.name}</option>
+              ))}
+          </select>
+          {selectedPresetId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Trash2 className="h-3 w-3" />}
+              onClick={() => void handleDeletePreset(selectedPresetId)}
+            >
+              删除
+            </Button>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder="编排名称"
+              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text w-40"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Save className="h-3 w-3" />}
+              loading={savingPreset}
+              disabled={!presetName.trim() || selectedConfigIds.length === 0}
+              onClick={() => void handleSavePreset()}
+            >
+              保存编排
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">

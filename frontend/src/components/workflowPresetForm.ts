@@ -1,7 +1,7 @@
 import type { Task } from './taskTypes';
 import type { FocusWorkType } from './workflowProgress';
 
-export type WorkflowPhaseType = 'focus' | 'break';
+export type WorkflowPhaseType = 'focus' | 'break' | 'deliberate_group';
 export type WorkflowTimerMode = 'countdown' | 'countup';
 
 export type WorkflowPresetPhase = {
@@ -12,6 +12,8 @@ export type WorkflowPresetPhase = {
   focus_work_type?: FocusWorkType | null;
   is_temporary?: boolean;
   record_focus?: boolean;
+  config_ids?: string[];
+  config_names?: string[];
 };
 
 export interface WorkflowPreset {
