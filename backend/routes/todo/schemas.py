@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
@@ -513,6 +513,8 @@ class AppTaskStatusOut(BaseModel):
 
 
 class FocusWorkflowPhase(BaseModel):
+    model_config = ConfigDict(extra='allow')
+
     phase_type: Literal["focus", "break", "deliberate_group"]
     duration: int = Field(ge=60, le=24 * 60 * 60)
     timer_mode: FocusTimerMode | None = None
