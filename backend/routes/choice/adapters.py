@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 import asyncpg
+
 from .schemas import (
     ChoiceBankOut,
     ChoiceFiltersOut,
@@ -358,6 +359,8 @@ async def list_erc_as_choice_items(
     subject: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    user_id: int | None = None,
+    exclude_answered: bool = False,
 ) -> list[ChoiceItemOut]:
     articles = await conn.fetch(
         """
@@ -392,15 +395,33 @@ async def list_erc_as_choice_items(
             for p in paragraphs
         ]
 
-        q_rows = await conn.fetch(
-            """
-            SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer, explanation
-            FROM choice_questions
-            WHERE article_pk = $1::uuid
-            ORDER BY sort_order
-            """,
-            article["article_pk"],
-        )
+        if exclude_answered and user_id is not None:
+            q_rows = await conn.fetch(
+                """
+                SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer, explanation
+                FROM choice_questions q
+                WHERE q.article_pk = $1::uuid
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM choice_user_question_cards c
+                    WHERE c.user_id = $2
+                      AND c.question_pk = q.id
+                  )
+                ORDER BY q.sort_order
+                """,
+                article["article_pk"],
+                user_id,
+            )
+        else:
+            q_rows = await conn.fetch(
+                """
+                SELECT id::text AS question_pk, question_id, question_no, stem, options_json, answer, explanation
+                FROM choice_questions
+                WHERE article_pk = $1::uuid
+                ORDER BY sort_order
+                """,
+                article["article_pk"],
+            )
         questions: list[ChoiceQuestionOut] = []
         for q in q_rows:
             options = _parse_options(q["options_json"])
@@ -419,6 +440,9 @@ async def list_erc_as_choice_items(
                 tags=[article_exam] if article_exam else [],
                 sort_order=_int(q["question_no"]),
             ))
+
+        if not questions:
+            continue
 
         result.append(ChoiceItemOut(
             id=str(article["article_id"]),

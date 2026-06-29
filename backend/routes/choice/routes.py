@@ -80,18 +80,26 @@ async def route_get_filters(
 @router.get("/items", response_model=list[ChoiceItemOut])
 async def route_list_items(
     request: Request,
-    _user: Annotated[Any, Depends(get_current_user)],
+    user: Annotated[Any, Depends(get_current_user)],
     bank_id: str = Query(...),
     year: int | None = Query(default=None),
     subject: str | None = Query(default=None),
     tag: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    exclude_answered: bool = Query(default=False),
 ) -> list[ChoiceItemOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
         return await list_erc_as_choice_items(
-            conn, bank_id=bank_id, year=year, subject=subject, limit=limit, offset=offset,
+            conn,
+            bank_id=bank_id,
+            year=year,
+            subject=subject,
+            limit=limit,
+            offset=offset,
+            user_id=int(user.id),
+            exclude_answered=exclude_answered,
         )
 
 

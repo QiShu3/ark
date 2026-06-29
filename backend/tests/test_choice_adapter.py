@@ -220,3 +220,50 @@ class TestERCChoiceAdapter:
 
         assert items[0].group_type == "passage"
         assert items[0].question_count == 2
+
+    def test_erc_items_can_exclude_answered_questions(self):
+        from routes.choice.adapters import list_erc_as_choice_items
+
+        class Conn:
+            async def fetch(self, query: str, *args: object):
+                if "FROM choice_articles" in query:
+                    return [
+                        {
+                            "article_pk": "00000000-0000-0000-0000-000000000001",
+                            "article_id": "article-1",
+                            "year": 2025,
+                            "text_no": 1,
+                            "title": "阅读 Text 1",
+                            "exam": "英语",
+                            "sort_order": 1,
+                        }
+                    ]
+                if "FROM choice_paragraphs" in query:
+                    return [{"paragraph_no": 1, "text": "阅读材料"}]
+                if "FROM choice_questions" in query:
+                    assert "choice_user_question_cards" in query
+                    assert args == ("00000000-0000-0000-0000-000000000001", 7)
+                    return [
+                        {
+                            "question_pk": "00000000-0000-0000-0000-000000000102",
+                            "question_id": "q2",
+                            "question_no": 2,
+                            "stem": "剩余题干",
+                            "options_json": {"A": "选项 A", "B": "选项 B"},
+                            "answer": "B",
+                        },
+                    ]
+                return []
+
+        items = asyncio.run(
+            list_erc_as_choice_items(
+                Conn(),
+                bank_id="00000000-0000-0000-0000-000000000999",
+                user_id=7,
+                exclude_answered=True,
+            )
+        )
+
+        assert len(items) == 1
+        assert items[0].question_count == 1
+        assert items[0].questions[0].id == "q2"

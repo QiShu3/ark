@@ -3810,6 +3810,8 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
         if bank_id:
             config["set_id"] = bank_id
             config["article_set_id"] = bank_id
+        config["target_question_count"] = target_count
+        config["daily_question_target"] = target_count
         config["target_article_count"] = target_count
         config["daily_article_target"] = target_count
     elif focus_work_type == "input":
@@ -3818,6 +3820,17 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
         config["target_question_count"] = target_count
         config["daily_question_target"] = target_count
     return config
+
+
+def _countup_focus_completion(focus_work_type: str, completion: dict[str, Any] | None, target_count: int) -> dict[str, Any] | None:
+    if focus_work_type not in {"practice", "review", "input"}:
+        return completion
+    normalized = dict(completion or {})
+    if normalized.get("mode") not in {"question_count", "exhaust_scope"}:
+        normalized["mode"] = "question_count"
+    if normalized["mode"] == "question_count" and not normalized.get("question_count"):
+        normalized["question_count"] = target_count
+    return normalized
 
 
 def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
@@ -5154,6 +5167,7 @@ async def _create_countup_focus_workflow(
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
+    completion = _countup_focus_completion(focus_work_type, completion, target_count)
 
     existing = await conn.fetchrow(
         "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",

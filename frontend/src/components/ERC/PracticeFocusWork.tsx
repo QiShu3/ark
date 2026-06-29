@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
+import { extractRunConfigNumber } from '../focus-work/focusWorkUtils';
 import ChoiceQuestionFocusTemplate from '../focus-work/templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from '../focus-work/templates/choiceQuestionTypes';
 import { fetchChoiceItems, submitChoiceAnswer } from '../../lib/choice/api';
@@ -14,7 +15,12 @@ function choiceTargetQuestionCount(run: FocusWorkRendererProps['run'], totalQues
   if (completion?.mode === 'question_count' && completion.question_count) {
     return Math.max(1, Math.min(totalQuestionCount, Math.floor(completion.question_count)));
   }
-  return totalQuestionCount;
+  return extractRunConfigNumber(
+    run,
+    ['target_question_count', 'daily_question_target', 'target_count', 'target_article_count', 'daily_article_target'],
+    totalQuestionCount,
+    totalQuestionCount,
+  );
 }
 
 function computeGlobalQuestionIndex(items: ChoiceItemDTO[], itemIndex: number, questionIndex: number): number {
@@ -86,6 +92,7 @@ export default function PracticeFocusWork({
   const [loading, setLoading] = useState(true);
   const answeredQuestionsRef = useRef<Array<{ question_id: string; correct: boolean; subject?: string; year?: number; tag?: string }>>([]);
   const startTimeRef = useRef<number>(Date.now());
+  const noContentCompletedRef = useRef(false);
   const totalChoiceQuestionCount = choiceItems.reduce((sum, item) => sum + item.question_count, 0);
   const targetQuestionCount = choiceTargetQuestionCount(run, totalChoiceQuestionCount);
 
@@ -99,7 +106,7 @@ export default function PracticeFocusWork({
       correct_count: completedCorrectCount,
       question_count: answeredCount,
       run_summary: {
-        total_questions: totalChoiceQuestionCount,
+        total_questions: targetQuestionCount,
         answered_count: answeredCount,
         correct_count: correctCount,
         accuracy: answeredCount > 0 ? correctCount / answeredCount : 0,
@@ -117,13 +124,18 @@ export default function PracticeFocusWork({
     }
     setLoading(true);
     setError(null);
+    noContentCompletedRef.current = false;
     try {
       const year = choiceScope?.years?.[0];
       const subject = choiceScope?.subjects?.[0];
+      const tag = choiceScope?.tags?.[0];
+      const shouldContinueUnanswered = !choiceScope?.status || choiceScope.status === 'all' || choiceScope.status === 'unstarted';
       const items = await fetchChoiceItems(bankId, {
         year: year != null ? Number(year) : undefined,
         subject: subject || undefined,
+        tag: tag || undefined,
         limit: 1000,
+        excludeAnswered: shouldContinueUnanswered,
       });
       setChoiceItems(items);
       setCurrentChoiceItemIndex(0);
@@ -139,6 +151,18 @@ export default function PracticeFocusWork({
   useEffect(() => {
     void loadItems();
   }, [loadItems]);
+
+  useEffect(() => {
+    if (loading || error || !bankId || choiceItems.length > 0 || noContentCompletedRef.current) return;
+    noContentCompletedRef.current = true;
+    onContentCompleted({
+      article_count: 0,
+      target_article_count: targetQuestionCount,
+      correct_count: 0,
+      question_count: 0,
+      no_available_content: true,
+    });
+  }, [bankId, choiceItems.length, error, loading, onContentCompleted, targetQuestionCount]);
 
   const handleSubmit = useCallback(async (item: ChoiceQuestionItem, optionKey: string): Promise<ChoiceQuestionSubmitResult> => {
     const currentItem = choiceItems[currentChoiceItemIndex];
@@ -165,28 +189,32 @@ export default function PracticeFocusWork({
     const currentItem = choiceItems[currentChoiceItemIndex];
     if (!currentItem) return null;
     const nextQIndex = currentChoiceQuestionIndex + 1;
+    const nextGlobalIndex = computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, nextQIndex);
+    if (nextGlobalIndex >= targetQuestionCount) return null;
     if (nextQIndex < currentItem.questions.length) {
       setCurrentChoiceQuestionIndex(nextQIndex);
       return choiceItemToChoiceQuestion(
         currentItem,
         nextQIndex,
-        computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, nextQIndex),
-        totalChoiceQuestionCount,
+        nextGlobalIndex,
+        targetQuestionCount,
       );
     }
     const nextItemIndex = currentChoiceItemIndex + 1;
     if (nextItemIndex < choiceItems.length) {
+      const nextItemGlobalIndex = computeGlobalQuestionIndex(choiceItems, nextItemIndex, 0);
+      if (nextItemGlobalIndex >= targetQuestionCount) return null;
       setCurrentChoiceItemIndex(nextItemIndex);
       setCurrentChoiceQuestionIndex(0);
       return choiceItemToChoiceQuestion(
         choiceItems[nextItemIndex],
         0,
-        computeGlobalQuestionIndex(choiceItems, nextItemIndex, 0),
-        totalChoiceQuestionCount,
+        nextItemGlobalIndex,
+        targetQuestionCount,
       );
     }
     return null;
-  }, [choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex, totalChoiceQuestionCount]);
+  }, [choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex, targetQuestionCount]);
 
   const handleComplete = useCallback((progressSnapshot?: Record<string, unknown>) => {
     if (progressSnapshot?.no_available_content === true) {
@@ -209,7 +237,7 @@ export default function PracticeFocusWork({
       currentItem,
       currentChoiceQuestionIndex,
       computeGlobalQuestionIndex(choiceItems, currentChoiceItemIndex, currentChoiceQuestionIndex),
-      totalChoiceQuestionCount,
+      targetQuestionCount,
     );
   }
 

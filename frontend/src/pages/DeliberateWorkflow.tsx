@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, FileUp, Link, Play, Plus, Save, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
+import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, FileUp, Play, Plus, Save, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import AppModalFrame from '../components/AppModalFrame';
@@ -178,7 +178,6 @@ export default function DeliberateWorkflow() {
   const [draftMode, setDraftMode] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
-  const [updatingTaskId, setUpdatingTaskId] = useState(false);
   const [modalRunId, setModalRunId] = useState<string | null>(null);
   const [modalRun, setModalRun] = useState<DeliberateWorkflowRun | null>(null);
   const [loadingModalRun, setLoadingModalRun] = useState(false);
@@ -211,7 +210,6 @@ export default function DeliberateWorkflow() {
   const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : kind === 'input' ? 'input' : choiceMode;
   const selectedConfig = configs.find((item) => item.id === selectedId) ?? configs[0] ?? null;
   const selectedBank = banks.find((item) => item.id === bankId) ?? null;
-  const selectedTask = tasks.find((t) => t.id === selectedConfig?.task_id) ?? null;
   const bankCountLabel = kind === 'flashcard' ? '词' : '题';
   const kindLabel = kind === 'flashcard' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
   const canSave = Boolean(name.trim() && bankId);
@@ -293,8 +291,7 @@ export default function DeliberateWorkflow() {
   useEffect(() => {
     if (loading) return;
     if (configs.length === 0) {
-      setDraftMode(true);
-      setActiveStep((current) => current === 4 ? 1 : current);
+      setSelectedId('');
       return;
     }
     if (!draftMode) {
@@ -536,6 +533,7 @@ export default function DeliberateWorkflow() {
     target_count?: number;
     pass_criteria?: Record<string, unknown>;
     children?: { config_id: string; label: string; is_recommended: boolean }[];
+    task_id?: string | null;
   }) {
     if (!editingConfig) return;
     setSaving(true);
@@ -548,19 +546,6 @@ export default function DeliberateWorkflow() {
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleTaskSelect(configId: string, taskId: string | null) {
-    setUpdatingTaskId(true);
-    setError(null);
-    try {
-      await patchDeliberateWorkflow(configId, { task_id: taskId });
-      await loadConfigs(configId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '更新任务绑定失败');
-    } finally {
-      setUpdatingTaskId(false);
     }
   }
 
@@ -668,10 +653,6 @@ export default function DeliberateWorkflow() {
   const savedWorkflowContent = loading ? (
     <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-8 text-center text-sm text-ark-text-muted">
       正在加载刻意工作流
-    </div>
-  ) : configs.length === 0 ? (
-    <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-8 text-center text-sm text-ark-text-muted">
-      暂无已保存工作流
     </div>
   ) : (
     <div className="space-y-8">
@@ -917,44 +898,6 @@ export default function DeliberateWorkflow() {
                 ))
               )}
             </div>
-          </section>
-
-          <section className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Link className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-              <h4 className="text-base font-semibold text-ark-text">绑定任务</h4>
-            </div>
-            {tasksLoading ? (
-              <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
-                加载任务列表…
-              </div>
-            ) : (
-              <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
-                <label className="mb-1.5 block text-xs font-medium text-ark-text-muted">关联任务</label>
-                <select
-                  aria-label="绑定任务"
-                  value={selectedConfig?.task_id ?? ''}
-                  onChange={(e) => void handleTaskSelect(selectedConfig!.id, e.target.value || null)}
-                  disabled={!selectedConfig || updatingTaskId}
-                  className="w-full rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="">未绑定任务</option>
-                  {tasks
-                    .filter((t) => t.status !== 'done' && !t.is_deleted)
-                    .map((task) => (
-                      <option key={task.id} value={task.id}>{task.title}</option>
-                    ))}
-                </select>
-                {selectedTask ? (
-                  <div className="mt-3 rounded-lg border border-ark-border bg-ark-surface px-3 py-2 text-sm text-ark-text">
-                    <div className="text-xs text-ark-text-muted">已绑定</div>
-                    <div className="mt-0.5 truncate font-medium">{selectedTask.title}</div>
-                  </div>
-                ) : selectedConfig?.task_id ? (
-                  <div className="mt-3 text-xs text-ark-text-faint">任务已不存在或已完成</div>
-                ) : null}
-              </div>
-            )}
           </section>
         </div>
       </section>
@@ -1399,8 +1342,6 @@ export default function DeliberateWorkflow() {
       {/* 新建专注工作弹窗 */}
       {showCreateModal && (
         <CreateFocusWorkModal
-          banks={banks}
-          filters={filters}
           saving={saving}
           onSave={handleCreateFocusWork}
           onClose={() => setShowCreateModal(false)}
@@ -1412,8 +1353,7 @@ export default function DeliberateWorkflow() {
         <EditFocusWorkModal
           config={editingConfig}
           allConfigs={configs}
-          banks={banks}
-          filters={filters}
+          tasks={tasks}
           saving={saving}
           onSave={handleEditSave}
           onClose={() => setEditingConfig(null)}

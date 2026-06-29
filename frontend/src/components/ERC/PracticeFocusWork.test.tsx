@@ -82,6 +82,41 @@ describe('PracticeFocusWork', () => {
     expect(await screen.findByText('Question 26?')).toBeInTheDocument();
   });
 
+  it('loads the next unanswered choice items for sequential practice', async () => {
+    fetchChoiceItems.mockResolvedValue(mockChoiceItems());
+
+    render(
+      <MemoryRouter>
+        <PracticeFocusWork
+          run={{
+            ...practiceRun,
+            config_snapshot: {
+              choice_scope: {
+                bank_id: 'set-1',
+                years: [2025],
+                subjects: ['数据结构'],
+                tags: ['链表'],
+                status: 'all',
+                mode: 'sequential',
+              },
+            },
+          }}
+          disabled={false}
+          onContentCompleted={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Question 26?');
+
+    expect(fetchChoiceItems).toHaveBeenCalledWith('set-1', expect.objectContaining({
+      year: 2025,
+      subject: '数据结构',
+      tag: '链表',
+      excludeAnswered: true,
+    }));
+  });
+
   it('emits content completion when no choice items are available', async () => {
     fetchChoiceItems.mockResolvedValue([]);
 
@@ -178,6 +213,64 @@ describe('PracticeFocusWork', () => {
       expect(submitChoiceAnswer).toHaveBeenCalledWith('choice-q1', 'A', 'practice');
       expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ question_count: 1 }));
     });
+  });
+
+  it('uses the run target count for the visible question total when completion is missing', async () => {
+    fetchChoiceItems.mockResolvedValue([
+      {
+        id: 'choice-article-1',
+        bank_id: 'set-1',
+        title: '2025 数据结构 第1题',
+        material_blocks: [],
+        group_type: 'single',
+        subject_area: '数据结构',
+        tags: ['数据结构'],
+        sort_order: 1,
+        question_count: 2,
+        questions: [
+          {
+            id: 'choice-q1',
+            question_no: 1,
+            stem_blocks: [{ type: 'paragraph', text: 'Choice Question One?' }],
+            options: [{ key: 'A', text: 'Option A' }, { key: 'B', text: 'Option B' }],
+            answer: 'A',
+            explanation_blocks: [],
+            tags: [],
+            sort_order: 1,
+          },
+          {
+            id: 'choice-q2',
+            question_no: 2,
+            stem_blocks: [{ type: 'paragraph', text: 'Choice Question Two?' }],
+            options: [{ key: 'A', text: 'Option A' }, { key: 'B', text: 'Option B' }],
+            answer: 'B',
+            explanation_blocks: [],
+            tags: [],
+            sort_order: 2,
+          },
+        ],
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <PracticeFocusWork
+          run={{
+            ...practiceRun,
+            config_snapshot: {
+              choice_scope: { bank_id: 'set-1', years: [2025], subjects: ['数据结构'] },
+              target_question_count: 1,
+              daily_question_target: 1,
+            },
+          }}
+          disabled={false}
+          onContentCompleted={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('题目 1 / 1')).toBeInTheDocument();
+    expect(screen.queryByText('题目 1 / 2')).not.toBeInTheDocument();
   });
 
   it('renders single choice stems in the upper material panel', async () => {

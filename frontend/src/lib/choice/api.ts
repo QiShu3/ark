@@ -27,7 +27,14 @@ export function fetchChoiceFilters(
 
 export function fetchChoiceItems(
   bankId: string,
-  opts?: { year?: number; subject?: string; tag?: string; limit?: number; offset?: number },
+  opts?: {
+    year?: number;
+    subject?: string;
+    tag?: string;
+    limit?: number;
+    offset?: number;
+    excludeAnswered?: boolean;
+  },
 ) {
   const params = new URLSearchParams({ bank_id: bankId });
   if (opts?.year != null) params.set('year', String(opts.year));
@@ -35,6 +42,7 @@ export function fetchChoiceItems(
   if (opts?.tag) params.set('tag', opts.tag);
   if (opts?.limit) params.set('limit', String(opts.limit));
   if (opts?.offset) params.set('offset', String(opts.offset));
+  if (opts?.excludeAnswered) params.set('exclude_answered', 'true');
   return apiJson<ChoiceItem[]>(`/api/choice/items?${params.toString()}`);
 }
 

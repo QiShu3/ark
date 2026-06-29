@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -18,9 +18,11 @@ from routes.todo_routes import (
     _build_run_metadata,
     _content_bank_article_seed,
     _content_bank_word_seed,
-    complete_focus_workflow_run_task_and_end_phase,
+    _countup_focus_completion,
     _resolve_erc_app_set_id,
     _resolve_vocab_app_deck_id,
+    _test_focus_phase_config,
+    complete_focus_workflow_run_task_and_end_phase,
 )
 
 
@@ -311,6 +313,21 @@ def test_normalize_workflow_phases_preserves_focus_work_type():
 
     assert phases[0]["focus_work_type"] == "vocab_today"
     assert phases[0]["task_id"] is None
+
+
+def test_countup_practice_config_targets_questions():
+    phase_config = _test_focus_phase_config("practice", "bank-1", 10)
+
+    assert phase_config["set_id"] == "bank-1"
+    assert phase_config["article_set_id"] == "bank-1"
+    assert phase_config["target_question_count"] == 10
+    assert phase_config["daily_question_target"] == 10
+    assert phase_config["target_article_count"] == 10
+    assert phase_config["daily_article_target"] == 10
+    assert _countup_focus_completion("practice", {}, 10) == {
+        "mode": "question_count",
+        "question_count": 10,
+    }
 
 
 def test_normalize_workflow_phases_preserves_test_focus_config():

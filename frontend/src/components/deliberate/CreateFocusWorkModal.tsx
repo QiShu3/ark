@@ -3,12 +3,11 @@ import { X } from 'lucide-react';
 
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
-import type { DeliberateKind, DeliberateFocusWorkType, DeliberateBankOption } from '../../lib/deliberate/api';
+import { listDeliberateBanks, type DeliberateKind, type DeliberateFocusWorkType, type DeliberateBankOption } from '../../lib/deliberate/api';
+import { fetchChoiceFilters } from '../../lib/choice/api';
 import type { ChoiceFilters } from '../../lib/choice/types';
 
 type CreateFocusWorkModalProps = {
-  banks: DeliberateBankOption[];
-  filters: ChoiceFilters | null;
   saving: boolean;
   onSave: (data: {
     name: string;
@@ -27,13 +26,14 @@ const inputClass =
   'w-full rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)]';
 
 export default function CreateFocusWorkModal({
-  banks,
-  filters,
   saving,
   onSave,
   onClose,
 }: CreateFocusWorkModalProps) {
   const [kind, setKind] = useState<DeliberateKind>('choice');
+  const [banks, setBanks] = useState<DeliberateBankOption[]>([]);
+  const [filters, setFilters] = useState<ChoiceFilters | null>(null);
+  const [loadingBanks, setLoadingBanks] = useState(false);
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
   const [name, setName] = useState('');
   const [bankId, setBankId] = useState('');
@@ -49,6 +49,54 @@ export default function CreateFocusWorkModal({
   const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : kind === 'input' ? 'input' : choiceMode;
   const bankCountLabel = kind === 'flashcard' ? '词' : '题';
   const kindLabel = kind === 'flashcard' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
+
+  useEffect(() => {
+    let ignore = false;
+    setLoadingBanks(true);
+    setBankId('');
+    setYear('');
+    setSubject('');
+    setTag('');
+    setStatus('all');
+
+    listDeliberateBanks(kind)
+      .then((data) => {
+        if (!ignore) setBanks(data);
+      })
+      .catch(() => {
+        if (!ignore) setBanks([]);
+      })
+      .finally(() => {
+        if (!ignore) setLoadingBanks(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [kind]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    if (kind !== 'choice' || !bankId) {
+      setFilters(null);
+      return () => {
+        ignore = true;
+      };
+    }
+
+    fetchChoiceFilters(bankId)
+      .then((data) => {
+        if (!ignore) setFilters(data);
+      })
+      .catch(() => {
+        if (!ignore) setFilters(null);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [kind, bankId]);
 
   const scope = kind === 'flashcard' ? {} : {
     bank_id: bankId,
@@ -157,6 +205,11 @@ export default function CreateFocusWorkModal({
                 </option>
               ))}
             </select>
+            {loadingBanks ? (
+              <p className="mt-1.5 text-xs text-ark-text-faint">正在加载{kindLabel}题库…</p>
+            ) : banks.length === 0 ? (
+              <p className="mt-1.5 text-xs text-ark-text-faint">暂无可用{kindLabel}题库</p>
+            ) : null}
           </div>
 
           <div>

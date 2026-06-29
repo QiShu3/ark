@@ -1,16 +1,15 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, Plus, Trash2, X } from 'lucide-react';
 
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
-import type { DeliberateWorkflowConfig, DeliberateKind, DeliberateFocusWorkType, DeliberateBankOption, DeliberateWorkflowChild } from '../../lib/deliberate/api';
-import type { ChoiceFilters } from '../../lib/choice/types';
+import { listDeliberateBanks, type DeliberateWorkflowConfig, type DeliberateBankOption, type DeliberateWorkflowChild } from '../../lib/deliberate/api';
+import type { Task } from '../taskTypes';
 
 type EditFocusWorkModalProps = {
   config: DeliberateWorkflowConfig;
   allConfigs: DeliberateWorkflowConfig[];
-  banks: DeliberateBankOption[];
-  filters: ChoiceFilters | null;
+  tasks: Task[];
   saving: boolean;
   onSave: (patch: {
     name?: string;
@@ -18,6 +17,7 @@ type EditFocusWorkModalProps = {
     target_count?: number;
     pass_criteria?: Record<string, unknown>;
     children?: DeliberateWorkflowChild[];
+    task_id?: string | null;
   }) => Promise<void>;
   onClose: () => void;
 };
@@ -28,12 +28,13 @@ const inputClass =
 export default function EditFocusWorkModal({
   config,
   allConfigs,
-  banks,
-  filters,
+  tasks,
   saving,
   onSave,
   onClose,
 }: EditFocusWorkModalProps) {
+  const [banks, setBanks] = useState<DeliberateBankOption[]>([]);
+  const [loadingBanks, setLoadingBanks] = useState(false);
   const [name, setName] = useState(config.name);
   const [bankId, setBankId] = useState(config.bank_id ?? '');
   const [targetCount, setTargetCount] = useState(config.target_count);
@@ -46,9 +47,50 @@ export default function EditFocusWorkModal({
   const [children, setChildren] = useState<DeliberateWorkflowChild[]>(
     config.children || []
   );
+  const [taskId, setTaskId] = useState<string>(config.task_id ?? '');
 
   const kindLabel = config.kind === 'flashcard' ? '闪卡' : config.kind === 'input' ? '输入题' : '选择题';
   const bankCountLabel = config.kind === 'flashcard' ? '词' : '题';
+
+  useEffect(() => {
+    let ignore = false;
+    setLoadingBanks(true);
+
+    listDeliberateBanks(config.kind)
+      .then((data) => {
+        if (ignore) return;
+
+        if (config.bank_id && config.bank_summary && !data.some((bank) => bank.id === config.bank_id)) {
+          const count = config.kind === 'flashcard'
+            ? config.bank_summary.item_count
+            : config.bank_summary.question_count;
+          setBanks([
+            ...data,
+            {
+              id: config.bank_id,
+              name: config.bank_summary.name,
+              kind: config.kind,
+              count,
+              item_count: config.bank_summary.item_count,
+              question_count: config.bank_summary.question_count,
+            },
+          ]);
+          return;
+        }
+
+        setBanks(data);
+      })
+      .catch(() => {
+        if (!ignore) setBanks([]);
+      })
+      .finally(() => {
+        if (!ignore) setLoadingBanks(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [config.bank_id, config.bank_summary, config.kind]);
 
   const availableConfigs = allConfigs.filter(c => c.id !== config.id);
 
@@ -75,6 +117,8 @@ export default function EditFocusWorkModal({
     })));
   }
 
+  const selectedTask = tasks.find((t) => t.id === taskId) ?? null;
+
   async function handleSave() {
     const passCriteria = passCriteriaEnabled
       ? { mode: 'accuracy', threshold: passCriteriaThreshold / 100 }
@@ -86,6 +130,7 @@ export default function EditFocusWorkModal({
       target_count: targetCount,
       pass_criteria: passCriteria,
       children: children.filter(c => c.config_id),
+      task_id: taskId || null,
     });
   }
 
@@ -128,6 +173,11 @@ export default function EditFocusWorkModal({
                 </option>
               ))}
             </select>
+            {loadingBanks ? (
+              <p className="mt-1.5 text-xs text-ark-text-faint">正在加载{kindLabel}题库…</p>
+            ) : banks.length === 0 ? (
+              <p className="mt-1.5 text-xs text-ark-text-faint">暂无可用{kindLabel}题库</p>
+            ) : null}
           </div>
 
           <div>
@@ -230,6 +280,32 @@ export default function EditFocusWorkModal({
                 ))}
               </div>
             )}
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Link className="h-4 w-4 text-ark-accent" aria-hidden="true" />
+              <label className="text-sm font-medium text-ark-text-muted">关联任务</label>
+            </div>
+            <select
+              value={taskId}
+              onChange={(e) => setTaskId(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">未绑定任务</option>
+              {tasks
+                .filter((t) => t.status !== 'done' && !t.is_deleted)
+                .map((task) => (
+                  <option key={task.id} value={task.id}>{task.title}</option>
+                ))}
+            </select>
+            {selectedTask ? (
+              <div className="rounded-lg border border-ark-border bg-ark-surface px-3 py-2 text-sm text-ark-text">
+                <div className="text-xs text-ark-text-muted">已绑定</div>
+                <div className="mt-0.5 truncate font-medium">{selectedTask.title}</div>
+              </div>
+            ) : config.task_id && !taskId ? (
+              <div className="text-xs text-ark-text-faint">解绑后将不再关联任务</div>
+            ) : null}
           </div>
         </div>
 
