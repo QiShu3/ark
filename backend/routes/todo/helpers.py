@@ -1706,6 +1706,8 @@ def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
                 phase_type = _normalize_phase_type(phase.get("phase_type"))
                 duration = _safe_int(phase.get("duration"), 0)
                 if phase_type is not None and duration >= 60:
+                    raw_config_ids = phase.get("config_ids")
+                    raw_config_names = phase.get("config_names")
                     phases.append(
                         FocusWorkflowPhase(
                             phase_type=phase_type,
@@ -1717,6 +1719,8 @@ def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
                             focus_work_type=_phase_focus_work_type_value(phase) if phase_type == "focus" else None,
                             is_temporary=bool(phase.get("is_temporary", False)) if phase_type == "focus" else False,
                             record_focus=bool(phase.get("record_focus", True)),
+                            config_ids=raw_config_ids if isinstance(raw_config_ids, list) else None,
+                            config_names=raw_config_names if isinstance(raw_config_names, list) else None,
                         )
                     )
     return phases
