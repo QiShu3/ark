@@ -65,9 +65,10 @@ export default function InputQuestionFocusTemplate({
 
   React.useEffect(() => {
     if (completedRef.current || loading || question) return;
+    if (answeredCount === 0 && !error) return;
     completedRef.current = true;
     onContentCompleted({ answered_count: answeredCount, target_question_count: targetCount, no_available_content: answeredCount === 0 });
-  }, [answeredCount, question, loading, onContentCompleted, targetCount]);
+  }, [answeredCount, error, question, loading, onContentCompleted, targetCount]);
 
   async function handleSubmit() {
     if (!question || submitting || disabled || !userInput.trim()) return;

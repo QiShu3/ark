@@ -92,9 +92,10 @@ export default function FlashcardFocusTemplate({
 
   React.useEffect(() => {
     if (completedRef.current || disabled || loading || item || currentItem) return;
+    if (completedCount === 0 && !error) return;
     completedRef.current = true;
     onContentCompleted(buildProgressSnapshot('completed_count', 'target_count', completedCount, targetCount, completedCount === 0));
-  }, [completedCount, currentItem, disabled, item, loading, onContentCompleted, targetCount]);
+  }, [completedCount, currentItem, disabled, error, item, loading, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
