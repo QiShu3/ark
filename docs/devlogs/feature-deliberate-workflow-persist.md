@@ -60,3 +60,27 @@
 - 浏览器验证保存编排启动后进入背单词卡片，选择题 A/B/C/D 选项可见
 
 **变更文件**：9 files changed, 374 insertions(+), 287 deletions(-)
+
+---
+
+### 2026-06-29 · `58a5aca` · refactor: align deliberate workflow runs with focus work
+
+**用户需求**：按“组合编排复用专注工作启动机制重构计划”实现：保留现有入口，统一组合编排和单独专注工作的运行上下文，让 deliberate run 在阶段真正开始时创建，并修复组合工作流结算缺少 Fork 的根因。
+
+**完成工作**：
+- 将组合编排 phase 构造改为复用标准 countup deliberate focus phase，统一使用 `deliberate_config_id` 等上下文字段
+- 在创建 focus work run 时按当前 phase 懒创建 `deliberate_workflow_runs`，绑定 workflow，并把 `deliberate_run_id` 写回 phase
+- 让 run metadata 加载 deliberate children，结算页可基于 failed `mastery_check` 显示 Fork 子节点
+- 恢复结算页循环动作：计入轮次可再来一轮，extra 轮次可结束阶段或再来一轮，无内容时显示暂无可加练内容
+- 增加组合 phase、阶段运行时 deliberate run 创建、Fork 子节点显示的测试覆盖
+
+**验证情况**：
+- `cd backend && uv run ruff check routes/todo/routes.py routes/todo/helpers.py tests/test_focus_workflow_app_work.py` 通过
+- `cd backend && uv run pytest tests/test_focus_workflow_app_work.py -q` 通过，29 passed
+- `cd backend && uv run pytest tests/test_todo_routes.py -q` 通过，102 passed
+- `cd frontend && pnpm check` 通过
+- `cd frontend && pnpm test -- FocusWorkProvider.test.tsx` 通过，10 passed
+- `cd frontend && pnpm test -- DeliberateWorkflow.test.tsx -t "starts a saved orchestration directly"` 通过
+- 浏览器验证“完整流程测试”重新启动后进入“今日单词”背单词卡片，没有直接跳结算，并显示开放式 `已完成 0`
+
+**变更文件**：5 files changed, 404 insertions(+), 64 deletions(-)
