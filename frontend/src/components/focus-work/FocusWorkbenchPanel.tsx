@@ -212,6 +212,9 @@ export default function FocusWorkbenchPanel({
         primaryLabel="完成任务并结束阶段"
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
+        secondaryLabel="再来一轮"
+        secondaryDisabled={busy || !activeRun}
+        onSecondary={onCreateExtraRun}
       >
         {hasMasteryCheckFailed && hasChildren && (
           <div className="mb-3 space-y-2">
@@ -240,14 +243,30 @@ export default function FocusWorkbenchPanel({
   }
 
   if (phaseRuntimeState === 'extra_run_completed') {
+    if (noAvailableContent) {
+      return (
+        <ActionPanel
+          label="No Content"
+          heading="暂无可加练内容"
+          description="当前题库暂时没有可继续练习的内容，可以先结束本阶段。"
+          primaryLabel="结束阶段"
+          primaryDisabled={busy}
+          onPrimary={onEndPhase}
+        />
+      );
+    }
+
     return (
       <ActionPanel
         label="Round Complete"
         heading="本轮专注已完成"
         description={hasMasteryCheckFailed ? "检验未通过。你可以选择fork到其他专注工作进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
-        primaryLabel="完成任务并结束阶段"
+        primaryLabel="结束阶段"
         primaryDisabled={busy || !activeRun}
-        onPrimary={onCompleteTaskAndEndPhase}
+        onPrimary={onEndPhase}
+        secondaryLabel="再来一轮"
+        secondaryDisabled={busy || !activeRun}
+        onSecondary={onCreateExtraRun}
       >
         {hasMasteryCheckFailed && hasChildren && (
           <div className="mb-3 space-y-2">

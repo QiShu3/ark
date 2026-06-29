@@ -19,6 +19,7 @@ from routes.todo_routes import (
     _content_bank_article_seed,
     _content_bank_word_seed,
     _countup_focus_completion,
+    _countup_focus_phase_from_deliberate_config,
     _resolve_erc_app_set_id,
     _resolve_vocab_app_deck_id,
     _test_focus_phase_config,
@@ -267,10 +268,16 @@ async def test_complete_task_and_end_phase_allows_unbound_deliberate_run(monkeyp
         assert snapshot_info is None
         calls.append("mark_deliberate_completed")
 
-    async def fake_advance(_conn, row, user_id, *, skip_breaks):
+    async def fake_record_node(_conn, user_id, snapshot_run):
+        assert user_id == 1
+        assert snapshot_run is completed_run
+        calls.append("record_node")
+
+    async def fake_advance(_conn, row, user_id, *, skip_breaks, completion_status="completed"):
         assert row is workflow_row
         assert user_id == 1
         assert skip_breaks is False
+        assert completion_status == "completed"
         calls.append("advance")
         return expected
 
@@ -283,6 +290,7 @@ async def test_complete_task_and_end_phase_allows_unbound_deliberate_run(monkeyp
     monkeypatch.setattr("routes.todo_routes._close_open_focus_app_work_log", fake_close_app_log)
     monkeypatch.setattr("routes.todo_routes._maybe_snapshot_focus_run", fake_snapshot)
     monkeypatch.setattr("routes.todo_routes._mark_deliberate_completed", fake_mark_deliberate_completed)
+    monkeypatch.setattr("routes.todo_routes._record_completed_focus_work_node", fake_record_node)
     monkeypatch.setattr("routes.todo_routes._advance_focus_workflow_to_next_phase", fake_advance)
 
     result = await complete_focus_workflow_run_task_and_end_phase(
@@ -296,6 +304,7 @@ async def test_complete_task_and_end_phase_allows_unbound_deliberate_run(monkeyp
         "fetch_workflow",
         "fetch_run",
         "complete_run",
+        "record_node",
         "close_focus_log",
         "close_app_log",
         "snapshot",
@@ -463,6 +472,146 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
     assert config_snapshot["choice_scope"] == choice_scope
     assert config_snapshot["choice_completion"] == choice_completion
     assert config_snapshot["task_title"] == "真题练习"
+
+
+@pytest.mark.asyncio
+async def test_deliberate_config_phase_uses_standard_context_without_precreating_run():
+    config_id = uuid4()
+    deck_id = uuid4()
+
+    class DeliberatePhaseConn:
+        async def fetchrow(self, query: str, *args: object):
+            if "FROM vocab_decks WHERE id = $1" in query:
+                assert args[0] == deck_id
+                return Row(id=deck_id)
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    phase = await _countup_focus_phase_from_deliberate_config(
+        DeliberatePhaseConn(),
+        user_id=1,
+        config_row=Row(
+            id=config_id,
+            name="背单词",
+            kind="flashcard",
+            focus_work_type="vocab_today",
+            bank_id=deck_id,
+            target_count=20,
+            scope_json={},
+            completion_json={},
+        ),
+    )
+
+    assert phase["phase_type"] == "focus"
+    assert phase["timer_mode"] == "countup"
+    assert phase["focus_work_type"] == "vocab_today"
+    assert phase["deliberate_config_id"] == str(config_id)
+    assert phase["deliberate_name"] == "背单词"
+    assert phase["deck_id"] == str(deck_id)
+    assert "deliberate_run_id" not in phase
+    assert "config_id" not in phase
+
+
+@pytest.mark.asyncio
+async def test_build_run_metadata_creates_deliberate_run_for_phase_and_loads_children(monkeypatch):
+    workflow_id = uuid4()
+    config_id = uuid4()
+    child_config_id = uuid4()
+    deck_id = uuid4()
+    deliberate_run_id = uuid4()
+    execute_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def fake_get_config(_conn, *, user_id: int, config_id: str):
+        assert user_id == 1
+        assert config_id == str(globals_config_id)
+        return Row(
+            id=globals_config_id,
+            name="背单词",
+            kind="flashcard",
+            focus_work_type="vocab_today",
+            bank_id=deck_id,
+            target_count=20,
+            scope_json={},
+            completion_json={},
+        )
+
+    async def fake_create_run(_conn, *, user_id: int, config_id: str | None, focus_work_type: str, bank_id: str | None, config_snapshot: dict):
+        assert user_id == 1
+        assert config_id == str(globals_config_id)
+        assert focus_work_type == "vocab_today"
+        assert bank_id == str(deck_id)
+        assert config_snapshot["name"] == "背单词"
+        return Row(id=deliberate_run_id)
+
+    async def fake_attach_workflow(_conn, *, user_id: int, run_id: str, workflow_id: UUID):
+        assert user_id == 1
+        assert run_id == str(deliberate_run_id)
+        assert workflow_id == globals_workflow_id
+
+    globals_config_id = config_id
+    globals_workflow_id = workflow_id
+
+    monkeypatch.setattr("routes.todo_routes.deliberate_repository.get_config", fake_get_config)
+    monkeypatch.setattr("routes.todo_routes.deliberate_repository.create_run", fake_create_run)
+    monkeypatch.setattr("routes.todo_routes.deliberate_repository.attach_workflow", fake_attach_workflow)
+
+    class DeliberateRunConn:
+        async def execute(self, query: str, *args: object):
+            execute_calls.append((query, args))
+            return "UPDATE 1"
+
+        async def fetchrow(self, query: str, *args: object):
+            if "SELECT children_json FROM deliberate_workflow_configs" in query:
+                assert args == (config_id, 1) or args == (str(config_id), 1)
+                return Row(children_json=[{"config_id": str(child_config_id), "label": "", "is_recommended": True}])
+            if "SELECT name FROM deliberate_workflow_configs" in query:
+                assert args == (str(child_config_id), 1)
+                return Row(name="错题复习")
+            raise AssertionError(f"Unexpected fetchrow query: {query}")
+
+    workflow_row = Row(
+        id=workflow_id,
+        focus_duration=3600,
+        break_duration=60,
+        phases=[
+            {
+                "phase_type": "focus",
+                "duration": 3600,
+                "timer_mode": "countup",
+                "focus_work_type": "vocab_today",
+                "is_temporary": True,
+                "deliberate_config_id": str(config_id),
+                "deliberate_kind": "flashcard",
+                "deliberate_name": "背单词",
+                "deck_id": str(deck_id),
+                "target_word_count": 20,
+                "daily_target_count": 20,
+                "task_title": "今日单词",
+            }
+        ],
+        current_phase_index=0,
+        runtime_task_id=None,
+        task_id=None,
+        active_focus_work_type="vocab_today",
+    )
+
+    task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
+        DeliberateRunConn(),
+        user_id=1,
+        workflow_row=workflow_row,
+    )
+
+    assert task_id is None
+    assert focus_work_type == "vocab_today"
+    assert app_id == "vocab"
+    assert app_task_type == "vocab_today"
+    assert config_snapshot["deliberate_run_id"] == str(deliberate_run_id)
+    assert config_snapshot["deliberate_config_id"] == str(config_id)
+    assert config_snapshot["children"] == [
+        {"config_id": str(child_config_id), "label": "错题复习", "is_recommended": True}
+    ]
+    assert len(execute_calls) == 1
+    updated_phases = execute_calls[0][1][0]
+    assert str(deliberate_run_id) in str(updated_phases)
 
 
 @pytest.mark.asyncio

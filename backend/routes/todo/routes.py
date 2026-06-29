@@ -3638,11 +3638,11 @@ async def _complete_workflow_record(
 
 
 async def _record_completed_focus_work_node(conn: Any, user_id: int, run: Any) -> None:
-    workflow_id = getattr(run, "workflow_id", None)
+    workflow_id = _row_value(run, "workflow_id")
     if workflow_id is None:
         return
-    progress = getattr(run, "progress_snapshot", None) or {}
-    config = getattr(run, "config_snapshot", None) or {}
+    progress = _row_value(run, "progress_snapshot") or {}
+    config = _row_value(run, "config_snapshot") or {}
     name = str(config.get("deliberate_name") or config.get("name") or "专注工作")
     accuracy = progress.get("accuracy")
     if not isinstance(accuracy, (int, float)):
@@ -3650,10 +3650,10 @@ async def _record_completed_focus_work_node(conn: Any, user_id: int, run: Any) -
         if isinstance(run_summary, dict):
             accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate")
     raw_config_id = config.get("deliberate_config_id") or config.get("config_id")
-    raw_focus_work_type = getattr(run, "focus_work_type", None)
+    raw_focus_work_type = _row_value(run, "focus_work_type")
     node = {
-        "id": str(getattr(run, "id")),
-        "run_id": str(getattr(run, "id")),
+        "id": str(_row_value(run, "id")),
+        "run_id": str(_row_value(run, "id")),
         "config_id": str(raw_config_id) if raw_config_id is not None else None,
         "name": name,
         "focus_work_type": str(raw_focus_work_type) if raw_focus_work_type is not None else None,
@@ -3695,37 +3695,11 @@ async def start_multi_deliberate_workflow(
 
             phases = []
             for i, config_row in enumerate(configs):
-                name = str(config_row["name"])
-                kind = str(config_row["kind"])
-                focus_work_type = str(config_row["focus_work_type"])
-                bank_id = config_row["bank_id"]
-                target_count = int(config_row["target_count"])
-                scope = _config_payload(config_row["scope_json"])
-                completion = _config_payload(config_row["completion_json"])
-
-                validate_config_shape(kind, focus_work_type, target_count)
-                resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
-                if resolved_bank_id and focus_work_type in {"review", "practice"}:
-                    scope = dict(scope or {})
-                    scope["bank_id"] = resolved_bank_id
-
-                phase = {
-                    "phase_type": "focus",
-                    "duration": 3600,
-                    "timer_mode": "countup",
-                    "task_id": None,
-                    "focus_work_type": focus_work_type,
-                    "is_temporary": True,
-                    "record_focus": True,
-                    "config_id": config_id,
-                    "deliberate_name": name,
-                    "deliberate_kind": kind,
-                    **_test_focus_phase_config(focus_work_type, resolved_bank_id, target_count),
-                }
-                if scope is not None:
-                    phase["choice_scope"] = scope
-                if completion is not None:
-                    phase["choice_completion"] = completion
+                phase = await _countup_focus_phase_from_deliberate_config(
+                    conn,
+                    user_id=int(user.id),
+                    config_row=config_row,
+                )
                 phases.append(phase)
 
                 if i < len(configs) - 1:
@@ -3822,6 +3796,49 @@ def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_c
     return config
 
 
+async def _countup_focus_phase_from_deliberate_config(
+    conn: Any,
+    *,
+    user_id: int,
+    config_row: Any,
+) -> dict[str, Any]:
+    config_id = str(config_row["id"])
+    name = str(config_row["name"])
+    kind = str(config_row["kind"])
+    focus_work_type = str(config_row["focus_work_type"])
+    raw_bank_id = config_row["bank_id"]
+    bank_id = str(raw_bank_id) if raw_bank_id is not None else None
+    target_count = int(config_row["target_count"])
+    scope = _config_payload(config_row["scope_json"])
+    completion = _config_payload(config_row["completion_json"])
+
+    validate_config_shape(kind, focus_work_type, target_count)
+    resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
+    if resolved_bank_id and focus_work_type in {"review", "practice"}:
+        scope = dict(scope or {})
+        scope["bank_id"] = resolved_bank_id
+    completion = _countup_focus_completion(focus_work_type, completion, target_count)
+
+    phase = {
+        "phase_type": "focus",
+        "duration": 3600,
+        "timer_mode": "countup",
+        "task_id": None,
+        "focus_work_type": focus_work_type,
+        "is_temporary": True,
+        "record_focus": True,
+        "deliberate_config_id": config_id,
+        "deliberate_kind": kind,
+        "deliberate_name": name,
+        **_test_focus_phase_config(focus_work_type, resolved_bank_id, target_count),
+    }
+    if scope is not None:
+        phase["choice_scope"] = scope
+    if completion is not None:
+        phase["choice_completion"] = completion
+    return phase
+
+
 def _countup_focus_completion(focus_work_type: str, completion: dict[str, Any] | None, target_count: int) -> dict[str, Any] | None:
     if focus_work_type not in {"practice", "review", "input"}:
         return completion
@@ -3868,6 +3885,133 @@ def _deliberate_run_id_from_focus_run(run: Any | None) -> str | None:
         return None
     raw = config.get("deliberate_run_id")
     return str(raw) if raw else None
+
+
+async def _load_deliberate_children(
+    conn: Any,
+    *,
+    user_id: int,
+    config_id: str,
+) -> list[dict[str, Any]]:
+    config_row = await conn.fetchrow(
+        "SELECT children_json FROM deliberate_workflow_configs WHERE id = $1 AND user_id = $2",
+        config_id,
+        user_id,
+    )
+    if not config_row or not config_row["children_json"]:
+        return []
+    children = config_row["children_json"]
+    if isinstance(children, str):
+        try:
+            children = json.loads(children)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(children, list):
+        return []
+    resolved_children: list[dict[str, Any]] = []
+    for raw_child in children:
+        if not isinstance(raw_child, dict):
+            continue
+        child = dict(raw_child)
+        if not child.get("label") and child.get("config_id"):
+            child_config = await conn.fetchrow(
+                "SELECT name FROM deliberate_workflow_configs WHERE id = $1 AND user_id = $2",
+                child["config_id"],
+                user_id,
+            )
+            if child_config:
+                child["label"] = child_config["name"]
+        resolved_children.append(child)
+    return resolved_children
+
+
+async def _ensure_deliberate_run_for_phase(
+    conn: Any,
+    *,
+    user_id: int,
+    workflow_id: UUID,
+    phases: list[dict[str, Any]],
+    phase_index: int,
+    config_snapshot: dict[str, Any],
+    focus_work_type: str,
+) -> dict[str, Any]:
+    deliberate_config_id = config_snapshot.get("deliberate_config_id")
+    if not deliberate_config_id or config_snapshot.get("deliberate_run_id"):
+        return config_snapshot
+
+    config_row = await deliberate_repository.get_config(
+        conn,
+        user_id=user_id,
+        config_id=str(deliberate_config_id),
+    )
+    if config_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="刻意工作流配置不存在")
+
+    bank_id = (
+        config_snapshot.get("deck_id")
+        or config_snapshot.get("set_id")
+        or config_snapshot.get("input_bank_id")
+        or config_row["bank_id"]
+    )
+    target_count = int(config_row["target_count"])
+    scope = _config_payload(config_row["scope_json"])
+    completion = _config_payload(config_row["completion_json"])
+    if config_snapshot.get("choice_scope") is not None:
+        scope = dict(config_snapshot["choice_scope"])
+    if config_snapshot.get("choice_completion") is not None:
+        completion = dict(config_snapshot["choice_completion"])
+
+    deliberate_run_snapshot = {
+        "config_id": str(deliberate_config_id),
+        "name": str(config_row["name"]),
+        "kind": str(config_row["kind"]),
+        "focus_work_type": focus_work_type,
+        "bank_id": bank_id,
+        "target_count": target_count,
+        "scope": scope,
+        "completion": completion,
+    }
+    deliberate_run = await deliberate_repository.create_run(
+        conn,
+        user_id=user_id,
+        config_id=str(deliberate_config_id),
+        focus_work_type=focus_work_type,
+        bank_id=str(bank_id) if bank_id is not None else None,
+        config_snapshot=deliberate_run_snapshot,
+    )
+    deliberate_run_id = str(deliberate_run["id"])
+    await deliberate_repository.attach_workflow(
+        conn,
+        user_id=user_id,
+        run_id=deliberate_run_id,
+        workflow_id=workflow_id,
+    )
+
+    next_snapshot = {
+        **config_snapshot,
+        "deliberate_run_id": deliberate_run_id,
+        "deliberate_config_id": str(deliberate_config_id),
+        "deliberate_kind": str(config_row["kind"]),
+        "deliberate_name": str(config_row["name"]),
+    }
+    if 0 <= phase_index < len(phases):
+        phase_updates = {
+            key: value
+            for key, value in next_snapshot.items()
+            if key not in {"phase_index", "children"}
+        }
+        phases[phase_index] = {**phases[phase_index], **phase_updates}
+        await conn.execute(
+            """
+            UPDATE focus_workflows
+            SET phases = $1::jsonb, updated_at = NOW()
+            WHERE id = $2 AND user_id = $3
+            """,
+            _to_jsonb_param(phases),
+            workflow_id,
+            user_id,
+        )
+    return next_snapshot
 
 
 async def _attach_deliberate_focus_run(conn: Any, user_id: int, run: Any) -> None:
@@ -4035,35 +4179,30 @@ async def _build_run_metadata(
                     pass
     elif current_phase is not None:
         focus_work_type = focus_work_type or _phase_focus_work_type_value(current_phase)
+        if focus_work_type is None:
+            focus_work_type = "task_focus"
         config_snapshot["phase_index"] = current_index
         config_snapshot.update(_phase_config_snapshot(current_phase))
         app_id, app_task_type = _focus_work_app_metadata(focus_work_type)
 
-        # Load children from deliberate_workflow_configs if deliberate_config_id exists
         deliberate_config_id = config_snapshot.get("deliberate_config_id")
         if deliberate_config_id:
-            config_row = await conn.fetchrow(
-                "SELECT children_json FROM deliberate_workflow_configs WHERE id = $1 AND user_id = $2",
-                deliberate_config_id,
-                user_id,
+            config_snapshot = await _ensure_deliberate_run_for_phase(
+                conn,
+                user_id=user_id,
+                workflow_id=workflow_row["id"],
+                phases=phases,
+                phase_index=current_index,
+                config_snapshot=config_snapshot,
+                focus_work_type=str(focus_work_type),
             )
-            if config_row and config_row["children_json"]:
-                children = config_row["children_json"]
-                if isinstance(children, str):
-                    import json
-                    children = json.loads(children)
-                if isinstance(children, list):
-                    # Fill in missing labels from config names
-                    for child in children:
-                        if not child.get("label") and child.get("config_id"):
-                            child_config = await conn.fetchrow(
-                                "SELECT name FROM deliberate_workflow_configs WHERE id = $1 AND user_id = $2",
-                                child["config_id"],
-                                user_id,
-                            )
-                            if child_config:
-                                child["label"] = child_config["name"]
-                    config_snapshot["children"] = children
+            children = await _load_deliberate_children(
+                conn,
+                user_id=user_id,
+                config_id=str(deliberate_config_id),
+            )
+            if children:
+                config_snapshot["children"] = children
 
     if focus_work_type is None:
         focus_work_type = "task_focus"

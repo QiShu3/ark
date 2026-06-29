@@ -242,8 +242,9 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   }
 
   async function forkToWeakArea(parentRun: FocusWorkRunSummary) {
-    const runSummary = (parentRun.progress_snapshot as Record<string, unknown> | undefined)?.run_summary as Record<string, unknown> | undefined;
-    const masteryCheck = runSummary?.mastery_check as Record<string, unknown> | undefined;
+    const progressSnapshot = parentRun.progress_snapshot as Record<string, unknown> | undefined;
+    const runSummary = progressSnapshot?.run_summary as Record<string, unknown> | undefined;
+    const masteryCheck = (progressSnapshot?.mastery_check ?? runSummary?.mastery_check) as Record<string, unknown> | undefined;
     const questionDetails = runSummary?.question_details as Array<Record<string, unknown>> | undefined;
 
     const wrongQuestions = questionDetails?.filter(q => q.correct === false) ?? [];

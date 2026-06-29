@@ -302,6 +302,38 @@ describe('FocusWorkProvider', () => {
     expect(apiJson).not.toHaveBeenCalledWith('/todo/tasks/task-1/complete', expect.anything());
   });
 
+  it('shows child fork options when mastery check fails', async () => {
+    const user = userEvent.setup();
+    mockCurrentWorkflow({ phase_runtime_state: 'counted_run_completed_confirming' }, {
+      status: 'content_completed',
+      progress_snapshot: {
+        mastery_check: { enabled: true, passed: false, threshold: 80, accuracy: 40 },
+      },
+      config_snapshot: {
+        task_title: '今日单词',
+        children: [{ config_id: 'child-cfg-1', label: '错题复习', is_recommended: true }],
+      },
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    expect(await screen.findByText('选择fork到：')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /错题复习/ }));
+
+    expect(apiJson).toHaveBeenCalledWith('/api/admin/deliberate-workflows/child-cfg-1');
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/focus/workflow/runs/fork',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"child_config_id":"child-cfg-1"'),
+      }),
+    );
+  });
+
   it('lets extra completion end the phase or start another extra run', async () => {
     const user = userEvent.setup();
     mockCurrentWorkflow({ phase_runtime_state: 'extra_run_completed' }, {
