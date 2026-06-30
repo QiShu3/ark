@@ -2,6 +2,24 @@
 
 ## 提交记录
 
+### 2026-06-29 · `3efb2b7` · feat: add deliberate workflow persist feature
+
+**用户需求**：提交当前工作区的代码修改，包括刻意工作流持久化的后端、前端及测试变更。
+
+**完成工作**：
+- 提交后端 todo helpers/schemas、vocab repository/routes/service 的修改
+- 提交前端 VocabTodayFocusWork 组件、vocab API 的修改
+- 提交前后端测试文件更新
+- 添加 Playwright 浏览器测试配置和测试用例
+- 更新开发日志文档
+
+**验证情况**：
+- 代码已成功提交到 `feature/deliberate-workflow-persist` 分支
+
+**变更文件**：20 files changed, 1753 insertions(+), 472 deletions(-)
+
+---
+
 ### 2026-06-29 · `849d306` · feat(frontend): persist deliberate workflow group as workflow preset
 
 **用户需求**：在刻意学习流页面的工作流编排区域，让用户可以保存/加载/删除编排配置，复用现有的工作流预设系统。

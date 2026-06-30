@@ -13,7 +13,7 @@ from routes.todo.helpers import (
     _normalize_workflow_phases,
     _row_to_focus_workflow,
 )
-from routes.todo.schemas import FocusWorkflowOut, FocusWorkflowPhase
+from routes.todo.schemas import FocusWorkRunSummaryOut, FocusWorkflowOut, FocusWorkflowPhase
 from routes.todo_routes import (
     _build_run_metadata,
     _content_bank_article_seed,
@@ -303,6 +303,123 @@ async def test_complete_task_and_end_phase_allows_unbound_deliberate_run(monkeyp
     assert calls == [
         "fetch_workflow",
         "fetch_run",
+        "complete_run",
+        "record_node",
+        "close_focus_log",
+        "close_app_log",
+        "snapshot",
+        "mark_deliberate_completed",
+        "advance",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_complete_task_and_end_phase_accepts_model_run_summary(monkeypatch):
+    workflow_id = uuid4()
+    run_id = uuid4()
+    calls: list[str] = []
+
+    workflow_row = Row(id=workflow_id)
+    run = FocusWorkRunSummaryOut(
+        id=run_id,
+        workflow_id=workflow_id,
+        phase_index=0,
+        task_id=uuid4(),
+        focus_work_type="vocab_today",
+        app_id=None,
+        app_task_type=None,
+        counts_for_task_completion=True,
+        status="content_completed",
+        progress_snapshot={"answered": 1, "run_summary": {"accuracy": 0.75}},
+        config_snapshot={"deliberate_name": "今日单词"},
+        completion_reason=None,
+        source_run_id=None,
+    )
+    completed_run = run.model_copy(update={"status": "completed", "completion_reason": "task_confirmed"})
+    expected = FocusWorkflowOut(state="normal")
+
+    async def fake_fetch_active_workflow_row(_conn, user_id):
+        assert user_id == 1
+        calls.append("fetch_workflow")
+        return workflow_row
+
+    async def fake_fetch_run_summary(_conn, *, user_id, run_id: UUID):
+        assert user_id == 1
+        assert run_id == run.id
+        calls.append("fetch_run")
+        return run
+
+    async def fake_record_task_completion(_conn, *, user_id, task_id, completed_at):
+        assert user_id == 1
+        assert task_id == run.task_id
+        assert isinstance(completed_at, datetime)
+        calls.append("record_task_completion")
+
+    async def fake_complete_run(_conn, *, user_id, run_id: UUID, completion_reason: str):
+        assert user_id == 1
+        assert run_id == run.id
+        assert completion_reason == "task_confirmed"
+        calls.append("complete_run")
+        return completed_run
+
+    async def fake_close_focus_log(_conn, user_id):
+        assert user_id == 1
+        calls.append("close_focus_log")
+
+    async def fake_close_app_log(_conn, user_id, *, result, progress_snapshot):
+        assert user_id == 1
+        assert result == "completed"
+        assert progress_snapshot == {"answered": 1, "run_summary": {"accuracy": 0.75}}
+        calls.append("close_app_log")
+
+    async def fake_snapshot(_conn, user_id, snapshot_run):
+        assert user_id == 1
+        assert snapshot_run is completed_run
+        calls.append("snapshot")
+        return None
+
+    async def fake_mark_deliberate_completed(_conn, user_id, snapshot_run, snapshot_info):
+        assert user_id == 1
+        assert snapshot_run is completed_run
+        assert snapshot_info is None
+        calls.append("mark_deliberate_completed")
+
+    async def fake_record_node(_conn, user_id, snapshot_run):
+        assert user_id == 1
+        assert snapshot_run is completed_run
+        calls.append("record_node")
+
+    async def fake_advance(_conn, row, user_id, *, skip_breaks, completion_status="completed"):
+        assert row is workflow_row
+        assert user_id == 1
+        assert skip_breaks is False
+        assert completion_status == "completed"
+        calls.append("advance")
+        return expected
+
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _request: FakePool(TransactionalConn()))
+    monkeypatch.setattr("routes.todo_routes._fetch_active_workflow_row", fake_fetch_active_workflow_row)
+    monkeypatch.setattr("routes.todo_routes._fetch_focus_work_run_summary", fake_fetch_run_summary)
+    monkeypatch.setattr("routes.todo_routes._record_task_completion_from_run", fake_record_task_completion)
+    monkeypatch.setattr("routes.todo_routes._complete_focus_work_run", fake_complete_run)
+    monkeypatch.setattr("routes.todo_routes._close_open_focus_log", fake_close_focus_log)
+    monkeypatch.setattr("routes.todo_routes._close_open_focus_app_work_log", fake_close_app_log)
+    monkeypatch.setattr("routes.todo_routes._maybe_snapshot_focus_run", fake_snapshot)
+    monkeypatch.setattr("routes.todo_routes._mark_deliberate_completed", fake_mark_deliberate_completed)
+    monkeypatch.setattr("routes.todo_routes._record_completed_focus_work_node", fake_record_node)
+    monkeypatch.setattr("routes.todo_routes._advance_focus_workflow_to_next_phase", fake_advance)
+
+    result = await complete_focus_workflow_run_task_and_end_phase(
+        request=object(),
+        run_id=run_id,
+        user=Row(id=1),
+    )
+
+    assert result is expected
+    assert calls == [
+        "fetch_workflow",
+        "fetch_run",
+        "record_task_completion",
         "complete_run",
         "record_node",
         "close_focus_log",

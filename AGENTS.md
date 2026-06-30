@@ -65,3 +65,42 @@ Backend commands run from `backend/`:
 ## Default Test Account
 - Username: `qishuadmin`
 - Password: `12345678`
+
+## 浏览器自动化测试 Agent 工作流程
+
+### 主 Agent 职责
+1. 读取测试方案模板: `docs/testing/test-plan-template.md`
+2. 按模板格式制定测试方案
+3. 保存方案到: `docs/testing/plans/{模块名}-{日期}-plan.md`
+4. 调用 Task 工具，传递方案给子 Agent
+
+### 子 Agent 职责
+1. 读取测试报告模板: `docs/testing/test-report-template.md`
+2. 按方案执行浏览器自动化测试
+3. 生成测试报告并保存到: `docs/testing/reports/{模块名}-{日期}-report.md`
+4. 返回报告路径给主 Agent
+
+### 文件命名规范
+- 测试方案: `{模块名}-{日期}-plan.md`
+- 测试报告: `{模块名}-{日期}-report.md`
+- 截图: `{模块名}-{日期}/s{序号}-{描述}.png`
+
+### 主 Agent 调用子 Agent 的 Prompt 格式
+
+```
+请执行以下浏览器自动化测试方案：
+
+## 测试方案
+
+[此处粘贴完整的测试方案内容]
+
+## 执行要求
+
+1. 先读取测试报告模板: docs/testing/test-report-template.md
+2. 按方案中的操作步骤逐个执行测试场景
+3. 每个步骤使用对应的 Playwright MCP 工具执行
+4. 每个场景执行完成后截图保存到 docs/testing/screenshots/{模块名}-{日期}/ 目录
+5. 所有场景执行完成后，按模板格式生成测试报告
+6. 保存报告到: docs/testing/reports/{模块名}-{日期}-report.md
+7. 返回测试报告的文件路径
+```

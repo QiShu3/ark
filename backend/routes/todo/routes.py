@@ -171,6 +171,8 @@ def _config_payload(config: Any) -> dict[str, object]:
 def _row_value(row: Any, key: str, default: Any = None) -> Any:
     if hasattr(row, "get"):
         return row.get(key, default)
+    if hasattr(row, key):
+        return getattr(row, key)
     try:
         return row[key]
     except KeyError:
