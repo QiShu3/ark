@@ -1,11 +1,14 @@
 import React from 'react';
+import { CheckCircle2 } from 'lucide-react';
 
 import AppModalFrame from '../AppModalFrame';
 import type { WorkflowSettlement, WorkflowSettlementNode } from './focusWorkTypes';
 
 type WorkflowSettlementModalProps = {
   open: boolean;
-  settlement: WorkflowSettlement;
+  settlement: WorkflowSettlement | null;
+  title?: string;
+  loading?: boolean;
   busy?: boolean;
   onConfirm?: () => void;
   onClose?: () => void;
@@ -34,14 +37,30 @@ function statusLabel(status: WorkflowSettlementNode['status']): string {
   }
 }
 
-function statusColor(status: WorkflowSettlementNode['status']): string {
+function statusBadgeClass(status: WorkflowSettlementNode['status']): string {
   switch (status) {
     case 'passed':
-      return 'text-green-400';
+      return 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)]';
     case 'failed':
-      return 'text-amber-400';
+      return 'border-[var(--focus-work-amber-border)] bg-[var(--focus-work-amber-bg)] text-[var(--focus-work-amber-text)]';
+    case 'completed':
+      return 'border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)]';
     default:
-      return 'text-[var(--focus-work-text-faint)]';
+      return 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] text-[var(--focus-work-text-muted)]';
+  }
+}
+
+function statusDotClass(status: WorkflowSettlementNode['status'], isReturn: boolean): string {
+  if (isReturn) return 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)]';
+  switch (status) {
+    case 'passed':
+      return 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-text)]';
+    case 'failed':
+      return 'border-[var(--focus-work-amber-border)] bg-[var(--focus-work-amber-text)]';
+    case 'completed':
+      return 'border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-text)]';
+    default:
+      return 'border-[var(--focus-work-border)] bg-[var(--focus-work-text-faint)]';
   }
 }
 
@@ -49,73 +68,98 @@ function ProcessTree({ nodes, depth = 0 }: { nodes: WorkflowSettlementNode[]; de
   if (!nodes || nodes.length === 0) return null;
 
   return (
-    <>
+    <div className={depth === 0 ? 'space-y-1' : 'mt-1 space-y-1'}>
       {nodes.map((node, i) => {
         const isLast = i === nodes.length - 1;
-        const connector = depth === 0 ? null : isLast ? '└─▶' : '├─▶';
-        const indentPx = depth * 20;
         const isReturn = node.is_return_node;
+        const hasChildren = node.children.length > 0;
+        const nodeKey = `${depth}-${i}-${node.name}-${node.status}`;
 
         return (
-          <React.Fragment key={i}>
-            <div
-              className="flex items-center gap-1 py-0.5"
-              style={{ paddingLeft: indentPx }}
-            >
-              {connector != null && (
-                <span className="shrink-0 text-[10px] leading-none text-[var(--focus-work-text-faint)]">
-                  {connector}
-                </span>
-              )}
-              <span className="shrink-0 text-[10px] leading-none text-[var(--focus-work-text-faint)]">
-                ●
-              </span>
-              <span
-                className={`flex-1 text-sm truncate ${
-                  isReturn
-                    ? 'text-[var(--focus-work-text-faint)] italic'
-                    : 'text-[var(--focus-work-text)]'
-                }`}
-              >
-                {node.name}
-              </span>
-              {node.accuracy != null && !isReturn && (
-                <span className="shrink-0 text-sm font-semibold text-[var(--focus-work-text)] tabular-nums">
-                  {node.accuracy}%
-                </span>
-              )}
-              {!isReturn && (
+          <div key={nodeKey} className="relative">
+            <div className="grid grid-cols-[1rem_minmax(0,1fr)] gap-3">
+              <div className="relative flex justify-center pt-[0.6rem]">
+                {!isLast && (
+                  <span className="absolute top-5 bottom-[-0.55rem] w-px bg-[var(--focus-work-border)]" />
+                )}
                 <span
-                  className={`shrink-0 text-xs ml-0.5 ${statusColor(node.status)}`}
-                >
-                  {statusLabel(node.status)}
-                </span>
-              )}
-              {node.duration_seconds > 0 && (
-                <span className="shrink-0 text-xs text-[var(--focus-work-text-muted)] tabular-nums ml-0.5">
-                  {formatDuration(node.duration_seconds)}
-                </span>
-              )}
+                  className={`relative z-10 h-2.5 w-2.5 rounded-full border ${statusDotClass(node.status, isReturn)}`}
+                />
+              </div>
+
+              <div className="min-w-0 py-1">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div
+                    className={`min-w-0 flex-1 text-sm leading-6 ${
+                      isReturn
+                        ? 'text-[var(--focus-work-text-muted)]'
+                        : 'font-semibold text-[var(--focus-work-text)]'
+                    }`}
+                  >
+                    {node.name}
+                  </div>
+
+                  {!isReturn && (
+                    <div className="flex shrink-0 items-center justify-end gap-2">
+                      {node.accuracy != null && (
+                        <span className="text-sm font-semibold tabular-nums text-[var(--focus-work-text)]">
+                          {node.accuracy}%
+                        </span>
+                      )}
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(node.status)}`}>
+                        {statusLabel(node.status)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {node.duration_seconds > 0 && (
+                  <div className="text-xs tabular-nums text-[var(--focus-work-text-faint)]">
+                    用时 {formatDuration(node.duration_seconds)}
+                  </div>
+                )}
+
+                {hasChildren && (
+                  <div className="mt-1 pl-4">
+                    <ProcessTree nodes={node.children} depth={depth + 1} />
+                  </div>
+                )}
+              </div>
             </div>
-            <ProcessTree nodes={node.children} depth={depth + 1} />
-          </React.Fragment>
+
+          </div>
         );
       })}
-    </>
+    </div>
+  );
+}
+
+function HeaderMetric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-[var(--focus-work-text-faint)]">{label}</span>
+      <span className="font-semibold text-[var(--focus-work-text)]">{value}</span>
+    </span>
   );
 }
 
 export default function WorkflowSettlementModal({
   open,
   settlement,
+  title,
+  loading = false,
   busy = false,
   onConfirm,
   onClose,
 }: WorkflowSettlementModalProps) {
   if (!open) return null;
 
-  const nodes = settlement.nodes ?? [];
+  const workflowName = settlement?.workflow_name ?? title ?? '工作流';
+  const nodes = settlement?.nodes ?? [];
   const showConfirm = onConfirm != null;
+  const totalDuration = settlement ? formatDuration(settlement.total_duration_seconds) || '0m' : '0m';
+  const isLoading = loading && settlement == null;
+  const isMissing = !loading && settlement == null;
 
   return (
     <AppModalFrame
@@ -124,78 +168,115 @@ export default function WorkflowSettlementModal({
       zIndexClassName="z-[90]"
       backdropClassName="ark-focus-work-shell ark-focus-work-backdrop"
       ariaLabel="工作流结算"
-      panelClassName="ark-focus-work-dialog w-[min(92vw,30rem)] rounded-[2rem] border p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
+      panelClassName="ark-focus-work-dialog w-[min(92vw,35rem)] rounded-[2rem] border border-[var(--focus-work-border-strong)] p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
     >
       <div className="text-center">
-        <div className="text-3xl mb-1">🎉</div>
-        <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">
-          工作流完成
+        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${
+          isLoading
+            ? 'border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] text-[var(--focus-work-blue-text)]'
+            : 'border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)]'
+        }`}>
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {isLoading ? '结算记录加载中' : isMissing ? '结算记录不可用' : '工作流完成'}
         </div>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--focus-work-text)]">
-          {settlement.workflow_name}
+        <h2 className="mx-auto mt-3 max-w-[30rem] text-xl font-semibold leading-7 text-[var(--focus-work-text)]">
+          {workflowName}
         </h2>
         <div className="mt-1 text-sm text-[var(--focus-work-text-muted)]">
-          结果：{settlement.result}
+          结果：{isLoading ? '加载中' : isMissing ? '暂无可展示记录' : settlement?.result}
         </div>
-        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-[var(--focus-work-text-faint)]">
-          <span>总用时 {formatDuration(settlement.total_duration_seconds)}</span>
-          <span className="opacity-40">·</span>
-          <span>{settlement.total_phases} 段内容</span>
-          <span className="opacity-40">·</span>
-          <span>{settlement.fork_count} 次补练</span>
-          <span className="opacity-40">·</span>
-          <span>{settlement.retry_count} 次再尝试</span>
-        </div>
+        {settlement && !isLoading ? (
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
+            <HeaderMetric label="总用时" value={totalDuration} />
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <HeaderMetric label="主任务" value={`${settlement.total_phases} 个`} />
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <HeaderMetric label="可扩展学习" value={`${settlement.fork_count} 次`} />
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <HeaderMetric label="再尝试" value={`${settlement.retry_count} 次`} />
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-[var(--focus-work-text-faint)]">
+            <span className="h-4 w-20 rounded-full bg-[var(--focus-work-surface-soft)]" />
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span className="h-4 w-16 rounded-full bg-[var(--focus-work-surface-soft)]" />
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span className="h-4 w-20 rounded-full bg-[var(--focus-work-surface-soft)]" />
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span className="h-4 w-16 rounded-full bg-[var(--focus-work-surface-soft)]" />
+          </div>
+        )}
       </div>
 
-      {nodes.length > 0 && (
-        <>
-          <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4">
-            <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)] mb-3">
-              过程
-            </div>
-            <ProcessTree nodes={nodes} />
+      {isLoading ? (
+        <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4">
+          <div className="mb-2 text-xs tracking-[0.18em] text-[var(--focus-work-text-faint)]">
+            加载中
           </div>
-        </>
-      )}
+          <div className="space-y-3">
+            <div className="h-5 w-[42%] rounded-full bg-[var(--focus-work-surface-soft)] animate-pulse" />
+            <div className="h-5 w-[66%] rounded-full bg-[var(--focus-work-surface-soft)] animate-pulse" />
+            <div className="h-5 w-[54%] rounded-full bg-[var(--focus-work-surface-soft)] animate-pulse" />
+          </div>
+        </div>
+      ) : nodes.length > 0 ? (
+        <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4">
+          <div className="mb-2 text-xs tracking-[0.18em] text-[var(--focus-work-text-faint)]">
+            学习路径
+          </div>
+          <ProcessTree nodes={nodes} />
+        </div>
+      ) : isMissing ? (
+        <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4">
+          <div className="text-sm text-[var(--focus-work-text-muted)]">
+            记录已打开，但没有可显示的结算内容。
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 border-t border-[var(--focus-work-border)] pt-4">
-        <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)] mb-3">
+        <div className="mb-2 text-xs tracking-[0.18em] text-[var(--focus-work-text-faint)]">
           汇总
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--focus-work-text-muted)]">
-          <span>总答题 {settlement.total_answered}</span>
-          <span className="opacity-40">·</span>
-          <span>总正确 {settlement.total_correct}</span>
-          <span className="opacity-40">·</span>
-          <span>最好一次 {settlement.best_accuracy != null ? `${settlement.best_accuracy}%` : '-'}</span>
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--focus-work-text-muted)]">
-          <span>补练 {settlement.fork_count} 次</span>
-          <span className="opacity-40">·</span>
-          <span>再尝试 {settlement.retry_count} 次</span>
-          <span className="opacity-40">·</span>
-          <span>一次达标 {settlement.first_try_passed_count} 段</span>
-        </div>
+        {isLoading ? (
+          <div className="h-6 w-[72%] rounded-full bg-[var(--focus-work-surface-soft)]" />
+        ) : settlement ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm leading-6 text-[var(--focus-work-text-muted)]">
+            <span>总答题 <strong className="font-semibold text-[var(--focus-work-text)]">{settlement.total_answered}</strong></span>
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span>总正确 <strong className="font-semibold text-[var(--focus-work-text)]">{settlement.total_correct}</strong></span>
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span>最好一次 <strong className="font-semibold text-[var(--focus-work-text)]">{settlement.best_accuracy != null ? `${settlement.best_accuracy}%` : '-'}</strong></span>
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span>可扩展学习 <strong className="font-semibold text-[var(--focus-work-text)]">{settlement.fork_count} 次</strong></span>
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span>再尝试 <strong className="font-semibold text-[var(--focus-work-text)]">{settlement.retry_count} 次</strong></span>
+            <span className="text-[var(--focus-work-text-faint)]">·</span>
+            <span>一次达标 <strong className="font-semibold text-[var(--focus-work-text)]">{settlement.first_try_passed_count} 段</strong></span>
+          </div>
+        ) : (
+          <div className="text-sm text-[var(--focus-work-text-faint)]">暂无汇总</div>
+        )}
       </div>
 
       <div className="mt-5 flex justify-center">
-        {showConfirm ? (
+        {showConfirm && !isLoading && !isMissing ? (
           <button
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="rounded-full bg-white px-8 py-3 text-sm font-medium text-slate-950 transition hover:bg-gray-200 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-sm font-semibold text-slate-950 shadow-sm transition hover:bg-gray-200 disabled:opacity-60"
           >
+            <CheckCircle2 className="h-4 w-4" />
             结束工作流
           </button>
         ) : (
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-8 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]"
+            className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-8 py-3 text-sm font-medium text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border-strong)] hover:bg-[var(--focus-work-surface-soft)]"
           >
-            关闭
+            {isLoading ? '加载中' : isMissing ? '关闭' : '关闭'}
           </button>
         )}
       </div>

@@ -3612,7 +3612,7 @@ async def get_workflow_record_settlement(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT wr.workflow_id, wr.workflow_name
+            SELECT wr.workflow_id, wr.workflow_name, wr.nodes
             FROM workflow_records wr
             LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
             WHERE wr.id = $1 AND wr.user_id = $2
@@ -3626,7 +3626,20 @@ async def get_workflow_record_settlement(
         if workflow_id is None:
             raise HTTPException(status_code=404, detail="记录关联的工作流不存在")
         workflow_name = str(_row_value(row, "workflow_name") or "工作流")
-        return await _build_workflow_settlement(conn, workflow_id, workflow_name, int(user.id))
+        raw_nodes = _row_value(row, "nodes", [])
+        record_nodes = raw_nodes if isinstance(raw_nodes, list) else []
+        run_ids = [
+            str(node.get("run_id") or node.get("id"))
+            for node in record_nodes
+            if isinstance(node, dict) and (node.get("run_id") or node.get("id"))
+        ]
+        return await _build_workflow_settlement(
+            conn,
+            workflow_id,
+            workflow_name,
+            int(user.id),
+            run_ids=run_ids or None,
+        )
 
 
 async def _create_workflow_record(conn: Any, user_id: int, workflow_id: UUID) -> Any:

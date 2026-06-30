@@ -8,12 +8,13 @@ from fastapi import HTTPException
 
 from routes.todo.helpers import (
     _bind_first_focus_phase_to_task,
+    _build_workflow_settlement,
     _create_workflow_with_focus_phase,
     _focus_work_type_for_task_row,
     _normalize_workflow_phases,
     _row_to_focus_workflow,
 )
-from routes.todo.schemas import FocusWorkRunSummaryOut, FocusWorkflowOut, FocusWorkflowPhase
+from routes.todo.schemas import FocusWorkflowOut, FocusWorkflowPhase, FocusWorkRunSummaryOut
 from routes.todo_routes import (
     _build_run_metadata,
     _content_bank_article_seed,
@@ -89,6 +90,19 @@ class FakePool:
 class TransactionalConn:
     def transaction(self):
         return FakeTransactionCtx()
+
+
+class FakeSettlementConn:
+    def __init__(self, rows: list[Row]):
+        self.rows = rows
+        self.fetch_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def fetch(self, query: str, *args: object):
+        self.fetch_calls.append((query, args))
+        if "id = ANY" not in query:
+            return self.rows
+        allowed = set(args[2])
+        return [row for row in self.rows if row["id"] in allowed]
 
 
 def test_focus_workflow_phase_accepts_focus_work_type():
@@ -197,6 +211,66 @@ def test_row_to_focus_workflow_reads_phase_runtime_state_and_active_run_id():
 
     assert out.phase_runtime_state == "running_run"
     assert str(out.active_run_id) == "00000000-0000-0000-0000-000000000101"
+
+
+@pytest.mark.asyncio
+async def test_build_workflow_settlement_filters_to_record_run_ids():
+    workflow_id = uuid4()
+    included_run_id = uuid4()
+    other_run_id = uuid4()
+    conn = FakeSettlementConn([
+        Row(
+            id=included_run_id,
+            focus_work_type="practice",
+            config_snapshot={"deliberate_name": "本次记录"},
+            progress_snapshot={
+                "run_summary": {
+                    "answered_count": 3,
+                    "correct_count": 2,
+                    "accuracy": 67,
+                    "duration_seconds": 180,
+                },
+                "mastery_check": {"enabled": True, "passed": False, "accuracy": 67},
+            },
+            phase_index=0,
+            completion_reason="task_confirmed",
+            source_run_id=None,
+            created_at=datetime.now(UTC),
+        ),
+        Row(
+            id=other_run_id,
+            focus_work_type="practice",
+            config_snapshot={"deliberate_name": "其他记录"},
+            progress_snapshot={
+                "run_summary": {
+                    "answered_count": 20,
+                    "correct_count": 20,
+                    "accuracy": 100,
+                    "duration_seconds": 1200,
+                },
+                "mastery_check": {"enabled": True, "passed": True, "accuracy": 100},
+            },
+            phase_index=0,
+            completion_reason="task_confirmed",
+            source_run_id=None,
+            created_at=datetime.now(UTC),
+        ),
+    ])
+
+    settlement = await _build_workflow_settlement(
+        conn,
+        workflow_id,
+        "历史记录",
+        1,
+        run_ids=[str(included_run_id)],
+    )
+
+    assert settlement.total_answered == 3
+    assert settlement.total_correct == 2
+    assert settlement.best_accuracy == 67
+    assert len(settlement.nodes) == 1
+    assert settlement.nodes[0].name == "A 本次记录"
+    assert "id = ANY" in conn.fetch_calls[0][0]
 
 
 @pytest.mark.asyncio

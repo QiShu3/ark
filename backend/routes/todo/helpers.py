@@ -2440,18 +2440,47 @@ async def _build_workflow_settlement(
     workflow_id: UUID,
     workflow_name: str,
     user_id: int,
+    *,
+    run_ids: list[str] | None = None,
 ) -> WorkflowSettlementOut:
-    rows = await conn.fetch(
-        """
-        SELECT id, focus_work_type, config_snapshot, progress_snapshot, phase_index,
-               completion_reason, source_run_id, created_at
-        FROM focus_work_runs
-        WHERE workflow_id = $1 AND user_id = $2 AND status IN ('completed', 'abandoned')
-        ORDER BY phase_index, created_at
-        """,
-        workflow_id,
-        user_id,
-    )
+    run_uuid_filter: list[UUID] | None = None
+    if run_ids is not None:
+        run_uuid_filter = []
+        for raw_run_id in run_ids:
+            try:
+                run_uuid_filter.append(UUID(str(raw_run_id)))
+            except (TypeError, ValueError):
+                continue
+        if not run_uuid_filter:
+            rows = []
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT id, focus_work_type, config_snapshot, progress_snapshot, phase_index,
+                       completion_reason, source_run_id, created_at
+                FROM focus_work_runs
+                WHERE workflow_id = $1
+                  AND user_id = $2
+                  AND id = ANY($3::uuid[])
+                  AND status IN ('completed', 'abandoned')
+                ORDER BY phase_index, created_at
+                """,
+                workflow_id,
+                user_id,
+                run_uuid_filter,
+            )
+    else:
+        rows = await conn.fetch(
+            """
+            SELECT id, focus_work_type, config_snapshot, progress_snapshot, phase_index,
+                   completion_reason, source_run_id, created_at
+            FROM focus_work_runs
+            WHERE workflow_id = $1 AND user_id = $2 AND status IN ('completed', 'abandoned')
+            ORDER BY phase_index, created_at
+            """,
+            workflow_id,
+            user_id,
+        )
 
     def parse_json(raw: Any) -> dict[str, Any]:
         if isinstance(raw, str):

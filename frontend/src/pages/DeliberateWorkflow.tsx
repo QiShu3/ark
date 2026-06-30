@@ -1642,21 +1642,9 @@ export default function DeliberateWorkflow() {
       {settlementRecord && (
         <WorkflowSettlementModal
           open={true}
-          settlement={settlementData ?? {
-            workflow_name: settlementRecord.workflow_name || '工作流',
-            result: '完成',
-            phases: [],
-            nodes: [],
-            total_phases: 0,
-            total_answered: 0,
-            total_correct: 0,
-            total_accuracy: null,
-            total_duration_seconds: 0,
-            fork_count: 0,
-            retry_count: 0,
-            best_accuracy: null,
-            first_try_passed_count: 0,
-          }}
+          settlement={settlementData}
+          title={settlementRecord.workflow_name || '工作流'}
+          loading={loadingSettlement}
           busy={loadingSettlement}
           onClose={handleCloseSettlement}
         />
