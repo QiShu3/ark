@@ -51,13 +51,29 @@ export default function WorkflowSettlementModal({ open, settlement, busy, onConf
         {settlement.phases.map((phase, idx) => (
           <div
             key={idx}
-            className="rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3"
+            className={`rounded-xl border px-4 py-3 ${
+              phase.is_fork
+                ? 'ml-4 border-dashed border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)]/50'
+                : 'border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)]'
+            }`}
           >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium text-[var(--focus-work-text)]">
-                  阶段 {idx + 1}：{phase.name}
+                  {phase.is_fork ? (
+                    <span>
+                      <span className="text-[var(--focus-work-text-muted)]">↳ Fork：</span>
+                      {phase.name}
+                    </span>
+                  ) : (
+                    <span>阶段：{phase.name}</span>
+                  )}
                 </div>
+                {phase.parent_phase_name && (
+                  <div className="text-xs text-[var(--focus-work-text-faint)]">
+                    来自：{phase.parent_phase_name}
+                  </div>
+                )}
                 <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">
                   类型：{phaseTypeLabel(phase.focus_work_type)}
                   {phase.focus_work_type !== 'vocab_today' && (

@@ -550,6 +550,8 @@ class WorkflowSettlementPhaseOut(BaseModel):
     correct_count: int = 0
     accuracy: float | None = None
     duration_seconds: int = 0
+    is_fork: bool = False
+    parent_phase_name: str | None = None
 
 
 class WorkflowSettlementOut(BaseModel):

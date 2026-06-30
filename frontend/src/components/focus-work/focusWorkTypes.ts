@@ -45,6 +45,8 @@ export type WorkflowSettlementPhase = {
   correct_count: number;
   accuracy: number | null;
   duration_seconds: number;
+  is_fork: boolean;
+  parent_phase_name: string | null;
 };
 
 export type WorkflowSettlement = {

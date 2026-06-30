@@ -2442,7 +2442,8 @@ async def _build_workflow_settlement(
 ) -> WorkflowSettlementOut:
     rows = await conn.fetch(
         """
-        SELECT focus_work_type, config_snapshot, progress_snapshot, phase_index
+        SELECT id, focus_work_type, config_snapshot, progress_snapshot, phase_index,
+               source_run_id, completion_reason
         FROM focus_work_runs
         WHERE workflow_id = $1 AND user_id = $2 AND status = 'completed' AND counts_for_task_completion = true
         ORDER BY phase_index, created_at
@@ -2450,17 +2451,29 @@ async def _build_workflow_settlement(
         workflow_id,
         user_id,
     )
-    phase_runs: dict[int, Any] = {}
+
+    parent_names: dict[str, str] = {}
     for r in rows:
-        phase_runs[r["phase_index"]] = r
+        pid = r["source_run_id"]
+        if pid is not None:
+            for pr in rows:
+                if str(pr["id"]) == str(pid):
+                    pconfig = pr["config_snapshot"] or {}
+                    if isinstance(pconfig, str):
+                        pconfig = json.loads(pconfig)
+                    pname = pconfig.get("deliberate_name") or pconfig.get("name") or ""
+                    if pname:
+                        parent_names[str(pid)] = str(pname)
+                    break
+
+    filtered: list[Any] = []
 
     phases: list[WorkflowSettlementPhaseOut] = []
     total_answered = 0
     total_correct = 0
     total_duration = 0
 
-    for idx in sorted(phase_runs.keys()):
-        r = phase_runs[idx]
+    for r in filtered:
         config = r["config_snapshot"] or {}
         if isinstance(config, str):
             config = json.loads(config)
@@ -2469,7 +2482,7 @@ async def _build_workflow_settlement(
             progress = json.loads(progress)
         run_summary = progress.get("run_summary", {}) if isinstance(progress, dict) else {}
 
-        name = config.get("deliberate_name") or config.get("name") or config.get("task_title") or f"阶段 {idx + 1}"
+        name = config.get("deliberate_name") or config.get("name") or config.get("task_title") or "专注工作"
         fw_type = r["focus_work_type"]
         answered = run_summary.get("answered_count", 0)
         correct = run_summary.get("correct_count", 0)
@@ -2480,6 +2493,11 @@ async def _build_workflow_settlement(
         if isinstance(raw_accuracy, (int, float)):
             accuracy = float(raw_accuracy)
 
+        is_fork = r["source_run_id"] is not None
+        parent_phase_name: str | None = None
+        if is_fork and str(r["source_run_id"]) in parent_names:
+            parent_phase_name = parent_names[str(r["source_run_id"])]
+
         phases.append(WorkflowSettlementPhaseOut(
             name=name,
             focus_work_type=fw_type,
@@ -2487,6 +2505,8 @@ async def _build_workflow_settlement(
             correct_count=correct,
             accuracy=accuracy,
             duration_seconds=duration,
+            is_fork=is_fork,
+            parent_phase_name=parent_phase_name,
         ))
         total_answered += answered
         total_correct += correct
