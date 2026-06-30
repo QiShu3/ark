@@ -10,6 +10,8 @@ import EditFocusWorkModal from '../components/deliberate/EditFocusWorkModal';
 import UploadBankModal from '../components/deliberate/UploadBankModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
+import WorkflowSettlementModal from '../components/focus-work/WorkflowSettlementModal';
+import type { WorkflowSettlement } from '../components/focus-work/focusWorkTypes';
 import type { Task } from '../components/taskTypes';
 import type { WorkflowPreset } from '../components/workflowPresetForm';
 import { fetchChoiceFilters, fetchSetSnapshots } from '../lib/choice/api';
@@ -35,6 +37,7 @@ import {
 } from '../lib/deliberate/api';
 import {
   fetchWorkflowRecords,
+  fetchWorkflowRecordSettlement,
   startMultiDeliberateWorkflow,
   type WorkflowRecord,
 } from '../lib/focusWorkflow';
@@ -199,6 +202,9 @@ export default function DeliberateWorkflow() {
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editingPresetName, setEditingPresetName] = useState('');
+  const [settlementRecord, setSettlementRecord] = useState<WorkflowRecord | null>(null);
+  const [settlementData, setSettlementData] = useState<WorkflowSettlement | null>(null);
+  const [loadingSettlement, setLoadingSettlement] = useState(false);
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
   const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
@@ -592,6 +598,25 @@ export default function DeliberateWorkflow() {
   const handleCloseModal = useCallback(() => {
     setModalRunId(null);
     setModalRun(null);
+  }, []);
+
+  const handleRecordClick = useCallback(async (record: WorkflowRecord) => {
+    setSettlementRecord(record);
+    setSettlementData(null);
+    setLoadingSettlement(true);
+    try {
+      const data = await fetchWorkflowRecordSettlement(record.id);
+      setSettlementData(data);
+    } catch {
+      setSettlementData(null);
+    } finally {
+      setLoadingSettlement(false);
+    }
+  }, []);
+
+  const handleCloseSettlement = useCallback(() => {
+    setSettlementRecord(null);
+    setSettlementData(null);
   }, []);
 
   const handleToggleConfigSelection = useCallback((configId: string) => {
@@ -1193,9 +1218,11 @@ export default function DeliberateWorkflow() {
             ) : (
               <div className="space-y-2">
                 {workflowRecords.slice(0, 6).map((record) => (
-                  <div
+                  <button
                     key={record.id}
-                    className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
+                    type="button"
+                    onClick={() => void handleRecordClick(record)}
+                    className="w-full text-left rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition hover:border-ark-accent/50 hover:bg-ark-surface"
                   >
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-medium text-ark-text">
@@ -1225,7 +1252,7 @@ export default function DeliberateWorkflow() {
                         ))}
                       </div>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -1608,6 +1635,30 @@ export default function DeliberateWorkflow() {
           uploading={uploading}
           onUpload={handleUploadBank}
           onClose={() => setShowUploadModal(false)}
+        />
+      )}
+
+      {/* 组合工作流结算弹窗 */}
+      {settlementRecord && (
+        <WorkflowSettlementModal
+          open={true}
+          settlement={settlementData ?? {
+            workflow_name: settlementRecord.workflow_name || '工作流',
+            result: '完成',
+            phases: [],
+            nodes: [],
+            total_phases: 0,
+            total_answered: 0,
+            total_correct: 0,
+            total_accuracy: null,
+            total_duration_seconds: 0,
+            fork_count: 0,
+            retry_count: 0,
+            best_accuracy: null,
+            first_try_passed_count: 0,
+          }}
+          busy={loadingSettlement}
+          onClose={handleCloseSettlement}
         />
       )}
     </SubAppPageShell>

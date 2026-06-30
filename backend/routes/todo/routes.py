@@ -148,6 +148,7 @@ from .schemas import (
     TaskUpdateRequest,
     VocabAppTaskInitRequest,
     WorkflowRecordOut,
+    WorkflowSettlementOut,
 )
 
 router = APIRouter(prefix="/todo", tags=["todo"])
@@ -3599,6 +3600,33 @@ async def get_workflow_record(
             completed_at=row["completed_at"],
             created_at=row["created_at"],
         )
+
+
+@router.get("/focus/workflow/records/{record_id}/settlement", response_model=WorkflowSettlementOut)
+async def get_workflow_record_settlement(
+    request: Request,
+    record_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> WorkflowSettlementOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT wr.workflow_id, wr.workflow_name
+            FROM workflow_records wr
+            LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
+            WHERE wr.id = $1 AND wr.user_id = $2
+            """,
+            record_id,
+            int(user.id),
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="工作流记录不存在")
+        workflow_id = _row_value(row, "workflow_id")
+        if workflow_id is None:
+            raise HTTPException(status_code=404, detail="记录关联的工作流不存在")
+        workflow_name = str(_row_value(row, "workflow_name") or "工作流")
+        return await _build_workflow_settlement(conn, workflow_id, workflow_name, int(user.id))
 
 
 async def _create_workflow_record(conn: Any, user_id: int, workflow_id: UUID) -> Any:

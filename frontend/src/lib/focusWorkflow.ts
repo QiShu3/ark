@@ -1,4 +1,5 @@
 import { apiJson } from './api';
+import type { WorkflowSettlement } from '../components/focus-work/focusWorkTypes';
 
 let currentWorkflowRequest: Promise<unknown> | null = null;
 
@@ -56,6 +57,10 @@ export function fetchWorkflowRecords(): Promise<WorkflowRecord[]> {
 
 export function fetchWorkflowRecord(recordId: string): Promise<WorkflowRecord> {
   return apiJson<WorkflowRecord>(`/todo/focus/workflow/records/${recordId}`);
+}
+
+export function fetchWorkflowRecordSettlement(recordId: string): Promise<WorkflowSettlement> {
+  return apiJson<WorkflowSettlement>(`/todo/focus/workflow/records/${recordId}/settlement`);
 }
 
 export function startMultiDeliberateWorkflow(configIds: string[]) {

@@ -6,8 +6,9 @@ import type { WorkflowSettlement, WorkflowSettlementNode } from './focusWorkType
 type WorkflowSettlementModalProps = {
   open: boolean;
   settlement: WorkflowSettlement;
-  busy: boolean;
-  onConfirm: () => void;
+  busy?: boolean;
+  onConfirm?: () => void;
+  onClose?: () => void;
 };
 
 function formatDuration(seconds: number): string {
@@ -107,16 +108,19 @@ function ProcessTree({ nodes, depth = 0 }: { nodes: WorkflowSettlementNode[]; de
 export default function WorkflowSettlementModal({
   open,
   settlement,
-  busy,
+  busy = false,
   onConfirm,
+  onClose,
 }: WorkflowSettlementModalProps) {
   if (!open) return null;
 
   const nodes = settlement.nodes ?? [];
+  const showConfirm = onConfirm != null;
 
   return (
     <AppModalFrame
       open={open}
+      onClose={onClose}
       zIndexClassName="z-[90]"
       backdropClassName="ark-focus-work-shell ark-focus-work-backdrop"
       ariaLabel="工作流结算"
@@ -176,14 +180,24 @@ export default function WorkflowSettlementModal({
       </div>
 
       <div className="mt-5 flex justify-center">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onConfirm}
-          className="rounded-full bg-white px-8 py-3 text-sm font-medium text-slate-950 transition hover:bg-gray-200 disabled:opacity-60"
-        >
-          结束工作流
-        </button>
+        {showConfirm ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className="rounded-full bg-white px-8 py-3 text-sm font-medium text-slate-950 transition hover:bg-gray-200 disabled:opacity-60"
+          >
+            结束工作流
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-8 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)]"
+          >
+            关闭
+          </button>
+        )}
       </div>
     </AppModalFrame>
   );
