@@ -65,3 +65,15 @@ export function startMultiDeliberateWorkflow(configIds: string[]) {
     body: JSON.stringify({ config_ids: configIds }),
   });
 }
+
+export function returnToParentFocusWork(runId: string) {
+  return apiJson(`/todo/focus/workflow/runs/${runId}/return-to-parent`, {
+    method: 'POST',
+  });
+}
+
+export function confirmWorkflowSettlement() {
+  return apiJson('/todo/focus/workflow/confirm-settlement', {
+    method: 'POST',
+  });
+}

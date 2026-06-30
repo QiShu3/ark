@@ -13,7 +13,7 @@ export type WorkflowPhase = {
 };
 
 export type WorkflowSnapshot = {
-  state: 'normal' | 'focus' | 'break';
+  state: 'normal' | 'focus' | 'break' | 'settlement';
   current_phase_index?: number | null;
   phases?: WorkflowPhase[];
   pending_confirmation: boolean;
@@ -36,6 +36,7 @@ export type WorkflowSnapshot = {
   phase_runtime_state_before_timeout_prompt?: string | null;
   active_run_id?: string | null;
   active_run?: Record<string, unknown> | null;
+  workflow_settlement?: Record<string, unknown> | null;
 };
 
 export type WorkflowProgressMetrics = {
@@ -78,7 +79,7 @@ export function getWorkflowPhaseTimerMode(workflow: WorkflowSnapshot): FocusTime
 
 export function getActiveWorkflowPhase(workflow: WorkflowSnapshot): WorkflowPhase | null {
   const phases = Array.isArray(workflow.phases) ? workflow.phases : [];
-  if (workflow.state === 'normal' || phases.length === 0) return null;
+  if (workflow.state === 'normal' || workflow.state === 'settlement' || phases.length === 0) return null;
 
   const activePhaseIndex = clamp(
     Math.round(workflow.current_phase_index ?? 0),
@@ -96,7 +97,7 @@ export function computeWorkflowProgress(workflow: WorkflowSnapshot): WorkflowPro
     .filter((phase) => phase.duration > 0);
 
   const totalSeconds = safePhases.reduce((sum, phase) => sum + phase.duration, 0);
-  if (workflow.state === 'normal' || safePhases.length === 0 || totalSeconds <= 0) {
+  if (workflow.state === 'normal' || workflow.state === 'settlement' || safePhases.length === 0 || totalSeconds <= 0) {
     return {
       totalSeconds: 0,
       elapsedSeconds: 0,

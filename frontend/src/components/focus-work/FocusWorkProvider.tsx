@@ -1,10 +1,11 @@
 import React from 'react';
 
 import { apiJson } from '../../lib/api';
-import { fetchCurrentFocusWorkflow, forkFocusWorkRun } from '../../lib/focusWorkflow';
+import { fetchCurrentFocusWorkflow, forkFocusWorkRun, returnToParentFocusWork, confirmWorkflowSettlement } from '../../lib/focusWorkflow';
 import AppModalFrame from '../AppModalFrame';
 import FocusWorkModalShell from './FocusWorkModalShell';
 import FocusWorkbenchPanel from './FocusWorkbenchPanel';
+import WorkflowSettlementModal from './WorkflowSettlementModal';
 import { getFocusWorkDefinition } from './focusWorkRegistry';
 import {
   START_FOCUS_WORK_EVENT,
@@ -300,6 +301,38 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     }
   }
 
+  async function returnToParent(runId: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await returnToParentFocusWork(runId);
+      const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to return to parent', err);
+      alert(err instanceof Error ? err.message : '回到原专注工作失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmSettlement() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await confirmWorkflowSettlement();
+      const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
+      setSnapshot(next);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to confirm settlement', err);
+      alert(err instanceof Error ? err.message : '结束工作流失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   React.useEffect(() => {
     if (!snapshot || busy || creatingRunRef.current) return;
     if (snapshot.state !== 'focus' || !activeDefinition) return;
@@ -387,9 +420,19 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
             onFork={activeRun ? () => void forkToWeakArea(activeRun) : undefined}
             onForkWithChild={activeRun ? (childId) => void forkToChild(activeRun, childId) : undefined}
             forkChildren={activeRun?.config_snapshot?.children as { config_id: string; label: string; is_recommended: boolean }[] | undefined}
+            onReturnToParent={activeRun ? () => void returnToParent(activeRun.id) : undefined}
             onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
-          />
+            />
         </FocusWorkModalShell>
+      ) : null}
+
+      {snapshot?.phase_runtime_state === 'workflow_settlement' && snapshot?.workflow_settlement ? (
+        <WorkflowSettlementModal
+          open={true}
+          settlement={snapshot.workflow_settlement}
+          busy={busy}
+          onConfirm={() => void confirmSettlement()}
+        />
       ) : null}
     </>
   );

@@ -26,7 +26,7 @@ type FocusWorkflowPhase = {
 };
 
 type FocusWorkflow = {
-  state: 'normal' | 'focus' | 'break';
+  state: 'normal' | 'focus' | 'break' | 'settlement';
   workflow_name?: string | null;
   current_phase_index?: number | null;
   phases?: FocusWorkflowPhase[];
@@ -258,16 +258,18 @@ export default function HomeRightDashboard() {
     () => upcomingAppointments.slice(0, visibleAppointmentCount),
     [upcomingAppointments, visibleAppointmentCount],
   );
-  const phaseLabel = workflow?.state === 'break' ? '休息阶段' : '当前阶段';
+  const phaseLabel = workflow?.state === 'break' ? '休息阶段' : workflow?.state === 'settlement' ? '结算阶段' : '当前阶段';
   const actionLabel = workflow?.pending_task_selection
     ? '选择任务'
     : !workflow || workflow.state === 'normal'
     ? '开始学习'
-    : workflow.state === 'break'
-      ? '结束休息'
-      : workflow.pending_confirmation
-        ? '确认流转'
-        : '结束阶段';
+    : workflow.state === 'settlement'
+      ? '结束工作流'
+      : workflow.state === 'break'
+        ? '结束休息'
+        : workflow.pending_confirmation
+          ? '确认流转'
+          : '结束阶段';
   const selectedWorkflowStartPreset = useMemo(
     () => workflowStartPresets.find((preset) => preset.id === selectedWorkflowStartId) ?? workflowStartPresets[0] ?? null,
     [selectedWorkflowStartId, workflowStartPresets],
@@ -339,6 +341,8 @@ export default function HomeRightDashboard() {
         return;
       } else if (workflow.state === 'break') {
         await apiJson('/todo/focus/workflow/skip_phase', { method: 'POST' });
+      } else if (workflow.state === 'settlement') {
+        await apiJson('/todo/focus/workflow/confirm-settlement', { method: 'POST' });
       } else {
         await apiJson('/todo/focus/workflow/confirm', { method: 'POST' });
       }

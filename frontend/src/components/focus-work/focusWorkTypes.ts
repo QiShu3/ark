@@ -19,7 +19,8 @@ export type FocusPhaseRuntimeState =
   | 'task_already_completed'
   | 'phase_time_expired_prompt'
   | 'pending_task_selection'
-  | 'break_running';
+  | 'break_running'
+  | 'workflow_settlement';
 
 export type FocusWorkRunSummary = {
   id: string;
@@ -35,6 +36,25 @@ export type FocusWorkRunSummary = {
   config_snapshot?: Record<string, unknown> | null;
   completion_reason?: string | null;
   source_run_id?: string | null;
+};
+
+export type WorkflowSettlementPhase = {
+  name: string;
+  focus_work_type: FocusWorkType;
+  answered_count: number;
+  correct_count: number;
+  accuracy: number | null;
+  duration_seconds: number;
+};
+
+export type WorkflowSettlement = {
+  workflow_name: string;
+  phases: WorkflowSettlementPhase[];
+  total_phases: number;
+  total_answered: number;
+  total_correct: number;
+  total_accuracy: number | null;
+  total_duration_seconds: number;
 };
 
 export type FocusWorkRendererProps = {
@@ -55,6 +75,7 @@ export type FocusWorkSnapshot = WorkflowSnapshot & {
   phase_runtime_state_before_timeout_prompt?: FocusPhaseRuntimeState | null;
   active_run_id?: string | null;
   active_run?: FocusWorkRunSummary | null;
+  workflow_settlement?: WorkflowSettlement | null;
 };
 
 

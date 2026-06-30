@@ -664,7 +664,7 @@ async def init_todo(app: Any) -> None:
               ended_at TIMESTAMPTZ NULL,
               CONSTRAINT chk_focus_workflows_focus_duration CHECK (focus_duration >= 60),
               CONSTRAINT chk_focus_workflows_break_duration CHECK (break_duration >= 60),
-              CONSTRAINT chk_focus_workflows_phase CHECK (current_phase IN ('focus', 'break')),
+              CONSTRAINT chk_focus_workflows_phase CHECK (current_phase IN ('focus', 'break', 'settlement')),
               CONSTRAINT chk_focus_workflows_status CHECK (status IN ('active', 'stopped'))
             );
             """
@@ -712,7 +712,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE focus_workflows DROP CONSTRAINT IF EXISTS chk_focus_workflows_phase;")
         await conn.execute(
-            "ALTER TABLE focus_workflows ADD CONSTRAINT chk_focus_workflows_phase CHECK (current_phase IN ('focus', 'break'));"
+            "ALTER TABLE focus_workflows ADD CONSTRAINT chk_focus_workflows_phase CHECK (current_phase IN ('focus', 'break', 'settlement'));"
         )
         await conn.execute("ALTER TABLE focus_workflows DROP CONSTRAINT IF EXISTS chk_focus_workflows_status;")
         await conn.execute(

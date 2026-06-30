@@ -43,10 +43,12 @@ from .helpers import (
     _build_appointment_occurrence,
     _build_completion_state,
     _build_default_phases,
+    _build_workflow_settlement,
     _check_task_completion_status,
     _close_open_focus_app_work_log,
     _close_open_focus_log,
     _complete_focus_work_run,
+    _complete_focus_workflow,
     _completion_records_for_user,
     _create_focus_work_run,
     _create_or_update_managed_app_task,
@@ -432,6 +434,13 @@ async def _row_to_focus_workflow_with_task_check(
     if active_run_id is not None:
         active_run = await _fetch_focus_work_run_summary(conn, user_id=user_id, run_id=active_run_id)
 
+    workflow_settlement = None
+    if str(_row_value(row, "current_phase", "")) == "settlement":
+        settlement_workflow_name = str(row.get("workflow_name", "工作流") if hasattr(row, "get") else _row_value(row, "workflow_name") or "工作流")
+        workflow_settlement = await _build_workflow_settlement(
+            conn, _row_value(row, "id"), settlement_workflow_name, user_id
+        )
+
     return _row_to_focus_workflow(
         row,
         completed_workflow_name=completed_workflow_name,
@@ -439,6 +448,7 @@ async def _row_to_focus_workflow_with_task_check(
         task_blocked_reason=task_blocked_reason,
         active_run=active_run,
         effective_phase_runtime_state=effective_phase_runtime_state,
+        workflow_settlement=workflow_settlement,
         **task_kwargs
     )
 
@@ -3647,10 +3657,11 @@ async def _record_completed_focus_work_node(conn: Any, user_id: int, run: Any) -
     config = _row_value(run, "config_snapshot") or {}
     name = str(config.get("deliberate_name") or config.get("name") or "专注工作")
     accuracy = progress.get("accuracy")
+    run_summary = progress.get("run_summary") if isinstance(progress, dict) else {}
+    if not isinstance(run_summary, dict):
+        run_summary = {}
     if not isinstance(accuracy, (int, float)):
-        run_summary = progress.get("run_summary")
-        if isinstance(run_summary, dict):
-            accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate")
+        accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate")
     raw_config_id = config.get("deliberate_config_id") or config.get("config_id")
     raw_focus_work_type = _row_value(run, "focus_work_type")
     node = {
@@ -3662,6 +3673,9 @@ async def _record_completed_focus_work_node(conn: Any, user_id: int, run: Any) -
         "status": "completed",
         "children": [],
         "created_at": datetime.now(UTC).isoformat(),
+        "answered_count": int(run_summary.get("answered_count", 0)),
+        "correct_count": int(run_summary.get("correct_count", 0)),
+        "duration_seconds": int(run_summary.get("duration_seconds", 0)),
     }
     if isinstance(accuracy, (int, float)):
         node["accuracy"] = float(accuracy)
@@ -4434,11 +4448,24 @@ async def fork_focus_workflow_run(
                     "deliberate_kind": child_kind,
                 }
 
+            phases = _normalize_workflow_phases(
+                _row_value(row, "phases", []),
+                fallback_focus_duration=int(_row_value(row, "focus_duration", 60)),
+                fallback_break_duration=int(_row_value(row, "break_duration", 60)),
+            )
+            current_index = _safe_int(_row_value(row, "current_phase_index", 0), 0)
+            if 0 <= current_index < len(phases):
+                parent_phase = dict(phases[current_index])
+            else:
+                parent_phase = None
+
             config_snapshot = {
                 "focus_work_type": fork_focus_work_type,
                 "bank_id": fork_bank_id,
                 "scope": fork_scope,
             }
+            if parent_phase is not None:
+                config_snapshot["parent_phase"] = parent_phase
             target_count = None
             if fork_completion:
                 target_count = _safe_int(fork_completion.get("question_count"), 0)
@@ -4456,7 +4483,7 @@ async def fork_focus_workflow_run(
                 conn,
                 user_id=int(user.id),
                 workflow_id=row["id"],
-                phase_index=_safe_int(_row_value(row, "current_phase_index", 0), 0),
+                phase_index=current_index,
                 task_id=None,
                 focus_work_type=fork_focus_work_type,
                 app_id=None,
@@ -4473,14 +4500,8 @@ async def fork_focus_workflow_run(
                     run_id=str(deliberate_context["deliberate_run_id"]),
                     focus_run_id=run.id,
                 )
-                phases = _normalize_workflow_phases(
-                    _row_value(row, "phases", []),
-                    fallback_focus_duration=int(_row_value(row, "focus_duration", 60)),
-                    fallback_break_duration=int(_row_value(row, "break_duration", 60)),
-                )
-                current_index = _safe_int(_row_value(row, "current_phase_index", 0), 0)
-                if 0 <= current_index < len(phases):
-                    next_phase = dict(phases[current_index])
+                if parent_phase is not None:
+                    next_phase = dict(parent_phase)
                     next_phase.update(child_phase_updates)
                     next_phase.update(deliberate_context)
                     next_phase["focus_work_type"] = fork_focus_work_type
@@ -4509,6 +4530,75 @@ async def fork_focus_workflow_run(
                 workflow_id=row["id"],
                 run_id=run.id,
                 phase_runtime_state="running_run",
+            )
+            return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
+
+
+@router.post("/focus/workflow/runs/{run_id}/return-to-parent", response_model=FocusWorkflowOut)
+async def return_to_parent_focus_workflow(
+    request: Request,
+    run_id: UUID,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+
+            child_run = await _fetch_focus_work_run_summary(conn, user_id=int(user.id), run_id=run_id)
+            if child_run is None or child_run.workflow_id != row["id"]:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="专注轮次不存在")
+            if child_run.status != "content_completed":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次尚未自然完成")
+            if child_run.source_run_id is None:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次非 fork 产生的子专注")
+
+            parent_phase = (child_run.config_snapshot or {}).get("parent_phase")
+            if not isinstance(parent_phase, dict) or not parent_phase:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="子专注缺少父阶段配置")
+
+            await _complete_focus_work_run(
+                conn,
+                user_id=int(user.id),
+                run_id=child_run.id,
+                completion_reason="returned_to_parent",
+            )
+
+            if child_run.source_run_id is not None:
+                parent_run = await _fetch_focus_work_run_summary(conn, user_id=int(user.id), run_id=child_run.source_run_id)
+                if parent_run is not None and parent_run.status == "content_completed":
+                    await _complete_focus_work_run(
+                        conn,
+                        user_id=int(user.id),
+                        run_id=parent_run.id,
+                        completion_reason="returned_to_parent",
+                    )
+
+            phases = _normalize_workflow_phases(
+                _row_value(row, "phases", []),
+                fallback_focus_duration=int(_row_value(row, "focus_duration", 60)),
+                fallback_break_duration=int(_row_value(row, "break_duration", 60)),
+            )
+            current_index = _safe_int(_row_value(row, "current_phase_index", 0), 0)
+            if 0 <= current_index < len(phases):
+                phases[current_index] = parent_phase
+                await conn.execute(
+                    """
+                    UPDATE focus_workflows
+                    SET phases = $1::jsonb, updated_at = NOW()
+                    WHERE id = $2
+                    """,
+                    _to_jsonb_param(phases),
+                    row["id"],
+                )
+
+            next_row = await _set_workflow_active_run(
+                conn,
+                workflow_id=row["id"],
+                run_id=None,
+                phase_runtime_state=None,
             )
             return await _row_to_focus_workflow_with_task_check(conn, int(user.id), next_row)
 
@@ -4617,6 +4707,30 @@ async def complete_focus_workflow_run_task_and_end_phase(
                 completion_status="completed",
             )
     return next_out
+
+
+@router.post("/focus/workflow/confirm-settlement", response_model=FocusWorkflowOut)
+async def confirm_workflow_settlement(
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> FocusWorkflowOut:
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await _fetch_active_workflow_row(conn, int(user.id))
+            if row is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            if str(row["current_phase"]) != "settlement":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前不在结算阶段")
+
+            workflow_name = str(_row_value(row, "workflow_name") or "工作流")
+            return await _complete_focus_workflow(
+                conn,
+                row["id"],
+                workflow_name,
+                int(user.id),
+                record_status="completed",
+            )
 
 
 @router.post("/focus/workflow/end-phase", response_model=FocusWorkflowOut)

@@ -176,6 +176,7 @@ type FocusWorkbenchPanelProps = {
   onFork?: () => void;
   onForkWithChild?: (childConfigId: string) => void;
   forkChildren?: { config_id: string; label: string; is_recommended: boolean }[];
+  onReturnToParent?: () => void;
   onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
 };
 
@@ -192,6 +193,7 @@ export default function FocusWorkbenchPanel({
   onFork,
   onForkWithChild,
   forkChildren,
+  onReturnToParent,
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
   const noAvailableContent = runHasNoAvailableContent(activeRun);
@@ -202,8 +204,48 @@ export default function FocusWorkbenchPanel({
   const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
 
   const hasChildren = forkChildren && forkChildren.length > 0;
+  const isChildRun = Boolean(activeRun?.source_run_id);
 
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
+    if (isChildRun) {
+      return (
+        <ActionPanel
+          label="Forked Round Complete"
+          heading="本轮专注工作已完成"
+          description="当前为 fork 的子阶段，请选择回到原专注工作继续。"
+          primaryLabel="回到原专注工作"
+          primaryDisabled={busy || !activeRun}
+          onPrimary={() => onReturnToParent?.()}
+          secondaryLabel="再来一轮"
+          secondaryDisabled={busy || !activeRun}
+          onSecondary={onCreateExtraRun}
+        >
+          {hasMasteryCheckFailed && hasChildren && (
+            <div className="mb-3 space-y-2">
+              <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到下一个子专注：</div>
+              {forkChildren.map((child) => (
+                <button
+                  key={child.config_id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onForkWithChild?.(child.config_id)}
+                  className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
+                >
+                  <div className="font-medium">{child.label || child.config_id}</div>
+                  {child.is_recommended && (
+                    <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {runSummary && Object.keys(runSummary).length > 0 && (
+            <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
+          )}
+        </ActionPanel>
+      );
+    }
+
     return (
       <ActionPanel
         label="Round Complete"
@@ -248,11 +290,50 @@ export default function FocusWorkbenchPanel({
         <ActionPanel
           label="No Content"
           heading="暂无可加练内容"
-          description="当前题库暂时没有可继续练习的内容，可以先结束本阶段。"
-          primaryLabel="结束阶段"
+          description={isChildRun ? "当前为 fork 的子阶段，请回到原专注工作继续。" : "当前题库暂时没有可继续练习的内容，可以先结束本阶段。"}
+          primaryLabel={isChildRun ? "回到原专注工作" : "结束阶段"}
           primaryDisabled={busy}
-          onPrimary={onEndPhase}
+          onPrimary={isChildRun ? () => onReturnToParent?.() : onEndPhase}
         />
+      );
+    }
+
+    if (isChildRun) {
+      return (
+        <ActionPanel
+          label="Forked Round Complete"
+          heading="本轮专注已完成"
+          description="当前为 fork 的子阶段，请选择回到原专注工作继续。"
+          primaryLabel="回到原专注工作"
+          primaryDisabled={busy || !activeRun}
+          onPrimary={() => onReturnToParent?.()}
+          secondaryLabel="再来一轮"
+          secondaryDisabled={busy || !activeRun}
+          onSecondary={onCreateExtraRun}
+        >
+          {hasMasteryCheckFailed && hasChildren && (
+            <div className="mb-3 space-y-2">
+              <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到下一个子专注：</div>
+              {forkChildren.map((child) => (
+                <button
+                  key={child.config_id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onForkWithChild?.(child.config_id)}
+                  className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
+                >
+                  <div className="font-medium">{child.label || child.config_id}</div>
+                  {child.is_recommended && (
+                    <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {runSummary && Object.keys(runSummary).length > 0 && (
+            <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
+          )}
+        </ActionPanel>
       );
     }
 

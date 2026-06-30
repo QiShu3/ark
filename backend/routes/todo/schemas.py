@@ -44,6 +44,7 @@ FocusPhaseRuntimeState = Literal[
     "phase_time_expired_prompt",
     "pending_task_selection",
     "break_running",
+    "workflow_settlement",
 ]
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
 
@@ -542,8 +543,27 @@ class FocusWorkRunSummaryOut(BaseModel):
     source_run_id: UUID | None = None
 
 
+class WorkflowSettlementPhaseOut(BaseModel):
+    name: str
+    focus_work_type: FocusWorkType
+    answered_count: int = 0
+    correct_count: int = 0
+    accuracy: float | None = None
+    duration_seconds: int = 0
+
+
+class WorkflowSettlementOut(BaseModel):
+    workflow_name: str
+    phases: list[WorkflowSettlementPhaseOut]
+    total_phases: int
+    total_answered: int
+    total_correct: int
+    total_accuracy: float | None = None
+    total_duration_seconds: int
+
+
 class FocusWorkflowOut(BaseModel):
-    state: Literal["normal", "focus", "break"]
+    state: Literal["normal", "focus", "break", "settlement"]
     workflow_name: str | None = None
     current_phase_index: int | None = None
     phases: list[FocusWorkflowPhase] = Field(default_factory=list)
@@ -576,6 +596,7 @@ class FocusWorkflowOut(BaseModel):
     phase_runtime_state_before_timeout_prompt: FocusPhaseRuntimeState | None = None
     active_run_id: UUID | None = None
     active_run: FocusWorkRunSummaryOut | None = None
+    workflow_settlement: WorkflowSettlementOut | None = None
 
 
 class FocusWorkflowPresetCreateRequest(BaseModel):

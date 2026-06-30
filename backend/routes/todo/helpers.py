@@ -32,6 +32,8 @@ from .schemas import (
     PhaseType,
     TaskOut,
     TaskType,
+    WorkflowSettlementOut,
+    WorkflowSettlementPhaseOut,
 )
 
 UTC = getattr(timezone, "utc")
@@ -1868,6 +1870,7 @@ def _row_to_focus_workflow(
     task_blocked_reason: str | None = None,
     active_run: FocusWorkRunSummaryOut | None = None,
     effective_phase_runtime_state: str | None = None,
+    workflow_settlement: WorkflowSettlementOut | None = None,
 ) -> FocusWorkflowOut:
     """将工作流行数据转换为返回模型。"""
     if row is None:
@@ -1956,6 +1959,7 @@ def _row_to_focus_workflow(
         phase_runtime_state_before_timeout_prompt=phase_runtime_state_before_timeout_prompt,
         active_run_id=active_run_id,
         active_run=active_run,
+        workflow_settlement=workflow_settlement,
     )
 
 
@@ -2406,12 +2410,100 @@ async def _advance_focus_workflow_to_next_phase(
             is_task_completed_today=is_task_completed_today,
             task_blocked_reason=task_blocked_reason,
         )
-    return await _complete_focus_workflow(
-        conn,
+    settlement = await _build_workflow_settlement(conn, workflow_id, workflow_name, user_id)
+    settlement_row = await conn.fetchrow(
+        """
+        UPDATE focus_workflows
+        SET current_phase = 'settlement',
+            phase_runtime_state = 'workflow_settlement',
+            active_run_id = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, user_id, task_id, runtime_task_id, workflow_name, phases, current_phase_index,
+                  focus_duration, break_duration, current_phase, phase_started_at,
+                  phase_planned_duration, pending_confirmation, pending_task_selection,
+                  active_focus_work_type, focus_work_display_state, focus_work_result,
+                  focus_work_progress_snapshot, is_paused, paused_at, record_focus,
+                  active_run_id, phase_runtime_state, phase_runtime_state_before_timeout_prompt
+        """,
         workflow_id,
-        workflow_name,
+    )
+    return _row_to_focus_workflow(
+        settlement_row,
+        workflow_settlement=settlement,
+    )
+
+
+async def _build_workflow_settlement(
+    conn: Any,
+    workflow_id: UUID,
+    workflow_name: str,
+    user_id: int,
+) -> WorkflowSettlementOut:
+    rows = await conn.fetch(
+        """
+        SELECT focus_work_type, config_snapshot, progress_snapshot, phase_index
+        FROM focus_work_runs
+        WHERE workflow_id = $1 AND user_id = $2 AND status = 'completed' AND counts_for_task_completion = true
+        ORDER BY phase_index, created_at
+        """,
+        workflow_id,
         user_id,
-        record_status=completion_status,
+    )
+    phase_runs: dict[int, Any] = {}
+    for r in rows:
+        phase_runs[r["phase_index"]] = r
+
+    phases: list[WorkflowSettlementPhaseOut] = []
+    total_answered = 0
+    total_correct = 0
+    total_duration = 0
+
+    for idx in sorted(phase_runs.keys()):
+        r = phase_runs[idx]
+        config = r["config_snapshot"] or {}
+        if isinstance(config, str):
+            config = json.loads(config)
+        progress = r["progress_snapshot"] or {}
+        if isinstance(progress, str):
+            progress = json.loads(progress)
+        run_summary = progress.get("run_summary", {}) if isinstance(progress, dict) else {}
+
+        name = config.get("deliberate_name") or config.get("name") or config.get("task_title") or f"阶段 {idx + 1}"
+        fw_type = r["focus_work_type"]
+        answered = run_summary.get("answered_count", 0)
+        correct = run_summary.get("correct_count", 0)
+        raw_accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate")
+        duration = run_summary.get("duration_seconds", 0)
+
+        accuracy: float | None = None
+        if isinstance(raw_accuracy, (int, float)):
+            accuracy = float(raw_accuracy)
+
+        phases.append(WorkflowSettlementPhaseOut(
+            name=name,
+            focus_work_type=fw_type,
+            answered_count=answered,
+            correct_count=correct,
+            accuracy=accuracy,
+            duration_seconds=duration,
+        ))
+        total_answered += answered
+        total_correct += correct
+        total_duration += duration
+
+    total_accuracy: float | None = None
+    if total_answered > 0:
+        total_accuracy = round(total_correct / total_answered * 100, 1)
+
+    return WorkflowSettlementOut(
+        workflow_name=workflow_name,
+        phases=phases,
+        total_phases=len(phases),
+        total_answered=total_answered,
+        total_correct=total_correct,
+        total_accuracy=total_accuracy,
+        total_duration_seconds=total_duration,
     )
 
 
