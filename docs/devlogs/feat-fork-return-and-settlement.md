@@ -2,6 +2,23 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-06-30 · 04fa5ee · feat: 组合工作流记录点击查看结算弹窗
+
+- 用户提出的需求：
+  - 刻意学习流页面的"组合工作流记录"板块，点击记录卡片显示结算弹窗
+  - 结算数据是否持久化保存
+
+- 本次完成的工作：
+  - 后端新增 `GET /todo/focus/workflow/records/{record_id}/settlement` 端点，按 record 重建 settlement 数据（`_build_workflow_settlement` 从 `focus_work_runs` 表实时构建，数据持久化）
+  - 前端 `focusWorkflow.ts` 新增 `fetchWorkflowRecordSettlement` API 函数
+  - 前端 `WorkflowSettlementModal` 增加 `onClose` 属性支持历史查看模式（按钮改为"关闭"）
+  - 前端 `DeliberateWorkflow` 组合工作流记录卡片改为可点击按钮，点击后弹出结算弹窗
+
+- 验证情况：
+  - `cd backend && uv run ruff check routes/todo/routes.py`，零错误
+  - `cd frontend && pnpm check`，零错误
+  - `cd frontend && npx eslint` 针对修改文件，无新增问题
+
 ### 2026-06-30 · e11cd13 · feat: 工作流结算弹窗重构 — 过程树形展示 + 汇总统计
 
 - 用户提出的需求：
