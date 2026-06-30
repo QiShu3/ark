@@ -45,18 +45,35 @@ export type WorkflowSettlementPhase = {
   correct_count: number;
   accuracy: number | null;
   duration_seconds: number;
-  is_fork: boolean;
-  parent_phase_name: string | null;
+};
+
+export type WorkflowSettlementNode = {
+  name: string;
+  focus_work_type?: FocusWorkType | null;
+  answered_count: number;
+  correct_count: number;
+  accuracy: number | null;
+  duration_seconds: number;
+  status: 'passed' | 'failed' | 'completed' | 'return';
+  is_return_node: boolean;
+  return_to_name?: string | null;
+  children: WorkflowSettlementNode[];
 };
 
 export type WorkflowSettlement = {
   workflow_name: string;
+  result: string;
   phases: WorkflowSettlementPhase[];
+  nodes: WorkflowSettlementNode[];
   total_phases: number;
   total_answered: number;
   total_correct: number;
   total_accuracy: number | null;
   total_duration_seconds: number;
+  fork_count: number;
+  retry_count: number;
+  best_accuracy: number | null;
+  first_try_passed_count: number;
 };
 
 export type FocusWorkRendererProps = {

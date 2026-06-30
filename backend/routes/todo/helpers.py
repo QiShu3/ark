@@ -32,6 +32,7 @@ from .schemas import (
     PhaseType,
     TaskOut,
     TaskType,
+    WorkflowSettlementNodeOut,
     WorkflowSettlementOut,
     WorkflowSettlementPhaseOut,
 )
@@ -2443,88 +2444,240 @@ async def _build_workflow_settlement(
     rows = await conn.fetch(
         """
         SELECT id, focus_work_type, config_snapshot, progress_snapshot, phase_index,
-               source_run_id, completion_reason
+               completion_reason, source_run_id, created_at
         FROM focus_work_runs
-        WHERE workflow_id = $1 AND user_id = $2 AND status = 'completed' AND counts_for_task_completion = true
+        WHERE workflow_id = $1 AND user_id = $2 AND status IN ('completed', 'abandoned')
         ORDER BY phase_index, created_at
         """,
         workflow_id,
         user_id,
     )
 
-    parent_names: dict[str, str] = {}
-    for r in rows:
-        pid = r["source_run_id"]
-        if pid is not None:
-            for pr in rows:
-                if str(pr["id"]) == str(pid):
-                    pconfig = pr["config_snapshot"] or {}
-                    if isinstance(pconfig, str):
-                        pconfig = json.loads(pconfig)
-                    pname = pconfig.get("deliberate_name") or pconfig.get("name") or ""
-                    if pname:
-                        parent_names[str(pid)] = str(pname)
-                    break
+    def parse_json(raw: Any) -> dict[str, Any]:
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return {}
+        if isinstance(raw, dict):
+            return raw
+        return {}
 
-    filtered: list[Any] = []
-
-    phases: list[WorkflowSettlementPhaseOut] = []
-    total_answered = 0
-    total_correct = 0
-    total_duration = 0
-
-    for r in filtered:
-        config = r["config_snapshot"] or {}
-        if isinstance(config, str):
-            config = json.loads(config)
-        progress = r["progress_snapshot"] or {}
-        if isinstance(progress, str):
-            progress = json.loads(progress)
+    def extract_node(r: dict[str, Any], phase_letter: str) -> dict[str, Any]:
+        config = parse_json(r.get("config_snapshot"))
+        progress = parse_json(r.get("progress_snapshot"))
         run_summary = progress.get("run_summary", {}) if isinstance(progress, dict) else {}
+        mastery_check = progress.get("mastery_check") or run_summary.get("mastery_check") or {}
 
-        name = config.get("deliberate_name") or config.get("name") or config.get("task_title") or "专注工作"
-        fw_type = r["focus_work_type"]
+        name = config.get("deliberate_name") or config.get("name") or config.get("task_title") or r.get("focus_work_type", "")
+        fw_type = r.get("focus_work_type")
         answered = run_summary.get("answered_count", 0)
         correct = run_summary.get("correct_count", 0)
-        raw_accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate")
+        raw_accuracy = run_summary.get("accuracy") or run_summary.get("correct_rate") or mastery_check.get("accuracy")
         duration = run_summary.get("duration_seconds", 0)
 
         accuracy: float | None = None
         if isinstance(raw_accuracy, (int, float)):
             accuracy = float(raw_accuracy)
 
-        is_fork = r["source_run_id"] is not None
-        parent_phase_name: str | None = None
-        if is_fork and str(r["source_run_id"]) in parent_names:
-            parent_phase_name = parent_names[str(r["source_run_id"])]
+        node_status = "completed"
+        if isinstance(mastery_check, dict) and mastery_check.get("enabled"):
+            node_status = "passed" if mastery_check.get("passed") else "failed"
 
-        phases.append(WorkflowSettlementPhaseOut(
-            name=name,
-            focus_work_type=fw_type,
-            answered_count=answered,
-            correct_count=correct,
-            accuracy=accuracy,
-            duration_seconds=duration,
-            is_fork=is_fork,
-            parent_phase_name=parent_phase_name,
-        ))
-        total_answered += answered
-        total_correct += correct
-        total_duration += duration
+        return {
+            "id": str(r.get("id", "")),
+            "source_run_id": str(r["source_run_id"]) if r.get("source_run_id") else None,
+            "phase_index": r.get("phase_index", 0),
+            "name": f"{phase_letter} {name}",
+            "focus_work_type": fw_type,
+            "answered_count": answered,
+            "correct_count": correct,
+            "accuracy": accuracy,
+            "duration_seconds": duration,
+            "status": node_status,
+            "is_return_node": False,
+            "return_to_name": None,
+            "children": [],
+            "completion_reason": r.get("completion_reason"),
+        }
 
+    run_map: dict[str, dict[str, Any]] = {}
+    for r_dict in [dict(r) for r in rows]:
+        run_map[str(r_dict["id"])] = r_dict
+
+    phase_letters: dict[int, str] = {}
+    seen_phases: set[int] = set()
+    for r_dict in [dict(r) for r in rows]:
+        pi = r_dict.get("phase_index", 0)
+        if pi not in seen_phases:
+            seen_phases.add(pi)
+        letter_idx = sorted(seen_phases).index(pi)
+        phase_letters[pi] = chr(ord("A") + letter_idx)
+
+    all_nodes: list[dict[str, Any]] = []
+    for r_dict in [dict(r) for r in rows]:
+        pi = r_dict.get("phase_index", 0)
+        node = extract_node(r_dict, phase_letters.get(pi, ""))
+        node["_rid"] = str(r_dict["id"])
+        node["_source_run_id"] = str(r_dict["source_run_id"]) if r_dict.get("source_run_id") else None
+        all_nodes.append(node)
+
+    node_by_id: dict[str, dict[str, Any]] = {n["_rid"]: n for n in all_nodes}
+    top_nodes: list[dict[str, Any]] = []
+    for node in all_nodes:
+        parent_id = node.get("_source_run_id")
+        if parent_id and parent_id in node_by_id:
+            node_by_id[parent_id]["children"].append(node)
+        else:
+            top_nodes.append(node)
+
+    top_nodes.sort(key=lambda n: (n.get("phase_index", 0), n.get("_rid", "")))
+
+    for node in all_nodes:
+        node["children"].sort(key=lambda c: c.get("_rid", ""))
+
+    def _clean_node(n: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "name": n.get("name", ""),
+            "focus_work_type": n.get("focus_work_type"),
+            "answered_count": n.get("answered_count", 0),
+            "correct_count": n.get("correct_count", 0),
+            "accuracy": n.get("accuracy"),
+            "duration_seconds": n.get("duration_seconds", 0),
+            "status": n.get("status", "completed"),
+            "is_return_node": n.get("is_return_node", False),
+            "return_to_name": n.get("return_to_name"),
+            "children": [_clean_node(c) for c in n.get("children", [])],
+        }
+
+    def _inject_return_nodes(children: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        for child in children:
+            result.append(child)
+            if child.get("completion_reason") == "returned_to_parent":
+                return_name = None
+                source_id = child.get("_source_run_id")
+                if source_id and source_id in run_map:
+                    c = parse_json(run_map[source_id].get("config_snapshot"))
+                    return_name = c.get("deliberate_name") or c.get("name") or c.get("task_title") or ""
+                result.append({
+                    "name": "回到" + (f"《{return_name}》" if return_name else "原工作"),
+                    "focus_work_type": None,
+                    "answered_count": 0,
+                    "correct_count": 0,
+                    "accuracy": None,
+                    "duration_seconds": 0,
+                    "status": "return",
+                    "is_return_node": True,
+                    "return_to_name": return_name,
+                    "children": [],
+                    "_rid": "",
+                    "_source_run_id": None,
+                    "completion_reason": None,
+                })
+            child["children"] = _inject_return_nodes(child.get("children", []))
+        return result
+
+    for node in top_nodes:
+        node["children"] = _inject_return_nodes(node.get("children", []))
+
+    nodes = [_clean_node(n) for n in top_nodes]
+
+    fork_count = sum(1 for n in all_nodes if n.get("_source_run_id"))
+    phase_attempts: dict[int, list[dict[str, Any]]] = {}
+    for n in top_nodes:
+        pi = n.get("phase_index", 0)
+        phase_attempts.setdefault(pi, []).append(n)
+    retry_count = sum(max(0, len(attempts) - 1) for attempts in phase_attempts.values())
+    first_try_passed = 0
+    for pi, attempts in phase_attempts.items():
+        if attempts and attempts[0].get("status") == "passed":
+            first_try_passed += 1
+
+    all_accuracies = [n.get("accuracy") for n in all_nodes if isinstance(n.get("accuracy"), (int, float))]
+    best_accuracy = max(all_accuracies) if all_accuracies else None
+
+    total_duration = sum(n.get("duration_seconds", 0) for n in all_nodes)
+    total_answered = sum(n.get("answered_count", 0) for n in all_nodes)
+    total_correct = sum(n.get("correct_count", 0) for n in all_nodes)
     total_accuracy: float | None = None
     if total_answered > 0:
         total_accuracy = round(total_correct / total_answered * 100, 1)
 
+    node_outs = [
+        WorkflowSettlementNodeOut(
+            name=n["name"],
+            focus_work_type=n.get("focus_work_type"),
+            answered_count=n.get("answered_count", 0),
+            correct_count=n.get("correct_count", 0),
+            accuracy=n.get("accuracy"),
+            duration_seconds=n.get("duration_seconds", 0),
+            status=n.get("status", "completed"),
+            is_return_node=n.get("is_return_node", False),
+            return_to_name=n.get("return_to_name"),
+            children=[
+                WorkflowSettlementNodeOut(
+                    name=c["name"],
+                    focus_work_type=c.get("focus_work_type"),
+                    answered_count=c.get("answered_count", 0),
+                    correct_count=c.get("correct_count", 0),
+                    accuracy=c.get("accuracy"),
+                    duration_seconds=c.get("duration_seconds", 0),
+                    status=c.get("status", "completed"),
+                    is_return_node=c.get("is_return_node", False),
+                    return_to_name=c.get("return_to_name"),
+                    children=_build_children(c.get("children", [])),
+                )
+                for c in n.get("children", [])
+            ],
+        )
+        for n in nodes
+    ]
+
+    phases: list[WorkflowSettlementPhaseOut] = []
+    for n in top_nodes:
+        phases.append(WorkflowSettlementPhaseOut(
+            name=n.get("name", ""),
+            focus_work_type=n.get("focus_work_type") or "task_focus",
+            answered_count=n.get("answered_count", 0),
+            correct_count=n.get("correct_count", 0),
+            accuracy=n.get("accuracy"),
+            duration_seconds=n.get("duration_seconds", 0),
+        ))
+
     return WorkflowSettlementOut(
         workflow_name=workflow_name,
+        result="完成",
         phases=phases,
-        total_phases=len(phases),
+        nodes=node_outs,
+        total_phases=len(seen_phases),
         total_answered=total_answered,
         total_correct=total_correct,
         total_accuracy=total_accuracy,
         total_duration_seconds=total_duration,
+        fork_count=fork_count,
+        retry_count=retry_count,
+        best_accuracy=best_accuracy,
+        first_try_passed_count=first_try_passed,
     )
+
+
+def _build_children(children_data: list[dict[str, Any]]) -> list[WorkflowSettlementNodeOut]:
+    result: list[WorkflowSettlementNodeOut] = []
+    for c in children_data:
+        result.append(WorkflowSettlementNodeOut(
+            name=c.get("name", ""),
+            focus_work_type=c.get("focus_work_type"),
+            answered_count=c.get("answered_count", 0),
+            correct_count=c.get("correct_count", 0),
+            accuracy=c.get("accuracy"),
+            duration_seconds=c.get("duration_seconds", 0),
+            status=c.get("status", "completed"),
+            is_return_node=c.get("is_return_node", False),
+            return_to_name=c.get("return_to_name"),
+            children=_build_children(c.get("children", [])),
+        ))
+    return result
 
 
 async def _sync_active_focus_workflow(conn: Any, user_id: int) -> asyncpg.Record | None:

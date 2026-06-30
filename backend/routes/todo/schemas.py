@@ -550,18 +550,35 @@ class WorkflowSettlementPhaseOut(BaseModel):
     correct_count: int = 0
     accuracy: float | None = None
     duration_seconds: int = 0
-    is_fork: bool = False
-    parent_phase_name: str | None = None
+
+
+class WorkflowSettlementNodeOut(BaseModel):
+    name: str
+    focus_work_type: FocusWorkType | None = None
+    answered_count: int = 0
+    correct_count: int = 0
+    accuracy: float | None = None
+    duration_seconds: int = 0
+    status: str = "completed"
+    is_return_node: bool = False
+    return_to_name: str | None = None
+    children: list[WorkflowSettlementNodeOut] = Field(default_factory=list)
 
 
 class WorkflowSettlementOut(BaseModel):
     workflow_name: str
+    result: str = "完成"
     phases: list[WorkflowSettlementPhaseOut]
+    nodes: list[WorkflowSettlementNodeOut] = Field(default_factory=list)
     total_phases: int
     total_answered: int
     total_correct: int
     total_accuracy: float | None = None
     total_duration_seconds: int
+    fork_count: int = 0
+    retry_count: int = 0
+    best_accuracy: float | None = None
+    first_try_passed_count: int = 0
 
 
 class FocusWorkflowOut(BaseModel):
