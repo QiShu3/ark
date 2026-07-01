@@ -7,7 +7,7 @@ import pytest
 import httpx
 from fastapi import FastAPI
 
-from routes.input.routes import router
+from routes.focus_work.input.routes import router
 
 
 @dataclass
@@ -79,6 +79,13 @@ class _FakeInputConn:
             row = {"id": rid, "question_id": args[1] if len(args) > 1 else "q1"}
             self._questions.append(row)
             return row
+        if "INSERT INTO input_user_answers" in sql:
+            rid = self._new_id()
+            return {"id": rid}
+        if "set_id" in sql and "input_questions" in sql:
+            if self._sets:
+                return {"set_id": self._sets[0]["id"]}
+            return None
         if "SELECT" in sql and "input_questions" in sql:
             if self._questions:
                 return dict(self._questions[0])

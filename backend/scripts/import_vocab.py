@@ -37,8 +37,8 @@ def _resolve_source_dir(raw_path: str) -> Path:
 
 async def _run() -> None:
     from routes.auth_routes import _database_url
-    from routes.vocab.importer import build_deck_seed
-    from routes.vocab.repository import import_deck, init_tables, sync_vocab_deck_word_counts
+    from routes.focus_work.flash.importer import build_deck_seed
+    from routes.focus_work.flash.repository import import_deck, init_tables, sync_vocab_deck_word_counts
 
     args = _parse_args()
     source_dir = _resolve_source_dir(args.source_dir)

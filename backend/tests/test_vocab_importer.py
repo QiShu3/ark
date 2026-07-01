@@ -1,4 +1,4 @@
-from routes.vocab.importer import parse_sentence_entry
+from routes.focus_work.flash.importer import parse_sentence_entry
 
 
 def test_parse_sentence_entry_extracts_core_fields() -> None:

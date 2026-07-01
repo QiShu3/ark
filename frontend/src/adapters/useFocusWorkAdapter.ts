@@ -1,4 +1,4 @@
-import type { FocusWorkDeclaration } from '../lib/subAppRegistry';
+import type { FocusWorkDeclaration } from '../lib/appRegistry';
 import type { FocusWorkAdapter } from './types';
 import { useChoiceQuestionAdapter } from './useChoiceQuestionAdapter';
 import { useFlashcardAdapter } from './useFlashcardAdapter';
@@ -9,5 +9,5 @@ export function useFocusWorkAdapter(
 ): FocusWorkAdapter {
   const choice = useChoiceQuestionAdapter(fw, appId);
   const flashcard = useFlashcardAdapter(fw, appId);
-  return fw.template === 'flashcard' ? flashcard : choice;
+  return fw.template === 'flash_card' ? flashcard : choice;
 }

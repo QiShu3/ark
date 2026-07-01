@@ -8,6 +8,7 @@ import {
 } from './workflowProgress';
 import { apiJson } from '../lib/api';
 import { Coffee, Flame, Sparkles } from 'lucide-react';
+import { normalizeFocusWorkType } from './focus-work/focusWorkTypes';
 
 type WorkflowNavProgressProps = {
   workflow: WorkflowSnapshot;
@@ -22,10 +23,17 @@ function phaseStatusLabel(phaseType: 'focus' | 'break'): string {
 }
 
 const FOCUS_WORK_LABELS = {
-  vocab_today: '背单词',
-  review: '复习',
+  flash_card: '背单词',
+  choice: '选择练习',
+  input: '输入练习',
   task_focus: '任务专注',
 } as const;
+
+function resolveFocusWorkLabel(value: string | null | undefined): string | null {
+  const normalized = normalizeFocusWorkType(value);
+  if (!normalized) return null;
+  return FOCUS_WORK_LABELS[normalized] ?? null;
+}
 
 function resolveFeedbackCopy(
   prevState: WorkflowSnapshot['state'],
@@ -293,10 +301,10 @@ const WorkflowNavProgress: React.FC<WorkflowNavProgressProps> = ({ workflow }) =
           ? '已暂停'
         : phaseStatusLabel(phaseType);
   const activeFocusWorkLabel = workflowForMetrics.active_focus_work_type
-    ? FOCUS_WORK_LABELS[workflowForMetrics.active_focus_work_type]
+    ? resolveFocusWorkLabel(workflowForMetrics.active_focus_work_type)
     : null;
   const nextFocusWorkLabel = workflowForMetrics.next_focus_work_type
-    ? FOCUS_WORK_LABELS[workflowForMetrics.next_focus_work_type]
+    ? resolveFocusWorkLabel(workflowForMetrics.next_focus_work_type)
     : null;
   const focusWorkHint = workflowForMetrics.state === 'break'
     ? nextFocusWorkLabel

@@ -60,7 +60,7 @@ const mockConfig: DeliberateWorkflowConfig = {
   id: 'cfg-1',
   name: '每日练习',
   kind: 'choice',
-  focus_work_type: 'practice',
+  focus_work_type: 'choice',
   bank_id: 'bank-1',
   target_count: 20,
   scope: {},
@@ -80,7 +80,7 @@ const mockRuns: DeliberateWorkflowRun[] = [
   {
     id: 'run-1',
     config_id: 'cfg-1',
-    focus_work_type: 'practice',
+    focus_work_type: 'choice',
     bank_id: 'bank-1',
     status: 'completed',
     progress_snapshot: {},
@@ -210,7 +210,7 @@ describe('DeliberateWorkflow', () => {
   });
 
   it('starts a saved orchestration directly with preset config ids', async () => {
-    const firstConfig = { ...mockConfig, id: 'cfg-a', name: 'test3', kind: 'flashcard' as const, focus_work_type: 'vocab_today' as const };
+    const firstConfig = { ...mockConfig, id: 'cfg-a', name: 'test3', kind: 'flash_card' as const, focus_work_type: 'flash_card' as const };
     const secondConfig = { ...mockConfig, id: 'cfg-b', name: 'test2' };
     (listDeliberateWorkflows as ReturnType<typeof vi.fn>).mockResolvedValue([firstConfig, secondConfig]);
     (apiJson as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {

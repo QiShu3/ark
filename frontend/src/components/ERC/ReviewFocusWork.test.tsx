@@ -38,10 +38,11 @@ const reviewRun: FocusWorkRunSummary = {
   id: 'run-1',
   workflow_id: 'workflow-1',
   phase_index: 0,
-  focus_work_type: 'review',
+  focus_work_type: 'choice',
   counts_for_task_completion: true,
   status: 'running',
   config_snapshot: {
+    choiceMode: 'review',
     choice_scope: { bank_id: 'set-1' },
   },
 };
@@ -127,7 +128,7 @@ describe('ReviewFocusWork', () => {
     await user.click(screen.getByRole('button', { name: '提交答案' }));
 
     await waitFor(() => {
-      expect(submitChoiceAnswer).toHaveBeenCalledWith('kaoyan2_2025_text2_q26', 'A', 'review');
+      expect(submitChoiceAnswer).toHaveBeenCalledWith('kaoyan2_2025_text2_q26', 'A');
     });
     expect(await screen.findByRole('button', { name: '下一题' })).toBeInTheDocument();
   });

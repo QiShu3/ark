@@ -10,13 +10,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from routes.auth_routes import _AuthUser, get_current_user
-from routes.choice.adapters import resolve_choice_set_id
-from routes.choice.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
-from routes.choice.repository import aggregate_focus_stats, aggregate_set_snapshot, insert_set_snapshot
+from lib.focus_work_types import (
+    CHOICE_KIND,
+    FLASH_CARD_KIND,
+    INPUT_KIND,
+    normalize_focus_work_type,
+)
+from routes.focus_work.choice.adapters import resolve_choice_set_id
+from routes.focus_work.choice.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
+from routes.focus_work.choice.repository import aggregate_focus_stats, aggregate_set_snapshot, insert_set_snapshot
 from routes.deliberate import repository as deliberate_repository
 from routes.deliberate.service import validate_config_shape
-from routes.vocab.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
-from routes.vocab.repository import (
+from routes.focus_work.flash.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
+from routes.focus_work.flash.repository import (
     aggregate_vocab_focus_stats,
     aggregate_vocab_snapshot,
     import_deck,
@@ -815,7 +821,7 @@ async def get_vocab_app_task_status(
 ) -> AppTaskStatusOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="vocab_today")
+        return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="flash_card")
 
 
 @router.post("/app-tasks/vocab/init", response_model=AppTaskStatusOut)
@@ -843,7 +849,7 @@ async def init_vocab_app_task(
                 conn,
                 user_id=int(user.id),
                 app_id="vocab",
-                app_task_type="vocab_today",
+                app_task_type="flash_card",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
                 event_id=event_row["id"],
@@ -852,7 +858,7 @@ async def init_vocab_app_task(
                 conn,
                 user_id=int(user.id),
                 app_id="vocab",
-                app_task_type="vocab_today",
+                app_task_type="flash_card",
                 event_row=event_row,
             )
 
@@ -1226,7 +1232,7 @@ async def create_task(
         or body.app_instance_key
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由应用入口初始化创建"
         )
 
     pool = _pool_from_request(request)
@@ -1442,7 +1448,7 @@ async def update_task(
     }
     if reserved_app_task_fields & patch.keys():
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由子应用初始化创建"
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="应用托管任务只能由应用入口初始化创建"
         )
     if not patch:
         return await get_task(request, task_id, user)
@@ -1652,7 +1658,7 @@ async def complete_task(
             if bool(row["managed_by_app"]):
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="应用托管任务必须由子应用专注工作完成",
+                    detail="应用托管任务必须由应用入口专注工作完成",
                 )
 
             completion_state = await _build_completion_state(
@@ -3474,7 +3480,7 @@ async def start_focus_workflow_app_work(
     body: FocusWorkflowStartAppWorkRequest,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
-    """从子应用临时进入页面级专注工作。"""
+    """从应用入口临时进入页面级专注工作。"""
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -3484,11 +3490,11 @@ async def start_focus_workflow_app_work(
                 "duration": 1500,
                 "timer_mode": "countdown",
                 "task_id": None,
-                "focus_work_type": body.focus_work_type,
+                "focus_work_type": normalize_focus_work_type(body.focus_work_type),
                 "is_temporary": True,
                 "record_focus": bool(body.record_focus),
             }
-            if body.bank_id and body.focus_work_type in {"review", "practice"}:
+            if body.bank_id and normalize_focus_work_type(body.focus_work_type) == CHOICE_KIND:
                 resolved_bank_id = await _resolve_erc_app_set_id(conn, body.bank_id)
                 focus_phase["choice_scope"] = {"bank_id": resolved_bank_id}
             break_phase = {
@@ -3810,42 +3816,32 @@ def _runtime_state_for_completed_run(counts_for_task_completion: bool) -> str:
 
 
 def _focus_work_app_metadata(focus_work_type: str | None) -> tuple[str | None, str | None]:
-    if focus_work_type == "vocab_today":
-        return "vocab", "vocab_today"
-    if focus_work_type in {"review", "practice"}:
-        return "erc", focus_work_type
-    # input 是独立类型，不关联 vocab/erc 子应用
+    normalize_focus_work_type(focus_work_type)
+    # 专注工作不再回填老的应用分类元数据
     return None, None
 
 
 def _test_focus_phase_config(focus_work_type: str, bank_id: str | None, target_count: int) -> dict[str, Any]:
+    normalized = normalize_focus_work_type(focus_work_type)
     config: dict[str, Any] = {
-        "task_title": {
-            "vocab_today": "今日单词",
-            "review": "错题复习",
-            "practice": "真题练习",
-        }.get(focus_work_type, "测试专注工作"),
+            "task_title": {
+            FLASH_CARD_KIND: "闪卡",
+            CHOICE_KIND: "选择练习",
+            INPUT_KIND: "输入练习",
+        }.get(normalized, "测试专注工作"),
     }
-    if focus_work_type == "vocab_today":
+    if normalized == FLASH_CARD_KIND:
         if bank_id:
             config["deck_id"] = bank_id
         config["target_word_count"] = target_count
         config["daily_target_count"] = target_count
-    elif focus_work_type == "review":
+    elif normalized == CHOICE_KIND:
         if bank_id:
             config["set_id"] = bank_id
             config["article_set_id"] = bank_id
         config["target_question_count"] = target_count
         config["daily_question_target"] = target_count
-    elif focus_work_type == "practice":
-        if bank_id:
-            config["set_id"] = bank_id
-            config["article_set_id"] = bank_id
-        config["target_question_count"] = target_count
-        config["daily_question_target"] = target_count
-        config["target_article_count"] = target_count
-        config["daily_article_target"] = target_count
-    elif focus_work_type == "input":
+    elif normalized == INPUT_KIND:
         if bank_id:
             config["input_bank_id"] = bank_id
         config["target_question_count"] = target_count
@@ -3871,7 +3867,7 @@ async def _countup_focus_phase_from_deliberate_config(
 
     validate_config_shape(kind, focus_work_type, target_count)
     resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
-    if resolved_bank_id and focus_work_type in {"review", "practice"}:
+    if resolved_bank_id and normalize_focus_work_type(focus_work_type) == CHOICE_KIND:
         scope = dict(scope or {})
         scope["bank_id"] = resolved_bank_id
     completion = _countup_focus_completion(focus_work_type, completion, target_count)
@@ -3897,7 +3893,7 @@ async def _countup_focus_phase_from_deliberate_config(
 
 
 def _countup_focus_completion(focus_work_type: str, completion: dict[str, Any] | None, target_count: int) -> dict[str, Any] | None:
-    if focus_work_type not in {"practice", "review", "input"}:
+    if normalize_focus_work_type(focus_work_type) not in {CHOICE_KIND, INPUT_KIND}:
         return completion
     normalized = dict(completion or {})
     if normalized.get("mode") not in {"question_count", "exhaust_scope"}:
@@ -4226,9 +4222,8 @@ async def _build_run_metadata(
             )
             if config_row is not None:
                 config_snapshot.update(_config_payload(config_row["config"]))
-        if "choice_scope" not in config_snapshot and "set_id" in config_snapshot:
-            raw_set_id = config_snapshot.get("set_id")
-            if raw_set_id and focus_work_type in {"review", "practice"}:
+            raw_set_id = config_snapshot.get("set_id") if "set_id" in config_snapshot else None
+            if raw_set_id and normalize_focus_work_type(focus_work_type) == CHOICE_KIND and "choice_scope" not in config_snapshot:
                 try:
                     resolved = await _resolve_erc_app_set_id(conn, str(raw_set_id))
                     config_snapshot["choice_scope"] = {"bank_id": resolved}
@@ -4441,7 +4436,7 @@ async def fork_focus_workflow_run(
                     child_focus_work_type,
                     child_bank_id,
                 )
-                if resolved_child_bank_id and child_focus_work_type in {"review", "practice"}:
+                if resolved_child_bank_id and normalize_focus_work_type(child_focus_work_type) == CHOICE_KIND:
                     child_scope = dict(child_scope or {})
                     child_scope["bank_id"] = resolved_child_bank_id
                 if not child_completion:
@@ -4844,7 +4839,7 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> dict[s
     """Create a mastery snapshot after a focus run completes.
 
     For choice sets: writes to choice_set_snapshots.
-    For vocab decks: writes to vocab_deck_snapshots.
+    For flash-card decks: writes to flash_card_deck_snapshots.
     """
     try:
         # Use focus_work_type from the run itself, not from config_snapshot
@@ -4853,8 +4848,10 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> dict[s
         if not config:
             return None
 
-        # Vocab deck snapshot
-        if focus_work_type == "vocab_today":
+        focus_work_type = normalize_focus_work_type(focus_work_type)
+
+        # Flash-card snapshot
+        if focus_work_type == FLASH_CARD_KIND:
             deck_id = config.get("deck_id")
             if not deck_id:
                 return None
@@ -4869,14 +4866,14 @@ async def _maybe_snapshot_focus_run(conn: Any, user_id: int, run: Any) -> dict[s
                 trigger_reason="phase_end",
                 focus_run_id=str(run.id),
             )
-            return {"snapshot_id": snapshot_id, "snapshot_type": "vocab_deck"}
+            return {"snapshot_id": snapshot_id, "snapshot_type": "flash_card_deck"}
 
         # Input set snapshot
-        if focus_work_type == "input":
+        if focus_work_type == INPUT_KIND:
             input_bank_id = config.get("input_bank_id") or config.get("bank_id")
             if not input_bank_id:
                 return None
-            from routes.input.repository import (
+            from routes.focus_work.input.repository import (
                 aggregate_input_focus_stats,
                 aggregate_input_snapshot,
                 insert_input_snapshot,
@@ -5463,9 +5460,10 @@ class DeliberateWorkflowStartRequest(BaseModel):
 async def _resolve_countup_focus_bank_id(conn: Any, focus_work_type: str, bank_id: str | None) -> str | None:
     if not bank_id:
         return None
-    if focus_work_type == "vocab_today":
+    normalized = normalize_focus_work_type(focus_work_type)
+    if normalized == FLASH_CARD_KIND:
         return await _resolve_vocab_app_deck_id(conn, bank_id)
-    if focus_work_type in {"review", "practice"}:
+    if normalized == CHOICE_KIND:
         return await _resolve_erc_app_set_id(conn, bank_id)
     return bank_id
 
@@ -5482,11 +5480,12 @@ async def _create_countup_focus_workflow(
     completion: dict[str, Any] | None,
     deliberate_context: dict[str, Any] | None = None,
 ) -> Any:
-    if focus_work_type not in ("vocab_today", "review", "practice", "input"):
+    normalized = normalize_focus_work_type(focus_work_type)
+    if normalized not in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND}:
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
-    completion = _countup_focus_completion(focus_work_type, completion, target_count)
+    completion = _countup_focus_completion(normalized, completion, target_count)
 
     existing = await conn.fetchrow(
         "SELECT id FROM focus_workflows WHERE user_id = $1 AND status = 'active'",
@@ -5499,7 +5498,7 @@ async def _create_countup_focus_workflow(
         )
         await _complete_workflow_record(conn, user_id, existing["id"], status="abandoned")
 
-    resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
+    resolved_bank_id = await _resolve_countup_focus_bank_id(conn, normalized, bank_id)
     focus_phase = {
         "phase_type": "focus",
         "duration": 3600,
@@ -5512,10 +5511,10 @@ async def _create_countup_focus_workflow(
     }
     if scope is not None:
         choice_scope = dict(scope)
-        if resolved_bank_id and focus_work_type in {"review", "practice"}:
+        if resolved_bank_id and normalized == CHOICE_KIND:
             choice_scope["bank_id"] = resolved_bank_id
         focus_phase["choice_scope"] = choice_scope
-    elif resolved_bank_id and focus_work_type in {"review", "practice"}:
+    elif resolved_bank_id and normalized == CHOICE_KIND:
         focus_phase["choice_scope"] = {"bank_id": resolved_bank_id, "status": "all", "mode": "sequential"}
     if completion is not None:
         focus_phase["choice_completion"] = completion
@@ -5545,7 +5544,7 @@ async def _create_countup_focus_workflow(
             _to_jsonb_param([focus_phase]),
             60,
             60,
-            focus_work_type,
+            normalized,
             True,
         )
     except Exception as exc:
@@ -5603,8 +5602,15 @@ async def start_deliberate_workflow(
             else:
                 if not body.focus_work_type:
                     raise HTTPException(status_code=400, detail="缺少 focus_work_type")
-                focus_work_type = body.focus_work_type
-                kind = body.kind or ("flashcard" if focus_work_type == "vocab_today" else "choice")
+                focus_work_type = normalize_focus_work_type(body.focus_work_type)
+                if body.kind is not None:
+                    kind = body.kind
+                elif focus_work_type == FLASH_CARD_KIND:
+                    kind = FLASH_CARD_KIND
+                elif focus_work_type == INPUT_KIND:
+                    kind = INPUT_KIND
+                else:
+                    kind = CHOICE_KIND
                 name = (body.name or "未保存的刻意工作流").strip()
                 bank_id = body.bank_id
                 target_count = int(body.target_count)
@@ -5613,7 +5619,7 @@ async def start_deliberate_workflow(
 
             validate_config_shape(kind, focus_work_type, target_count)
             resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
-            if resolved_bank_id and focus_work_type in {"review", "practice"}:
+            if resolved_bank_id and normalize_focus_work_type(focus_work_type) == CHOICE_KIND:
                 scope = dict(scope or {})
                 scope["bank_id"] = resolved_bank_id
             config_snapshot = {

@@ -34,7 +34,6 @@ export default function CreateFocusWorkModal({
   const [banks, setBanks] = useState<DeliberateBankOption[]>([]);
   const [filters, setFilters] = useState<ChoiceFilters | null>(null);
   const [loadingBanks, setLoadingBanks] = useState(false);
-  const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
   const [name, setName] = useState('');
   const [bankId, setBankId] = useState('');
   const [targetCount, setTargetCount] = useState(10);
@@ -46,9 +45,9 @@ export default function CreateFocusWorkModal({
   const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(false);
   const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(80);
 
-  const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : kind === 'input' ? 'input' : choiceMode;
-  const bankCountLabel = kind === 'flashcard' ? '词' : '题';
-  const kindLabel = kind === 'flashcard' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
+  const focusWorkType: DeliberateFocusWorkType = kind;
+  const bankCountLabel = kind === 'flash_card' ? '词' : '题';
+  const kindLabel = kind === 'flash_card' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
 
   useEffect(() => {
     let ignore = false;
@@ -98,7 +97,7 @@ export default function CreateFocusWorkModal({
     };
   }, [kind, bankId]);
 
-  const scope = kind === 'flashcard' ? {} : {
+  const scope = kind === 'flash_card' ? {} : {
     bank_id: bankId,
     years: year !== '' ? [year] : undefined,
     subjects: subject ? [subject] : undefined,
@@ -107,7 +106,7 @@ export default function CreateFocusWorkModal({
     mode,
   };
 
-  const completion = kind === 'flashcard'
+  const completion = kind === 'flash_card'
     ? { mode: 'word_count', word_count: targetCount }
     : { mode: 'question_count', question_count: targetCount };
 
@@ -146,7 +145,7 @@ export default function CreateFocusWorkModal({
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">类型</label>
             <div className="grid grid-cols-3 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-              {(['choice', 'flashcard', 'input'] as DeliberateKind[]).map((item) => (
+              {(['choice', 'flash_card', 'input'] as DeliberateKind[]).map((item) => (
                 <button
                   key={item}
                   type="button"
@@ -155,29 +154,15 @@ export default function CreateFocusWorkModal({
                     kind === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
                   }`}
                 >
-                  {item === 'choice' ? '选择题' : item === 'flashcard' ? '闪卡' : '输入题'}
+                  {item === 'choice' ? '选择题' : item === 'flash_card' ? '闪卡' : '输入题'}
                 </button>
               ))}
             </div>
           </div>
 
           {kind === 'choice' && (
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">工作模式</label>
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-                {(['practice', 'review'] as const).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setChoiceMode(item)}
-                    className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                      choiceMode === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
-                    }`}
-                  >
-                    {item === 'practice' ? '练习模式' : '复习模式'}
-                  </button>
-                ))}
-              </div>
+            <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-3 text-sm text-ark-text-muted">
+              选择题专注工作会按题库配置自动生成题目。
             </div>
           )}
 
@@ -214,7 +199,7 @@ export default function CreateFocusWorkModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">
-              {kind === 'flashcard' ? '目标词数' : '目标题数'}
+              {kind === 'flash_card' ? '目标词数' : '目标题数'}
             </label>
             <input
               type="number"
@@ -277,7 +262,7 @@ export default function CreateFocusWorkModal({
             </div>
           )}
 
-          {kind !== 'flashcard' && (
+          {kind !== 'flash_card' && (
             <div className="space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input

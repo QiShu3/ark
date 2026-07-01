@@ -1,8 +1,8 @@
 """Content selector abstraction for focus works.
 
 每个专注工作从题库提取内容时有不同的筛选 + 排序策略。
-ContentSelector 将策略标准化为 filter + algorithm 接口，让动态子应用
-skeleton 生成直接复用 selector 逻辑，而非硬编码 LIMIT 1。
+ContentSelector 将策略标准化为 filter + algorithm 接口，让新入口
+生成直接复用 selector 逻辑，而非硬编码 LIMIT 1。
 
 策略:
   真题策略 (sequential)      — SQL WHERE + ORDER BY，零算法
@@ -16,6 +16,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
+
+from lib.focus_work_types import normalize_focus_work_type
 
 
 class ContentSelector(ABC):
@@ -206,7 +208,7 @@ class FrsMixedSelector(ContentSelector):
       - 混合推送：复习优先 → 新词随后
 
     当前为占位实现，回退到 SequentialSelector。
-    Vocab 的今日学习已有完整实现，暂无新 flashcard 子应用需要。
+    Vocab 的今日学习已有完整实现，暂无新 flash-card 策略需要。
     """
 
     async def select_next(
@@ -244,17 +246,17 @@ def get_selector(name: str, table_prefix: str) -> ContentSelector:
 def derive_content_selector(template: str, fw_type: str) -> str:
     """从 template 和 fw_type 推导默认 content_selector。
 
-    | template        | fw_type 含 review | → content_selector |
-    |-----------------|:-----------------:|-------------------|
-    | choice_question | yes               | weighted_mistake  |
-    | choice_question | no                | sequential        |
-    | flashcard       | —                 | fsrs_mixed        |
+    旧的 review / practice 仅作兼容，新的默认逻辑看 canonical 类型。
     """
+    normalized_fw_type = normalize_focus_work_type(fw_type)
+    raw_fw_type = str(fw_type or "").strip().lower()
     if template == "flashcard":
         return "fsrs_mixed"
     if template == "choice_question":
-        if "review" in fw_type.lower():
+        if raw_fw_type in {"review", "practice", "erc_review", "erc_practice"}:
             return "weighted_mistake"
+        if normalized_fw_type == "choice":
+            return "sequential"
         return "sequential"
     # 未知 template 回退 sequential
     return "sequential"

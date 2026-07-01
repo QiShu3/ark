@@ -1,64 +1,52 @@
 import type { FocusWorkDefinition, FocusWorkType } from './focusWorkTypes';
-import { subAppList, type SubAppDeclaration } from '../../lib/subAppRegistry';
 import VocabTodayFocusWork from '../Vocab/VocabTodayFocusWork';
-import ReviewFocusWork from '../ERC/ReviewFocusWork';
-import PracticeFocusWork from '../ERC/PracticeFocusWork';
+import ChoiceFocusWork from '../ERC/ChoiceFocusWork';
 import TaskFocusWork from './TaskFocusWork';
 import InputFocusWork from '../Input/InputFocusWork';
+import { normalizeFocusWorkType } from './focusWorkTypes';
 
-// 组件映射：专注工作类型 → render 函数（新增子应用时在这里注册组件）
+// 组件映射：专注工作类型 → render 函数
 const RENDER_MAP: Record<string, (props: Parameters<FocusWorkDefinition['render']>[0]) => React.ReactNode> = {
-  vocab_today: (props) => <VocabTodayFocusWork {...props} />,
-  review: (props) => <ReviewFocusWork {...props} />,
-  practice: (props) => <PracticeFocusWork {...props} />,
+  flash_card: (props) => <VocabTodayFocusWork {...props} />,
+  choice: (props) => <ChoiceFocusWork {...props} />,
   task_focus: (props) => <TaskFocusWork {...props} />,
   input: (props) => <InputFocusWork {...props} />,
 };
 
-function buildRegistryEntry(fwDecl: { type: string; label: string }, app: SubAppDeclaration): FocusWorkDefinition {
+function buildRegistryEntry(fwDecl: { type: string; label: string }, subtitle: string): FocusWorkDefinition {
   return {
-    type: fwDecl.type as FocusWorkType,
+    type: (normalizeFocusWorkType(fwDecl.type) ?? fwDecl.type) as FocusWorkType,
     title: fwDecl.label,
-    subtitle: app.name,
-    render: RENDER_MAP[fwDecl.type] ?? (() => null),
+    subtitle,
+    render: RENDER_MAP[normalizeFocusWorkType(fwDecl.type) ?? fwDecl.type] ?? (() => null),
   };
 }
 
 function buildRegistry(): Record<string, FocusWorkDefinition> {
   const entries: Record<string, FocusWorkDefinition> = {};
-  for (const app of subAppList) {
-    for (const fw of app.focusWorks) {
-      entries[fw.type] = buildRegistryEntry(fw, app);
-    }
-  }
-  // built-in: task_focus (不属于任何子应用)
+  entries.flash_card = buildRegistryEntry({ type: 'flash_card', label: '今日单词' }, '背单词');
+  entries.choice = buildRegistryEntry({ type: 'choice', label: '选择练习' }, '阅读训练');
   entries['task_focus'] = {
     type: 'task_focus',
     title: '任务专注',
     subtitle: '自定义任务',
     render: RENDER_MAP['task_focus'],
   };
-  // built-in: input (暂无独立子应用入口)
-  if (!entries['input']) {
-    entries['input'] = {
-      type: 'input',
-      title: '输入练习',
-      subtitle: '手动输入作答',
-      render: RENDER_MAP['input'],
-    };
-  }
+  entries['input'] = {
+    type: 'input',
+    title: '输入练习',
+    subtitle: '手动输入作答',
+    render: RENDER_MAP['input'],
+  };
   return entries;
 }
 
 export const focusWorkRegistry = buildRegistry() as Record<FocusWorkType, FocusWorkDefinition>;
 
 export const FOCUS_WORK_LABELS: Record<string, string> = {};
-for (const app of subAppList) {
-  FOCUS_WORK_LABELS[app.id] = app.name;
-  for (const fw of app.focusWorks) {
-    FOCUS_WORK_LABELS[fw.type] = `${app.name} · ${fw.label}`;
-  }
-}
+FOCUS_WORK_LABELS.flash_card = '背单词 · 今日单词';
+FOCUS_WORK_LABELS.choice = '阅读训练 · 选择练习';
+FOCUS_WORK_LABELS.input = '输入练习';
 FOCUS_WORK_LABELS['task_focus'] = '任务专注';
 
 export function getFocusWorkDefinition(type: FocusWorkType | null | undefined): FocusWorkDefinition | null {

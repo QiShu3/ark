@@ -200,7 +200,7 @@ export default function SubAppArrangements({ tasks, isBusy = false }: SubAppArra
             <div className="ark-subapp-arrangement-empty flex h-[132px] flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center">
               <Calendar className="mb-2 h-8 w-8 text-[var(--ark-text-faint)]" />
               <div className="text-sm font-medium text-[var(--ark-text-muted)]">暂无日程安排</div>
-              <div className="mt-1 text-xs text-[var(--ark-text-faint)]">当前子应用尚未生成托管日程</div>
+              <div className="mt-1 text-xs text-[var(--ark-text-faint)]">当前应用尚未生成托管日程</div>
             </div>
           </div>
         </div>

@@ -9,6 +9,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_focus_work_type
 from .schemas import (
     AchievementItemOut,
     AchievementSectionOut,
@@ -90,12 +91,13 @@ def _row_to_task(row: asyncpg.Record) -> TaskOut:
 
 
 def _app_task_title(app_id: str, app_task_type: str) -> str:
-    if app_id == "vocab" and app_task_type == "vocab_today":
-        return "今日单词"
-    if app_id == "erc" and app_task_type == "review":
-        return "复习"
-    if app_id == "erc" and app_task_type == "practice":
-        return "真题练习"
+    normalized_app_task_type = normalize_focus_work_type(app_task_type)
+    if normalized_app_task_type == "flash_card":
+        return "闪卡"
+    if normalized_app_task_type == "input":
+        return "输入练习"
+    if normalized_app_task_type == "choice":
+        return "选择练习"
     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="不支持的应用任务类型")
 
 
@@ -1167,8 +1169,9 @@ def _normalize_timer_mode(value: Any, default: FocusTimerMode = "countdown") -> 
 
 def _normalize_focus_work_type(value: Any) -> FocusWorkType | None:
     text = str(value or "").strip()
-    if text in {"vocab_today", "review", "practice", "task_focus", "input"}:
-        return text  # type: ignore[return-value]
+    normalized = normalize_focus_work_type(text)
+    if normalized in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND, "task_focus"}:
+        return normalized  # type: ignore[return-value]
     return None
 
 
@@ -1267,13 +1270,9 @@ def _should_use_task_focus_runtime(
 def _focus_work_type_for_task_row(task_row: Any | None) -> FocusWorkType:
     if task_row is None:
         return "task_focus"
-    app_task_type = _record_get(task_row, "app_task_type")
-    if app_task_type == "vocab_today":
-        return "vocab_today"
-    if app_task_type == "review":
-        return "review"
-    if app_task_type == "practice":
-        return "practice"
+    app_task_type = normalize_focus_work_type(_record_get(task_row, "app_task_type"))
+    if app_task_type in {"flash_card", "input", "choice"}:
+        return app_task_type  # type: ignore[return-value]
     return "task_focus"
 
 

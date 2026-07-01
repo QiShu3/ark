@@ -1,12 +1,12 @@
-"""Public API for sub-app registry — consumed by frontend."""
+"""Public API for app registry — consumed by frontend."""
 from fastapi import APIRouter
 
-from lib.sub_app_registry import SubAppDeclaration, get_all
+from lib.app_registry import AppDeclaration, get_all
 
 router = APIRouter(prefix="/api", tags=["app-registry"])
 
 
-def _decl_to_dict(decl: SubAppDeclaration) -> dict:
+def _decl_to_dict(decl: AppDeclaration) -> dict:
     return {
         "id": decl.id,
         "name": decl.name,

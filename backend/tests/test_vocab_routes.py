@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routes.auth_routes import get_current_user
-from routes.vocab.routes import router as vocab_router
+from routes.focus_work.flash.routes import router as vocab_router
 
 
 class _User:
@@ -22,7 +22,7 @@ def test_vocab_router_exposes_decks_endpoint() -> None:
     app.include_router(vocab_router)
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks")
+    response = client.get("/api/flash/decks")
 
     assert response.status_code == 401
 
@@ -45,13 +45,13 @@ def test_vocab_today_route_returns_counts(monkeypatch) -> None:
             "memorized_count": 88,
         }
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "get_today_summary", fake_get_today_summary)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/deck-1/today")
+    response = client.get("/api/flash/decks/deck-1/today")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -87,13 +87,13 @@ def test_vocab_overview_route_returns_global_snapshot(monkeypatch) -> None:
             },
         }
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "get_overview", fake_get_overview)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/cet6/overview")
+    response = client.get("/api/flash/decks/cet6/overview")
 
     assert response.status_code == 200
     assert response.json()["completed_deck_count"] == 3
@@ -117,13 +117,13 @@ def test_vocab_overview_mastered_words_route_returns_items(monkeypatch) -> None:
             }
         ]
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "list_overview_mastered_words", fake_list_overview_mastered_words)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/cet6/overview/mastered-words")
+    response = client.get("/api/flash/decks/cet6/overview/mastered-words")
 
     assert response.status_code == 200
     assert response.json()[0]["word"] == "prosperity"
@@ -149,13 +149,13 @@ def test_vocab_overview_current_words_route_returns_items(monkeypatch) -> None:
             }
         ]
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "list_overview_current_words", fake_list_overview_current_words)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/cet6/overview/current-words?state=mastered")
+    response = client.get("/api/flash/decks/cet6/overview/current-words?state=mastered")
 
     assert response.status_code == 200
     assert response.json()[0]["deck_name"] == "CET6"
@@ -186,13 +186,13 @@ def test_vocab_focus_queue_route_returns_items(monkeypatch) -> None:
             }
         ]
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "get_focus_queue", fake_get_focus_queue)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/cet6/focus-queue?limit=24")
+    response = client.get("/api/flash/decks/cet6/focus-queue?limit=24")
 
     assert response.status_code == 200
     assert response.json()[0]["word"] == "prosperity"
@@ -209,13 +209,13 @@ def test_vocab_inheritance_preview_route_returns_count(monkeypatch) -> None:
     async def fake_get_inheritance_preview(*_args, **_kwargs):
         return {"inheritable_word_count": 18}
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "get_inheritance_preview", fake_get_inheritance_preview)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/cet6/inheritance-preview")
+    response = client.get("/api/flash/decks/cet6/inheritance-preview")
 
     assert response.status_code == 200
     assert response.json() == {"inheritable_word_count": 18}
@@ -229,13 +229,13 @@ def test_vocab_inherit_mastered_words_route_returns_count(monkeypatch) -> None:
     async def fake_inherit_mastered_words(*_args, **_kwargs):
         return {"inherited_word_count": 15}
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "inherit_mastered_words", fake_inherit_mastered_words)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.post("/api/vocab/decks/cet6/inherit-mastered-words")
+    response = client.post("/api/flash/decks/cet6/inherit-mastered-words")
 
     assert response.status_code == 200
     assert response.json() == {"inherited_word_count": 15}
@@ -259,13 +259,13 @@ def test_vocab_today_settings_route_updates_plan(monkeypatch) -> None:
             "memorized_count": 64,
         }
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "update_today_plan", fake_update_today_plan)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.put("/api/vocab/decks/cet4/today/settings", json={"total_target_count": 20})
+    response = client.put("/api/flash/decks/cet4/today/settings", json={"total_target_count": 20})
 
     assert response.status_code == 200
     assert response.json()["daily_target_count"] == 20
@@ -288,14 +288,14 @@ def test_vocab_submit_review_route_returns_progress(monkeypatch) -> None:
             "should_repeat_today": False,
         }
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "submit_review", fake_submit_review)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
     response = client.post(
-        "/api/vocab/reviews",
+        "/api/flash/reviews",
         json={
             "deck_id": "deck-1",
             "word_id": "word-1",
@@ -329,14 +329,14 @@ def test_vocab_submit_content_review_route_returns_progress(monkeypatch) -> None
             "should_repeat_today": False,
         }
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "submit_content_review", fake_submit_content_review)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
     response = client.post(
-        "/api/vocab/content-reviews",
+        "/api/flash/content-reviews",
         json={
             "deck_id": "deck-1",
             "word_id": "word-extra",
@@ -369,13 +369,13 @@ def test_vocab_word_detail_route_returns_nested_content(monkeypatch) -> None:
             "sentences": [{"sentence": "We talk daily.", "translation": "我们每天交谈。"}],
         }
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "get_word_detail", fake_get_word_detail)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/words/word-1")
+    response = client.get("/api/flash/words/word-1")
 
     assert response.status_code == 200
     assert response.json()["word"] == "talk"
@@ -401,13 +401,13 @@ def test_vocab_mistakes_route_returns_items(monkeypatch) -> None:
             }
         ]
 
-    from routes.vocab import routes as vocab_routes
+    from routes.focus_work.flash import routes as vocab_routes
 
     monkeypatch.setattr(vocab_routes, "list_mistakes", fake_list_mistakes)
     monkeypatch.setattr(vocab_routes, "_pool_from_request", lambda _request: object())
     client = TestClient(app)
 
-    response = client.get("/api/vocab/decks/deck-1/mistakes")
+    response = client.get("/api/flash/decks/deck-1/mistakes")
 
     assert response.status_code == 200
     assert response.json()[0]["word"] == "talk"

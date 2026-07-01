@@ -121,9 +121,9 @@ export default function AdminUiLibraryPage() {
       preview: (
         <WorkflowPhaseChips
           phases={[
-            { phase_type: 'focus', duration: 1500, focus_work_type: 'vocab_today' },
+            { phase_type: 'focus', duration: 1500, focus_work_type: 'flash_card' },
             { phase_type: 'break', duration: 300 },
-            { phase_type: 'focus', duration: 1500, focus_work_type: 'practice' },
+            { phase_type: 'focus', duration: 1500, focus_work_type: 'choice' },
             { phase_type: 'break', duration: 300 },
           ]}
           maxTaskWidthClassName="max-w-[120px]"

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import type { FocusPhaseRuntimeState, FocusWorkRendererProps } from './focusWorkTypes';
 import type { FocusWorkDefinition } from './focusWorkTypes';
+import { normalizeFocusWorkType } from './focusWorkTypes';
 
 const primaryButtonClass =
   'rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
@@ -83,7 +84,7 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
         </div>
       )}
 
-      {focusWorkType === 'vocab_today' && (
+      {normalizeFocusWorkType(focusWorkType) === 'flash_card' && (
         <div className="grid grid-cols-4 gap-3">
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">{String((summary.reviewed_count as number) ?? 0)}</div>
@@ -106,7 +107,7 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
         </div>
       )}
 
-      {(focusWorkType === 'practice' || focusWorkType === 'review') && (
+      {normalizeFocusWorkType(focusWorkType) === 'choice' && (
         <div className="grid grid-cols-4 gap-3">
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">{String((summary.answered_count as number) ?? 0)}</div>

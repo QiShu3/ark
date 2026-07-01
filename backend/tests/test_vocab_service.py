@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from routes.vocab import service as vocab_service
+from routes.focus_work.flash import service as vocab_service
 
 
 @pytest.mark.asyncio

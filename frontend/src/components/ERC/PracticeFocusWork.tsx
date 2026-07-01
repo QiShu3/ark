@@ -169,7 +169,7 @@ export default function PracticeFocusWork({
     if (!currentItem) return { correctOptionKey: undefined };
     const q = currentItem.questions.find((question) => question.id === item.id);
     if (!q) return { correctOptionKey: undefined };
-    const result = await submitChoiceAnswer(q.id, optionKey, 'practice');
+    const result = await submitChoiceAnswer(q.id, optionKey);
     setAnsweredCount((prev) => prev + 1);
     if (result.is_correct) setCompletedCorrectCount((prev) => prev + 1);
     answeredQuestionsRef.current.push({

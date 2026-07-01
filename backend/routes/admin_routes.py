@@ -20,11 +20,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from pydantic import BaseModel, Field
 
 from lib.content_selector import derive_content_selector
-from lib.sub_app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
+from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_focus_work_type
+from lib.app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
-from routes.choice.repository import list_set_rows as list_erc_set_rows
-from routes.input.repository import list_input_sets
-from routes.vocab.repository import list_vocab_decks
+from routes.focus_work.choice.repository import list_set_rows as list_erc_set_rows
+from routes.focus_work.input.repository import list_input_sets
+from routes.focus_work.flash.repository import list_vocab_decks
 
 # --- Import logger setup ---
 _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -638,11 +639,11 @@ async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]
 
     # update count
     await conn.execute(f"UPDATE {set_table} SET item_count = (SELECT COUNT(*) FROM {table}) WHERE id = $1", set_id)
-    print(f"[sub_app_registry] Imported {len(questions)} questions into '{app_id}' with user progress tables")
+    print(f"[app_registry] Imported {len(questions)} questions into '{app_id}' with user progress tables")
 
 
 def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
-    """Generate backend domain skeleton for a new sub-app."""
+    """Generate backend domain skeleton for a new app."""
     app_id = decl.id
     app_name = decl.name
     py_id = app_id.replace("-", "_")  # sanitize for Python identifiers + directory names
@@ -1024,7 +1025,7 @@ async def route_list_mistakes(
     return [schemas.MistakeItem(**item) for item in await service.list_mistakes(_pool(request), user_id=int(user.id), set_id=set_id)]
 ''')
 
-    print(f"[sub_app_registry] Generated full domain skeleton for '{app_id}' at {{app_dir}}")
+    print(f"[app_registry] Generated full domain skeleton for '{app_id}' at {{app_dir}}")
 
 
 class VocabStats(BaseModel):
@@ -1086,7 +1087,7 @@ async def toggle_deck_publish(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> VocabDeckPublishOut:
-    from routes.vocab.repository import toggle_deck_published
+    from routes.focus_work.flash.repository import toggle_deck_published
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1107,7 +1108,7 @@ async def delete_vocab_deck(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> VocabDeckDeleteOut:
-    from routes.vocab.repository import delete_deck
+    from routes.focus_work.flash.repository import delete_deck
 
     pool = _pool(request)
     try:
@@ -1133,8 +1134,8 @@ async def update_vocab_deck(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> VocabDeckUpdateOut:
-    from routes.vocab.importer import detect_format, parse_word_entry
-    from routes.vocab.repository import replace_deck_words, sync_vocab_deck_word_counts
+    from routes.focus_work.flash.importer import detect_format, parse_word_entry
+    from routes.focus_work.flash.repository import replace_deck_words, sync_vocab_deck_word_counts
 
     # Verify deck exists
     pool = _pool(request)
@@ -1252,7 +1253,7 @@ async def vocab_deck_detail(
     limit: int = Query(default=30, ge=1, le=200),
     search: str | None = Query(default=None),
 ) -> VocabDeckDetailOut:
-    from routes.vocab.repository import (
+    from routes.focus_work.flash.repository import (
         count_admin_deck_words,
         list_admin_deck_words_paginated,
         list_sentences_for_word_ids,
@@ -1341,14 +1342,14 @@ async def import_vocab_deck(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> VocabDeckImportOut:
-    from routes.vocab.importer import (
+    from routes.focus_work.flash.importer import (
         DeckSeed,
         WordSeed,
         _deck_meta_from_filename,
         detect_format,
         parse_word_entry,
     )
-    from routes.vocab.repository import import_deck, sync_vocab_deck_word_counts
+    from routes.focus_work.flash.repository import import_deck, sync_vocab_deck_word_counts
 
     # Read multipart form
     form = await request.form()
@@ -1519,7 +1520,7 @@ async def toggle_erc_set_publish(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcSetPublishOut:
-    from routes.choice.repository import toggle_set_published
+    from routes.focus_work.choice.repository import toggle_set_published
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1540,7 +1541,7 @@ async def delete_erc_set(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcSetDeleteOut:
-    from routes.choice.repository import delete_set
+    from routes.focus_work.choice.repository import delete_set
 
     pool = _pool(request)
     try:
@@ -1570,7 +1571,7 @@ async def erc_set_articles(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> list[ErcArticleListItem]:
-    from routes.choice.repository import list_admin_articles
+    from routes.focus_work.choice.repository import list_admin_articles
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1600,7 +1601,7 @@ async def erc_article_detail(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcArticleDetailOut:
-    from routes.choice.repository import get_article_row, list_paragraph_rows, list_question_rows
+    from routes.focus_work.choice.repository import get_article_row, list_paragraph_rows, list_question_rows
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -1635,7 +1636,7 @@ async def delete_erc_article(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> ErcArticleDeleteOut:
-    from routes.choice.repository import delete_article, refresh_set_counts
+    from routes.focus_work.choice.repository import delete_article, refresh_set_counts
 
     pool = _pool(request)
     try:
@@ -1940,7 +1941,7 @@ async def list_content_banks(
             ContentBankListItem(
                 id=str(r["id"]),
                 name=r["name"],
-                fw_type="erc_practice",
+                fw_type="choice",
                 item_type="passage",
                 description=r["description"],
                 item_count=r["item_count"],
@@ -2306,8 +2307,8 @@ async def create_content_bank(
                     question_count = 0
                 else:
                     # Choice type: write to choice_sets (skip content_banks)
-                    from routes.choice.importer import parse_content_bank_entries
-                    from routes.choice.repository import (
+                    from routes.focus_work.choice.importer import parse_content_bank_entries
+                    from routes.focus_work.choice.repository import (
                         refresh_set_counts,
                         upsert_article_seed,
                         upsert_set,
@@ -2973,14 +2974,14 @@ async def list_content_banks_for_type(
     """根据专注工作类型返回可用的题库列表。"""
     pool = _pool(request)
     async with pool.acquire() as conn:
-        if focus_work_type == "vocab_today":
+        normalized_type = normalize_focus_work_type(focus_work_type)
+        if normalized_type == FLASH_CARD_KIND:
             rows = await list_vocab_decks(conn)
             return [ContentBankItem(id=r["id"], name=r["name"], count=r["word_count"]) for r in rows]
-        elif focus_work_type in ("review", "practice"):
+        elif normalized_type == CHOICE_KIND:
             rows = await list_erc_set_rows(conn)
-            count_key = "question_count" if focus_work_type == "review" else "article_count"
-            return [ContentBankItem(id=r["id"], name=r["name"], count=r[count_key]) for r in rows]
-        elif focus_work_type == "input":
+            return [ContentBankItem(id=r["id"], name=r["name"], count=r["article_count"]) for r in rows]
+        elif normalized_type == INPUT_KIND:
             rows = await list_input_sets(conn)
             return [ContentBankItem(id=r["id"], name=r["name"], count=r["question_count"]) for r in rows]
         else:
@@ -3021,7 +3022,7 @@ async def list_test_focus_configs(
         TestFocusConfigOut(
             id=r["id"],
             name=r["name"],
-            focus_work_type=r["focus_work_type"],
+            focus_work_type=normalize_focus_work_type(r["focus_work_type"]),
             bank_id=r["bank_id"],
             target_count=r["target_count"],
             scope=json.loads(r["scope_json"]) if r["scope_json"] else None,
@@ -3045,7 +3046,7 @@ async def create_test_focus_config(
     completion_json: str = Form(""),
 ) -> TestFocusConfigOut:
     """创建测试专注配置。"""
-    if focus_work_type not in ("vocab_today", "review", "practice", "input"):
+    if normalize_focus_work_type(focus_work_type) not in (FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND):
         raise HTTPException(status_code=400, detail=f"不支持的专注工作类型: {focus_work_type}")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")
@@ -3065,6 +3066,7 @@ async def create_test_focus_config(
 
     pool = _pool(request)
     async with pool.acquire() as conn:
+        normalized_focus_work_type = normalize_focus_work_type(focus_work_type)
         row = await conn.fetchrow(
             """
             INSERT INTO test_focus_configs (user_id, name, focus_work_type, bank_id, target_count, scope_json, completion_json)
@@ -3074,7 +3076,7 @@ async def create_test_focus_config(
             """,
             int(_admin.id),
             name,
-            focus_work_type,
+            normalized_focus_work_type,
             bank_id or None,
             target_count,
             json.dumps(scope_parsed) if scope_parsed else None,
@@ -3083,7 +3085,7 @@ async def create_test_focus_config(
     return TestFocusConfigOut(
         id=row["id"],
         name=row["name"],
-        focus_work_type=row["focus_work_type"],
+        focus_work_type=normalize_focus_work_type(row["focus_work_type"]),
         bank_id=row["bank_id"],
         target_count=row["target_count"],
         scope=scope_parsed,

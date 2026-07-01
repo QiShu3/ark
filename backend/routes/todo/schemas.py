@@ -4,7 +4,9 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_focus_work_type
 
 TaskStatus = Literal["todo", "done"]
 TaskCyclePeriod = Literal["daily", "weekly", "monthly", "custom"]
@@ -12,8 +14,8 @@ TaskType = Literal["focus", "checkin"]
 TaskSourceType = Literal["user", "app"]
 EventPlanScheduleMode = Literal["from_start", "before_due"]
 EventPlanItemKind = Literal["task", "appointment"]
-AppTaskId = Literal["vocab", "erc"]
-AppTaskType = Literal["vocab_today", "review", "practice"]
+AppTaskId = Literal["vocab", "erc", "input"]
+AppTaskType = Literal["flash_card", "choice", "input"]
 AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
 AppTaskRuntimeState = Literal[
     "uninitialized",
@@ -30,7 +32,7 @@ AppointmentStatus = Literal["pending", "needs_confirmation", "attended", "missed
 AppointmentListView = Literal["all", "today", "needs_confirmation", "repeating"]
 PhaseType = Literal["focus", "break", "deliberate_group"]
 FocusTimerMode = Literal["countdown", "countup"]
-FocusWorkType = Literal["vocab_today", "review", "practice", "task_focus", "input"]
+FocusWorkType = Literal["flash_card", "choice", "input", "task_focus"]
 FocusWorkDisplayState = Literal["fullscreen", "minimized", "closed"]
 FocusWorkResult = Literal["completed", "interrupted", "abandoned"]
 FocusWorkRunStatus = Literal["running", "paused", "content_completed", "completed", "abandoned"]
@@ -49,6 +51,26 @@ FocusPhaseRuntimeState = Literal[
 COUNTUP_PHASE_CAP_SECONDS = 2 * 60 * 60
 
 
+class _NormalizedFocusWorkTypeBase(BaseModel):
+    @field_validator("focus_work_type", "active_focus_work_type", "next_focus_work_type", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_focus_work_type(cls, value: Any) -> Any:
+        normalized = normalize_focus_work_type(value)
+        if normalized in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND, "task_focus"}:
+            return normalized
+        return value
+
+
+class _NormalizedAppTaskTypeBase(BaseModel):
+    @field_validator("app_task_type", "active_task_app_task_type", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_app_task_type(cls, value: Any) -> Any:
+        normalized = normalize_focus_work_type(value)
+        if normalized in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND}:
+            return normalized
+        return value
+
+
 class CompletionStateOut(BaseModel):
     completion_state: Literal["permanent", "available", "period_complete", "blocked"]
     is_completable_now: bool
@@ -60,7 +82,7 @@ class CompletionStateOut(BaseModel):
     hidden_from_action_list: bool
 
 
-class TaskCreateRequest(BaseModel):
+class TaskCreateRequest(_NormalizedAppTaskTypeBase):
     title: str = Field(min_length=1, max_length=255)
     content: str | None = None
     status: TaskStatus = "todo"
@@ -89,7 +111,7 @@ class TaskCreateRequest(BaseModel):
     managed_by_app: bool = False
 
 
-class TaskUpdateRequest(BaseModel):
+class TaskUpdateRequest(_NormalizedAppTaskTypeBase):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     content: str | None = None
     status: TaskStatus | None = None
@@ -119,7 +141,7 @@ class TaskUpdateRequest(BaseModel):
     managed_by_app: bool | None = None
 
 
-class TaskOut(BaseModel):
+class TaskOut(_NormalizedAppTaskTypeBase):
     id: UUID
     user_id: int
     title: str
@@ -513,7 +535,7 @@ class AppTaskStatusOut(BaseModel):
     config: dict[str, object] = Field(default_factory=dict)
 
 
-class FocusWorkflowPhase(BaseModel):
+class FocusWorkflowPhase(_NormalizedFocusWorkTypeBase):
     model_config = ConfigDict(extra="allow")
 
     phase_type: Literal["focus", "break", "deliberate_group"]
@@ -527,7 +549,7 @@ class FocusWorkflowPhase(BaseModel):
     config_names: list[str] | None = None
 
 
-class FocusWorkRunSummaryOut(BaseModel):
+class FocusWorkRunSummaryOut(_NormalizedFocusWorkTypeBase, _NormalizedAppTaskTypeBase):
     id: UUID
     workflow_id: UUID
     phase_index: int
@@ -543,7 +565,7 @@ class FocusWorkRunSummaryOut(BaseModel):
     source_run_id: UUID | None = None
 
 
-class WorkflowSettlementPhaseOut(BaseModel):
+class WorkflowSettlementPhaseOut(_NormalizedFocusWorkTypeBase):
     name: str
     focus_work_type: FocusWorkType
     answered_count: int = 0
@@ -552,7 +574,7 @@ class WorkflowSettlementPhaseOut(BaseModel):
     duration_seconds: int = 0
 
 
-class WorkflowSettlementNodeOut(BaseModel):
+class WorkflowSettlementNodeOut(_NormalizedFocusWorkTypeBase):
     name: str
     focus_work_type: FocusWorkType | None = None
     answered_count: int = 0
@@ -581,7 +603,7 @@ class WorkflowSettlementOut(BaseModel):
     first_try_passed_count: int = 0
 
 
-class FocusWorkflowOut(BaseModel):
+class FocusWorkflowOut(_NormalizedFocusWorkTypeBase, _NormalizedAppTaskTypeBase):
     state: Literal["normal", "focus", "break", "settlement"]
     workflow_name: str | None = None
     current_phase_index: int | None = None
@@ -658,13 +680,13 @@ class FocusWorkflowSelectTaskRequest(BaseModel):
     task_id: UUID
 
 
-class FocusWorkflowStartAppWorkRequest(BaseModel):
+class FocusWorkflowStartAppWorkRequest(_NormalizedFocusWorkTypeBase):
     focus_work_type: FocusWorkType
     record_focus: bool = True
     bank_id: str | None = None
 
 
-class FocusWorkflowResultRequest(BaseModel):
+class FocusWorkflowResultRequest(_NormalizedFocusWorkTypeBase):
     focus_work_type: FocusWorkType
     result: FocusWorkResult
     progress_snapshot: dict[str, object] = Field(default_factory=dict)
@@ -682,7 +704,7 @@ class FocusWorkflowExtendPhaseRequest(BaseModel):
     extend_seconds: int = Field(default=300, ge=60, le=24 * 60 * 60)
 
 
-class FocusWorkForkRequest(BaseModel):
+class FocusWorkForkRequest(_NormalizedFocusWorkTypeBase):
     parent_run_id: UUID
     child_config_id: UUID | None = None
     focus_work_type: FocusWorkType

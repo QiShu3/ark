@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useFocusWorkAdapter } from '../adapters/useFocusWorkAdapter';
 import { apiJson } from '../lib/api';
-import type { SubAppDeclaration, TemplateSection } from '../lib/subAppRegistry';
+import type { AppDeclaration, FocusWorkDeclaration, TemplateSection } from '../lib/appRegistry';
 import type { SubAppHomeAction, SubAppHomeMetric } from '../components/SubAppHomeTemplate';
 
 export interface SubAppHomePageData {
@@ -29,14 +29,14 @@ export interface SubAppHomePageData {
   modals: React.ReactNode;
 }
 
-export function useSubAppHomePage(app: SubAppDeclaration): SubAppHomePageData {
+export function useSubAppHomePage(app: AppDeclaration): SubAppHomePageData {
   const sections = app.sections ?? ['hero', 'asset', 'arrangements'];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Dynamic sub-app declarations provide one adapter per configured focus work.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const adapters = app.focusWorks.map((fw) => useFocusWorkAdapter(fw, app.id));
+  const adapters = app.focusWorks.map((fw) => useFocusWorkAdapter(fw as FocusWorkDeclaration, app.id));
 
   const allMetrics = adapters.flatMap((a) => a.metrics);
 

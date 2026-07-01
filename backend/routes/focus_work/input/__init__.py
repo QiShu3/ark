@@ -1,3 +1,5 @@
+"""Input focus-work route entrypoint."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -16,6 +18,7 @@ async def init_input(app: Any) -> None:
 
 async def _init_tables(pool: asyncpg.Pool) -> None:
     from .db import init_input as _init_db
+
     async with pool.acquire() as conn:
         await _init_db(conn)
 

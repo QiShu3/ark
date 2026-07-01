@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from inspect import getsource
 
-from routes.choice.repository import get_overview_counts
-from routes.choice.service import (
+from routes.focus_work.choice.repository import get_overview_counts
+from routes.focus_work.choice.service import (
     _vocabulary_summary,
     choose_due_review_candidate,
     make_practice_wrong_immediately_due,

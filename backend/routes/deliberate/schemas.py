@@ -2,15 +2,34 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-DeliberateKind = Literal["flashcard", "choice", "input"]
-DeliberateFocusWorkType = Literal["vocab_today", "practice", "review", "input"]
+from lib.focus_work_types import normalize_deliberate_kind, normalize_focus_work_type, normalize_snapshot_type
+
+DeliberateKind = Literal["flash_card", "choice", "input"]
+DeliberateFocusWorkType = Literal["flash_card", "choice", "input"]
 DeliberateRunStatus = Literal["started", "content_completed", "completed", "abandoned"]
-DeliberateSnapshotType = Literal["choice_set", "vocab_deck", "input_set"]
+DeliberateSnapshotType = Literal["choice_set", "flash_card_deck", "input_set"]
 
 
-class DeliberateBankSummary(BaseModel):
+class _NormalizedDeliberateBase(BaseModel):
+    @field_validator("kind", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_kind(cls, value: Any) -> Any:
+        return normalize_deliberate_kind(value)
+
+    @field_validator("focus_work_type", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_focus_work_type(cls, value: Any) -> Any:
+        return normalize_focus_work_type(value)
+
+    @field_validator("snapshot_type", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_snapshot_type(cls, value: Any) -> Any:
+        return normalize_snapshot_type(value)
+
+
+class DeliberateBankSummary(_NormalizedDeliberateBase):
     id: str
     name: str
     kind: DeliberateKind
@@ -18,7 +37,7 @@ class DeliberateBankSummary(BaseModel):
     question_count: int = 0
 
 
-class DeliberateBankOptionOut(BaseModel):
+class DeliberateBankOptionOut(_NormalizedDeliberateBase):
     id: str
     name: str
     kind: DeliberateKind
@@ -27,7 +46,7 @@ class DeliberateBankOptionOut(BaseModel):
     question_count: int = 0
 
 
-class DeliberateWorkflowRunSummary(BaseModel):
+class DeliberateWorkflowRunSummary(_NormalizedDeliberateBase):
     id: str
     config_id: str | None = None
     workflow_id: str | None = None
@@ -43,7 +62,7 @@ class DeliberateWorkflowRunSummary(BaseModel):
     completed_at: str | None = None
 
 
-class DeliberateWorkflowConfigOut(BaseModel):
+class DeliberateWorkflowConfigOut(_NormalizedDeliberateBase):
     id: str
     name: str
     kind: DeliberateKind
@@ -61,7 +80,7 @@ class DeliberateWorkflowConfigOut(BaseModel):
     updated_at: str
 
 
-class DeliberateWorkflowConfigCreate(BaseModel):
+class DeliberateWorkflowConfigCreate(_NormalizedDeliberateBase):
     name: str = Field(min_length=1)
     kind: DeliberateKind
     focus_work_type: DeliberateFocusWorkType
@@ -74,7 +93,7 @@ class DeliberateWorkflowConfigCreate(BaseModel):
     children: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class DeliberateWorkflowConfigPatch(BaseModel):
+class DeliberateWorkflowConfigPatch(_NormalizedDeliberateBase):
     name: str | None = Field(default=None, min_length=1)
     kind: DeliberateKind | None = None
     focus_work_type: DeliberateFocusWorkType | None = None
@@ -87,7 +106,7 @@ class DeliberateWorkflowConfigPatch(BaseModel):
     children: list[dict[str, Any]] | None = None
 
 
-class DeliberateBankUploadOut(BaseModel):
+class DeliberateBankUploadOut(_NormalizedDeliberateBase):
     bank_id: str
     kind: DeliberateKind
     name: str

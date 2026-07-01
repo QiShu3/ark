@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from routes.auth_routes import get_current_user
-from routes.vocab.repository import list_vocab_snapshots
+from routes.focus_work.flash.repository import list_vocab_snapshots
 
 from .adapters import (
     ensure_choice_set,
@@ -168,7 +168,6 @@ async def route_submit_choice_answer(
         question_id=question_id,
         chosen_option=body.chosen_option,
         time_spent_ms=body.time_spent_ms,
-        mode=body.mode,
     )
     return ChoiceAnswerSubmitOut(**result)
 

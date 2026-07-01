@@ -2,10 +2,11 @@ import { getEventWorkbench } from './api';
 import { deleteEventArrangementTask } from './arrangementApi';
 import { initializeVocabAppTask } from '../vocab/api';
 import { saveEventChoiceConfig, type PracticeConfigInput, type ReviewConfigInput } from '../erc/configSync';
+import { normalizeAppType } from './appConfigTypes';
 
 /**
- * Activates passive sub-app configuration tasks saved under a non-primary event
- * and synchronizes them to the user's active sub-app settings.
+ * Activates passive app configuration tasks saved under a non-primary event
+ * and synchronizes them to the user's active app settings.
  */
 export async function activateEventSubApps(eventId: string): Promise<void> {
   try {
@@ -23,9 +24,9 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
       if (!task.content) continue;
       try {
         const config = JSON.parse(task.content);
-        const appType = task.app_task_type;
+        const appType = normalizeAppType(task.app_task_type);
 
-        if (appType === 'vocab_today') {
+        if (appType === 'flash_card') {
           await initializeVocabAppTask({
             deck_id: config.deckId,
             daily_target_count: config.dailyTargetCount,
@@ -33,21 +34,21 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
             add_to_today_plan: config.addToTodayPlan,
             event_id: eventId,
           });
-        } else if (appType === 'practice') {
-          ercConfigs.practice = {
-            daily_article_target: config.dailyArticleTarget,
-            default_focus_duration: config.defaultFocusDuration,
-            add_to_today_plan: config.addToTodayPlan,
-          };
-          ercConfigs.taskIds.push(task.id);
-          continue;
-        } else if (appType === 'review') {
-          ercConfigs.review = {
-            review_scope: config.reviewScope,
-            daily_question_target: config.dailyQuestionTarget,
-            default_focus_duration: config.defaultFocusDuration,
-            add_to_today_plan: config.addToTodayPlan,
-          };
+        } else if (appType === 'choice') {
+          if (config.reviewScope || config.dailyQuestionTarget !== undefined) {
+            ercConfigs.review = {
+              review_scope: config.reviewScope,
+              daily_question_target: config.dailyQuestionTarget,
+              default_focus_duration: config.defaultFocusDuration,
+              add_to_today_plan: config.addToTodayPlan,
+            };
+          } else {
+            ercConfigs.practice = {
+              daily_article_target: config.dailyArticleTarget,
+              default_focus_duration: config.defaultFocusDuration,
+              add_to_today_plan: config.addToTodayPlan,
+            };
+          }
           ercConfigs.taskIds.push(task.id);
           continue;
         }
@@ -55,7 +56,7 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
         // Clean up the temporary passive task from the database
         await deleteEventArrangementTask(task.id);
       } catch (err) {
-        console.error('Failed to activate sub-app task', task.title, err);
+        console.error('Failed to activate app task', task.title, err);
       }
     }
 
@@ -74,6 +75,6 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
       }
     }
   } catch (err) {
-    console.error('Failed to activate event sub-apps', err);
+    console.error('Failed to activate event apps', err);
   }
 }

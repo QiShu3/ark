@@ -1151,11 +1151,11 @@ async def test_init_todo_seeds_event_template_store(monkeypatch) -> None:
     assert template["default_is_primary"] is True
     assert template["items"] == []
     assert [item["client_id"] for item in template["app_configs"]] == [
-        "vocab_today",
-        "practice",
-        "review",
+        "flash_card",
+        "choice",
+        "input",
     ]
-    assert template["workflows"][0]["phases"][0]["task_id"] == "vocab_today"
+    assert template["workflows"][0]["phases"][0]["task_id"] == "flash_card"
 
 
 @pytest_asyncio.fixture
@@ -1213,7 +1213,7 @@ async def test_vocab_app_task_status_without_primary_does_not_use_global_config(
             "user_id": 7,
             "event_id": None,
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
             "status": "active",
             "created_task_id": None,
@@ -1261,7 +1261,7 @@ async def test_vocab_app_task_status_includes_config_before_task_exists(monkeypa
             "user_id": 7,
             "event_id": event_id,
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
             "status": "active",
             "created_task_id": None,
@@ -1310,7 +1310,7 @@ async def test_vocab_app_task_status_rejects_unbound_created_task(monkeypatch, a
             "user_id": 7,
             "event_id": event_id,
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "config": {"deck_id": vocab_deck_id, "daily_target_count": 20},
             "status": "active",
             "created_task_id": task_id,
@@ -1353,10 +1353,10 @@ async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_h
     task = await client.get(f"/todo/tasks/{payload['task_id']}", headers=auth_headers)
     assert task.status_code == 200
     task_payload = task.json()
-    assert task_payload["title"] == "今日单词"
+    assert task_payload["title"] == "闪卡"
     assert task_payload["source_type"] == "app"
     assert task_payload["app_id"] == "vocab"
-    assert task_payload["app_task_type"] == "vocab_today"
+    assert task_payload["app_task_type"] == "flash_card"
     assert task_payload["managed_by_app"] is True
     assert task_payload["is_recurring"] is True
     assert task_payload["period_type"] == "daily"
@@ -1485,7 +1485,7 @@ async def test_vocab_app_task_init_keeps_distinct_configs_per_event(monkeypatch,
     assert first.json()["task_id"] != second.json()["task_id"]
     assert len(conn.app_task_configs) == 2
     assert {config["event_id"] for config in conn.app_task_configs} == {event_a_id, event_b_id}
-    assert [task for task in conn.tasks if task["source_type"] == "app" and task["app_task_type"] == "vocab_today"]
+    assert [task for task in conn.tasks if task["source_type"] == "app" and task["app_task_type"] == "flash_card"]
     payload = status.json()
     assert payload["event_id"] == str(event_b_id)
     assert payload["event_name"] == "事件 B"
@@ -1540,7 +1540,7 @@ async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["title"] == "今日单词"
+    assert payload["title"] == "闪卡"
     assert payload["source_type"] == "app"
     assert payload["managed_by_app"] is True
 
@@ -1563,7 +1563,7 @@ async def test_complete_app_managed_task_rejects_plain_task_complete(client, aut
     response = await client.post(f"/todo/tasks/{task_id}/complete", headers=auth_headers)
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "应用托管任务必须由子应用专注工作完成"
+    assert response.json()["detail"] == "应用托管任务必须由应用入口专注工作完成"
 
 
 @pytest.mark.asyncio
@@ -1584,10 +1584,10 @@ async def test_erc_app_task_init_creates_recurring_managed_task(client, auth_hea
     task = await client.get(f"/todo/tasks/{payload['task_id']}", headers=auth_headers)
     assert task.status_code == 200
     task_payload = task.json()
-    assert task_payload["title"] == "复习"
+    assert task_payload["title"] == "选择练习"
     assert task_payload["source_type"] == "app"
     assert task_payload["app_id"] == "erc"
-    assert task_payload["app_task_type"] == "review"
+    assert task_payload["app_task_type"] == "choice"
     assert task_payload["managed_by_app"] is True
     assert task_payload["is_recurring"] is True
     assert task_payload["period_type"] == "daily"
@@ -1902,9 +1902,9 @@ async def test_task_out_includes_app_managed_metadata(client, auth_headers):
         {"source_type": "app"},
         {"managed_by_app": True},
         {"app_id": "vocab"},
-        {"app_task_type": "vocab_today"},
+        {"app_task_type": "flash_card"},
         {"app_config_id": "00000000-0000-0000-0000-000000000001"},
-        {"app_instance_key": "vocab:vocab_today"},
+        {"app_instance_key": "vocab:flash_card"},
     ],
 )
 async def test_create_task_rejects_app_managed_metadata(client, auth_headers, metadata):
@@ -1915,7 +1915,7 @@ async def test_create_task_rejects_app_managed_metadata(client, auth_headers, me
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "应用托管任务只能由子应用初始化创建"
+    assert response.json()["detail"] == "应用托管任务只能由应用入口初始化创建"
 
 
 @pytest.mark.asyncio
@@ -1925,9 +1925,9 @@ async def test_create_task_rejects_app_managed_metadata(client, auth_headers, me
         {"source_type": "app"},
         {"managed_by_app": True},
         {"app_id": "vocab"},
-        {"app_task_type": "vocab_today"},
+        {"app_task_type": "flash_card"},
         {"app_config_id": "00000000-0000-0000-0000-000000000001"},
-        {"app_instance_key": "vocab:vocab_today"},
+        {"app_instance_key": "vocab:flash_card"},
     ],
 )
 async def test_update_task_rejects_app_managed_metadata(client, auth_headers, metadata):
@@ -1942,7 +1942,7 @@ async def test_update_task_rejects_app_managed_metadata(client, auth_headers, me
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "应用托管任务只能由子应用初始化创建"
+    assert response.json()["detail"] == "应用托管任务只能由应用入口初始化创建"
 
 
 def _task_row(
@@ -2686,7 +2686,7 @@ def test_delete_event_cleans_container_contents(monkeypatch) -> None:
             "user_id": 7,
             "event_id": event_id,
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "config": {"deck_id": "cet4", "daily_target_count": 20},
             "status": "active",
             "created_task_id": app_task_id,
@@ -2701,7 +2701,7 @@ def test_delete_event_cleans_container_contents(monkeypatch) -> None:
             "event_id": event_id,
             "source_type": "app",
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "app_config_id": config_id,
             "app_instance_key": "event-vocab",
             "managed_by_app": True,
@@ -3755,10 +3755,10 @@ def test_get_focus_workflow_current_exposes_app_managed_adapter(monkeypatch) -> 
     config_id = uuid4()
     conn.tasks[0].update(
         {
-            "title": "今日单词",
+            "title": "闪卡",
             "source_type": "app",
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "app_config_id": config_id,
             "managed_by_app": True,
             "is_recurring": True,
@@ -3769,7 +3769,7 @@ def test_get_focus_workflow_current_exposes_app_managed_adapter(monkeypatch) -> 
         {
             "pending_confirmation": False,
             "runtime_task_id": conn.task_id,
-            "active_focus_work_type": "vocab_today",
+            "active_focus_work_type": "flash_card",
             "focus_work_display_state": "fullscreen",
         }
     )
@@ -3783,10 +3783,10 @@ def test_get_focus_workflow_current_exposes_app_managed_adapter(monkeypatch) -> 
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["active_focus_work_type"] == "vocab_today"
+    assert data["active_focus_work_type"] == "flash_card"
     assert data["active_task_source_type"] == "app"
     assert data["active_task_app_id"] == "vocab"
-    assert data["active_task_app_task_type"] == "vocab_today"
+    assert data["active_task_app_task_type"] == "flash_card"
     assert data["active_task_app_config_id"] == str(config_id)
     assert data["focus_work_display_state"] == "fullscreen"
 
@@ -3867,10 +3867,10 @@ def test_focus_work_result_completed_does_not_record_app_managed_task_completion
     conn = _WorkflowConn()
     conn.tasks[0].update(
         {
-            "title": "今日单词",
+            "title": "闪卡",
             "source_type": "app",
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "app_config_id": uuid4(),
             "managed_by_app": True,
             "is_recurring": True,
@@ -3882,7 +3882,7 @@ def test_focus_work_result_completed_does_not_record_app_managed_task_completion
         {
             "pending_confirmation": False,
             "runtime_task_id": conn.task_id,
-            "active_focus_work_type": "vocab_today",
+            "active_focus_work_type": "flash_card",
             "focus_work_display_state": "fullscreen",
             "phases": [
                 {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}
@@ -3898,7 +3898,7 @@ def test_focus_work_result_completed_does_not_record_app_managed_task_completion
     resp = client.post(
         "/todo/focus/workflow/focus-work-result",
         json={
-            "focus_work_type": "vocab_today",
+            "focus_work_type": "flash_card",
             "result": "completed",
             "progress_snapshot": {"completedTask": True, "done": True},
         },
@@ -3911,10 +3911,10 @@ def test_focus_work_result_completed_round_does_not_record_app_managed_task_comp
     conn = _WorkflowConn()
     conn.tasks[0].update(
         {
-            "title": "今日单词",
+            "title": "闪卡",
             "source_type": "app",
             "app_id": "vocab",
-            "app_task_type": "vocab_today",
+            "app_task_type": "flash_card",
             "app_config_id": uuid4(),
             "managed_by_app": True,
             "is_recurring": True,
@@ -3926,7 +3926,7 @@ def test_focus_work_result_completed_round_does_not_record_app_managed_task_comp
         {
             "pending_confirmation": False,
             "runtime_task_id": conn.task_id,
-            "active_focus_work_type": "vocab_today",
+            "active_focus_work_type": "flash_card",
             "focus_work_display_state": "fullscreen",
             "phases": [
                 {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": str(conn.task_id)}
@@ -3941,7 +3941,7 @@ def test_focus_work_result_completed_round_does_not_record_app_managed_task_comp
 
     resp = client.post(
         "/todo/focus/workflow/focus-work-result",
-        json={"focus_work_type": "vocab_today", "result": "completed", "progress_snapshot": {"completedTask": False}},
+        json={"focus_work_type": "flash_card", "result": "completed", "progress_snapshot": {"completedTask": False}},
     )
 
     assert resp.status_code == 410
@@ -3980,7 +3980,7 @@ def test_pause_focus_workflow_marks_app_focus_as_paused(monkeypatch) -> None:
             "pending_confirmation": False,
             "pending_task_selection": False,
             "runtime_task_id": conn.task_id,
-            "active_focus_work_type": "vocab_today",
+            "active_focus_work_type": "flash_card",
             "focus_work_display_state": "fullscreen",
             "is_paused": False,
             "paused_at": None,
@@ -3996,7 +3996,7 @@ def test_pause_focus_workflow_marks_app_focus_as_paused(monkeypatch) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["is_paused"] is True
-    assert data["active_focus_work_type"] == "vocab_today"
+    assert data["active_focus_work_type"] == "flash_card"
 
 
 def test_resume_focus_workflow_clears_paused_state(monkeypatch) -> None:
@@ -4058,7 +4058,7 @@ def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:
             "pending_confirmation": False,
             "pending_task_selection": False,
             "runtime_task_id": conn.task_id,
-            "active_focus_work_type": "review",
+            "active_focus_work_type": "choice",
             "focus_work_display_state": "fullscreen",
             "is_paused": True,
             "paused_at": datetime.now(UTC),
@@ -4074,7 +4074,7 @@ def test_resume_focus_workflow_clears_app_paused_state(monkeypatch) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["is_paused"] is False
-    assert data["active_focus_work_type"] == "review"
+    assert data["active_focus_work_type"] == "choice"
 
 
 def _preset_row(

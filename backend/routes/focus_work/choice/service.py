@@ -447,7 +447,7 @@ async def submit_review(
     question_id: str,
     chosen_option: str,
     time_spent_ms: int | None,
-    mode: str = "review",
+    mode: str = "practice",
 ) -> dict:
     now = datetime.now(UTC)
     async with pool.acquire() as conn:

@@ -8,7 +8,7 @@ import asyncpg
 from .importer import DeckSeed, WordSeed
 
 
-async def init_vocab(app: Any) -> None:
+async def init_flash(app: Any) -> None:
     pool = getattr(getattr(app, "state", None), "auth_pool", None)
     if pool is None:
         raise RuntimeError("auth_pool 未初始化，无法创建 vocab 表")

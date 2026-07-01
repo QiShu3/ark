@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Workflow } from 'lucide-react';
 import { useAuthStore } from '../lib/auth';
-import { subAppList, getSubAppIcon, loadDynamicRegistry, type SubAppDeclaration } from '../lib/subAppRegistry';
+import { appList, getAppIcon, loadAppRegistry, type AppDeclaration } from '../lib/appRegistry';
 
-/** 应用中心页面，从 subAppRegistry + 后端 API 渲染子应用入口 */
+/** 应用中心页面，从应用注册表 + 后端 API 渲染入口 */
 export default function AppCenter() {
   const navigate = useNavigate();
   const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
-  const [apps, setApps] = useState<SubAppDeclaration[]>(subAppList);
+  const [apps, setApps] = useState<AppDeclaration[]>(appList);
 
   useEffect(() => {
-    loadDynamicRegistry().then((all) => setApps(all.filter((a) => !a.adminOnly || isAdmin)));
+    loadAppRegistry().then((all) => setApps(all.filter((a) => !a.adminOnly || isAdmin)));
   }, [isAdmin]);
 
   return (
@@ -23,7 +23,7 @@ export default function AppCenter() {
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {apps.map((app) => {
-            const Icon = getSubAppIcon(app.icon);
+            const Icon = getAppIcon(app.icon);
             return (
               <button
                 key={app.id}

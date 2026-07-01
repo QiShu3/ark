@@ -515,7 +515,7 @@ describe('EventCountdownCard', () => {
       if (url === '/todo/events/primary') throw new Error('主事件不存在');
       if (url === '/todo/events' && !options) return [...createdEvents];
       if (url === '/todo/event-plan-templates') return [];
-      if (url === '/api/vocab/decks') return [];
+      if (url === '/api/flash/decks') return [];
       if (url === '/todo/events' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
         expect(payload.is_primary).toBe(false);
@@ -651,7 +651,7 @@ describe('EventCountdownCard', () => {
       if (url === '/todo/events/primary') throw new Error('主事件不存在');
       if (url === '/todo/events' && !options) return [...createdEvents];
       if (url === '/todo/event-plan-templates') return [];
-      if (url === '/api/vocab/decks') return [];
+      if (url === '/api/flash/decks') return [];
       if (url === '/todo/events' && options?.method === 'POST') {
         const payload = JSON.parse(options.body || '{}');
         expect(payload.is_primary).toBe(false);
@@ -739,7 +739,7 @@ describe('EventCountdownCard', () => {
         const payload = JSON.parse(options.body || '{}');
         expect(payload).toMatchObject({
           title: '真题练习 (应用)',
-          app_task_type: 'practice',
+          app_task_type: 'choice',
           event_id: 'event-app-workflow',
         });
         return {
@@ -798,9 +798,9 @@ describe('EventCountdownCard', () => {
     const createDialog = screen.getByRole('dialog', { name: '添加事件' });
 
     await user.click(within(createDialog).getByRole('button', { name: '添加应用' }));
-    await user.selectOptions(screen.getByLabelText('选择应用'), 'practice');
+    await user.selectOptions(screen.getByLabelText('选择应用'), 'choice');
     await user.click(screen.getByRole('button', { name: '保存应用' }));
-    expect(within(createDialog).getByRole('button', { name: /真题练习/ })).toBeInTheDocument();
+    expect(within(createDialog).getByRole('button', { name: /选择练习/ })).toBeInTheDocument();
 
     await user.click(within(createDialog).getByRole('button', { name: '新建工作流' }));
     const workflowDialog = await screen.findByRole('dialog', { name: '工作流' });

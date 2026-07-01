@@ -23,7 +23,7 @@ describe('AdminUiLibraryPage', () => {
     expect(screen.getByRole('heading', { name: 'HomeCard' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'HomeSectionHeader' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'WorkflowPhaseChips' })).toBeInTheDocument();
-    expect(screen.getByText('真题练习')).toBeInTheDocument();
+    expect(screen.getByText('选择练习')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'AppModalFrame' })).toBeInTheDocument();
     expect(screen.getByText('--ark-text')).toBeInTheDocument();
     expect(screen.getByText('--ark-glass-surface')).toBeInTheDocument();

@@ -1,5 +1,5 @@
 export type FocusTimerMode = 'countdown' | 'countup';
-export type FocusWorkType = 'vocab_today' | 'review' | 'practice' | 'task_focus';
+export type FocusWorkType = 'flash_card' | 'choice' | 'input' | 'task_focus';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
 
 export type WorkflowPhase = {

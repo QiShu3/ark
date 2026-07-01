@@ -21,6 +21,13 @@ import {
 import { activateEventSubApps } from '../../lib/events/eventAppSync';
 import { fetchVocabDecks, initializeVocabAppTask } from '../../lib/vocab/api';
 import { saveEventChoiceConfig } from '../../lib/erc/configSync';
+import {
+  getAppTypeLabel,
+  inferChoiceMode,
+  normalizeAppType,
+  type CanonicalAppType,
+  type ChoiceAppMode,
+} from '../../lib/events/appConfigTypes';
 import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
 import WorkflowPhaseChips from '../WorkflowPhaseChips';
@@ -41,7 +48,6 @@ import {
 } from '../workflowPresetForm';
 import type { EventItem } from '../../lib/events/types';
 import type { Appointment, AppointmentStoredStatus, CompletionPeriodType, Task } from '../taskTypes';
-import type { AppTaskType } from '../taskTypes';
 import type { VocabDeck } from '../../lib/vocab/types';
 
 type EventWorkbenchModalProps = {
@@ -59,7 +65,8 @@ type EventEditFormState = {
 };
 
 type AppConfigEditorState = {
-  appType: AppTaskType;
+  appType: CanonicalAppType;
+  choiceMode: ChoiceAppMode;
   deckId: string;
   dailyTargetCount: number;
   dailyArticleTarget: number;
@@ -754,13 +761,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
 
   function beginAddAppConfig(): void {
     const usedTypes = new Set(appTasks.map((t) => t.app_task_type));
-    const available = (['vocab_today', 'practice', 'review'] as const)
+    const available = (['flash_card', 'choice', 'input'] as const)
       .filter((t) => !usedTypes.has(t));
     if (available.length === 0) return;
     const appType = available[0];
     setAppConfigEditor({
       appType,
-      deckId: appType === 'vocab_today' ? (appConfigDecks[0]?.id ?? '') : '',
+      choiceMode: 'practice',
+      deckId: appType === 'flash_card' ? (appConfigDecks[0]?.id ?? '') : '',
       dailyTargetCount: 20,
       dailyArticleTarget: 1,
       reviewScope: 'due',
@@ -774,9 +782,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
 
   function beginEditAppConfig(task: Task): void {
     const config = parseAppTaskConfig(task);
-    const appType = task.app_task_type!;
+    const appType = normalizeAppType(task.app_task_type) ?? 'choice';
     setAppConfigEditor({
       appType,
+      choiceMode: appType === 'choice' ? inferChoiceMode(task.app_task_type, config) : 'practice',
       deckId: (config.deckId as string) ?? '',
       dailyTargetCount: (config.dailyTargetCount as number) ?? 20,
       dailyArticleTarget: (config.dailyArticleTarget as number) ?? 1,
@@ -806,19 +815,18 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
 
   async function handleSaveAppConfig(): Promise<void> {
     if (appConfigSubmitting || !appConfigEditor) return;
-    if (appConfigEditor.appType === 'vocab_today' && !appConfigEditor.deckId) {
+    if (appConfigEditor.appType === 'flash_card' && !appConfigEditor.deckId) {
       setAppConfigError('请选择词书');
       return;
     }
     setAppConfigSubmitting(true);
     setAppConfigError(null);
     try {
-      const isChoiceApp = appConfigEditor.appType === 'practice' || appConfigEditor.appType === 'review';
-      if (appConfigEditor.editingTaskId && !isChoiceApp) {
+      if (appConfigEditor.editingTaskId && appConfigEditor.appType !== 'choice') {
         await deleteEventArrangementTask(appConfigEditor.editingTaskId);
       }
       const focusDuration = appConfigEditor.focusDurationMin * 60;
-      if (appConfigEditor.appType === 'vocab_today') {
+      if (appConfigEditor.appType === 'flash_card') {
         await initializeVocabAppTask({
           deck_id: appConfigEditor.deckId,
           daily_target_count: appConfigEditor.dailyTargetCount,
@@ -826,7 +834,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
           add_to_today_plan: appConfigEditor.addToTodayPlan,
           event_id: currentEvent.id,
         });
-      } else if (appConfigEditor.appType === 'practice') {
+      } else if (appConfigEditor.appType === 'choice' && appConfigEditor.choiceMode === 'practice') {
         await saveEventChoiceConfig({
           eventId: currentEvent.id,
           practice: {
@@ -835,7 +843,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
             add_to_today_plan: appConfigEditor.addToTodayPlan,
           },
         });
-      } else {
+      } else if (appConfigEditor.appType === 'choice') {
         await saveEventChoiceConfig({
           eventId: currentEvent.id,
           review: {
@@ -1010,7 +1018,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
   function renderAppConfigEditor() {
     if (!appConfigEditor) return null;
     const usedTypes = new Set(appTasks.map((t) => t.app_task_type));
-    const available = (['vocab_today', 'practice', 'review'] as const)
+    const available = (['flash_card', 'choice', 'input'] as const)
       .filter((t) => !usedTypes.has(t) || t === appConfigEditor.appType);
     const isNew = appConfigEditor.editingTaskId === null;
 
@@ -1022,23 +1030,31 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
             选择应用
             <select
               value={appConfigEditor.appType}
-              onChange={(e) => setAppConfigEditor((s) => s ? { ...s, appType: e.target.value as AppTaskType, deckId: e.target.value === 'vocab_today' ? (appConfigDecks[0]?.id ?? '') : '' } : s)}
+              onChange={(e) => {
+                const appType = e.target.value as CanonicalAppType;
+                setAppConfigEditor((s) => s ? {
+                  ...s,
+                  appType,
+                  choiceMode: appType === 'choice' ? s.choiceMode : 'practice',
+                  deckId: appType === 'flash_card' ? (appConfigDecks[0]?.id ?? '') : '',
+                } : s);
+              }}
               className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
             >
               {available.map((t) => (
                 <option key={t} value={t}>
-                  {t === 'vocab_today' ? '今日单词' : t === 'practice' ? '真题练习' : '错题复习'}
+                  {t === 'flash_card' ? '今日单词' : t === 'choice' ? '选择练习' : '输入练习'}
                 </option>
               ))}
             </select>
           </label>
         ) : (
           <div className="text-sm text-ark-text">
-            {appConfigEditor.appType === 'vocab_today' ? '今日单词' : appConfigEditor.appType === 'practice' ? '真题练习' : '错题复习'}
+            {getAppTypeLabel(appConfigEditor.appType, { choiceMode: appConfigEditor.choiceMode })}
           </div>
         )}
 
-        {appConfigEditor.appType === 'vocab_today' ? (
+        {appConfigEditor.appType === 'flash_card' ? (
           <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
               选择词书
@@ -1067,34 +1083,64 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
           </>
         ) : null}
 
-        {appConfigEditor.appType === 'practice' ? (
-          <label className="grid gap-1 text-xs text-ark-text-muted">
-            每日目标文章数
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={appConfigEditor.dailyArticleTarget}
-              onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyArticleTarget: Math.max(1, Math.min(50, Number(e.target.value) || 1)) } : s)}
-              className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-            />
-          </label>
-        ) : null}
-
-        {appConfigEditor.appType === 'review' ? (
+        {appConfigEditor.appType === 'choice' ? (
           <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
-              复习范围
+              选择练习类型
               <select
-                value={appConfigEditor.reviewScope}
-                onChange={(e) => setAppConfigEditor((s) => s ? { ...s, reviewScope: e.target.value as AppConfigEditorState['reviewScope'] } : s)}
+                value={appConfigEditor.choiceMode}
+                onChange={(e) => setAppConfigEditor((s) => s ? { ...s, choiceMode: e.target.value as ChoiceAppMode } : s)}
                 className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
               >
-                <option value="due">到期复习</option>
-                <option value="mistakes">全部错题</option>
-                <option value="all">全部题目</option>
+                <option value="practice">真题练习</option>
+                <option value="review">错题复习</option>
               </select>
             </label>
+            {appConfigEditor.choiceMode === 'practice' ? (
+              <label className="grid gap-1 text-xs text-ark-text-muted">
+                每日目标文章数
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={appConfigEditor.dailyArticleTarget}
+                  onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyArticleTarget: Math.max(1, Math.min(50, Number(e.target.value) || 1)) } : s)}
+                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
+                />
+              </label>
+            ) : null}
+            {appConfigEditor.choiceMode === 'review' ? (
+              <>
+                <label className="grid gap-1 text-xs text-ark-text-muted">
+                  复习范围
+                  <select
+                    value={appConfigEditor.reviewScope}
+                    onChange={(e) => setAppConfigEditor((s) => s ? { ...s, reviewScope: e.target.value as AppConfigEditorState['reviewScope'] } : s)}
+                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
+                  >
+                    <option value="due">到期复习</option>
+                    <option value="mistakes">全部错题</option>
+                    <option value="all">全部题目</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs text-ark-text-muted">
+                  每日目标题数
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={appConfigEditor.dailyQuestionTarget}
+                    onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyQuestionTarget: Math.max(1, Math.min(200, Number(e.target.value) || 10)) } : s)}
+                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
+                  />
+                </label>
+              </>
+            ) : null}
+          </>
+        ) : null}
+
+        {appConfigEditor.appType === 'input' ? (
+          <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
               每日目标题数
               <input
@@ -1361,19 +1407,19 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
                 {appTasks.map((task) => {
                   const config = parseAppTaskConfig(task);
                   const isEditing = appConfigEditor?.editingTaskId === task.id;
-                  const typeLabel = task.app_task_type === 'vocab_today'
-                    ? '今日单词'
-                    : task.app_task_type === 'practice'
-                      ? '真题练习'
-                      : '错题复习';
+                  const appType = normalizeAppType(task.app_task_type) ?? 'choice';
+                  const choiceMode = appType === 'choice' ? inferChoiceMode(task.app_task_type, config) : undefined;
+                  const typeLabel = getAppTypeLabel(appType, { ...config, choiceMode });
                   const summaryParts: string[] = [];
-                  if (task.app_task_type === 'vocab_today') {
+                  if (appType === 'flash_card') {
                     if (config.deckName) summaryParts.push(`词书 ${config.deckName}`);
                     if (config.dailyTargetCount) summaryParts.push(`每日 ${config.dailyTargetCount} 词`);
-                  } else if (task.app_task_type === 'practice') {
+                  } else if (appType === 'choice' && choiceMode === 'practice') {
                     if (config.dailyArticleTarget) summaryParts.push(`每日 ${config.dailyArticleTarget} 篇`);
-                  } else {
+                  } else if (appType === 'choice') {
                     if (config.reviewScope) summaryParts.push(config.reviewScope === 'due' ? '到期复习' : config.reviewScope === 'mistakes' ? '错题复习' : '全部');
+                    if (config.dailyQuestionTarget) summaryParts.push(`每日 ${config.dailyQuestionTarget} 题`);
+                  } else {
                     if (config.dailyQuestionTarget) summaryParts.push(`每日 ${config.dailyQuestionTarget} 题`);
                   }
                   if (config.defaultFocusDuration) summaryParts.push(`专注 ${Math.round((config.defaultFocusDuration as number) / 60)}m`);
@@ -1398,7 +1444,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
                 {appConfigEditor && !appConfigEditor.editingTaskId ? renderAppConfigEditor() : null}
                 {(() => {
                   const usedTypes = new Set(appTasks.map((t) => t.app_task_type));
-                  const available = (['vocab_today', 'practice', 'review'] as const).filter((t) => !usedTypes.has(t));
+                  const available = (['flash_card', 'choice', 'input'] as const).filter((t) => !usedTypes.has(t));
                   if (!appConfigEditor && available.length > 0) {
                     return (
                       <button

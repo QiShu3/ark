@@ -35,6 +35,7 @@ import {
   type WorkflowFormState,
   type WorkflowPreset,
 } from './workflowPresetForm';
+import { getAppTypeLabel, normalizeAppType } from '../lib/events/appConfigTypes';
 
 type WorkflowPresetModalProps = {
   open: boolean;
@@ -488,7 +489,8 @@ const WorkflowPresetModal: React.FC<WorkflowPresetModalProps> = ({
                               return tasks.find((t) => t.id === p.task_id)?.title || '未知任务';
                             }
                             if (p.focus_work_type) {
-                              return p.focus_work_type === 'vocab_today' ? '今日单词' : '应用任务';
+                              const appType = normalizeAppType(p.focus_work_type) ?? 'choice';
+                              return getAppTypeLabel(appType);
                             }
                             return '任务专注';
                           })

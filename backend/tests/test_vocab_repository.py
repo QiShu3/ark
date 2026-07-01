@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from routes.vocab.repository import upsert_user_word_progress
+from routes.focus_work.flash.repository import upsert_user_word_progress
 
 
 @pytest.mark.asyncio

@@ -172,7 +172,7 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
     if (submitting) return;
 
     const confirmMessage = task.managed_by_app
-      ? "删除此卡片仅跳过今日任务，次日仍会自动生成。如需永久取消，请前往子应用内关闭配置。确定要删除吗？"
+      ? "删除此卡片仅跳过今日任务，次日仍会自动生成。如需永久取消，请前往应用内关闭配置。确定要删除吗？"
       : `确定要删除任务「${task.title}」吗？`;
 
     if (!window.confirm(confirmMessage)) return;
@@ -225,7 +225,7 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
                   应用托管任务
                 </div>
                 <p className="text-[11px] sm:text-xs text-ark-text-muted leading-relaxed mt-0.5">
-                  该任务由子应用托管生成，核心内容不可在当前面板修改。
+                  该任务由应用托管生成，核心内容不可在当前面板修改。
                 </p>
               </div>
               <Button

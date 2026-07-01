@@ -7,11 +7,8 @@ import pytest
 from fastapi import HTTPException
 
 from routes.todo.helpers import (
-    _bind_first_focus_phase_to_task,
     _build_workflow_settlement,
     _create_workflow_with_focus_phase,
-    _focus_work_type_for_task_row,
-    _normalize_workflow_phases,
     _row_to_focus_workflow,
 )
 from routes.todo.schemas import FocusWorkflowOut, FocusWorkflowPhase, FocusWorkRunSummaryOut
@@ -19,11 +16,8 @@ from routes.todo_routes import (
     _build_run_metadata,
     _content_bank_article_seed,
     _content_bank_word_seed,
-    _countup_focus_completion,
-    _countup_focus_phase_from_deliberate_config,
     _resolve_erc_app_set_id,
     _resolve_vocab_app_deck_id,
-    _test_focus_phase_config,
     complete_focus_workflow_run_task_and_end_phase,
 )
 
@@ -105,18 +99,6 @@ class FakeSettlementConn:
         return [row for row in self.rows if row["id"] in allowed]
 
 
-def test_focus_workflow_phase_accepts_focus_work_type():
-    phase = FocusWorkflowPhase(
-        phase_type="focus",
-        duration=1500,
-        timer_mode="countdown",
-        focus_work_type="vocab_today",
-    )
-
-    assert phase.focus_work_type == "vocab_today"
-    assert phase.task_id is None
-
-
 def test_focus_workflow_phase_accepts_task_focus_type():
     phase = FocusWorkflowPhase(
         phase_type="focus",
@@ -131,14 +113,14 @@ def test_focus_workflow_phase_accepts_task_focus_type():
 def test_focus_workflow_out_exposes_focus_work_runtime_fields():
     payload = FocusWorkflowOut(
         state="focus",
-        active_focus_work_type="review",
+        active_focus_work_type="choice",
         focus_work_display_state="fullscreen",
         next_focus_work_type=None,
         has_minimized_work=False,
         phase_runtime_state="running_run",
     )
 
-    assert payload.active_focus_work_type == "review"
+    assert payload.active_focus_work_type == "choice"
     assert payload.focus_work_display_state == "fullscreen"
     assert payload.phase_runtime_state == "running_run"
 
@@ -166,7 +148,7 @@ def test_focus_workflow_out_exposes_run_runtime_fields():
             "id": "00000000-0000-0000-0000-000000000001",
             "workflow_id": "00000000-0000-0000-0000-000000000002",
             "phase_index": 0,
-            "focus_work_type": "vocab_today",
+            "focus_work_type": "flash_card",
             "counts_for_task_completion": True,
             "status": "running",
             "progress_snapshot": None,
@@ -221,7 +203,7 @@ async def test_build_workflow_settlement_filters_to_record_run_ids():
     conn = FakeSettlementConn([
         Row(
             id=included_run_id,
-            focus_work_type="practice",
+            focus_work_type="choice",
             config_snapshot={"deliberate_name": "本次记录"},
             progress_snapshot={
                 "run_summary": {
@@ -239,7 +221,7 @@ async def test_build_workflow_settlement_filters_to_record_run_ids():
         ),
         Row(
             id=other_run_id,
-            focus_work_type="practice",
+            focus_work_type="choice",
             config_snapshot={"deliberate_name": "其他记录"},
             progress_snapshot={
                 "run_summary": {
@@ -399,7 +381,7 @@ async def test_complete_task_and_end_phase_accepts_model_run_summary(monkeypatch
         workflow_id=workflow_id,
         phase_index=0,
         task_id=uuid4(),
-        focus_work_type="vocab_today",
+        focus_work_type="flash_card",
         app_id=None,
         app_task_type=None,
         counts_for_task_completion=True,
@@ -504,113 +486,6 @@ async def test_complete_task_and_end_phase_accepts_model_run_summary(monkeypatch
     ]
 
 
-def test_normalize_workflow_phases_preserves_focus_work_type():
-    phases = _normalize_workflow_phases(
-        [{"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "vocab_today"}],
-        fallback_focus_duration=1500,
-        fallback_break_duration=300,
-    )
-
-    assert phases[0]["focus_work_type"] == "vocab_today"
-    assert phases[0]["task_id"] is None
-
-
-def test_countup_practice_config_targets_questions():
-    phase_config = _test_focus_phase_config("practice", "bank-1", 10)
-
-    assert phase_config["set_id"] == "bank-1"
-    assert phase_config["article_set_id"] == "bank-1"
-    assert phase_config["target_question_count"] == 10
-    assert phase_config["daily_question_target"] == 10
-    assert phase_config["target_article_count"] == 10
-    assert phase_config["daily_article_target"] == 10
-    assert _countup_focus_completion("practice", {}, 10) == {
-        "mode": "question_count",
-        "question_count": 10,
-    }
-
-
-def test_normalize_workflow_phases_preserves_test_focus_config():
-    choice_scope = {
-        "bank_id": "bank-1",
-        "years": [2025],
-        "subjects": ["计算机组成原理"],
-        "status": "all",
-        "mode": "sequential",
-    }
-    choice_completion = {"mode": "question_count", "question_count": 3}
-    phases = _normalize_workflow_phases(
-        [
-            {
-                "phase_type": "focus",
-                "duration": 3600,
-                "timer_mode": "countup",
-                "focus_work_type": "vocab_today",
-                "is_temporary": True,
-                "deck_id": "deck-1",
-                "target_word_count": 100,
-                "daily_target_count": 100,
-                "task_title": "今日单词",
-                "choice_scope": choice_scope,
-                "choice_completion": choice_completion,
-            }
-        ],
-        fallback_focus_duration=1500,
-        fallback_break_duration=300,
-    )
-
-    assert phases[0]["deck_id"] == "deck-1"
-    assert phases[0]["target_word_count"] == 100
-    assert phases[0]["daily_target_count"] == 100
-    assert phases[0]["task_title"] == "今日单词"
-    assert phases[0]["choice_scope"] == choice_scope
-    assert phases[0]["choice_completion"] == choice_completion
-
-
-@pytest.mark.asyncio
-async def test_build_run_metadata_uses_test_vocab_phase_config():
-    class NoTaskConn:
-        async def fetchrow(self, query: str, *args: object):
-            raise AssertionError(f"Unexpected fetchrow query: {query}")
-
-    workflow_row = Row(
-        focus_duration=3600,
-        break_duration=60,
-        phases=[
-            {
-                "phase_type": "focus",
-                "duration": 3600,
-                "timer_mode": "countup",
-                "focus_work_type": "vocab_today",
-                "is_temporary": True,
-                "deck_id": "deck-1",
-                "target_word_count": 100,
-                "daily_target_count": 100,
-                "task_title": "今日单词",
-            }
-        ],
-        current_phase_index=0,
-        runtime_task_id=None,
-        task_id=None,
-        active_focus_work_type="vocab_today",
-    )
-
-    task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
-        NoTaskConn(),
-        user_id=1,
-        workflow_row=workflow_row,
-    )
-
-    assert task_id is None
-    assert focus_work_type == "vocab_today"
-    assert app_id == "vocab"
-    assert app_task_type == "vocab_today"
-    assert config_snapshot["deck_id"] == "deck-1"
-    assert config_snapshot["target_word_count"] == 100
-    assert config_snapshot["daily_target_count"] == 100
-    assert config_snapshot["task_title"] == "今日单词"
-
-
 @pytest.mark.asyncio
 async def test_build_run_metadata_uses_test_choice_phase_config():
     class NoTaskConn:
@@ -633,13 +508,13 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
                 "phase_type": "focus",
                 "duration": 3600,
                 "timer_mode": "countup",
-                "focus_work_type": "practice",
+                "focus_work_type": "choice",
                 "is_temporary": True,
                 "set_id": "bank-1",
                 "article_set_id": "bank-1",
                 "target_article_count": 3,
                 "daily_article_target": 3,
-                "task_title": "真题练习",
+                "task_title": "选择练习",
                 "choice_scope": choice_scope,
                 "choice_completion": choice_completion,
             }
@@ -647,7 +522,7 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
         current_phase_index=0,
         runtime_task_id=None,
         task_id=None,
-        active_focus_work_type="practice",
+        active_focus_work_type="choice",
     )
 
     task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
@@ -657,152 +532,12 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
     )
 
     assert task_id is None
-    assert focus_work_type == "practice"
-    assert app_id == "erc"
-    assert app_task_type == "practice"
+    assert focus_work_type == "choice"
+    assert app_id is None
+    assert app_task_type is None
     assert config_snapshot["choice_scope"] == choice_scope
     assert config_snapshot["choice_completion"] == choice_completion
-    assert config_snapshot["task_title"] == "真题练习"
-
-
-@pytest.mark.asyncio
-async def test_deliberate_config_phase_uses_standard_context_without_precreating_run():
-    config_id = uuid4()
-    deck_id = uuid4()
-
-    class DeliberatePhaseConn:
-        async def fetchrow(self, query: str, *args: object):
-            if "FROM vocab_decks WHERE id = $1" in query:
-                assert args[0] == deck_id
-                return Row(id=deck_id)
-            raise AssertionError(f"Unexpected fetchrow query: {query}")
-
-    phase = await _countup_focus_phase_from_deliberate_config(
-        DeliberatePhaseConn(),
-        user_id=1,
-        config_row=Row(
-            id=config_id,
-            name="背单词",
-            kind="flashcard",
-            focus_work_type="vocab_today",
-            bank_id=deck_id,
-            target_count=20,
-            scope_json={},
-            completion_json={},
-        ),
-    )
-
-    assert phase["phase_type"] == "focus"
-    assert phase["timer_mode"] == "countup"
-    assert phase["focus_work_type"] == "vocab_today"
-    assert phase["deliberate_config_id"] == str(config_id)
-    assert phase["deliberate_name"] == "背单词"
-    assert phase["deck_id"] == str(deck_id)
-    assert "deliberate_run_id" not in phase
-    assert "config_id" not in phase
-
-
-@pytest.mark.asyncio
-async def test_build_run_metadata_creates_deliberate_run_for_phase_and_loads_children(monkeypatch):
-    workflow_id = uuid4()
-    config_id = uuid4()
-    child_config_id = uuid4()
-    deck_id = uuid4()
-    deliberate_run_id = uuid4()
-    execute_calls: list[tuple[str, tuple[object, ...]]] = []
-
-    async def fake_get_config(_conn, *, user_id: int, config_id: str):
-        assert user_id == 1
-        assert config_id == str(globals_config_id)
-        return Row(
-            id=globals_config_id,
-            name="背单词",
-            kind="flashcard",
-            focus_work_type="vocab_today",
-            bank_id=deck_id,
-            target_count=20,
-            scope_json={},
-            completion_json={},
-        )
-
-    async def fake_create_run(_conn, *, user_id: int, config_id: str | None, focus_work_type: str, bank_id: str | None, config_snapshot: dict):
-        assert user_id == 1
-        assert config_id == str(globals_config_id)
-        assert focus_work_type == "vocab_today"
-        assert bank_id == str(deck_id)
-        assert config_snapshot["name"] == "背单词"
-        return Row(id=deliberate_run_id)
-
-    async def fake_attach_workflow(_conn, *, user_id: int, run_id: str, workflow_id: UUID):
-        assert user_id == 1
-        assert run_id == str(deliberate_run_id)
-        assert workflow_id == globals_workflow_id
-
-    globals_config_id = config_id
-    globals_workflow_id = workflow_id
-
-    monkeypatch.setattr("routes.todo_routes.deliberate_repository.get_config", fake_get_config)
-    monkeypatch.setattr("routes.todo_routes.deliberate_repository.create_run", fake_create_run)
-    monkeypatch.setattr("routes.todo_routes.deliberate_repository.attach_workflow", fake_attach_workflow)
-
-    class DeliberateRunConn:
-        async def execute(self, query: str, *args: object):
-            execute_calls.append((query, args))
-            return "UPDATE 1"
-
-        async def fetchrow(self, query: str, *args: object):
-            if "SELECT children_json FROM deliberate_workflow_configs" in query:
-                assert args == (config_id, 1) or args == (str(config_id), 1)
-                return Row(children_json=[{"config_id": str(child_config_id), "label": "", "is_recommended": True}])
-            if "SELECT name FROM deliberate_workflow_configs" in query:
-                assert args == (str(child_config_id), 1)
-                return Row(name="错题复习")
-            raise AssertionError(f"Unexpected fetchrow query: {query}")
-
-    workflow_row = Row(
-        id=workflow_id,
-        focus_duration=3600,
-        break_duration=60,
-        phases=[
-            {
-                "phase_type": "focus",
-                "duration": 3600,
-                "timer_mode": "countup",
-                "focus_work_type": "vocab_today",
-                "is_temporary": True,
-                "deliberate_config_id": str(config_id),
-                "deliberate_kind": "flashcard",
-                "deliberate_name": "背单词",
-                "deck_id": str(deck_id),
-                "target_word_count": 20,
-                "daily_target_count": 20,
-                "task_title": "今日单词",
-            }
-        ],
-        current_phase_index=0,
-        runtime_task_id=None,
-        task_id=None,
-        active_focus_work_type="vocab_today",
-    )
-
-    task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
-        DeliberateRunConn(),
-        user_id=1,
-        workflow_row=workflow_row,
-    )
-
-    assert task_id is None
-    assert focus_work_type == "vocab_today"
-    assert app_id == "vocab"
-    assert app_task_type == "vocab_today"
-    assert config_snapshot["deliberate_run_id"] == str(deliberate_run_id)
-    assert config_snapshot["deliberate_config_id"] == str(config_id)
-    assert config_snapshot["children"] == [
-        {"config_id": str(child_config_id), "label": "错题复习", "is_recommended": True}
-    ]
-    assert len(execute_calls) == 1
-    updated_phases = execute_calls[0][1][0]
-    assert str(deliberate_run_id) in str(updated_phases)
+    assert config_snapshot["task_title"] == "选择练习"
 
 
 @pytest.mark.asyncio
@@ -982,32 +717,6 @@ async def test_resolve_vocab_app_deck_id_keeps_existing_vocab_deck_id():
     assert resolved == str(deck_id)
 
 
-def test_bind_first_focus_phase_to_task_clears_stale_preset_work_binding():
-    task_id = uuid4()
-    stale_task_id = uuid4()
-    phases = _normalize_workflow_phases(
-        [
-            {
-                "phase_type": "focus",
-                "duration": 900,
-                "timer_mode": "countdown",
-                "task_id": str(stale_task_id),
-                "focus_work_type": "vocab_today",
-            },
-            {"phase_type": "break", "duration": 300},
-            {"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "vocab_today"},
-        ],
-        fallback_focus_duration=1500,
-        fallback_break_duration=300,
-    )
-
-    bound_phases = _bind_first_focus_phase_to_task(phases, task_id)
-
-    assert bound_phases[0]["task_id"] == task_id
-    assert bound_phases[0]["focus_work_type"] is None
-    assert bound_phases[2]["focus_work_type"] == "vocab_today"
-
-
 @pytest.mark.asyncio
 async def test_create_workflow_activates_first_bound_focus_work_without_starting_run_log():
     conn = FakeWorkflowConn()
@@ -1018,7 +727,7 @@ async def test_create_workflow_activates_first_bound_focus_work_without_starting
             "duration": 60,
             "timer_mode": "countdown",
             "task_id": None,
-            "focus_work_type": "review",
+            "focus_work_type": "choice",
             "record_focus": True,
         },
         {"phase_type": "break", "duration": 60, "timer_mode": None, "task_id": None, "focus_work_type": None},
@@ -1037,41 +746,9 @@ async def test_create_workflow_activates_first_bound_focus_work_without_starting
     workflow_insert_query, workflow_insert_args = conn.fetchrow_calls[0]
     assert "active_focus_work_type" in workflow_insert_query
     assert "focus_work_display_state" in workflow_insert_query
-    assert "review" in workflow_insert_args
+    assert "choice" in workflow_insert_args
     assert "fullscreen" in workflow_insert_args
     assert not any("focus_app_work_logs" in query for query, _args in conn.execute_calls)
-
-
-@pytest.mark.asyncio
-async def test_create_workflow_activates_app_managed_task_adapter_without_starting_run_log():
-    conn = FakeWorkflowConn()
-    task_id = uuid4()
-    phases = [
-        {"phase_type": "focus", "duration": 1500, "timer_mode": "countdown", "task_id": None},
-        {"phase_type": "break", "duration": 300},
-    ]
-
-    await _create_workflow_with_focus_phase(
-        conn,
-        user_id=1,
-        task_id=task_id,
-        workflow_name="Vocab Focus",
-        phases=phases,
-        focus_duration=1500,
-        break_duration=300,
-        task_focus_work_type="vocab_today",
-    )
-
-    workflow_insert_query, workflow_insert_args = conn.fetchrow_calls[0]
-    assert "active_focus_work_type" in workflow_insert_query
-    assert "vocab_today" in workflow_insert_args
-    assert not any("focus_app_work_logs" in query for query, _args in conn.execute_calls)
-
-
-def test_focus_work_type_for_task_row_maps_app_managed_tasks():
-    assert _focus_work_type_for_task_row({"app_task_type": "vocab_today"}) == "vocab_today"
-    assert _focus_work_type_for_task_row({"app_task_type": "review"}) == "review"
-    assert _focus_work_type_for_task_row({"app_task_type": None}) == "task_focus"
 
 
 def test_row_to_focus_workflow_reports_next_same_focus_work_type_for_minimize():
@@ -1082,9 +759,9 @@ def test_row_to_focus_workflow_reports_next_same_focus_work_type_for_minimize():
         runtime_task_id=None,
         workflow_name="Vocabulary Loop",
         phases=[
-            {"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "vocab_today"},
+            {"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "flash_card"},
             {"phase_type": "break", "duration": 300},
-            {"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "vocab_today"},
+            {"phase_type": "focus", "duration": 900, "timer_mode": "countdown", "focus_work_type": "flash_card"},
         ],
         current_phase_index=1,
         focus_duration=900,
@@ -1094,7 +771,7 @@ def test_row_to_focus_workflow_reports_next_same_focus_work_type_for_minimize():
         phase_planned_duration=300,
         pending_confirmation=False,
         pending_task_selection=False,
-        active_focus_work_type="vocab_today",
+        active_focus_work_type="flash_card",
         focus_work_display_state="minimized",
         focus_work_result="interrupted",
         focus_work_progress_snapshot={"memorized": 4},
@@ -1105,7 +782,7 @@ def test_row_to_focus_workflow_reports_next_same_focus_work_type_for_minimize():
 
     assert out.state == "break"
     assert out.has_minimized_work is True
-    assert out.next_focus_work_type == "vocab_today"
+    assert out.next_focus_work_type == "flash_card"
 
 
 def test_row_to_focus_workflow_marks_task_bound_focus_phase_as_task_focus():
@@ -1169,7 +846,7 @@ def test_row_to_focus_workflow_exposes_app_task_adapter_metadata():
         phase_planned_duration=1500,
         pending_confirmation=False,
         pending_task_selection=False,
-        active_focus_work_type="vocab_today",
+        active_focus_work_type="flash_card",
         focus_work_display_state="fullscreen",
         focus_work_result=None,
         focus_work_progress_snapshot=None,
@@ -1182,14 +859,14 @@ def test_row_to_focus_workflow_exposes_app_task_adapter_metadata():
         task_title="今日单词",
         task_source_type="app",
         task_app_id="vocab",
-        task_app_task_type="vocab_today",
+        task_app_task_type="flash_card",
         task_app_config_id=config_id,
     )
 
-    assert out.active_focus_work_type == "vocab_today"
+    assert out.active_focus_work_type == "flash_card"
     assert out.active_task_source_type == "app"
     assert out.active_task_app_id == "vocab"
-    assert out.active_task_app_task_type == "vocab_today"
+    assert out.active_task_app_task_type == "flash_card"
     assert out.active_task_app_config_id == config_id
 
 

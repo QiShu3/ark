@@ -7,14 +7,15 @@ import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 
 from routes.auth_routes import _AuthUser, get_current_user
-from routes.choice.repository import (
+from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_deliberate_kind
+from routes.focus_work.choice.repository import (
     count_questions_by_set as count_choice_questions,
     get_subjects_by_set as get_choice_subjects,
     list_questions_by_set as list_choice_questions,
     list_set_rows as list_choice_set_rows,
 )
-from routes.input.repository import list_all_questions_by_set as list_input_questions, list_input_sets
-from routes.vocab.repository import list_admin_deck_words_paginated as list_vocab_words, list_vocab_decks
+from routes.focus_work.input.repository import list_all_questions_by_set as list_input_questions, list_input_sets
+from routes.focus_work.flash.repository import list_admin_deck_words_paginated as list_vocab_words, list_vocab_decks
 
 from . import repository
 from .schemas import (
@@ -48,7 +49,8 @@ async def _require_admin(user: Annotated[_AuthUser, Depends(get_current_user)]) 
 async def _bank_summary(conn: asyncpg.Connection, *, kind: str, bank_id: str | None) -> dict[str, Any] | None:
     if not bank_id:
         return None
-    if kind == "flashcard":
+    kind = normalize_deliberate_kind(kind)
+    if kind == FLASH_CARD_KIND:
         row = await conn.fetchrow(
             """
             SELECT d.id::text AS id, d.name, COALESCE(stats.count, 0)::int AS item_count
@@ -67,11 +69,11 @@ async def _bank_summary(conn: asyncpg.Connection, *, kind: str, bank_id: str | N
         return DeliberateBankSummary(
             id=row["id"],
             name=row["name"],
-            kind="flashcard",
+            kind=FLASH_CARD_KIND,
             item_count=row["item_count"],
             question_count=0,
         ).model_dump()
-    if kind == "input":
+    if kind == INPUT_KIND:
         row = await conn.fetchrow(
             """
             SELECT id::text AS id, name, question_count
@@ -85,7 +87,7 @@ async def _bank_summary(conn: asyncpg.Connection, *, kind: str, bank_id: str | N
         return DeliberateBankSummary(
             id=row["id"],
             name=row["name"],
-            kind="input",
+            kind=INPUT_KIND,
             item_count=0,
             question_count=row["question_count"],
         ).model_dump()
@@ -102,7 +104,7 @@ async def _bank_summary(conn: asyncpg.Connection, *, kind: str, bank_id: str | N
     return DeliberateBankSummary(
         id=row["id"],
         name=row["name"],
-        kind="choice",
+        kind=CHOICE_KIND,
         item_count=row["article_count"],
         question_count=row["question_count"],
     ).model_dump()
@@ -251,46 +253,47 @@ async def list_deliberate_banks(
 ) -> list[DeliberateBankOptionOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        if kind == "flashcard":
+        kind = normalize_deliberate_kind(kind)
+        if kind == FLASH_CARD_KIND:
             rows = await list_vocab_decks(conn)
             return [
                 DeliberateBankOptionOut(
                     id=row["id"],
                     name=row["name"],
-                    kind="flashcard",
+                    kind=FLASH_CARD_KIND,
                     count=row["word_count"],
                     item_count=row["word_count"],
                     question_count=0,
                 )
                 for row in rows
             ]
-        if kind == "choice":
+        if kind == CHOICE_KIND:
             rows = await list_choice_set_rows(conn)
             return [
                 DeliberateBankOptionOut(
                     id=row["id"],
                     name=row["name"],
-                    kind="choice",
+                    kind=CHOICE_KIND,
                     count=row["question_count"],
                     item_count=row["article_count"],
                     question_count=row["question_count"],
                 )
                 for row in rows
             ]
-        if kind == "input":
+        if kind == INPUT_KIND:
             rows = await list_input_sets(conn)
             return [
                 DeliberateBankOptionOut(
                     id=row["id"],
                     name=row["name"],
-                    kind="input",
+                    kind=INPUT_KIND,
                     count=row["question_count"],
                     item_count=0,
                     question_count=row["question_count"],
                 )
                 for row in rows
             ]
-    raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
+    raise HTTPException(status_code=400, detail="kind 必须是 flash_card、choice 或 input")
 
 
 @router.delete("/deliberate-workflows/banks/{bank_id}")
@@ -303,7 +306,8 @@ async def delete_deliberate_bank(
     pool = _pool(request)
     async with pool.acquire() as conn:
         async with conn.transaction():
-            if kind == "flashcard":
+            kind = normalize_deliberate_kind(kind)
+            if kind == FLASH_CARD_KIND:
                 await conn.execute(
                     "DELETE FROM vocab_words WHERE deck_id = $1::uuid",
                     bank_id,
@@ -312,7 +316,7 @@ async def delete_deliberate_bank(
                     "DELETE FROM vocab_decks WHERE id = $1::uuid",
                     bank_id,
                 )
-            elif kind == "choice":
+            elif kind == CHOICE_KIND:
                 await conn.execute(
                     "DELETE FROM choice_questions WHERE article_id IN (SELECT id FROM choice_articles WHERE set_id = $1::uuid)",
                     bank_id,
@@ -325,7 +329,7 @@ async def delete_deliberate_bank(
                     "DELETE FROM choice_sets WHERE id = $1::uuid",
                     bank_id,
                 )
-            elif kind == "input":
+            elif kind == INPUT_KIND:
                 await conn.execute(
                     "DELETE FROM input_questions WHERE set_id = $1::uuid",
                     bank_id,
@@ -335,7 +339,7 @@ async def delete_deliberate_bank(
                     bank_id,
                 )
             else:
-                raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
+                raise HTTPException(status_code=400, detail="kind 必须是 flash_card、choice 或 input")
 
             if result == "DELETE 0":
                 raise HTTPException(status_code=404, detail="题库不存在")
@@ -391,7 +395,7 @@ async def get_bank_preview(
             return {
                 "bank_id": bank_id,
                 "name": choice_row["name"],
-                "kind": "choice",
+                "kind": CHOICE_KIND,
                 "total_count": total,
                 "subjects": subjects,
                 "questions": [
@@ -399,7 +403,7 @@ async def get_bank_preview(
                         "id": q["question_pk"],
                         "question_id": q["question_id"],
                         "stem": q["stem"],
-                        "type": "choice",
+                        "type": CHOICE_KIND,
                         "options": q["options_json"],
                         "answer": q["answer"],
                         "subject": q.get("exam", ""),
@@ -419,7 +423,7 @@ async def get_bank_preview(
             return {
                 "bank_id": bank_id,
                 "name": input_row["name"],
-                "kind": "input",
+                "kind": INPUT_KIND,
                 "total_count": input_row["question_count"],
                 "subjects": [],
                 "questions": [
@@ -447,7 +451,7 @@ async def get_bank_preview(
             return {
                 "bank_id": bank_id,
                 "name": vocab_row["name"],
-                "kind": "flashcard",
+                "kind": FLASH_CARD_KIND,
                 "total_count": vocab_row["word_count"],
                 "subjects": [],
                 "questions": [
@@ -455,7 +459,7 @@ async def get_bank_preview(
                         "id": w["id"],
                         "question_id": w["word"],
                         "stem": w["word"],
-                        "type": "word",
+                        "type": FLASH_CARD_KIND,
                         "options": None,
                         "answer": w.get("us_pronunciation", ""),
                         "subject": "",
@@ -491,7 +495,7 @@ async def list_bank_questions(
             return {
                 "bank_id": bank_id,
                 "name": choice_row["name"],
-                "kind": "choice",
+                "kind": CHOICE_KIND,
                 "total_count": total,
                 "page": page,
                 "limit": limit,
@@ -500,7 +504,7 @@ async def list_bank_questions(
                         "id": q["question_pk"],
                         "question_id": q["question_id"],
                         "stem": q["stem"],
-                        "type": "choice",
+                        "type": CHOICE_KIND,
                         "options": q["options_json"],
                         "answer": q["answer"],
                         "subject": q.get("exam", ""),
@@ -522,7 +526,7 @@ async def list_bank_questions(
             return {
                 "bank_id": bank_id,
                 "name": input_row["name"],
-                "kind": "input",
+                "kind": INPUT_KIND,
                 "total_count": input_row["question_count"],
                 "page": page,
                 "limit": limit,
@@ -553,7 +557,7 @@ async def list_bank_questions(
             return {
                 "bank_id": bank_id,
                 "name": vocab_row["name"],
-                "kind": "flashcard",
+                "kind": FLASH_CARD_KIND,
                 "total_count": vocab_row["word_count"],
                 "page": page,
                 "limit": limit,
@@ -562,7 +566,7 @@ async def list_bank_questions(
                         "id": w["id"],
                         "question_id": w["word"],
                         "stem": w["word"],
-                        "type": "word",
+                        "type": FLASH_CARD_KIND,
                         "options": None,
                         "answer": w.get("us_pronunciation", ""),
                         "subject": "",

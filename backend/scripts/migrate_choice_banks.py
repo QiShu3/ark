@@ -21,7 +21,7 @@ import asyncpg
 # Add parent dir to path so we can import routes
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from routes.choice.importer import parse_content_bank_entries
+from routes.focus_work.choice.importer import parse_content_bank_entries
 
 
 def _slugify(name: str) -> str:

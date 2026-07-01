@@ -12,8 +12,9 @@ export interface ChoiceModuleStatus {
 export interface ChoiceConfigStatus {
   event_id: string | null;
   event_name: string | null;
-  practice: ChoiceModuleStatus;
-  review: ChoiceModuleStatus;
+  choice: ChoiceModuleStatus;
+  practice?: ChoiceModuleStatus;
+  review?: ChoiceModuleStatus;
 }
 
 export interface ChoiceConfigSavePayload {

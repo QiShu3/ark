@@ -110,7 +110,7 @@ describe('WorkflowNavProgress', () => {
     render(
       <WorkflowNavProgress
         workflow={makeWorkflow({
-          active_focus_work_type: 'vocab_today',
+          active_focus_work_type: 'flash_card',
           focus_work_display_state: 'fullscreen',
           is_paused: true,
           remaining_seconds: 754,

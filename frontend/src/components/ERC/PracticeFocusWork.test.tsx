@@ -49,10 +49,11 @@ const practiceRun: FocusWorkRunSummary = {
   id: 'run-1',
   workflow_id: 'workflow-1',
   phase_index: 0,
-  focus_work_type: 'practice',
+  focus_work_type: 'choice',
   counts_for_task_completion: true,
   status: 'running',
   config_snapshot: {
+    choiceMode: 'practice',
     choice_scope: { bank_id: 'set-1', years: [2025], subjects: ['数据结构'] },
   },
 };
@@ -210,7 +211,7 @@ describe('PracticeFocusWork', () => {
     await user.click(screen.getByRole('button', { name: /提交答案/ }));
 
     await waitFor(() => {
-      expect(submitChoiceAnswer).toHaveBeenCalledWith('choice-q1', 'A', 'practice');
+      expect(submitChoiceAnswer).toHaveBeenCalledWith('choice-q1', 'A');
       expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ question_count: 1 }));
     });
   });

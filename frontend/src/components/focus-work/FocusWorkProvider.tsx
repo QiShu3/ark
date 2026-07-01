@@ -26,7 +26,7 @@ type PendingStart = {
 };
 
 function isFocusWorkType(value: unknown): value is FocusWorkType {
-  return value === 'vocab_today' || value === 'review' || value === 'practice' || value === 'task_focus' || value === 'input';
+  return value === 'flash_card' || value === 'choice' || value === 'input' || value === 'task_focus';
 }
 
 export default function FocusWorkProvider({ children }: FocusWorkProviderProps) {
@@ -373,7 +373,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
               记录这次专注吗？
             </h2>
             <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">
-              选择记录后，这次子应用工作会进入专注时间；不记录也会进入专注状态，只是不会写入专注时间。
+              选择记录后，这次应用工作会进入专注时间；不记录也会进入专注状态，只是不会写入专注时间。
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button

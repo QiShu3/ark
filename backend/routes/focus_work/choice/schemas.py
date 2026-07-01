@@ -80,7 +80,7 @@ class ChoicePracticeScope(BaseModel):
     subjects: list[str] | None = None
     tags: list[str] | None = None
     status: Literal["all", "unstarted", "mistake", "due_review"] = "all"
-    mode: Literal["sequential", "random", "review"] = "sequential"
+    mode: Literal["sequential", "random"] = "sequential"
 
 
 class ChoicePracticeCompletion(BaseModel):
@@ -90,7 +90,6 @@ class ChoicePracticeCompletion(BaseModel):
 
 
 class ChoicePracticeStartRequest(BaseModel):
-    focus_work_type: str = "practice"
     scope: ChoicePracticeScope
     completion: ChoicePracticeCompletion = Field(default_factory=ChoicePracticeCompletion)
     name: str = ""
@@ -106,7 +105,6 @@ class ChoicePracticeStartResponse(BaseModel):
 class ChoiceAnswerSubmitIn(BaseModel):
     chosen_option: Literal["A", "B", "C", "D"]
     time_spent_ms: int | None = Field(default=None, ge=0)
-    mode: Literal["practice", "review"] = "practice"
 
 
 class ChoiceAnswerSubmitOut(BaseModel):

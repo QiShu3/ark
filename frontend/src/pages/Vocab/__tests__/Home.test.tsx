@@ -37,7 +37,7 @@ vi.mock('../../../lib/vocab/api', () => ({
 }));
 
 const mockFw = {
-  type: 'vocab_today', label: '今日单词', template: 'flashcard' as const,
+  type: 'flash_card', label: '今日单词', template: 'flash_card' as const,
   contentBankType: 'word_deck' as const, contentSelector: 'fsrs_mixed', contentFields: [],
 };
 

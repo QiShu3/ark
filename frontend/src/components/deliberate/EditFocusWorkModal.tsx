@@ -49,8 +49,8 @@ export default function EditFocusWorkModal({
   );
   const [taskId, setTaskId] = useState<string>(config.task_id ?? '');
 
-  const kindLabel = config.kind === 'flashcard' ? '闪卡' : config.kind === 'input' ? '输入题' : '选择题';
-  const bankCountLabel = config.kind === 'flashcard' ? '词' : '题';
+  const kindLabel = config.kind === 'flash_card' ? '闪卡' : config.kind === 'input' ? '输入题' : '选择题';
+  const bankCountLabel = config.kind === 'flash_card' ? '词' : '题';
 
   useEffect(() => {
     let ignore = false;
@@ -61,7 +61,7 @@ export default function EditFocusWorkModal({
         if (ignore) return;
 
         if (config.bank_id && config.bank_summary && !data.some((bank) => bank.id === config.bank_id)) {
-          const count = config.kind === 'flashcard'
+          const count = config.kind === 'flash_card'
             ? config.bank_summary.item_count
             : config.bank_summary.question_count;
           setBanks([
@@ -182,7 +182,7 @@ export default function EditFocusWorkModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">
-              {config.kind === 'flashcard' ? '目标词数' : '目标题数'}
+              {config.kind === 'flash_card' ? '目标词数' : '目标题数'}
             </label>
             <input
               type="number"
@@ -194,7 +194,7 @@ export default function EditFocusWorkModal({
             />
           </div>
 
-          {config.kind !== 'flashcard' && (
+          {config.kind !== 'flash_card' && (
             <div className="space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input

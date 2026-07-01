@@ -2,9 +2,31 @@ import type React from 'react';
 import type { AppTaskId, AppTaskType } from '../taskTypes';
 import type { WorkflowSnapshot } from '../workflowProgress';
 
-export type FocusWorkType = 'vocab_today' | 'review' | 'practice' | 'task_focus' | 'input';
+export type CanonicalFocusWorkType = 'flash_card' | 'choice' | 'input' | 'task_focus';
+export type FocusWorkType = CanonicalFocusWorkType;
 export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
+
+const FOCUS_WORK_TYPE_ALIASES: Record<string, CanonicalFocusWorkType> = {
+  vocab_today: 'flash_card',
+  flashcard: 'flash_card',
+  flash_card: 'flash_card',
+  flash: 'flash_card',
+  practice: 'choice',
+  review: 'choice',
+  erc_practice: 'choice',
+  erc_review: 'choice',
+  choice_question: 'choice',
+  choice: 'choice',
+  input: 'input',
+  task_focus: 'task_focus',
+};
+
+export function normalizeFocusWorkType(value: unknown): CanonicalFocusWorkType | null {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  return FOCUS_WORK_TYPE_ALIASES[text] ?? null;
+}
 
 export type FocusWorkStartDetail = {
   focusWorkType: FocusWorkType;

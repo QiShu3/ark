@@ -1,3 +1,5 @@
+import { normalizeFocusWorkType } from './focus-work/focusWorkTypes';
+
 type WorkflowPhaseChipsProps = {
   phases: WorkflowPhaseChipPhase[];
   className?: string;
@@ -14,9 +16,9 @@ type WorkflowPhaseChipPhase = {
 };
 
 const FOCUS_WORK_LABELS: Record<string, string> = {
-  vocab_today: '今日单词',
-  practice: '真题练习',
-  review: '复习',
+  flash_card: '今日单词',
+  choice: '选择练习',
+  input: '输入练习',
   task_focus: '任务专注',
 };
 
@@ -25,7 +27,8 @@ function getPhaseTaskLabel(phase: WorkflowPhaseChipPhase, getTaskTitle?: Workflo
     return getTaskTitle(phase.task_id) ?? null;
   }
   if (phase.focus_work_type) {
-    return FOCUS_WORK_LABELS[phase.focus_work_type] ?? '应用任务';
+    const canonical = normalizeFocusWorkType(phase.focus_work_type) ?? phase.focus_work_type;
+    return FOCUS_WORK_LABELS[canonical] ?? '应用任务';
   }
   return null;
 }

@@ -43,7 +43,7 @@ from .service import (
     update_today_plan,
 )
 
-router = APIRouter(prefix="/api/vocab", tags=["vocab"])
+router = APIRouter(prefix="/api/flash", tags=["flash"])
 
 
 def _pool_from_request(request: Request) -> asyncpg.Pool:

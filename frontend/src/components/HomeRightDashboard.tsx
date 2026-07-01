@@ -15,6 +15,7 @@ import HomeCard from './HomeCard';
 import HomeSectionHeader from './HomeSectionHeader';
 import { getWorkflowPresetPhases, type WorkflowPreset } from './workflowPresetForm';
 import WorkflowPhaseChips from './WorkflowPhaseChips';
+import { normalizeFocusWorkType, type FocusWorkType } from './focus-work/focusWorkTypes';
 import timerClockPng from '../assets/timer-clock.png';
 
 type FocusWorkflowPhase = {
@@ -22,7 +23,7 @@ type FocusWorkflowPhase = {
   duration: number;
   timer_mode: 'countdown' | 'countup' | null;
   task_id: string | null;
-  focus_work_type: 'vocab_today' | 'review' | 'practice' | 'task_focus' | null;
+  focus_work_type: FocusWorkType | null;
 };
 
 type FocusWorkflow = {
@@ -308,13 +309,14 @@ export default function HomeRightDashboard() {
     if (nextFocusPhase.task_id) {
       taskLabel = tasks.find((t) => t.id === nextFocusPhase.task_id)?.title || '任务专注';
     } else if (nextFocusPhase.focus_work_type) {
+      const canonical = normalizeFocusWorkType(nextFocusPhase.focus_work_type) ?? nextFocusPhase.focus_work_type;
       const FOCUS_WORK_LABELS: Record<string, string> = {
-        vocab_today: '今日单词',
-        practice: '真题练习',
-        review: '复习',
+        flash_card: '今日单词',
+        choice: '选择练习',
+        input: '输入练习',
         task_focus: '任务专注',
       };
-      taskLabel = FOCUS_WORK_LABELS[nextFocusPhase.focus_work_type] ?? '应用任务';
+      taskLabel = FOCUS_WORK_LABELS[canonical] ?? '应用任务';
     }
 
     return taskLabel;

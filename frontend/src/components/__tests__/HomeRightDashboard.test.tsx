@@ -196,7 +196,7 @@ describe('HomeRightDashboard', () => {
     expect(screen.getByText('当前工作流：考研英语')).toBeInTheDocument();
     expect(screen.getByText('考研英语')).toBeInTheDocument();
     expect(screen.getByText('今日单词')).toBeInTheDocument();
-    expect(screen.getAllByText('真题练习').length).toBe(2);
+    expect(screen.getAllByText('选择练习').length).toBe(2);
     expect(screen.getByText('下个任务')).toBeInTheDocument();
     expect(screen.queryByText('10:00')).not.toBeInTheDocument();
   });

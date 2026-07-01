@@ -17,14 +17,14 @@ def _make_record(data: dict) -> MagicMock:
 
 class TestContentBlockParsing:
     def test_text_to_paragraph_blocks_single(self):
-        from routes.choice.adapters import _text_to_paragraph_blocks
+        from routes.focus_work.choice.adapters import _text_to_paragraph_blocks
         blocks = _text_to_paragraph_blocks("Hello world")
         assert len(blocks) == 1
         assert blocks[0].type == "paragraph"
         assert blocks[0].text == "Hello world"
 
     def test_text_to_paragraph_blocks_multi(self):
-        from routes.choice.adapters import _text_to_paragraph_blocks
+        from routes.focus_work.choice.adapters import _text_to_paragraph_blocks
         blocks = _text_to_paragraph_blocks("Para 1\n\nPara 2\n\nPara 3")
         assert len(blocks) == 3
         assert blocks[0].text == "Para 1"
@@ -32,61 +32,61 @@ class TestContentBlockParsing:
         assert blocks[2].text == "Para 3"
 
     def test_text_to_paragraph_blocks_empty(self):
-        from routes.choice.adapters import _text_to_paragraph_blocks
+        from routes.focus_work.choice.adapters import _text_to_paragraph_blocks
         blocks = _text_to_paragraph_blocks("")
         assert blocks == []
 
     def test_detect_table_block(self):
-        from routes.choice.adapters import _detect_table_block
+        from routes.focus_work.choice.adapters import _detect_table_block
         result = _detect_table_block("<table><tr><td>A</td></tr></table>")
         assert result is not None
         assert result.type == "html"
 
     def test_detect_table_block_none(self):
-        from routes.choice.adapters import _detect_table_block
+        from routes.focus_work.choice.adapters import _detect_table_block
         result = _detect_table_block("Just text")
         assert result is None
 
 
 class TestParseOptions:
     def test_dict_options(self):
-        from routes.choice.adapters import _parse_options
+        from routes.focus_work.choice.adapters import _parse_options
         options = _parse_options({"A": "opt A", "B": "opt B", "C": "opt C", "D": "opt D"})
         assert len(options) == 4
         assert options[0]["key"] == "A"
         assert options[0]["text"] == "opt A"
 
     def test_list_options(self):
-        from routes.choice.adapters import _parse_options
+        from routes.focus_work.choice.adapters import _parse_options
         options = _parse_options([{"key": "A", "text": "opt A"}, {"key": "B", "text": "opt B"}])
         assert len(options) == 2
         assert options[0]["key"] == "A"
 
     def test_json_string_options(self):
-        from routes.choice.adapters import _parse_options
+        from routes.focus_work.choice.adapters import _parse_options
         options = _parse_options('{"A": "opt A", "B": "opt B"}')
         assert len(options) == 2
         assert options[0]["key"] == "A"
         assert options[0]["text"] == "opt A"
 
     def test_empty_options(self):
-        from routes.choice.adapters import _parse_options
+        from routes.focus_work.choice.adapters import _parse_options
         assert _parse_options(None) == []
         assert _parse_options({}) == []
 
 
 class TestExtractHelpers:
     def test_extract_year_from_title(self):
-        from routes.choice.adapters import _extract_year_from_title_or_body
+        from routes.focus_work.choice.adapters import _extract_year_from_title_or_body
         assert _extract_year_from_title_or_body("2025年408真题", {}) == 2025
         assert _extract_year_from_title_or_body("No year", {}) == 0
 
     def test_extract_year_from_body(self):
-        from routes.choice.adapters import _extract_year_from_title_or_body
+        from routes.focus_work.choice.adapters import _extract_year_from_title_or_body
         assert _extract_year_from_title_or_body("", {"examination": "2024考研"}) == 2024
 
     def test_extract_tags(self):
-        from routes.choice.adapters import _extract_tags_from_body
+        from routes.focus_work.choice.adapters import _extract_tags_from_body
         body = {"tags": ["408", "数据结构"], "subject": "计算机"}
         tags = _extract_tags_from_body(body)
         assert "408" in tags
@@ -94,13 +94,13 @@ class TestExtractHelpers:
         assert "计算机" in tags
 
     def test_extract_tags_empty(self):
-        from routes.choice.adapters import _extract_tags_from_body
+        from routes.focus_work.choice.adapters import _extract_tags_from_body
         assert _extract_tags_from_body({}) == []
 
 
 class TestContentBlockSafeParsing:
     def test_html_table_parsing(self):
-        from routes.choice.adapters import _detect_table_block
+        from routes.focus_work.choice.adapters import _detect_table_block
         html = "<table><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></table>"
         block = _detect_table_block(html)
         assert block is not None
@@ -108,7 +108,7 @@ class TestContentBlockSafeParsing:
         assert "<table" in block.text
 
     def test_paragraph_with_table(self):
-        from routes.choice.adapters import _detect_table_block
+        from routes.focus_work.choice.adapters import _detect_table_block
         text = "Some text with <table><tr><td>1</td></tr></table>"
         block = _detect_table_block(text)
         assert block is not None
@@ -117,7 +117,7 @@ class TestContentBlockSafeParsing:
 
 class TestChoiceFilters:
     def test_choice_filters_count_selected_year(self):
-        from routes.choice.adapters import get_choice_filters
+        from routes.focus_work.choice.adapters import get_choice_filters
 
         class Conn:
             async def fetch(self, query: str, *args: object):
@@ -140,7 +140,7 @@ class TestChoiceFilters:
 
 class TestERCChoiceAdapter:
     def test_erc_single_question_article_is_single_group(self):
-        from routes.choice.adapters import list_erc_as_choice_items
+        from routes.focus_work.choice.adapters import list_erc_as_choice_items
 
         class Conn:
             async def fetch(self, query: str, *args: object):
@@ -177,7 +177,7 @@ class TestERCChoiceAdapter:
         assert items[0].question_count == 1
 
     def test_erc_multi_question_article_is_passage_group(self):
-        from routes.choice.adapters import list_erc_as_choice_items
+        from routes.focus_work.choice.adapters import list_erc_as_choice_items
 
         class Conn:
             async def fetch(self, query: str, *args: object):
@@ -222,7 +222,7 @@ class TestERCChoiceAdapter:
         assert items[0].question_count == 2
 
     def test_erc_items_can_exclude_answered_questions(self):
-        from routes.choice.adapters import list_erc_as_choice_items
+        from routes.focus_work.choice.adapters import list_erc_as_choice_items
 
         class Conn:
             async def fetch(self, query: str, *args: object):

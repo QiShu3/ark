@@ -41,6 +41,7 @@ import {
   startMultiDeliberateWorkflow,
   type WorkflowRecord,
 } from '../lib/focusWorkflow';
+import { normalizeFocusWorkType } from '../components/focus-work/focusWorkTypes';
 
 type CompletionMode = 'question_count' | 'exhaust_scope';
 type StepId = 1 | 2 | 3 | 4;
@@ -69,8 +70,7 @@ function formatDate(value?: string | null) {
 }
 
 function focusTypeLabel(type: DeliberateFocusWorkType) {
-  if (type === 'vocab_today') return '闪卡';
-  if (type === 'review') return '错题复习';
+  if (type === 'flash_card') return '闪卡';
   if (type === 'input') return '输入练习';
   return '选择练习';
 }
@@ -207,7 +207,6 @@ export default function DeliberateWorkflow() {
   const [loadingSettlement, setLoadingSettlement] = useState(false);
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
-  const [choiceMode, setChoiceMode] = useState<'practice' | 'review'>('practice');
   const [name, setName] = useState('');
   const [bankId, setBankId] = useState('');
   const [targetCount, setTargetCount] = useState(10);
@@ -220,11 +219,11 @@ export default function DeliberateWorkflow() {
   const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(false);
   const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(80);
 
-  const focusWorkType: DeliberateFocusWorkType = kind === 'flashcard' ? 'vocab_today' : kind === 'input' ? 'input' : choiceMode;
+  const focusWorkType: DeliberateFocusWorkType = kind === 'flash_card' ? 'flash_card' : kind;
   const selectedConfig = configs.find((item) => item.id === selectedId) ?? configs[0] ?? null;
   const selectedBank = banks.find((item) => item.id === bankId) ?? null;
-  const bankCountLabel = kind === 'flashcard' ? '词' : '题';
-  const kindLabel = kind === 'flashcard' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
+  const bankCountLabel = kind === 'flash_card' ? '词' : '题';
+  const kindLabel = kind === 'flash_card' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
   const canSave = Boolean(name.trim() && bankId);
   const canUseBank = Boolean(bankId);
   const hasSavedConfig = configs.length > 0;
@@ -234,7 +233,6 @@ export default function DeliberateWorkflow() {
     setActiveStep(1);
     setAssetMode('upload');
     setKind('choice');
-    setChoiceMode('practice');
     setName('');
     setBankId('');
     setTargetCount(10);
@@ -326,7 +324,7 @@ export default function DeliberateWorkflow() {
   useEffect(() => {
     const loadAllBanks = async () => {
       const results: { id: string; name: string; count: number; kind: DeliberateKind }[] = [];
-      for (const k of ['choice', 'flashcard', 'input'] as DeliberateKind[]) {
+      for (const k of ['choice', 'flash_card', 'input'] as DeliberateKind[]) {
         try {
           const data = await listDeliberateBanks(k);
           for (const bank of data) {
@@ -398,7 +396,7 @@ export default function DeliberateWorkflow() {
   }, []);
 
   const scope = useMemo(() => {
-    if (kind === 'flashcard') return {};
+    if (kind === 'flash_card') return {};
     return {
       bank_id: bankId,
       years: year !== '' ? [year] : undefined,
@@ -410,7 +408,7 @@ export default function DeliberateWorkflow() {
   }, [bankId, kind, mode, status, subject, tag, year]);
 
   const completion = useMemo(() => {
-    if (kind === 'flashcard') {
+    if (kind === 'flash_card') {
       return { mode: 'word_count', word_count: targetCount };
     }
     if (completionMode === 'exhaust_scope') {
@@ -798,7 +796,7 @@ export default function DeliberateWorkflow() {
 
         {/* 题库类型切换 */}
         <div className="grid grid-cols-3 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-          {(['choice', 'flashcard', 'input'] as DeliberateKind[]).map((item) => (
+          {(['choice', 'flash_card', 'input'] as DeliberateKind[]).map((item) => (
             <button
               key={item}
               type="button"
@@ -810,7 +808,7 @@ export default function DeliberateWorkflow() {
                 kind === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
               }`}
             >
-              {item === 'choice' ? '选择题' : item === 'flashcard' ? '闪卡' : '输入题'}
+              {item === 'choice' ? '选择题' : item === 'flash_card' ? '闪卡' : '输入题'}
             </button>
           ))}
         </div>
@@ -830,7 +828,7 @@ export default function DeliberateWorkflow() {
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-ark-text">{bank.name}</div>
                   <div className="text-xs text-ark-text-muted">
-                    {bank.count} {kind === 'flashcard' ? '词' : '题'}
+                    {bank.count} {kind === 'flash_card' ? '词' : '题'}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -883,7 +881,7 @@ export default function DeliberateWorkflow() {
                 <option value="">选择题库</option>
                 {allBanks.map((bank) => (
                   <option key={bank.id} value={bank.id}>
-                    {bank.name} ({bank.count} {bank.kind === 'flashcard' ? '词' : '题'})
+                    {bank.name} ({bank.count} {bank.kind === 'flash_card' ? '词' : '题'})
                   </option>
                 ))}
               </select>
@@ -1358,7 +1356,7 @@ export default function DeliberateWorkflow() {
           {draftMode && activeStep === 1 ? (
             <div className="space-y-5">
               <div className="grid grid-cols-3 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-                {(['choice', 'flashcard', 'input'] as DeliberateKind[]).map((item) => (
+                {(['choice', 'flash_card', 'input'] as DeliberateKind[]).map((item) => (
                   <button
                     key={item}
                     type="button"
@@ -1367,7 +1365,7 @@ export default function DeliberateWorkflow() {
                       kind === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
                     }`}
                   >
-                    {item === 'choice' ? '选择题' : item === 'flashcard' ? '闪卡' : '输入题'}
+                    {item === 'choice' ? '选择题' : item === 'flash_card' ? '闪卡' : '输入题'}
                   </button>
                 ))}
               </div>
@@ -1452,26 +1450,6 @@ export default function DeliberateWorkflow() {
 
           {draftMode && activeStep === 3 ? (
             <div className="space-y-5">
-              {kind === 'choice' ? (
-                <div>
-                  <div className="mb-1.5 text-sm font-medium text-ark-text-muted">工作模式</div>
-                  <div className="grid grid-cols-2 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-                    {(['practice', 'review'] as const).map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setChoiceMode(item)}
-                        className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                          choiceMode === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
-                        }`}
-                      >
-                        {item === 'practice' ? '练习模式' : '复习模式'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="配置名称">
                   <input
@@ -1481,7 +1459,7 @@ export default function DeliberateWorkflow() {
                     placeholder="例如：408 每日 20 题"
                   />
                 </Field>
-                <Field label={kind === 'flashcard' ? '目标词数' : '目标题数'}>
+                <Field label={kind === 'flash_card' ? '目标词数' : '目标题数'}>
                   <input
                     type="number"
                     min={1}
@@ -1504,7 +1482,7 @@ export default function DeliberateWorkflow() {
                   </Field>
                 ) : null}
 
-                {kind !== 'flashcard' ? (
+                {kind !== 'flash_card' ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 cursor-pointer">
@@ -1914,10 +1892,10 @@ function RunDetailModal({
 
                 {expandedSections.has('summary') && (
                   <div className="pl-6 space-y-3">
-                    {focusWorkType === 'vocab_today' && (
+                    {focusWorkType === 'flash_card' && (
                       <VocabRunSummary summary={runSummary} />
                     )}
-                    {(focusWorkType === 'practice' || focusWorkType === 'review') && (
+                    {focusWorkType === 'choice' && (
                       <ChoiceRunSummary summary={runSummary} />
                     )}
                     {focusWorkType === 'input' && (

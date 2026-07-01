@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from routes.choice.importer import (
+from routes.focus_work.choice.importer import (
     ERCArticleSeed,
     load_article_seeds,
     load_article_word_seeds,

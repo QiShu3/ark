@@ -67,7 +67,7 @@ export type EventPlanTemplateItemInput = {
 
 export type EventPlanTemplateAppConfigInput = {
   client_id: string;
-  app_type: 'vocab_today' | 'practice' | 'review';
+  app_type: 'flash_card' | 'choice' | 'input';
   config: Record<string, unknown>;
 };
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, RefreshCw } from 'lucide-react';
 import { apiJson } from '../lib/api';
-import type { FocusWorkDeclaration } from '../lib/subAppRegistry';
+import type { FocusWorkDeclaration } from '../lib/appRegistry';
 import type { FocusWorkAdapter } from './types';
 import SetSnapshotPanel from '../components/ERC/SetSnapshotPanel';
 

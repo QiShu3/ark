@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from routes.choice.importer import ERCArticleSeed, parse_content_bank_entries
+from routes.focus_work.choice.importer import ERCArticleSeed, parse_content_bank_entries
 
 
 def _choice_entry(**overrides) -> dict:

@@ -164,7 +164,7 @@ export default function ReviewFocusWork({
         });
       }}
       onSubmitAnswer={async (choiceItem, optionKey) => {
-        const result = await submitChoiceAnswer(choiceItem.id, optionKey, 'review');
+        const result = await submitChoiceAnswer(choiceItem.id, optionKey);
         answeredQuestionIdsRef.current.add(choiceItem.id);
         setAnsweredCount((count) => count + 1);
         answeredQuestionsRef.current.push({

@@ -1,4 +1,5 @@
-"""Unified choice question bank."""
+"""Choice focus-work route entrypoint."""
+
 from .repository import init_choice
 from .routes import router
 

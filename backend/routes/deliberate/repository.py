@@ -5,6 +5,8 @@ from typing import Any
 
 import asyncpg
 
+from lib.focus_work_types import normalize_deliberate_kind, normalize_focus_work_type, normalize_snapshot_type
+
 
 def _json_param(value: Any) -> str:
     return json.dumps(value if value is not None else {}, ensure_ascii=False, default=str)
@@ -65,17 +67,20 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS pass_criteria_json JSONB NOT NULL DEFAULT '{}'::jsonb;"
         )
         await conn.execute("ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_kind;")
+        await conn.execute("UPDATE deliberate_workflow_configs SET kind = 'flash_card' WHERE kind = 'flashcard'")
         await conn.execute(
-            "ALTER TABLE deliberate_workflow_configs ADD CONSTRAINT chk_deliberate_configs_kind CHECK (kind IN ('flashcard', 'choice', 'input'));"
+            "ALTER TABLE deliberate_workflow_configs ADD CONSTRAINT chk_deliberate_configs_kind CHECK (kind IN ('flash_card', 'choice', 'input'));"
         )
         await conn.execute(
             "ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_focus_work_type;"
         )
+        await conn.execute("UPDATE deliberate_workflow_configs SET focus_work_type = 'flash_card' WHERE focus_work_type = 'vocab_today'")
+        await conn.execute("UPDATE deliberate_workflow_configs SET focus_work_type = 'choice' WHERE focus_work_type IN ('practice', 'review')")
         await conn.execute(
             """
             ALTER TABLE deliberate_workflow_configs
             ADD CONSTRAINT chk_deliberate_configs_focus_work_type
-            CHECK (focus_work_type IN ('vocab_today', 'practice', 'review', 'input'));
+            CHECK (focus_work_type IN ('flash_card', 'choice', 'input'));
             """
         )
         await conn.execute(
@@ -121,17 +126,20 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "ALTER TABLE deliberate_workflow_runs ADD CONSTRAINT chk_deliberate_runs_status CHECK (status IN ('started', 'content_completed', 'completed', 'abandoned'));"
         )
         await conn.execute("ALTER TABLE deliberate_workflow_runs DROP CONSTRAINT IF EXISTS chk_deliberate_runs_snapshot_type;")
+        await conn.execute("UPDATE deliberate_workflow_runs SET snapshot_type = 'flash_card_deck' WHERE snapshot_type = 'vocab_deck'")
         await conn.execute(
-            "ALTER TABLE deliberate_workflow_runs ADD CONSTRAINT chk_deliberate_runs_snapshot_type CHECK (snapshot_type IS NULL OR snapshot_type IN ('choice_set', 'vocab_deck', 'input_set'));"
+            "ALTER TABLE deliberate_workflow_runs ADD CONSTRAINT chk_deliberate_runs_snapshot_type CHECK (snapshot_type IS NULL OR snapshot_type IN ('choice_set', 'flash_card_deck', 'input_set'));"
         )
         await conn.execute(
             "ALTER TABLE deliberate_workflow_runs DROP CONSTRAINT IF EXISTS chk_deliberate_runs_focus_work_type;"
         )
+        await conn.execute("UPDATE deliberate_workflow_runs SET focus_work_type = 'flash_card' WHERE focus_work_type = 'vocab_today'")
+        await conn.execute("UPDATE deliberate_workflow_runs SET focus_work_type = 'choice' WHERE focus_work_type IN ('practice', 'review')")
         await conn.execute(
             """
             ALTER TABLE deliberate_workflow_runs
             ADD CONSTRAINT chk_deliberate_runs_focus_work_type
-            CHECK (focus_work_type IN ('vocab_today', 'practice', 'review', 'input'));
+            CHECK (focus_work_type IN ('flash_card', 'choice', 'input'));
             """
         )
         await conn.execute(
@@ -149,8 +157,8 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
     return {
         "id": str(row["id"]),
         "name": row["name"],
-        "kind": row["kind"],
-        "focus_work_type": row["focus_work_type"],
+        "kind": normalize_deliberate_kind(row["kind"]),
+        "focus_work_type": normalize_focus_work_type(row["focus_work_type"]),
         "bank_id": row["bank_id"],
         "task_id": str(row["task_id"]) if row.get("task_id") else None,
         "target_count": int(row["target_count"]),
@@ -171,10 +179,10 @@ def run_to_summary(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
         "config_id": str(row["config_id"]) if row["config_id"] is not None else None,
         "workflow_id": str(row["workflow_id"]) if row["workflow_id"] is not None else None,
         "focus_run_id": str(row["focus_run_id"]) if row["focus_run_id"] is not None else None,
-        "focus_work_type": row["focus_work_type"],
+        "focus_work_type": normalize_focus_work_type(row["focus_work_type"]),
         "bank_id": row["bank_id"],
         "snapshot_id": str(row["snapshot_id"]) if row["snapshot_id"] is not None else None,
-        "snapshot_type": row["snapshot_type"],
+        "snapshot_type": normalize_snapshot_type(row["snapshot_type"]),
         "status": row["status"],
         "progress_snapshot": _json_value(row["progress_snapshot"]) or {},
         "created_at": _iso(row["created_at"]),

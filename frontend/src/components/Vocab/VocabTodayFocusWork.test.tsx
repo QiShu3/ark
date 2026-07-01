@@ -38,7 +38,7 @@ function focusRun(configSnapshot: Record<string, unknown> = {}): FocusWorkRunSum
     id: 'run-1',
     workflow_id: 'workflow-1',
     phase_index: 0,
-    focus_work_type: 'vocab_today',
+    focus_work_type: 'flash_card',
     counts_for_task_completion: true,
     status: 'running',
     config_snapshot: configSnapshot,

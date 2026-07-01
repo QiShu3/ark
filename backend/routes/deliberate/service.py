@@ -12,10 +12,17 @@ from typing import Any
 import asyncpg
 from fastapi import HTTPException
 
-from routes.choice.importer import parse_content_bank_entries
-from routes.choice.repository import refresh_set_counts, upsert_article_seed, upsert_set
-from routes.vocab.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed, detect_format, parse_word_entry
-from routes.vocab.repository import import_deck
+from lib.focus_work_types import (
+    CHOICE_KIND,
+    FLASH_CARD_KIND,
+    INPUT_KIND,
+    normalize_deliberate_kind,
+    normalize_focus_work_type,
+)
+from routes.focus_work.choice.importer import parse_content_bank_entries
+from routes.focus_work.choice.repository import refresh_set_counts, upsert_article_seed, upsert_set
+from routes.focus_work.flash.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed, detect_format, parse_word_entry
+from routes.focus_work.flash.repository import import_deck
 
 
 @dataclass(frozen=True)
@@ -171,10 +178,11 @@ async def import_deliberate_bank(
     filename: str,
     file_bytes: bytes,
 ) -> BankImportResult:
-    if kind not in {"flashcard", "choice", "input"}:
-        raise HTTPException(status_code=400, detail="kind 必须是 flashcard、choice 或 input")
-    if kind == "input":
-        from routes.input.service import import_input_bank as _import_input_bank
+    kind = normalize_deliberate_kind(kind)
+    if kind not in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND}:
+        raise HTTPException(status_code=400, detail="kind 必须是 flash_card、choice 或 input")
+    if kind == INPUT_KIND:
+        from routes.focus_work.input.service import import_input_bank as _import_input_bank
         result = await _import_input_bank(
             conn,
             name=name,
@@ -192,7 +200,7 @@ async def import_deliberate_bank(
         )
     entries = _load_json_payload(file_bytes, filename)
     digest = hashlib.sha1(file_bytes).hexdigest()[:8]
-    if kind == "flashcard":
+    if kind == FLASH_CARD_KIND:
         words = _parse_flashcard_words(entries)
         key = f"deliberate-{_slugify(name, 'deck')}-{digest}-{secrets.token_hex(3)}"
         deck_id = await import_deck(
@@ -211,7 +219,7 @@ async def import_deliberate_bank(
             name=name,
             item_count=len(words),
             question_count=0,
-            validation_summary={"accepted": True, "format": "vocab_deck", "word_count": len(words)},
+            validation_summary={"accepted": True, "format": "flash_card_deck", "word_count": len(words)},
         )
 
     _validate_choice_entries(entries)
@@ -241,11 +249,11 @@ async def import_deliberate_bank(
 
 
 def validate_config_shape(kind: str, focus_work_type: str, target_count: int) -> None:
-    if kind == "flashcard" and focus_work_type != "vocab_today":
-        raise HTTPException(status_code=400, detail="闪卡工作流必须使用 vocab_today")
-    if kind == "choice" and focus_work_type not in {"practice", "review"}:
-        raise HTTPException(status_code=400, detail="选择题工作流必须使用 practice 或 review")
-    if kind == "input" and focus_work_type != "input":
-        raise HTTPException(status_code=400, detail="输入题工作流必须使用 input")
+    normalized_kind = normalize_deliberate_kind(kind)
+    normalized_focus_work_type = normalize_focus_work_type(focus_work_type)
+    if normalized_kind not in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND}:
+        raise HTTPException(status_code=400, detail="kind 必须是 flash_card、choice 或 input")
+    if normalized_kind != normalized_focus_work_type:
+        raise HTTPException(status_code=400, detail="专注工作类型必须与工作流类型一致")
     if target_count < 1 or target_count > 500:
         raise HTTPException(status_code=400, detail="目标数量必须在 1-500 之间")

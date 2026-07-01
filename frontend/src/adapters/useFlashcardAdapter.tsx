@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useVocabDeck } from '../hooks/vocab/useVocabDeck';
 import { fetchVocabOverview, fetchVocabToday } from '../lib/vocab/api';
 import type { VocabOverview, VocabTodaySummary } from '../lib/vocab/types';
-import type { FocusWorkDeclaration } from '../lib/subAppRegistry';
+import type { FocusWorkDeclaration } from '../lib/appRegistry';
 import type { FocusWorkAdapter } from './types';
 
 export function useFlashcardAdapter(
