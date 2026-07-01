@@ -61,11 +61,12 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
   }, [initPool]);
 
   function handleShowAnswer() {
+    if (disabled) return;
     setShowAnswer(true);
   }
 
   async function handleSubmitAnswer(isCorrect: boolean, timeSpentMs?: number) {
-    if (submitInFlight.current || !question) return;
+    if (submitInFlight.current || !question || disabled) return;
     submitInFlight.current = true;
     setErrorMessage(null);
 
@@ -92,8 +93,8 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       setPhase('done');
       onContentCompleted({
         run_summary: {
-          answered_count: answeredCount,
-          correct_count: submitResult?.is_correct ? answeredCount : answeredCount - 1,
+          answered_count: submitResult?.answered_count ?? answeredCount,
+          correct_count: submitResult?.correct_count ?? 0,
           total_questions: initResult?.total ?? 0,
         },
       });
@@ -226,13 +227,13 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
           </div>
           <div className="flex justify-center gap-2">
             {!showAnswer ? (
-              <Button variant="primary" onClick={handleShowAnswer}>显示答案</Button>
+              <Button variant="primary" onClick={handleShowAnswer} disabled={disabled}>显示答案</Button>
             ) : (
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => void handleSubmitAnswer(false)} leftIcon={<X className="h-4 w-4" />}>
+                <Button variant="secondary" onClick={() => void handleSubmitAnswer(false)} disabled={disabled} leftIcon={<X className="h-4 w-4" />}>
                   没记住
                 </Button>
-                <Button variant="primary" onClick={() => void handleSubmitAnswer(true)} leftIcon={<Check className="h-4 w-4" />}>
+                <Button variant="primary" onClick={() => void handleSubmitAnswer(true)} disabled={disabled} leftIcon={<Check className="h-4 w-4" />}>
                   记住了
                 </Button>
               </div>
@@ -252,7 +253,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                 <button
                   key={key}
                   type="button"
-                  disabled={showAnswer}
+                  disabled={showAnswer || disabled}
                   onClick={() => {
                     setSelectedOption(key);
                     setShowAnswer(true);
@@ -286,18 +287,19 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && userInput.trim()) {
+                  if (e.key === 'Enter' && userInput.trim() && !disabled) {
                     handleShowAnswer();
                   }
                 }}
                 placeholder="输入你的答案…"
                 className={inputClass}
                 autoFocus
+                disabled={disabled}
               />
               <div className="flex justify-center">
                 <Button
                   variant="primary"
-                  disabled={!userInput.trim()}
+                  disabled={!userInput.trim() || disabled}
                   onClick={handleShowAnswer}
                 >
                   提交
@@ -315,10 +317,10 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                 <p className="text-sm text-green-400">{question.answer}</p>
               </div>
               <div className="flex justify-center gap-2">
-                <Button variant="secondary" onClick={() => void handleSubmitAnswer(false)} leftIcon={<X className="h-4 w-4" />}>
+                <Button variant="secondary" onClick={() => void handleSubmitAnswer(false)} disabled={disabled} leftIcon={<X className="h-4 w-4" />}>
                   答错了
                 </Button>
-                <Button variant="primary" onClick={() => void handleSubmitAnswer(true)} leftIcon={<Check className="h-4 w-4" />}>
+                <Button variant="primary" onClick={() => void handleSubmitAnswer(true)} disabled={disabled} leftIcon={<Check className="h-4 w-4" />}>
                   答对了
                 </Button>
               </div>
@@ -332,12 +334,12 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
           {submitResult?.backflow_action === 'retry' ? (
             <div className="space-y-2 text-center">
               <p className="text-sm text-amber-400">请重新作答本题</p>
-              <Button variant="primary" onClick={handleNextQuestion}>
+              <Button variant="primary" onClick={handleNextQuestion} disabled={disabled}>
                 继续
               </Button>
             </div>
           ) : (
-            <Button variant="primary" onClick={handleNextQuestion}>
+            <Button variant="primary" onClick={handleNextQuestion} disabled={disabled}>
               {submitResult?.done ? '完成' : '下一题'}
             </Button>
           )}

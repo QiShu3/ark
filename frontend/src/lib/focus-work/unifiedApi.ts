@@ -37,6 +37,7 @@ export type UnifiedSubmitResult = {
   next_question: UnifiedQuestion | null;
   done: boolean;
   answered_count: number;
+  correct_count: number;
   total: number;
   backflow_action: string | null;
   backflow_info: string | null;

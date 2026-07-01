@@ -296,6 +296,7 @@ async def submit_answer(
             "next_question": next_question,
             "done": done,
             "answered_count": answered_count,
+            "correct_count": run_summary.get("correct_count", 0),
             "total": len([q for q in pool_data if not q.get("answered") or q.get("backflow_count", 0) > 0]),
             "backflow_action": triggered_action,
             "backflow_info": backflow_info,

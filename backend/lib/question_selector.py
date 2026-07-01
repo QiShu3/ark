@@ -178,12 +178,18 @@ class VocabQuestionAdapter(QuestionAdapter):
         rows = await conn.fetch(
             f"""
             SELECT w.id AS question_pk, w.word AS question_id, w.word AS stem,
-                   w.definition AS answer, w.us_pronunciation,
+                   COALESCE(vt.translation, '') AS answer, w.us_pronunciation,
                    COALESCE(p.wrong_count, 0) AS wrong_count,
                    COALESCE(p.correct_count, 0) AS right_count,
                    p.last_review_at, p.last_result, p.next_review_at,
                    p.fsrs_card_json
             FROM vocab_words w
+            LEFT JOIN LATERAL (
+                SELECT translation FROM vocab_word_translations
+                WHERE word_id = w.id
+                ORDER BY sort_order ASC
+                LIMIT 1
+            ) vt ON TRUE
             LEFT JOIN vocab_user_word_progress p
                 ON p.word_id = w.id AND p.user_id = $1
             WHERE w.deck_id = $2::uuid

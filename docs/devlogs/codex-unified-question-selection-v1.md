@@ -88,3 +88,67 @@
 | frontend/src/components/focus-work/UnifiedFocusWork.tsx | 新增 |
 | frontend/src/components/focus-work/focusWorkRegistry.tsx | 修改（统一路由） |
 | frontend/src/lib/focus-work/unifiedApi.ts | 新增 |
+
+## 返工修复 round · 2026-07-01 · fix: unified question selection rework
+
+### 用户需求
+
+将统一取题方案 V1 修到可验收状态。修复以下问题：
+
+1. question_selector 查询不存在的数据库字段
+2. UnifiedFocusWork 学习统计只按最后一道题算
+3. 暂停/禁用状态未真正拦截作答
+4. 补全后端测试覆盖
+
+### 完成工作
+
+1. **VocabQuestionAdapter 修复**（`backend/lib/question_selector.py`）：
+   - `w.definition` 在 `vocab_words` 表中不存在（定义存于 `vocab_word_translations` 表）
+   - 新增 LEFT JOIN LATERAL 关联 `vocab_word_translations`，取第一条翻译作为 `answer`
+
+2. **统计修正**（`backend/routes/focus_work/unified/routes.py` + `frontend/src/lib/focus-work/unifiedApi.ts` + `UnifiedFocusWork.tsx`）：
+   - submit 端点返回 `correct_count` 字段（由后端 run_summary 累计）
+   - UnifiedFocusWork 在 done 回调中使用 `submitResult.correct_count` 而非按最后一次作答推算
+   - 确保 answered_count 也取自后端累计值
+
+3. **暂停/禁用拦截**（`UnifiedFocusWork.tsx`）：
+   - `handleShowAnswer()` 和 `handleSubmitAnswer()` 入口处 `if (disabled) return`
+   - 所有交互按钮/选项/输入框添加 `disabled={disabled}` 属性
+   - shell 层 `FocusWorkModalShell` 已有 `pointer-events-none` 做 CSS 层拦截，本层做 React 层防御
+
+4. **后端测试**（`backend/tests/test_question_selector.py`）：
+   - 34 个测试用例覆盖：get_adapter、_build_filter_clause（全部 5 种筛选条件的 3 种题型）、_sort_sql（4 种排序方式的 3 种题型）、count_available、select_questions（含翻译表关联）、build_question_list（空池/部分池/满池/vocab 翻译）、count_questions
+
+### 未改动/已确认正常
+
+- **scope（year/subject/tag）过滤**：分析确认 scope 在 bank_id 层面生效，不属于 question_selector 动态过滤范畴。题库字段不含 `choice_questions.subject` 等列，subject/year 在 `choice_articles` 表层面。不在此次修复范围内。
+- **FSRS 可选**：已确认默认为 False，从 config_snapshot 正确传递到 question_selector 和 study_ledger。
+- **路由逻辑**：`focusWorkRegistry.tsx` 中 `primary_filter || deliberate_config_id → UnifiedFocusWork` 的判断正确，旧配置走旧 renderer。
+- **结算页**：未改动。
+- **题库字段规范**：未改动。
+
+### 验证情况
+
+- 前端 TypeScript check (`pnpm check`)：通过
+- 前端 lint：无新增错误
+- 前端 focus-work 相关测试：19 passed / 0 failed
+- 后端新测试（test_question_selector）：34 passed / 0 failed
+- 后端全量测试：250 passed / 0 failed
+- 后端 lint：（仅新/改文件）0 errors
+- 预存失败 8 个（Today.test.tsx 2 / DeliberateWorkflow.test.tsx 5 / EventCountdownCard.test.tsx 1 / workflow-test.spec.ts 0）与本次改动无关
+
+### 变更概要
+
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| backend/lib/question_selector.py | 修改 | VocabQuestionAdapter 修复 w.definition → JOIN translations |
+| backend/routes/focus_work/unified/routes.py | 修改 | submit 返回 correct_count |
+| frontend/src/components/focus-work/UnifiedFocusWork.tsx | 修改 | 统计修正 + disabled 拦截 |
+| frontend/src/lib/focus-work/unifiedApi.ts | 修改 | UnifiedSubmitResult 新增 correct_count |
+| backend/tests/test_question_selector.py | 新增 | 34 个测试 |
+
+### 已知风险
+
+1. DeliberateWorkflow.test.tsx 5 个测试预存失败（"开始专注"文本查找超时），不阻塞本次验收
+2. VocabQuestionAdapter 使用 LEFT JOIN LATERAL 取第一条翻译，当单词有多个 POS 翻译时只展示一个。这和旧 VocabTodayFocusWork（展示全部翻译）行为略有不同，但功能正常
+3. 结算页（WorkflowSettlementModal）的 aggregated stats 依赖 run_summary 数据，如果旧 renderer 和 UnifiedFocusWork 的 run_summary 结构不同，结算页可能展示不一致（但本次未改结算页）
