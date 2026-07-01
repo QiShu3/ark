@@ -1,4 +1,5 @@
 import type { FocusWorkDefinition, FocusWorkType } from './focusWorkTypes';
+import UnifiedFocusWork from './UnifiedFocusWork';
 import VocabTodayFocusWork from '../Vocab/VocabTodayFocusWork';
 import ChoiceFocusWork from '../ERC/ChoiceFocusWork';
 import TaskFocusWork from './TaskFocusWork';
@@ -6,11 +7,28 @@ import InputFocusWork from '../Input/InputFocusWork';
 import { normalizeFocusWorkType } from './focusWorkTypes';
 
 // 组件映射：专注工作类型 → render 函数
+// 统一取题方案：优先使用 UnifiedFocusWork（当配置包含 unified 字段时自动生效）
+// 旧配置回退到已有 renderer
 const RENDER_MAP: Record<string, (props: Parameters<FocusWorkDefinition['render']>[0]) => React.ReactNode> = {
-  flash_card: (props) => <VocabTodayFocusWork {...props} />,
-  choice: (props) => <ChoiceFocusWork {...props} />,
+  flash_card: (props) => {
+    if (props.run.config_snapshot?.primary_filter || props.run.config_snapshot?.deliberate_config_id) {
+      return <UnifiedFocusWork {...props} />;
+    }
+    return <VocabTodayFocusWork {...props} />;
+  },
+  choice: (props) => {
+    if (props.run.config_snapshot?.primary_filter || props.run.config_snapshot?.deliberate_config_id) {
+      return <UnifiedFocusWork {...props} />;
+    }
+    return <ChoiceFocusWork {...props} />;
+  },
   task_focus: (props) => <TaskFocusWork {...props} />,
-  input: (props) => <InputFocusWork {...props} />,
+  input: (props) => {
+    if (props.run.config_snapshot?.primary_filter || props.run.config_snapshot?.deliberate_config_id) {
+      return <UnifiedFocusWork {...props} />;
+    }
+    return <InputFocusWork {...props} />;
+  },
 };
 
 function buildRegistryEntry(fwDecl: { type: string; label: string }, subtitle: string): FocusWorkDefinition {

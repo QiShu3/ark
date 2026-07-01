@@ -18,7 +18,7 @@ from routes.checkin_routes import router as checkin_router
 from routes.content_bank import init_content_bank
 from routes.deliberate import init_deliberate
 from routes.deliberate import router as deliberate_router
-from routes.focus_work import choice_router, flash_router, input_router
+from routes.focus_work import choice_router, flash_router, input_router, unified_router
 from routes.focus_work import init_choice, init_flash, init_input
 from routes.todo_routes import init_todo
 from routes.todo_routes import router as todo_router
@@ -73,6 +73,7 @@ app.include_router(admin_router)
 app.include_router(deliberate_router)
 app.include_router(choice_router)
 app.include_router(input_router)
+app.include_router(unified_router)
 
 # Auto-discover and register dynamic app routers
 for _decl in get_all():

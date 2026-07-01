@@ -9,18 +9,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from routes.auth_routes import _AuthUser, get_current_user
 from lib.focus_work_types import (
     CHOICE_KIND,
     FLASH_CARD_KIND,
     INPUT_KIND,
     normalize_focus_work_type,
 )
+from routes.auth_routes import _AuthUser, get_current_user
+from routes.deliberate import repository as deliberate_repository
+from routes.deliberate.service import validate_config_shape
 from routes.focus_work.choice.adapters import resolve_choice_set_id
 from routes.focus_work.choice.importer import ERCArticleSeed, ERCParagraphSeed, ERCQuestionSeed
 from routes.focus_work.choice.repository import aggregate_focus_stats, aggregate_set_snapshot, insert_set_snapshot
-from routes.deliberate import repository as deliberate_repository
-from routes.deliberate.service import validate_config_shape
 from routes.focus_work.flash.importer import DeckSeed, SentenceSeed, TranslationSeed, WordSeed
 from routes.focus_work.flash.repository import (
     aggregate_vocab_focus_stats,
@@ -3914,6 +3914,15 @@ def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
         "deliberate_config_id",
         "deliberate_kind",
         "deliberate_name",
+        "primary_filter",
+        "sort_order",
+        "use_fsrs",
+        "backflow_rule",
+        "kind",
+        "bank_id",
+        "target_count",
+        "scope",
+        "completion",
     ):
         if key in phase:
             config[key] = phase[key]
@@ -3999,6 +4008,10 @@ async def _ensure_deliberate_run_for_phase(
     target_count = int(config_row["target_count"])
     scope = _config_payload(config_row["scope_json"])
     completion = _config_payload(config_row["completion_json"])
+    primary_filter = str(config_row.get("primary_filter", "all"))
+    sort_order = str(config_row.get("sort_order", "sequential"))
+    use_fsrs = bool(config_row.get("use_fsrs", False))
+    backflow_rule = str(config_row.get("backflow_rule", "none"))
     if config_snapshot.get("choice_scope") is not None:
         scope = dict(config_snapshot["choice_scope"])
     if config_snapshot.get("choice_completion") is not None:
@@ -4013,6 +4026,10 @@ async def _ensure_deliberate_run_for_phase(
         "target_count": target_count,
         "scope": scope,
         "completion": completion,
+        "primary_filter": primary_filter,
+        "sort_order": sort_order,
+        "use_fsrs": use_fsrs,
+        "backflow_rule": backflow_rule,
     }
     deliberate_run = await deliberate_repository.create_run(
         conn,
