@@ -6,16 +6,24 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 
-from routes.auth_routes import _AuthUser, get_current_user
 from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_deliberate_kind
+from routes.auth_routes import _AuthUser, get_current_user
 from routes.focus_work.choice.repository import (
     count_questions_by_set as count_choice_questions,
+)
+from routes.focus_work.choice.repository import (
     get_subjects_by_set as get_choice_subjects,
+)
+from routes.focus_work.choice.repository import (
     list_questions_by_set as list_choice_questions,
+)
+from routes.focus_work.choice.repository import (
     list_set_rows as list_choice_set_rows,
 )
-from routes.focus_work.input.repository import list_all_questions_by_set as list_input_questions, list_input_sets
-from routes.focus_work.flash.repository import list_admin_deck_words_paginated as list_vocab_words, list_vocab_decks
+from routes.focus_work.flash.repository import list_admin_deck_words_paginated as list_vocab_words
+from routes.focus_work.flash.repository import list_vocab_decks
+from routes.focus_work.input.repository import list_all_questions_by_set as list_input_questions
+from routes.focus_work.input.repository import list_input_sets
 
 from . import repository
 from .schemas import (
@@ -137,12 +145,12 @@ async def create_deliberate_workflow(
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> DeliberateWorkflowConfigOut:
     validate_config_shape(payload.kind, payload.focus_work_type, payload.target_count)
-    
+
     # Ensure completion.question_count matches target_count
     completion = dict(payload.completion)
     if completion.get("mode") == "question_count" and "question_count" not in completion:
         completion["question_count"] = payload.target_count
-    
+
     pool = _pool(request)
     async with pool.acquire() as conn:
         row = await repository.create_config(
@@ -157,6 +165,10 @@ async def create_deliberate_workflow(
             scope=payload.scope,
             completion=completion,
             pass_criteria=payload.pass_criteria,
+            primary_filter=payload.primary_filter,
+            sort_order=payload.sort_order,
+            use_fsrs=payload.use_fsrs,
+            backflow_rule=payload.backflow_rule,
         )
         return await _config_out(conn, row, user_id=int(admin.id))
 
@@ -183,14 +195,14 @@ async def update_deliberate_workflow(
     admin: Annotated[_AuthUser, Depends(_require_admin)],
 ) -> DeliberateWorkflowConfigOut:
     patch = payload.model_dump(exclude_unset=True)
-    
+
     # Ensure completion.question_count matches target_count
     if "target_count" in patch or "completion" in patch:
         current_completion = patch.get("completion") or {}
         target_count = patch.get("target_count")
         if target_count and current_completion.get("mode") == "question_count" and "question_count" not in current_completion:
             patch["completion"] = {**current_completion, "question_count": target_count}
-    
+
     pool = _pool(request)
     async with pool.acquire() as conn:
         current = await repository.get_config(conn, user_id=int(admin.id), config_id=str(config_id))

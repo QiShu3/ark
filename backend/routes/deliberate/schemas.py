@@ -11,6 +11,10 @@ DeliberateFocusWorkType = Literal["flash_card", "choice", "input"]
 DeliberateRunStatus = Literal["started", "content_completed", "completed", "abandoned"]
 DeliberateSnapshotType = Literal["choice_set", "flash_card_deck", "input_set"]
 
+PrimaryFilter = Literal["all", "unstarted", "mistake", "last_wrong", "due_review"]
+SortOrder = Literal["sequential", "due", "mistake_first", "random"]
+BackflowRule = Literal["none", "wrong_to_end", "wrong_retry"]
+
 
 class _NormalizedDeliberateBase(BaseModel):
     @field_validator("kind", mode="before", check_fields=False)
@@ -75,6 +79,10 @@ class DeliberateWorkflowConfigOut(_NormalizedDeliberateBase):
     completion: dict[str, Any] = Field(default_factory=dict)
     pass_criteria: dict[str, Any] = Field(default_factory=dict)
     children: list[dict[str, Any]] = Field(default_factory=list)
+    primary_filter: PrimaryFilter = "all"
+    sort_order: SortOrder = "sequential"
+    use_fsrs: bool = False
+    backflow_rule: BackflowRule = "none"
     bank_summary: DeliberateBankSummary | None = None
     latest_run: DeliberateWorkflowRunSummary | None = None
     created_at: str
@@ -92,6 +100,10 @@ class DeliberateWorkflowConfigCreate(_NormalizedDeliberateBase):
     completion: dict[str, Any] = Field(default_factory=dict)
     pass_criteria: dict[str, Any] = Field(default_factory=dict)
     children: list[dict[str, Any]] = Field(default_factory=list)
+    primary_filter: PrimaryFilter = "all"
+    sort_order: SortOrder = "sequential"
+    use_fsrs: bool = False
+    backflow_rule: BackflowRule = "none"
 
 
 class DeliberateWorkflowConfigPatch(_NormalizedDeliberateBase):
@@ -105,6 +117,10 @@ class DeliberateWorkflowConfigPatch(_NormalizedDeliberateBase):
     completion: dict[str, Any] | None = None
     pass_criteria: dict[str, Any] | None = None
     children: list[dict[str, Any]] | None = None
+    primary_filter: PrimaryFilter | None = None
+    sort_order: SortOrder | None = None
+    use_fsrs: bool | None = None
+    backflow_rule: BackflowRule | None = None
 
 
 class DeliberateBankUploadOut(_NormalizedDeliberateBase):

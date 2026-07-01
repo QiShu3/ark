@@ -90,6 +90,18 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS children_json JSONB NOT NULL DEFAULT '[]'::jsonb;"
         )
         await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS primary_filter TEXT NOT NULL DEFAULT 'all';"
+        )
+        await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS sort_order TEXT NOT NULL DEFAULT 'sequential';"
+        )
+        await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS use_fsrs BOOLEAN NOT NULL DEFAULT false;"
+        )
+        await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS backflow_rule TEXT NOT NULL DEFAULT 'none';"
+        )
+        await conn.execute(
             "ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_target_count;"
         )
         await conn.execute(
@@ -166,6 +178,10 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
         "completion": _json_value(row["completion_json"]) or {},
         "pass_criteria": _json_value(row["pass_criteria_json"]) or {},
         "children": _json_value(row["children_json"]) or [],
+        "primary_filter": row.get("primary_filter", "all"),
+        "sort_order": row.get("sort_order", "sequential"),
+        "use_fsrs": bool(row.get("use_fsrs", False)),
+        "backflow_rule": row.get("backflow_rule", "none"),
         "bank_summary": bank_summary,
         "latest_run": latest_run,
         "created_at": _iso(row["created_at"]),
@@ -201,7 +217,9 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int) -> list[asyncp
     return await conn.fetch(
         """
         SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-               scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
+               scope_json, completion_json, pass_criteria_json, children_json,
+               primary_filter, sort_order, use_fsrs, backflow_rule,
+               created_at, updated_at
         FROM deliberate_workflow_configs
         WHERE user_id = $1
         ORDER BY updated_at DESC, created_at DESC
@@ -214,7 +232,9 @@ async def get_config(conn: asyncpg.Connection, *, user_id: int, config_id: str) 
     return await conn.fetchrow(
         """
         SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-               scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
+               scope_json, completion_json, pass_criteria_json, children_json,
+               primary_filter, sort_order, use_fsrs, backflow_rule,
+               created_at, updated_at
         FROM deliberate_workflow_configs
         WHERE id = $1::uuid AND user_id = $2
         """,
@@ -237,15 +257,24 @@ async def create_config(
     completion: dict[str, Any],
     pass_criteria: dict[str, Any],
     children: list[dict[str, Any]] | None = None,
+    primary_filter: str = "all",
+    sort_order: str = "sequential",
+    use_fsrs: bool = False,
+    backflow_rule: str = "none",
 ) -> asyncpg.Record:
     return await conn.fetchrow(
         """
         INSERT INTO deliberate_workflow_configs(
-            user_id, name, kind, focus_work_type, bank_id, task_id, target_count, scope_json, completion_json, pass_criteria_json, children_json
+            user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
+            scope_json, completion_json, pass_criteria_json, children_json,
+            primary_filter, sort_order, use_fsrs, backflow_rule
         )
-        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb)
+        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb,
+                $12, $13, $14, $15)
         RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
-                  scope_json, completion_json, pass_criteria_json, children_json, created_at, updated_at
+                  scope_json, completion_json, pass_criteria_json, children_json,
+                  primary_filter, sort_order, use_fsrs, backflow_rule,
+                  created_at, updated_at
         """,
         user_id,
         name,
@@ -258,6 +287,10 @@ async def create_config(
         _json_param(completion),
         _json_param(pass_criteria),
         _json_param(children or []),
+        primary_filter,
+        sort_order,
+        use_fsrs,
+        backflow_rule,
     )
 
 
@@ -277,6 +310,10 @@ async def update_config(
         "bank_id": "bank_id",
         "task_id": "task_id",
         "target_count": "target_count",
+        "primary_filter": "primary_filter",
+        "sort_order": "sort_order",
+        "use_fsrs": "use_fsrs",
+        "backflow_rule": "backflow_rule",
     }
     for key, column in mapping.items():
         if key in patch:

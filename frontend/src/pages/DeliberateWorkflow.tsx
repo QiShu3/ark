@@ -28,12 +28,15 @@ import {
   patchDeliberateWorkflow,
   startDeliberateWorkflow,
   uploadDeliberateBank,
+  type BackflowRule,
   type DeliberateBankOption,
   type DeliberateFocusWorkType,
   type DeliberateKind,
   type DeliberateUploadError,
   type DeliberateWorkflowConfig,
   type DeliberateWorkflowRun,
+  type PrimaryFilter,
+  type SortOrder,
 } from '../lib/deliberate/api';
 import {
   fetchWorkflowRecords,
@@ -213,8 +216,10 @@ export default function DeliberateWorkflow() {
   const [year, setYear] = useState<number | ''>('');
   const [subject, setSubject] = useState('');
   const [tag, setTag] = useState('');
-  const [status, setStatus] = useState<'all' | 'unstarted' | 'mistake' | 'due_review'>('all');
-  const [mode, setMode] = useState<'sequential' | 'random' | 'review'>('sequential');
+  const [primaryFilter, setPrimaryFilter] = useState<PrimaryFilter>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('sequential');
+  const [useFsrs, setUseFsrs] = useState(false);
+  const [backflowRule, setBackflowRule] = useState<BackflowRule>('none');
   const [completionMode, setCompletionMode] = useState<CompletionMode>('question_count');
   const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(false);
   const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(80);
@@ -239,8 +244,10 @@ export default function DeliberateWorkflow() {
     setYear('');
     setSubject('');
     setTag('');
-    setStatus('all');
-    setMode('sequential');
+    setPrimaryFilter('all');
+    setSortOrder('sequential');
+    setUseFsrs(false);
+    setBackflowRule('none');
     setCompletionMode('question_count');
     setPassCriteriaEnabled(false);
     setPassCriteriaThreshold(80);
@@ -402,10 +409,8 @@ export default function DeliberateWorkflow() {
       years: year !== '' ? [year] : undefined,
       subjects: subject ? [subject] : undefined,
       tags: tag ? [tag] : undefined,
-      status,
-      mode,
     };
-  }, [bankId, kind, mode, status, subject, tag, year]);
+  }, [bankId, kind, subject, tag, year]);
 
   const completion = useMemo(() => {
     if (kind === 'flash_card') {
@@ -462,6 +467,7 @@ export default function DeliberateWorkflow() {
     setSaving(true);
     setError(null);
     try {
+      const effectivePrimaryFilter = useFsrs ? primaryFilter : (primaryFilter === 'due_review' ? 'all' : primaryFilter);
       const created = await createDeliberateWorkflow({
         name: name.trim(),
         kind,
@@ -471,6 +477,10 @@ export default function DeliberateWorkflow() {
         scope,
         completion,
         pass_criteria: passCriteria,
+        primary_filter: effectivePrimaryFilter,
+        sort_order: sortOrder,
+        use_fsrs: useFsrs,
+        backflow_rule: backflowRule,
       });
       setName('');
       await loadConfigs(created.id);
@@ -530,6 +540,10 @@ export default function DeliberateWorkflow() {
     scope: Record<string, unknown>;
     completion: Record<string, unknown>;
     pass_criteria: Record<string, unknown>;
+    primary_filter: PrimaryFilter;
+    sort_order: SortOrder;
+    use_fsrs: boolean;
+    backflow_rule: BackflowRule;
   }) {
     setSaving(true);
     setError(null);
@@ -551,6 +565,10 @@ export default function DeliberateWorkflow() {
     pass_criteria?: Record<string, unknown>;
     children?: { config_id: string; label: string; is_recommended: boolean }[];
     task_id?: string | null;
+    primary_filter?: PrimaryFilter;
+    sort_order?: SortOrder;
+    use_fsrs?: boolean;
+    backflow_rule?: BackflowRule;
   }) {
     if (!editingConfig) return;
     setSaving(true);
@@ -1482,41 +1500,99 @@ export default function DeliberateWorkflow() {
                   </Field>
                 ) : null}
 
-                {kind !== 'flash_card' ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={passCriteriaEnabled}
-                          onChange={(e) => setPassCriteriaEnabled(e.target.checked)}
-                          className="rounded border-ark-border"
-                        />
-                        <span className="text-sm font-medium text-ark-text-muted">启用通过标准</span>
-                      </label>
-                    </div>
-                    {passCriteriaEnabled ? (
-                      <Field label="正确率阈值 (%)">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="range"
-                            min={50}
-                            max={100}
-                            step={5}
-                            value={passCriteriaThreshold}
-                            onChange={(e) => setPassCriteriaThreshold(Number(e.target.value))}
-                            className="flex-1"
-                          />
-                          <span className="text-sm font-medium text-ark-text w-12 text-right">{passCriteriaThreshold}%</span>
-                        </div>
-                      </Field>
-                    ) : null}
+                <Field label="排序方式">
+                  <select
+                    value={sortOrder}
+                    onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+                    className={inputClass}
+                  >
+                    <option value="sequential">按序号</option>
+                    <option value="due">按到期时间</option>
+                    <option value="mistake_first">按错误优先</option>
+                    <option value="random">随机</option>
+                  </select>
+                </Field>
+
+                <Field label="本场回流规则">
+                  <select
+                    value={backflowRule}
+                    onChange={(event) => setBackflowRule(event.target.value as BackflowRule)}
+                    className={inputClass}
+                  >
+                    <option value="none">不回流</option>
+                    <option value="wrong_to_end">答错放队尾</option>
+                    <option value="wrong_retry">答错立即再来一次</option>
+                  </select>
+                </Field>
+              </div>
+
+              {kind !== 'flash_card' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={passCriteriaEnabled}
+                        onChange={(e) => setPassCriteriaEnabled(e.target.checked)}
+                        className="rounded border-ark-border"
+                      />
+                      <span className="text-sm font-medium text-ark-text-muted">启用通过标准</span>
+                    </label>
                   </div>
-                ) : null}
+                  {passCriteriaEnabled ? (
+                    <Field label="正确率阈值 (%)">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={50}
+                          max={100}
+                          step={5}
+                          value={passCriteriaThreshold}
+                          onChange={(e) => setPassCriteriaThreshold(Number(e.target.value))}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium text-ark-text w-12 text-right">{passCriteriaThreshold}%</span>
+                      </div>
+                    </Field>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="主筛选条件">
+                  <select
+                    value={primaryFilter}
+                    onChange={(event) => setPrimaryFilter(event.target.value as PrimaryFilter)}
+                    className={inputClass}
+                  >
+                    <option value="all">全部题目</option>
+                    <option value="unstarted">没做过</option>
+                    <option value="mistake">做错过</option>
+                    <option value="last_wrong">上次做错</option>
+                    <option value="due_review" disabled={!useFsrs}>到期复习{!useFsrs ? '（需启用 FSRS）' : ''}</option>
+                  </select>
+                </Field>
+
+                <div className="flex items-center gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useFsrs}
+                      onChange={(e) => {
+                        setUseFsrs(e.target.checked);
+                        if (!e.target.checked && primaryFilter === 'due_review') {
+                          setPrimaryFilter('all');
+                        }
+                      }}
+                      className="rounded border-ark-border"
+                    />
+                    <span className="text-sm font-medium text-ark-text-muted">启用 FSRS</span>
+                  </label>
+                </div>
               </div>
 
               {kind === 'choice' ? (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <Field label="年份">
                     <select value={year} onChange={(event) => setYear(event.target.value ? Number(event.target.value) : '')} className={inputClass}>
                       <option value="">全部年份</option>
@@ -1533,21 +1609,6 @@ export default function DeliberateWorkflow() {
                     <select value={tag} onChange={(event) => setTag(event.target.value)} className={inputClass}>
                       <option value="">全部标签</option>
                       {filters?.tags.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="筛选">
-                    <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className={inputClass}>
-                      <option value="all">全部</option>
-                      <option value="unstarted">未开始</option>
-                      <option value="mistake">错题</option>
-                      <option value="due_review">待复习</option>
-                    </select>
-                  </Field>
-                  <Field label="顺序">
-                    <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className={inputClass}>
-                      <option value="sequential">顺序</option>
-                      <option value="random">随机</option>
-                      <option value="review">复习优先</option>
                     </select>
                   </Field>
                   <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 text-sm text-ark-text-muted">

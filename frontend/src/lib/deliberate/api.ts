@@ -3,6 +3,9 @@ import { apiFetch, apiJson } from '../api';
 export type DeliberateKind = 'flash_card' | 'choice' | 'input';
 export type DeliberateFocusWorkType = 'flash_card' | 'choice' | 'input';
 export type DeliberateRunStatus = 'started' | 'content_completed' | 'completed' | 'abandoned';
+export type PrimaryFilter = 'all' | 'unstarted' | 'mistake' | 'last_wrong' | 'due_review';
+export type SortOrder = 'sequential' | 'due' | 'mistake_first' | 'random';
+export type BackflowRule = 'none' | 'wrong_to_end' | 'wrong_retry';
 
 export type DeliberateBankSummary = {
   id: string;
@@ -50,6 +53,10 @@ export type DeliberateWorkflowConfig = {
   completion: Record<string, unknown>;
   pass_criteria: Record<string, unknown>;
   children: DeliberateWorkflowChild[];
+  primary_filter: PrimaryFilter;
+  sort_order: SortOrder;
+  use_fsrs: boolean;
+  backflow_rule: BackflowRule;
   bank_summary?: DeliberateBankSummary | null;
   latest_run?: DeliberateWorkflowRun | null;
   created_at: string;
@@ -73,6 +80,10 @@ export type DeliberateWorkflowPayload = {
   completion?: Record<string, unknown>;
   pass_criteria?: Record<string, unknown>;
   children?: DeliberateWorkflowChild[];
+  primary_filter?: PrimaryFilter;
+  sort_order?: SortOrder;
+  use_fsrs?: boolean;
+  backflow_rule?: BackflowRule;
 };
 
 export type DeliberateWorkflowPatch = {
@@ -86,6 +97,10 @@ export type DeliberateWorkflowPatch = {
   completion?: Record<string, unknown>;
   pass_criteria?: Record<string, unknown>;
   children?: DeliberateWorkflowChild[];
+  primary_filter?: PrimaryFilter;
+  sort_order?: SortOrder;
+  use_fsrs?: boolean;
+  backflow_rule?: BackflowRule;
 };
 
 export type DeliberateBankUploadResult = {
