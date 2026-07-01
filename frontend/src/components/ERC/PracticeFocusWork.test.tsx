@@ -53,7 +53,6 @@ const practiceRun: FocusWorkRunSummary = {
   counts_for_task_completion: true,
   status: 'running',
   config_snapshot: {
-    choiceMode: 'practice',
     choice_scope: { bank_id: 'set-1', years: [2025], subjects: ['数据结构'] },
   },
 };

@@ -358,8 +358,9 @@ class _FakeTodoConn:
             )
             return {"id": task["id"]} if task is not None else None
         if "app task status task lookup" in sql:
-            task_id, user_id, app_id, app_task_type, config_id = args[0], args[1], args[2], args[3], args[4]
+            task_id, user_id, app_id_arg, app_task_type, config_id = args[0], args[1], args[2], args[3], args[4]
             event_id = args[5] if len(args) > 5 else None
+            app_id_list = app_id_arg if isinstance(app_id_arg, list) else [app_id_arg]
             return next(
                 (
                     task
@@ -369,7 +370,7 @@ class _FakeTodoConn:
                     and (event_id is None or task["event_id"] == event_id)
                     and task["source_type"] == "app"
                     and task["managed_by_app"]
-                    and task["app_id"] == app_id
+                    and task["app_id"] in app_id_list
                     and task["app_task_type"] == app_task_type
                     and task["app_config_id"] == config_id
                     and not task["is_deleted"]
@@ -1194,7 +1195,7 @@ def vocab_deck_id() -> str:
 
 @pytest.mark.asyncio
 async def test_vocab_app_task_status_starts_unconfigured_for_primary_event(client, auth_headers):
-    response = await client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+    response = await client.get("/todo/app-tasks/flash/status", headers=auth_headers)
     assert response.status_code == 200
     payload = response.json()
     assert payload["state"] == "event_not_configured"
@@ -1226,7 +1227,7 @@ async def test_vocab_app_task_status_without_primary_does_not_use_global_config(
 
     transport = httpx.ASGITransport(app=_build_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
-        response = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+        response = await test_client.get("/todo/app-tasks/flash/status", headers=auth_headers)
 
     assert response.status_code == 200
     payload = response.json()
@@ -1274,7 +1275,7 @@ async def test_vocab_app_task_status_includes_config_before_task_exists(monkeypa
 
     transport = httpx.ASGITransport(app=_build_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
-        response = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+        response = await test_client.get("/todo/app-tasks/flash/status", headers=auth_headers)
 
     assert response.status_code == 200
     payload = response.json()
@@ -1323,7 +1324,7 @@ async def test_vocab_app_task_status_rejects_unbound_created_task(monkeypatch, a
 
     transport = httpx.ASGITransport(app=_build_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
-        response = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+        response = await test_client.get("/todo/app-tasks/flash/status", headers=auth_headers)
 
     assert response.status_code == 200
     payload = response.json()
@@ -1336,7 +1337,7 @@ async def test_vocab_app_task_status_rejects_unbound_created_task(monkeypatch, a
 @pytest.mark.asyncio
 async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_headers, vocab_deck_id):
     response = await client.post(
-        "/todo/app-tasks/vocab/init",
+        "/todo/app-tasks/flash/init",
         json={
             "deck_id": vocab_deck_id,
             "daily_target_count": 20,
@@ -1355,7 +1356,7 @@ async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_h
     task_payload = task.json()
     assert task_payload["title"] == "闪卡"
     assert task_payload["source_type"] == "app"
-    assert task_payload["app_id"] == "vocab"
+    assert task_payload["app_id"] == "flash"
     assert task_payload["app_task_type"] == "flash_card"
     assert task_payload["managed_by_app"] is True
     assert task_payload["is_recurring"] is True
@@ -1366,7 +1367,7 @@ async def test_vocab_app_task_init_creates_recurring_managed_task(client, auth_h
 @pytest.mark.asyncio
 async def test_vocab_app_task_init_accepts_grouped_deck_identifier(client, auth_headers):
     response = await client.post(
-        "/todo/app-tasks/vocab/init",
+        "/todo/app-tasks/flash/init",
         json={
             "deck_id": "cet6luan",
             "daily_target_count": 20,
@@ -1385,7 +1386,7 @@ async def test_vocab_app_task_init_accepts_grouped_deck_identifier(client, auth_
 @pytest.mark.asyncio
 async def test_vocab_app_task_init_rejects_invalid_deck_id(client, auth_headers):
     response = await client.post(
-        "/todo/app-tasks/vocab/init",
+        "/todo/app-tasks/flash/init",
         json={
             "deck_id": "not-a-uuid",
             "daily_target_count": 20,
@@ -1408,8 +1409,8 @@ async def test_vocab_app_task_init_returns_same_task_on_repeated_init(client, au
         "add_to_today_plan": True,
     }
 
-    first = await client.post("/todo/app-tasks/vocab/init", json=body, headers=auth_headers)
-    second = await client.post("/todo/app-tasks/vocab/init", json=body, headers=auth_headers)
+    first = await client.post("/todo/app-tasks/flash/init", json=body, headers=auth_headers)
+    second = await client.post("/todo/app-tasks/flash/init", json=body, headers=auth_headers)
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -1450,7 +1451,7 @@ async def test_vocab_app_task_init_keeps_distinct_configs_per_event(monkeypatch,
     transport = httpx.ASGITransport(app=_build_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as test_client:
         first = await test_client.post(
-            "/todo/app-tasks/vocab/init",
+            "/todo/app-tasks/flash/init",
             json={
                 "deck_id": vocab_deck_id,
                 "daily_target_count": 20,
@@ -1465,7 +1466,7 @@ async def test_vocab_app_task_init_keeps_distinct_configs_per_event(monkeypatch,
             headers=auth_headers,
         )
         second = await test_client.post(
-            "/todo/app-tasks/vocab/init",
+            "/todo/app-tasks/flash/init",
             json={
                 "deck_id": vocab_deck_id,
                 "daily_target_count": 30,
@@ -1474,7 +1475,7 @@ async def test_vocab_app_task_init_keeps_distinct_configs_per_event(monkeypatch,
             },
             headers=auth_headers,
         )
-        status = await test_client.get("/todo/app-tasks/vocab/status", headers=auth_headers)
+        status = await test_client.get("/todo/app-tasks/flash/status", headers=auth_headers)
 
     assert first.status_code == 200
     assert promote.status_code == 200
@@ -1495,7 +1496,7 @@ async def test_vocab_app_task_init_keeps_distinct_configs_per_event(monkeypatch,
 @pytest.mark.asyncio
 async def test_update_app_managed_task_rejects_business_patch(client, auth_headers, vocab_deck_id):
     init_response = await client.post(
-        "/todo/app-tasks/vocab/init",
+        "/todo/app-tasks/flash/init",
         json={
             "deck_id": vocab_deck_id,
             "daily_target_count": 20,
@@ -1520,7 +1521,7 @@ async def test_update_app_managed_task_rejects_business_patch(client, auth_heade
 @pytest.mark.asyncio
 async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_headers, vocab_deck_id):
     init_response = await client.post(
-        "/todo/app-tasks/vocab/init",
+        "/todo/app-tasks/flash/init",
         json={
             "deck_id": vocab_deck_id,
             "daily_target_count": 20,
@@ -1548,7 +1549,7 @@ async def test_update_app_managed_task_allows_outer_planning_patch(client, auth_
 @pytest.mark.asyncio
 async def test_complete_app_managed_task_rejects_plain_task_complete(client, auth_headers, vocab_deck_id):
     init_response = await client.post(
-        "/todo/app-tasks/vocab/init",
+        "/todo/app-tasks/flash/init",
         json={
             "deck_id": vocab_deck_id,
             "daily_target_count": 20,
@@ -1617,16 +1618,9 @@ async def test_erc_config_save_enables_both_modules(client, auth_headers):
     response = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {
+            "choice_enabled": True,
+            "choice": {
                 "daily_article_target": 2,
-                "default_focus_duration": 1500,
-                "add_to_today_plan": True,
-            },
-            "review": {
-                "review_scope": "due",
-                "daily_question_target": 10,
                 "default_focus_duration": 1500,
                 "add_to_today_plan": True,
             },
@@ -1635,13 +1629,9 @@ async def test_erc_config_save_enables_both_modules(client, auth_headers):
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["practice"]["enabled"] is True
-    assert payload["practice"]["task_id"] is not None
-    assert payload["practice"]["config"]["daily_article_target"] == 2
-    assert payload["review"]["enabled"] is True
-    assert payload["review"]["task_id"] is not None
-    assert payload["review"]["config"]["daily_question_target"] == 10
-    assert payload["practice"]["task_id"] != payload["review"]["task_id"]
+    assert payload["choice"]["enabled"] is True
+    assert payload["choice"]["task_id"] is not None
+    assert payload["choice"]["config"]["daily_article_target"] == 2
 
 
 @pytest.mark.asyncio
@@ -1681,15 +1671,8 @@ async def test_erc_config_status_can_read_non_primary_event(monkeypatch, auth_he
             "/todo/app-tasks/erc-config",
             json={
                 "event_id": str(event_b_id),
-                "practice_enabled": True,
-                "review_enabled": True,
-                "practice": {"daily_article_target": 3, "default_focus_duration": 1800, "add_to_today_plan": False},
-                "review": {
-                    "review_scope": "all",
-                    "daily_question_target": 15,
-                    "default_focus_duration": 1200,
-                    "add_to_today_plan": True,
-                },
+                "choice_enabled": True,
+                "choice": {"daily_article_target": 3, "default_focus_duration": 1800, "add_to_today_plan": False},
             },
             headers=auth_headers,
         )
@@ -1700,11 +1683,8 @@ async def test_erc_config_status_can_read_non_primary_event(monkeypatch, auth_he
     payload = status.json()
     assert payload["event_id"] == str(event_b_id)
     assert payload["event_name"] == "事件 B"
-    assert payload["practice"]["enabled"] is True
-    assert payload["practice"]["config"]["daily_article_target"] == 3
-    assert payload["review"]["enabled"] is True
-    assert payload["review"]["config"]["review_scope"] == "all"
-    assert payload["review"]["config"]["daily_question_target"] == 15
+    assert payload["choice"]["enabled"] is True
+    assert payload["choice"]["config"]["daily_article_target"] == 3
 
 
 @pytest.mark.asyncio
@@ -1722,25 +1702,20 @@ async def test_erc_config_disable_review_keeps_practice(client, auth_headers):
     response = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": False,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
         },
         headers=auth_headers,
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["practice"]["enabled"] is True
-    assert payload["practice"]["task_id"] is not None
-    assert payload["review"]["enabled"] is False
-    assert payload["review"]["task_id"] is None
+    assert payload["choice"]["enabled"] is True
+    assert payload["choice"]["task_id"] is not None
 
     get_response = await client.get("/todo/app-tasks/erc-config", headers=auth_headers)
     assert get_response.status_code == 200
     get_payload = get_response.json()
-    assert get_payload["practice"]["enabled"] is True
-    assert get_payload["review"]["enabled"] is False
+    assert get_payload["choice"]["enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -1748,22 +1723,18 @@ async def test_erc_config_reenable_reuses_existing_task(client, auth_headers):
     initial = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
         },
         headers=auth_headers,
     )
-    original_practice_id = initial.json()["practice"]["task_id"]
+    original_choice_id = initial.json()["choice"]["task_id"]
 
     await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": False,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": False,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
         },
         headers=auth_headers,
     )
@@ -1771,17 +1742,15 @@ async def test_erc_config_reenable_reuses_existing_task(client, auth_headers):
     restored = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": True},
         },
         headers=auth_headers,
     )
     assert restored.status_code == 200
     payload = restored.json()
-    assert payload["practice"]["task_id"] == original_practice_id
-    assert payload["practice"]["enabled"] is True
+    assert payload["choice"]["task_id"] == original_choice_id
+    assert payload["choice"]["enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -1789,17 +1758,15 @@ async def test_erc_config_reenable_reports_confirmation_needed(client, auth_head
     initial = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
         },
         headers=auth_headers,
     )
-    practice_task_id = initial.json()["practice"]["task_id"]
+    choice_task_id = initial.json()["choice"]["task_id"]
 
     patch_resp = await client.patch(
-        f"/todo/tasks/{practice_task_id}",
+        f"/todo/tasks/{choice_task_id}",
         json={"manually_scheduled_for_today": True},
         headers=auth_headers,
     )
@@ -1809,10 +1776,8 @@ async def test_erc_config_reenable_reports_confirmation_needed(client, auth_head
     await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": False,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": False,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
         },
         headers=auth_headers,
     )
@@ -1820,20 +1785,17 @@ async def test_erc_config_reenable_reports_confirmation_needed(client, auth_head
     restored = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
         },
         headers=auth_headers,
     )
     assert restored.status_code == 200
     payload = restored.json()
-    assert payload["practice"]["task_id"] == practice_task_id
-    assert payload["practice"]["confirmation_needed"] is True
-    assert payload["review"]["confirmation_needed"] is False
+    assert payload["choice"]["task_id"] == choice_task_id
+    assert payload["choice"]["confirmation_needed"] is True
 
-    task_response = await client.get(f"/todo/tasks/{practice_task_id}", headers=auth_headers)
+    task_response = await client.get(f"/todo/tasks/{choice_task_id}", headers=auth_headers)
     assert task_response.json()["manually_scheduled_for_today"] is True
 
 
@@ -1842,17 +1804,15 @@ async def test_erc_config_sync_preserves_manual_today_arrangement(client, auth_h
     initial = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 1, "default_focus_duration": 1500, "add_to_today_plan": False},
         },
         headers=auth_headers,
     )
-    practice_task_id = initial.json()["practice"]["task_id"]
+    choice_task_id = initial.json()["choice"]["task_id"]
 
     patch_resp = await client.patch(
-        f"/todo/tasks/{practice_task_id}",
+        f"/todo/tasks/{choice_task_id}",
         json={"manually_scheduled_for_today": True},
         headers=auth_headers,
     )
@@ -1862,17 +1822,15 @@ async def test_erc_config_sync_preserves_manual_today_arrangement(client, auth_h
     synced = await client.post(
         "/todo/app-tasks/erc-config",
         json={
-            "practice_enabled": True,
-            "review_enabled": True,
-            "practice": {"daily_article_target": 3, "default_focus_duration": 1800, "add_to_today_plan": False},
-            "review": {"review_scope": "due", "daily_question_target": 10, "default_focus_duration": 1500, "add_to_today_plan": True},
+            "choice_enabled": True,
+            "choice": {"daily_article_target": 3, "default_focus_duration": 1800, "add_to_today_plan": False},
         },
         headers=auth_headers,
     )
     assert synced.status_code == 200
-    assert synced.json()["practice"]["task_id"] == practice_task_id
+    assert synced.json()["choice"]["task_id"] == choice_task_id
 
-    task_response = await client.get(f"/todo/tasks/{practice_task_id}", headers=auth_headers)
+    task_response = await client.get(f"/todo/tasks/{choice_task_id}", headers=auth_headers)
     assert task_response.json()["manually_scheduled_for_today"] is True
 
 
@@ -1901,10 +1859,10 @@ async def test_task_out_includes_app_managed_metadata(client, auth_headers):
     [
         {"source_type": "app"},
         {"managed_by_app": True},
-        {"app_id": "vocab"},
+        {"app_id": "flash"},
         {"app_task_type": "flash_card"},
         {"app_config_id": "00000000-0000-0000-0000-000000000001"},
-        {"app_instance_key": "vocab:flash_card"},
+        {"app_instance_key": "flash:flash_card"},
     ],
 )
 async def test_create_task_rejects_app_managed_metadata(client, auth_headers, metadata):
@@ -1924,10 +1882,10 @@ async def test_create_task_rejects_app_managed_metadata(client, auth_headers, me
     [
         {"source_type": "app"},
         {"managed_by_app": True},
-        {"app_id": "vocab"},
+        {"app_id": "flash"},
         {"app_task_type": "flash_card"},
         {"app_config_id": "00000000-0000-0000-0000-000000000001"},
-        {"app_instance_key": "vocab:flash_card"},
+        {"app_instance_key": "flash:flash_card"},
     ],
 )
 async def test_update_task_rejects_app_managed_metadata(client, auth_headers, metadata):
@@ -3785,7 +3743,7 @@ def test_get_focus_workflow_current_exposes_app_managed_adapter(monkeypatch) -> 
     data = resp.json()
     assert data["active_focus_work_type"] == "flash_card"
     assert data["active_task_source_type"] == "app"
-    assert data["active_task_app_id"] == "vocab"
+    assert data["active_task_app_id"] == "flash"
     assert data["active_task_app_task_type"] == "flash_card"
     assert data["active_task_app_config_id"] == str(config_id)
     assert data["focus_work_display_state"] == "fullscreen"

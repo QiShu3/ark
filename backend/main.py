@@ -76,7 +76,7 @@ app.include_router(input_router)
 
 # Auto-discover and register dynamic app routers
 for _decl in get_all():
-    if _decl.id in ("vocab", "erc"):
+    if _decl.id in ("flash", "erc"):
         continue
     _py_id = _decl.id.replace("-", "_")
     try:

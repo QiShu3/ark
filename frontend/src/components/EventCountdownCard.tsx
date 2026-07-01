@@ -32,17 +32,14 @@ import {
   type EventArrangementAppointmentInput,
 } from '../lib/events/arrangementApi';
 import { fetchVocabDecks, initializeVocabAppTask } from '../lib/vocab/api';
-import { saveEventChoiceConfig, type PracticeConfigInput, type ReviewConfigInput } from '../lib/erc/configSync';
+import { saveEventChoiceConfig } from '../lib/erc/configSync';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import type { VocabDeck } from '../lib/vocab/types';
 import {
   getAppTypeLabel,
-  getChoiceModeLabel,
-  inferChoiceMode,
   normalizeAppType,
   type CanonicalAppType,
-  type ChoiceAppMode,
 } from '../lib/events/appConfigTypes';
 import AppModalFrame from './AppModalFrame';
 import EventWorkbenchModal from './events/EventWorkbenchModal';
@@ -75,13 +72,10 @@ type ConfiguredAppState = {
   clientId: string;
   appType: CanonicalAppType;
   config: {
-    choiceMode?: ChoiceAppMode;
     deckId?: string;
     deckName?: string;
     dailyTargetCount?: number;
     dailyArticleTarget?: number;
-    reviewScope?: 'due' | 'mistakes' | 'all';
-    dailyQuestionTarget?: number;
     defaultFocusDuration: number; // in seconds
     addToTodayPlan: boolean;
   };
@@ -89,11 +83,9 @@ type ConfiguredAppState = {
 
 type AppEditorState = {
   appType: CanonicalAppType;
-  choiceMode: ChoiceAppMode;
   deckId: string;
   dailyTargetCount: number;
   dailyArticleTarget: number;
-  reviewScope: 'due' | 'mistakes' | 'all';
   dailyQuestionTarget: number;
   focusDurationMin: number;
   addToTodayPlan: boolean;
@@ -356,17 +348,10 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           clientId: item.client_id || makeConfiguredAppClientId(),
           appType,
           config: {
-            choiceMode: appType === 'choice' ? inferChoiceMode(item.app_type, item.config) : undefined,
             deckId: typeof item.config.deckId === 'string' ? item.config.deckId : undefined,
             deckName: typeof item.config.deckName === 'string' ? item.config.deckName : undefined,
             dailyTargetCount: typeof item.config.dailyTargetCount === 'number' ? item.config.dailyTargetCount : undefined,
             dailyArticleTarget: typeof item.config.dailyArticleTarget === 'number' ? item.config.dailyArticleTarget : undefined,
-            reviewScope: item.config.reviewScope === 'mistakes' || item.config.reviewScope === 'all'
-              ? item.config.reviewScope
-              : item.config.reviewScope === 'due'
-                ? 'due'
-                : undefined,
-            dailyQuestionTarget: typeof item.config.dailyQuestionTarget === 'number' ? item.config.dailyQuestionTarget : undefined,
             defaultFocusDuration: typeof item.config.defaultFocusDuration === 'number'
               ? item.config.defaultFocusDuration
               : 25 * 60,
@@ -917,11 +902,8 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       config: {
         deckId: app.config.deckId ?? null,
         deckName: app.config.deckName ?? null,
-        choiceMode: app.config.choiceMode ?? null,
         dailyTargetCount: app.config.dailyTargetCount ?? null,
         dailyArticleTarget: app.config.dailyArticleTarget ?? null,
-        reviewScope: app.config.reviewScope ?? null,
-        dailyQuestionTarget: app.config.dailyQuestionTarget ?? null,
         defaultFocusDuration: app.config.defaultFocusDuration,
         addToTodayPlan: app.config.addToTodayPlan,
       },
@@ -1142,10 +1124,8 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       const createdEvent = await createEvent(payload);
       const workflowTaskIdMap = new Map<string, string>();
       const ercApps: {
-        practice?: PracticeConfigInput;
-        practiceClientId?: string;
-        review?: ReviewConfigInput;
-        reviewClientId?: string;
+        choice?: import('../lib/erc/configSync').ChoiceConfigInput;
+        choiceClientId?: string;
       } = {};
 
       for (const app of configuredApps) {
@@ -1159,36 +1139,22 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
           });
           if (appTaskStatus.task_id) workflowTaskIdMap.set(app.clientId, appTaskStatus.task_id);
         } else if (app.appType === 'choice') {
-          if (app.config.choiceMode === 'review') {
-            ercApps.review = {
-              review_scope: app.config.reviewScope!,
-              daily_question_target: app.config.dailyQuestionTarget!,
-              default_focus_duration: app.config.defaultFocusDuration,
-              add_to_today_plan: app.config.addToTodayPlan,
-            };
-            ercApps.reviewClientId = app.clientId;
-          } else {
-            ercApps.practice = {
-              daily_article_target: app.config.dailyArticleTarget!,
-              default_focus_duration: app.config.defaultFocusDuration,
-              add_to_today_plan: app.config.addToTodayPlan,
-            };
-            ercApps.practiceClientId = app.clientId;
-          }
+          ercApps.choice = {
+            daily_article_target: app.config.dailyArticleTarget!,
+            default_focus_duration: app.config.defaultFocusDuration,
+            add_to_today_plan: app.config.addToTodayPlan,
+          };
+          ercApps.choiceClientId = app.clientId;
         }
       }
 
-      if (ercApps.practice || ercApps.review) {
+      if (ercApps.choice) {
         const ercStatus = await saveEventChoiceConfig({
           eventId: createdEvent.id,
-          practice: ercApps.practice,
-          review: ercApps.review,
+          choice: ercApps.choice,
         });
-        if (ercApps.practiceClientId && ercStatus.practice.task_id) {
-          workflowTaskIdMap.set(ercApps.practiceClientId, ercStatus.practice.task_id);
-        }
-        if (ercApps.reviewClientId && ercStatus.review.task_id) {
-          workflowTaskIdMap.set(ercApps.reviewClientId, ercStatus.review.task_id);
+        if (ercApps.choiceClientId && ercStatus.choice.task_id) {
+          workflowTaskIdMap.set(ercApps.choiceClientId, ercStatus.choice.task_id);
         }
       }
 
@@ -1246,11 +1212,9 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     const initialType = unconfiguredTypes[0];
     setAppEditor({
       appType: initialType,
-      choiceMode: 'practice',
       deckId: initialType === 'flash_card' ? (decks[0]?.id || '') : '',
       dailyTargetCount: 20,
       dailyArticleTarget: 1,
-      reviewScope: 'due',
       dailyQuestionTarget: 10,
       focusDurationMin: 25,
       addToTodayPlan: true,
@@ -1264,12 +1228,10 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     if (!app) return;
     setAppEditor({
       appType: app.appType,
-      choiceMode: app.config.choiceMode || 'practice',
       deckId: app.config.deckId || '',
       dailyTargetCount: app.config.dailyTargetCount || 20,
       dailyArticleTarget: app.config.dailyArticleTarget || 1,
-      reviewScope: app.config.reviewScope || 'due',
-      dailyQuestionTarget: app.config.dailyQuestionTarget || 10,
+      dailyQuestionTarget: 10,
       focusDurationMin: Math.round(app.config.defaultFocusDuration / 60),
       addToTodayPlan: app.config.addToTodayPlan,
       index,
@@ -1295,13 +1257,10 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
         : configuredApps[appEditor.index]?.clientId ?? makeConfiguredAppClientId(),
       appType: appEditor.appType,
       config: {
-        choiceMode: appEditor.appType === 'choice' ? appEditor.choiceMode : undefined,
         deckId: appEditor.appType === 'flash_card' ? appEditor.deckId : undefined,
         deckName,
         dailyTargetCount: appEditor.appType === 'flash_card' ? appEditor.dailyTargetCount : undefined,
-        dailyArticleTarget: appEditor.appType === 'choice' && appEditor.choiceMode === 'practice' ? appEditor.dailyArticleTarget : undefined,
-        reviewScope: appEditor.appType === 'choice' && appEditor.choiceMode === 'review' ? appEditor.reviewScope : undefined,
-        dailyQuestionTarget: appEditor.appType === 'choice' && appEditor.choiceMode === 'review' ? appEditor.dailyQuestionTarget : undefined,
+        dailyArticleTarget: appEditor.appType === 'choice' ? appEditor.dailyArticleTarget : undefined,
         defaultFocusDuration: appEditor.focusDurationMin * 60,
         addToTodayPlan: appEditor.addToTodayPlan,
       },
@@ -1331,17 +1290,14 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     if (app.appType === 'flash_card') {
       return `词书: ${app.config.deckName || '加载中...'}, 每日 ${app.config.dailyTargetCount} 词, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
     }
-    if (app.appType === 'choice' && app.config.choiceMode !== 'review') {
+    if (app.appType === 'choice') {
       return `每日 ${app.config.dailyArticleTarget} 篇文章, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
     }
-    if (app.appType === 'choice') {
-      return `范围: ${app.config.reviewScope === 'due' ? '到期复习' : app.config.reviewScope === 'mistakes' ? '错题复习' : '全部'}, 每日 ${app.config.dailyQuestionTarget} 题, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
-    }
-    return `每日 ${app.config.dailyQuestionTarget ?? 10} 题, 专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
+    return `专注 ${Math.round(app.config.defaultFocusDuration / 60)} 分钟`;
   }
 
-  function getStoreAppName(appType: string, config: Record<string, unknown> = {}): string {
-    return getAppTypeLabel(normalizeAppType(appType) ?? 'choice', config);
+  function getStoreAppName(appType: string): string {
+    return getAppTypeLabel(normalizeAppType(appType) ?? 'choice');
   }
 
   function getStoreAppSummary(app: EventTemplateStoreTemplate['app_configs'][number]): string {
@@ -1359,20 +1315,9 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       const dailyTarget = typeof config.dailyTargetCount === 'number' ? `每日 ${config.dailyTargetCount} 词` : null;
       return [`词书 ${deckName}`, dailyTarget, focusDuration].filter(Boolean).join(' · ');
     }
-    if (appType === 'choice' && inferChoiceMode(app.app_type, config) === 'practice') {
+    if (appType === 'choice') {
       const dailyTarget = typeof config.dailyArticleTarget === 'number' ? `每日 ${config.dailyArticleTarget} 篇文章` : null;
       return [dailyTarget, focusDuration].filter(Boolean).join(' · ');
-    }
-    if (appType === 'choice') {
-      const scope = config.reviewScope === 'due'
-        ? '到期复习'
-        : config.reviewScope === 'mistakes'
-          ? '错题复习'
-          : config.reviewScope === 'all'
-            ? '全部'
-            : null;
-      const dailyTarget = typeof config.dailyQuestionTarget === 'number' ? `每日 ${config.dailyQuestionTarget} 题` : null;
-      return [scope, dailyTarget, focusDuration].filter(Boolean).join(' · ');
     }
     return focusDuration ?? '应用配置';
   }
@@ -1380,7 +1325,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   function getStoreTemplateBindingName(template: EventTemplateStoreTemplate, taskId: string | null | undefined): string | null {
     if (!taskId) return null;
     const app = template.app_configs?.find((item) => item.client_id === taskId);
-    if (app) return getStoreAppName(app.app_type, app.config);
+    if (app) return getStoreAppName(app.app_type);
     const workbenchItem = template.items.find((item) => item.details?.client_id === taskId);
     if (workbenchItem) return workbenchItem.title;
     return taskId;
@@ -1407,7 +1352,6 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                     ...current,
                     appType: val,
                     deckId: val === 'flash_card' ? (decks[0]?.id || '') : '',
-                    choiceMode: val === 'choice' ? current.choiceMode : 'practice',
                   };
                 });
               }}
@@ -1471,72 +1415,21 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
         {appEditor.appType === 'choice' ? (
           <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
-              选择练习类型
-              <select
-                aria-label="选择练习类型"
-                value={appEditor.choiceMode}
+              每日目标文章数
+              <input
+                aria-label="每日目标文章数"
+                type="number"
+                min={1}
+                max={50}
+                value={appEditor.dailyArticleTarget}
                 onChange={(event) => setAppEditor((current) => (
-                  current ? { ...current, choiceMode: event.target.value as ChoiceAppMode } : current
+                  current
+                    ? { ...current, dailyArticleTarget: Math.max(1, Math.min(50, Number(event.target.value) || 1)) }
+                    : current
                 ))}
                 className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              >
-                <option value="practice">真题练习</option>
-                <option value="review">错题复习</option>
-              </select>
+              />
             </label>
-            {appEditor.choiceMode === 'practice' ? (
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                每日目标文章数
-                <input
-                  aria-label="每日目标文章数"
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={appEditor.dailyArticleTarget}
-                  onChange={(event) => setAppEditor((current) => (
-                    current
-                      ? { ...current, dailyArticleTarget: Math.max(1, Math.min(50, Number(event.target.value) || 1)) }
-                      : current
-                  ))}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                />
-              </label>
-            ) : null}
-            {appEditor.choiceMode === 'review' ? (
-              <>
-                <label className="grid gap-1 text-xs text-ark-text-muted">
-                  复习范围
-                  <select
-                    aria-label="复习范围"
-                    value={appEditor.reviewScope}
-                    onChange={(event) => setAppEditor((current) => (
-                      current ? { ...current, reviewScope: event.target.value as AppEditorState['reviewScope'] } : current
-                    ))}
-                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  >
-                    <option value="due">到期复习 (due)</option>
-                    <option value="mistakes">全部错题 (mistakes)</option>
-                    <option value="all">全部题目 (all)</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-xs text-ark-text-muted">
-                  每日目标题数
-                  <input
-                    aria-label="每日目标题数"
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={appEditor.dailyQuestionTarget}
-                    onChange={(event) => setAppEditor((current) => (
-                      current
-                        ? { ...current, dailyQuestionTarget: Math.max(1, Math.min(200, Number(event.target.value) || 10)) }
-                        : current
-                    ))}
-                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  />
-                </label>
-              </>
-            ) : null}
           </>
         ) : null}
 

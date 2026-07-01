@@ -61,7 +61,7 @@ function makeRun(overrides: Record<string, unknown> = {}) {
     phase_index: 0,
     task_id: 'task-1',
     focus_work_type: focusWorkType,
-    app_id: focusWorkType === 'vocab_today' ? 'vocab' : null,
+    app_id: focusWorkType === 'vocab_today' ? 'flash' : null,
     app_task_type: focusWorkType === 'vocab_today' ? 'vocab_today' : null,
     counts_for_task_completion: true,
     status: 'running',
@@ -199,7 +199,7 @@ describe('FocusWorkProvider', () => {
     mockCurrentWorkflow({}, {
       task_id: 'task-vocab',
       focus_work_type: 'vocab_today',
-      app_id: 'vocab',
+      app_id: 'flash',
       app_task_type: 'vocab_today',
       config_snapshot: { task_title: '今日单词' },
     });
@@ -246,7 +246,7 @@ describe('FocusWorkProvider', () => {
     mockCurrentWorkflow({}, {
       task_id: 'task-vocab',
       focus_work_type: 'vocab_today',
-      app_id: 'vocab',
+      app_id: 'flash',
       app_task_type: 'vocab_today',
       config_snapshot: { task_title: '今日单词' },
     });

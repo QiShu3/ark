@@ -39,7 +39,7 @@ export default function VocabWordDetail() {
 
   return (
     <SubAppPageShell maxWidth="4xl">
-      <a href="#/vocab" className="text-sm text-ark-text-muted transition hover:text-ark-text">
+      <a href="#/flash" className="text-sm text-ark-text-muted transition hover:text-ark-text">
         返回词书首页
       </a>
 

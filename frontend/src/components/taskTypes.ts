@@ -1,6 +1,6 @@
 export type CompletionPeriodType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom_days';
 export type TaskSourceType = 'user' | 'app';
-export type AppTaskId = 'vocab' | 'erc' | 'input';
+export type AppTaskId = 'flash' | 'erc' | 'input';
 export type AppTaskType = 'flash_card' | 'choice' | 'input';
 export type AppTaskRuntimeState =
   | 'uninitialized'

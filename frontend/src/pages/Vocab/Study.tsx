@@ -64,7 +64,7 @@ export default function VocabStudy() {
             </div>
 
             <a
-              href={`#/vocab/words/${session.currentItem.id}`}
+              href={`#/flash/words/${session.currentItem.id}`}
               className="inline-block text-sm text-ark-text-muted transition hover:text-ark-text"
             >
               查看完整词条

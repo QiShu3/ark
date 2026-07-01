@@ -460,6 +460,19 @@ async def _row_to_focus_workflow_with_task_check(
     )
 
 
+# Legacy app_id aliases for DB lookups. When the canonical app_id is "flash",
+# old rows may still use "vocab". This map provides the list of DB values to
+# search for a given canonical app_id.
+_LEGACY_APP_ID_ALIASES: dict[str, list[str]] = {
+    "flash": ["flash", "vocab"],
+}
+
+
+def _db_app_ids(canonical_app_id: str) -> list[str]:
+    """Return all DB app_id values (canonical + legacy) for a canonical app_id."""
+    return _LEGACY_APP_ID_ALIASES.get(canonical_app_id, [canonical_app_id])
+
+
 async def _app_task_status_for_event(
     conn: Any,
     *,
@@ -468,13 +481,17 @@ async def _app_task_status_for_event(
     app_task_type: str,
     event_row: Any,
 ) -> AppTaskStatusOut:
-    config = await _get_active_app_task_config(
-        conn,
-        user_id=user_id,
-        app_id=app_id,
-        app_task_type=app_task_type,
-        event_id=event_row["id"],
-    )
+    config = None
+    for db_app_id in _db_app_ids(app_id):
+        config = await _get_active_app_task_config(
+            conn,
+            user_id=user_id,
+            app_id=db_app_id,
+            app_task_type=app_task_type,
+            event_id=event_row["id"],
+        )
+        if config is not None:
+            break
     if config is None:
         return AppTaskStatusOut(
             state="event_not_configured",
@@ -508,14 +525,14 @@ async def _app_task_status_for_event(
           AND event_id = $6
           AND source_type = 'app'
           AND managed_by_app = TRUE
-          AND app_id = $3
+          AND app_id = ANY($3::text[])
           AND app_task_type = $4
           AND app_config_id = $5
           AND is_deleted = FALSE
         """,
         config["created_task_id"],
         user_id,
-        app_id,
+        _db_app_ids(app_id),
         app_task_type,
         config["id"],
         event_row["id"],
@@ -814,17 +831,17 @@ async def _resolve_app_config_event(conn: Any, *, user_id: int, event_id: UUID |
     return await get_primary_event_row(conn, user_id=user_id)
 
 
-@router.get("/app-tasks/vocab/status", response_model=AppTaskStatusOut)
+@router.get("/app-tasks/flash/status", response_model=AppTaskStatusOut)
 async def get_vocab_app_task_status(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
 ) -> AppTaskStatusOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        return await _app_task_status(conn, user_id=int(user.id), app_id="vocab", app_task_type="flash_card")
+        return await _app_task_status(conn, user_id=int(user.id), app_id="flash", app_task_type="flash_card")
 
 
-@router.post("/app-tasks/vocab/init", response_model=AppTaskStatusOut)
+@router.post("/app-tasks/flash/init", response_model=AppTaskStatusOut)
 async def init_vocab_app_task(
     request: Request,
     body: VocabAppTaskInitRequest,
@@ -848,7 +865,7 @@ async def init_vocab_app_task(
             await _create_or_update_managed_app_task(
                 conn,
                 user_id=int(user.id),
-                app_id="vocab",
+                app_id="flash",
                 app_task_type="flash_card",
                 config=config,
                 add_to_today_plan=body.add_to_today_plan,
@@ -857,7 +874,7 @@ async def init_vocab_app_task(
             return await _app_task_status_for_event(
                 conn,
                 user_id=int(user.id),
-                app_id="vocab",
+                app_id="flash",
                 app_task_type="flash_card",
                 event_row=event_row,
             )
@@ -1059,28 +1076,19 @@ async def get_erc_config_status(
         event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=event_id)
         if event_row is None:
             return ERCConfigStatusOut(
-                practice=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
-                review=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
+                choice=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
             )
-        practice = await _erc_module_status(
+        choice = await _erc_module_status(
             conn,
             user_id=int(user.id),
             app_task_type="practice",
             event_id=event_row["id"],
             event_name=str(event_row["name"]),
         )
-        review = await _erc_module_status(
-            conn,
-            user_id=int(user.id),
-            app_task_type="review",
-            event_id=event_row["id"],
-            event_name=str(event_row["name"]),
-        )
         return ERCConfigStatusOut(
             event_id=event_row["id"],
             event_name=str(event_row["name"]),
-            practice=practice,
-            review=review,
+            choice=choice,
         )
 
 
@@ -1172,47 +1180,29 @@ async def save_erc_config(
             event_row = await _resolve_app_config_event(conn, user_id=int(user.id), event_id=body.event_id)
             if event_row is None:
                 return ERCConfigStatusOut(
-                    practice=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
-                    review=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
+                    choice=ERCModuleStatusOut(enabled=False, state="no_primary_event", config={}),
                 )
-            practice_config = {
-                "daily_article_target": body.practice.daily_article_target,
-                "default_focus_duration": body.practice.default_focus_duration,
-                "add_to_today_plan": body.practice.add_to_today_plan,
+            choice_config = {
+                "daily_article_target": body.choice.daily_article_target,
+                "default_focus_duration": body.choice.default_focus_duration,
+                "add_to_today_plan": body.choice.add_to_today_plan,
                 "event_id": str(event_row["id"]),
             }
-            if body.practice.set_id is not None:
-                practice_config["set_id"] = body.practice.set_id
-            review_config = {
-                "review_scope": body.review.review_scope,
-                "daily_question_target": body.review.daily_question_target,
-                "default_focus_duration": body.review.default_focus_duration,
-                "add_to_today_plan": body.review.add_to_today_plan,
-                "event_id": str(event_row["id"]),
-            }
-            practice = await _save_erc_module(
+            if body.choice.set_id is not None:
+                choice_config["set_id"] = body.choice.set_id
+            choice = await _save_erc_module(
                 conn,
                 user_id=int(user.id),
                 app_task_type="practice",
-                config=practice_config,
-                enabled=body.practice_enabled,
-                add_to_today_plan=body.practice.add_to_today_plan,
-                event_id=event_row["id"],
-            )
-            review = await _save_erc_module(
-                conn,
-                user_id=int(user.id),
-                app_task_type="review",
-                config=review_config,
-                enabled=body.review_enabled,
-                add_to_today_plan=body.review.add_to_today_plan,
+                config=choice_config,
+                enabled=body.choice_enabled,
+                add_to_today_plan=body.choice.add_to_today_plan,
                 event_id=event_row["id"],
             )
             return ERCConfigStatusOut(
                 event_id=event_row["id"],
                 event_name=str(event_row["name"]),
-                practice=practice,
-                review=review,
+                choice=choice,
             )
 
 

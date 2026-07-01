@@ -68,7 +68,7 @@ export default function VocabMistakes() {
         {displayedItems.map((item) => (
           <a
             key={item.id}
-            href={`#/vocab/words/${item.id}`}
+            href={`#/flash/words/${item.id}`}
             className="block rounded-3xl border border-ark-border bg-ark-surface-subtle p-5 transition hover:bg-ark-surface-subtle"
           >
             <div className="flex items-start justify-between gap-4">

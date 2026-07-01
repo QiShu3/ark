@@ -28,7 +28,7 @@ function PathProbe() {
   return <div data-testid="current-path">{location.pathname}</div>;
 }
 
-function renderNavigation(initialPath = '/vocab', userOverrides: Partial<User> = {}) {
+function renderNavigation(initialPath = '/flash', userOverrides: Partial<User> = {}) {
   useAuthStore.getState().setSession('token', 3600);
   useAuthStore.getState().setUser({
     id: 1,
@@ -84,7 +84,7 @@ describe('Navigation', () => {
     await user.click(screen.getByLabelText('打开导航栏日历'));
     await user.click(screen.getByLabelText('重新进入首次体验引导'));
 
-    expect(screen.getByTestId('current-path')).toHaveTextContent('/vocab');
+    expect(screen.getByTestId('current-path')).toHaveTextContent('/flash');
     expect(screen.queryByRole('dialog', { name: '多周安排日历' })).not.toBeInTheDocument();
   });
 

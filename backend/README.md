@@ -75,7 +75,7 @@ uv run python scripts/auth_selftest.py
 
 ## ArXiv（已移除）
 
-旧的 ArXiv 子应用和相关表已从后端入口中移除。
+旧的 ArXiv 应用和相关表已从后端入口中移除。
 如需清理历史数据库里的残留表，请先备份，再执行：
 
 ```bash

@@ -14,7 +14,7 @@ TaskType = Literal["focus", "checkin"]
 TaskSourceType = Literal["user", "app"]
 EventPlanScheduleMode = Literal["from_start", "before_due"]
 EventPlanItemKind = Literal["task", "appointment"]
-AppTaskId = Literal["vocab", "erc", "input"]
+AppTaskId = Literal["flash", "erc", "input"]
 AppTaskType = Literal["flash_card", "choice", "input"]
 AppTaskConfigStatus = Literal["active", "disabled", "invalid"]
 AppTaskRuntimeState = Literal[
@@ -61,6 +61,11 @@ class _NormalizedFocusWorkTypeBase(BaseModel):
         return value
 
 
+_APP_ID_ALIASES: dict[str, str] = {
+    "vocab": "flash",
+}
+
+
 class _NormalizedAppTaskTypeBase(BaseModel):
     @field_validator("app_task_type", "active_task_app_task_type", mode="before", check_fields=False)
     @classmethod
@@ -68,6 +73,13 @@ class _NormalizedAppTaskTypeBase(BaseModel):
         normalized = normalize_focus_work_type(value)
         if normalized in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND}:
             return normalized
+        return value
+
+    @field_validator("app_id", "active_task_app_id", mode="before", check_fields=False)
+    @classmethod
+    def _normalize_app_id(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return _APP_ID_ALIASES.get(value, value)
         return value
 
 
@@ -498,30 +510,20 @@ class ERCModuleStatusOut(BaseModel):
 class ERCConfigStatusOut(BaseModel):
     event_id: UUID | None = None
     event_name: str | None = None
-    practice: ERCModuleStatusOut
-    review: ERCModuleStatusOut
+    choice: ERCModuleStatusOut
 
 
-class ERCPracticeModuleConfig(BaseModel):
+class ERCChoiceModuleConfig(BaseModel):
     daily_article_target: int = Field(default=1, ge=1, le=50)
     default_focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
     add_to_today_plan: bool = True
     set_id: str | None = None
 
 
-class ERCReviewModuleConfig(BaseModel):
-    review_scope: Literal["due", "mistakes", "all"] = "due"
-    daily_question_target: int = Field(default=10, ge=1, le=200)
-    default_focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
-    add_to_today_plan: bool = True
-
-
 class ERCConfigSaveRequest(BaseModel):
     event_id: UUID | None = None
-    practice_enabled: bool = True
-    review_enabled: bool = True
-    practice: ERCPracticeModuleConfig = Field(default_factory=ERCPracticeModuleConfig)
-    review: ERCReviewModuleConfig = Field(default_factory=ERCReviewModuleConfig)
+    choice_enabled: bool = True
+    choice: ERCChoiceModuleConfig = Field(default_factory=ERCChoiceModuleConfig)
 
 
 class AppTaskStatusOut(BaseModel):

@@ -858,14 +858,14 @@ def test_row_to_focus_workflow_exposes_app_task_adapter_metadata():
         row,
         task_title="今日单词",
         task_source_type="app",
-        task_app_id="vocab",
+        task_app_id="flash",
         task_app_task_type="flash_card",
         task_app_config_id=config_id,
     )
 
     assert out.active_focus_work_type == "flash_card"
     assert out.active_task_source_type == "app"
-    assert out.active_task_app_id == "vocab"
+    assert out.active_task_app_id == "flash"
     assert out.active_task_app_task_type == "flash_card"
     assert out.active_task_app_config_id == config_id
 

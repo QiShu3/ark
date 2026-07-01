@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { Settings } from 'lucide-react';
-import type { TemplateSection } from '../lib/subAppRegistry';
+import type { TemplateSection } from '../lib/appRegistry';
 
 export type SubAppHomeMetric = {
   label: string;

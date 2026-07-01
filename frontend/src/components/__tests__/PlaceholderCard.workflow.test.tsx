@@ -188,7 +188,7 @@ describe('PlaceholderCard workflow UI', () => {
       title: '今日单词',
       manually_scheduled_for_today: true,
       source_type: 'app',
-      app_id: 'vocab',
+      app_id: 'flash',
       app_task_type: 'vocab_today',
       app_config_id: 'config-vocab',
       managed_by_app: true,

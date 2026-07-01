@@ -8,16 +8,16 @@ export type FocusWorkResult = 'completed' | 'interrupted' | 'abandoned';
 export type FocusWorkDisplayState = 'fullscreen' | 'minimized' | 'closed';
 
 const FOCUS_WORK_TYPE_ALIASES: Record<string, CanonicalFocusWorkType> = {
-  vocab_today: 'flash_card',
-  flashcard: 'flash_card',
   flash_card: 'flash_card',
+  flashcard: 'flash_card',
   flash: 'flash_card',
+  vocab_today: 'flash_card',
+  choice: 'choice',
+  choice_question: 'choice',
   practice: 'choice',
   review: 'choice',
   erc_practice: 'choice',
   erc_review: 'choice',
-  choice_question: 'choice',
-  choice: 'choice',
   input: 'input',
   task_focus: 'task_focus',
 };

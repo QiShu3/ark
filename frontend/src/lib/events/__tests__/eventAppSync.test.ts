@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { activateEventSubApps } from '../eventAppSync';
+import { activateEventApps } from '../eventAppSync';
 
 const {
   deleteEventArrangementTask,
@@ -30,7 +30,7 @@ vi.mock('../../erc/configSync', () => ({
   saveEventChoiceConfig,
 }));
 
-describe('activateEventSubApps', () => {
+describe('activateEventApps', () => {
   beforeEach(() => {
     getEventWorkbench.mockReset();
     deleteEventArrangementTask.mockReset();
@@ -38,7 +38,7 @@ describe('activateEventSubApps', () => {
     saveEventChoiceConfig.mockReset();
   });
 
-  it('merges ERC passive app tasks into one event-bound ERC config', async () => {
+  it('merges ERC passive app tasks into one event-bound choice config', async () => {
     getEventWorkbench.mockResolvedValue({
       event: {
         id: 'event-1',
@@ -52,8 +52,8 @@ describe('activateEventSubApps', () => {
       },
       created_tasks: [
         {
-          id: 'temp-practice',
-          title: '真题练习 (应用)',
+          id: 'temp-choice',
+          title: '选择练习 (应用)',
           content: JSON.stringify({
             dailyArticleTarget: 2,
             defaultFocusDuration: 1800,
@@ -61,39 +61,21 @@ describe('activateEventSubApps', () => {
           }),
           app_task_type: 'practice',
         },
-        {
-          id: 'temp-review',
-          title: '错题复习 (应用)',
-          content: JSON.stringify({
-            reviewScope: 'all',
-            dailyQuestionTarget: 12,
-            defaultFocusDuration: 1200,
-            addToTodayPlan: true,
-          }),
-          app_task_type: 'review',
-        },
       ],
       created_appointments: [],
     });
 
-    await activateEventSubApps('event-1');
+    await activateEventApps('event-1');
 
     expect(saveEventChoiceConfig).toHaveBeenCalledWith({
       eventId: 'event-1',
-      practice: {
+      choice: {
         daily_article_target: 2,
         default_focus_duration: 1800,
         add_to_today_plan: false,
       },
-      review: {
-        review_scope: 'all',
-        daily_question_target: 12,
-        default_focus_duration: 1200,
-        add_to_today_plan: true,
-      },
     });
-    expect(deleteEventArrangementTask).toHaveBeenCalledWith('temp-practice');
-    expect(deleteEventArrangementTask).toHaveBeenCalledWith('temp-review');
+    expect(deleteEventArrangementTask).toHaveBeenCalledWith('temp-choice');
     expect(initializeVocabAppTask).not.toHaveBeenCalled();
   });
 });

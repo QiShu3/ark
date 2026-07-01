@@ -3,14 +3,12 @@ export type {
   TemplateSection,
   ContentConfigField,
   FocusWorkDeclaration,
-  AppDeclaration as SubAppDeclaration,
+  AppDeclaration,
 } from './appRegistry';
 
 export {
-  appRegistry as subAppRegistry,
-  appList as subAppList,
-  getAppIcon as getSubAppIcon,
-  loadAppRegistry as loadDynamicRegistry,
+  appRegistry,
+  appList,
+  getAppIcon,
+  loadAppRegistry,
 } from './appRegistry';
-
-export type { AppDeclaration } from './appRegistry';

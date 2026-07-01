@@ -1,22 +1,21 @@
 import { getEventWorkbench } from './api';
 import { deleteEventArrangementTask } from './arrangementApi';
 import { initializeVocabAppTask } from '../vocab/api';
-import { saveEventChoiceConfig, type PracticeConfigInput, type ReviewConfigInput } from '../erc/configSync';
+import { saveEventChoiceConfig, type ChoiceConfigInput } from '../erc/configSync';
 import { normalizeAppType } from './appConfigTypes';
 
 /**
  * Activates passive app configuration tasks saved under a non-primary event
  * and synchronizes them to the user's active app settings.
  */
-export async function activateEventSubApps(eventId: string): Promise<void> {
+export async function activateEventApps(eventId: string): Promise<void> {
   try {
     const workbench = await getEventWorkbench(eventId);
     const tempAppTasks = workbench.created_tasks.filter(
       (task) => task.app_task_type
     );
     const ercConfigs: {
-      practice?: PracticeConfigInput;
-      review?: ReviewConfigInput;
+      choice?: ChoiceConfigInput;
       taskIds: string[];
     } = { taskIds: [] };
 
@@ -35,20 +34,11 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
             event_id: eventId,
           });
         } else if (appType === 'choice') {
-          if (config.reviewScope || config.dailyQuestionTarget !== undefined) {
-            ercConfigs.review = {
-              review_scope: config.reviewScope,
-              daily_question_target: config.dailyQuestionTarget,
-              default_focus_duration: config.defaultFocusDuration,
-              add_to_today_plan: config.addToTodayPlan,
-            };
-          } else {
-            ercConfigs.practice = {
-              daily_article_target: config.dailyArticleTarget,
-              default_focus_duration: config.defaultFocusDuration,
-              add_to_today_plan: config.addToTodayPlan,
-            };
-          }
+          ercConfigs.choice = {
+            daily_article_target: config.dailyArticleTarget,
+            default_focus_duration: config.defaultFocusDuration,
+            add_to_today_plan: config.addToTodayPlan,
+          };
           ercConfigs.taskIds.push(task.id);
           continue;
         }
@@ -60,12 +50,11 @@ export async function activateEventSubApps(eventId: string): Promise<void> {
       }
     }
 
-    if (ercConfigs.practice || ercConfigs.review) {
+    if (ercConfigs.choice) {
       try {
         await saveEventChoiceConfig({
           eventId,
-          practice: ercConfigs.practice,
-          review: ercConfigs.review,
+          choice: ercConfigs.choice,
         });
         for (const taskId of ercConfigs.taskIds) {
           await deleteEventArrangementTask(taskId);

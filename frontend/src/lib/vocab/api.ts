@@ -27,11 +27,11 @@ export function fetchVocabToday(deckId: string) {
 }
 
 export function fetchVocabAppTaskStatus() {
-  return apiJson<AppTaskStatus>('/todo/app-tasks/vocab/status');
+  return apiJson<AppTaskStatus>('/todo/app-tasks/flash/status');
 }
 
 export function initializeVocabAppTask(payload: VocabAppTaskInitPayload) {
-  return apiJson<AppTaskStatus>('/todo/app-tasks/vocab/init', {
+  return apiJson<AppTaskStatus>('/todo/app-tasks/flash/init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

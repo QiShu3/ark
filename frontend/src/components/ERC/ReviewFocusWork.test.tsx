@@ -42,7 +42,6 @@ const reviewRun: FocusWorkRunSummary = {
   counts_for_task_completion: true,
   status: 'running',
   config_snapshot: {
-    choiceMode: 'review',
     choice_scope: { bank_id: 'set-1' },
   },
 };

@@ -34,12 +34,12 @@ createRoot(document.getElementById('root')!).render(
           </Route>
           <Route path="/apps" element={<AppCenter />} />
           <Route path="/:appId" element={<DynamicSubAppHome />} />
-          {/* Vocab sub-pages */}
-          <Route path="/vocab/today" element={<VocabToday />} />
-          <Route path="/vocab/study" element={<VocabStudy />} />
-          <Route path="/vocab/review" element={<VocabReview />} />
-          <Route path="/vocab/mistakes" element={<VocabMistakes />} />
-          <Route path="/vocab/words/:wordId" element={<VocabWordDetail />} />
+          {/* Flash sub-pages */}
+          <Route path="/flash/today" element={<VocabToday />} />
+          <Route path="/flash/study" element={<VocabStudy />} />
+          <Route path="/flash/review" element={<VocabReview />} />
+          <Route path="/flash/mistakes" element={<VocabMistakes />} />
+          <Route path="/flash/words/:wordId" element={<VocabWordDetail />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -25,7 +25,7 @@ export default function VocabReview() {
         tracking="tight"
       />
 
-      <a href="#/vocab/mistakes" className="inline-block mt-6 text-sm text-ark-text-muted transition hover:text-ark-text">
+      <a href="#/flash/mistakes" className="inline-block mt-6 text-sm text-ark-text-muted transition hover:text-ark-text">
         查看错题池
       </a>
 
@@ -60,7 +60,7 @@ export default function VocabReview() {
                 </button>
               ))}
             </div>
-            <a href={`#/vocab/words/${session.currentItem.id}`} className="inline-block text-sm text-ark-text-muted transition hover:text-ark-text">
+            <a href={`#/flash/words/${session.currentItem.id}`} className="inline-block text-sm text-ark-text-muted transition hover:text-ark-text">
               查看单词详情
             </a>
           </>

@@ -1574,11 +1574,11 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
             )}
             {task.managed_by_app && task.app_id && (
               <span className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold tracking-wide leading-none border ${
-                task.app_id === 'vocab'
+                task.app_id === 'flash'
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
               }`}>
-                {task.app_id === 'vocab' ? '单词' : (task.app_id === 'erc' ? '题库' : task.app_id)}
+                {task.app_id === 'flash' ? '单词' : (task.app_id === 'erc' ? '题库' : task.app_id)}
               </span>
             )}
           </div>

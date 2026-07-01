@@ -250,9 +250,9 @@ def derive_content_selector(template: str, fw_type: str) -> str:
     """
     normalized_fw_type = normalize_focus_work_type(fw_type)
     raw_fw_type = str(fw_type or "").strip().lower()
-    if template == "flashcard":
+    if template in ("flash_card", "flashcard"):
         return "fsrs_mixed"
-    if template == "choice_question":
+    if template in ("choice", "choice_question"):
         if raw_fw_type in {"review", "practice", "erc_review", "erc_practice"}:
             return "weighted_mistake"
         if normalized_fw_type == "choice":

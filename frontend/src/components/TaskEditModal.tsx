@@ -231,7 +231,7 @@ const TaskEditModalBody: React.FC<TaskEditModalBodyProps> = ({ task, onClose, on
               <Button
                 onClick={() => {
                   onClose();
-                  const route = task.app_id === 'vocab' ? '/vocab' : (task.app_id === 'erc' ? '/erc' : '/');
+                  const route = task.app_id === 'flash' ? '/flash' : (task.app_id === 'erc' ? '/erc' : '/');
                   window.location.href = route;
                 }}
                 variant="secondary"

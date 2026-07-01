@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from lib.content_selector import derive_content_selector
 from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_focus_work_type
-from lib.app_registry import FocusWorkDeclaration, SubAppDeclaration, get_all, register
+from lib.app_registry import AppDeclaration, FocusWorkDeclaration, get_all, register
 from routes.auth_routes import _AuthUser, get_current_user
 from routes.focus_work.choice.repository import list_set_rows as list_erc_set_rows
 from routes.focus_work.input.repository import list_input_sets
@@ -394,11 +394,11 @@ async def delete_user(
 
 
 # ---------------------------------------------------------------------------
-# Sub-applications
+# Applications
 # ---------------------------------------------------------------------------
 
 
-class SubApp(BaseModel):
+class AppInfo(BaseModel):
     id: str
     name: str
     icon: str
@@ -407,8 +407,8 @@ class SubApp(BaseModel):
     stats: str
 
 
-class SubAppsResponse(BaseModel):
-    apps: list[SubApp]
+class AppsResponse(BaseModel):
+    apps: list[AppInfo]
 
 
 ICON_EMOJI: dict[str, str] = {
@@ -418,8 +418,8 @@ ICON_EMOJI: dict[str, str] = {
 
 
 async def _query_app_stats(conn: Any, app_id: str, bank_type: str) -> str:
-    """Query live stats for a registered sub-app based on its content bank type."""
-    if app_id == "vocab":
+    """Query live stats for a registered app based on its content bank type."""
+    if app_id == "flash":
         deck_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_decks")
         word_count = await conn.fetchval("SELECT COUNT(*) FROM vocab_words")
         return f"{deck_count} 词库 / {word_count:,} 词"
@@ -427,31 +427,31 @@ async def _query_app_stats(conn: Any, app_id: str, bank_type: str) -> str:
         set_count = await conn.fetchval("SELECT COUNT(*) FROM choice_sets")
         article_count = await conn.fetchval("SELECT COUNT(*) FROM choice_articles")
         return f"{set_count} 阅读集 / {article_count} 篇文章"
-    # generic fallback for new sub-apps
+    # generic fallback for new apps
     return "—"
 
 
-@router.get("/apps", response_model=SubAppsResponse)
+@router.get("/apps", response_model=AppsResponse)
 async def list_apps(
     request: Request,
     _admin: Annotated[_AuthUser, Depends(_require_admin)],
-) -> SubAppsResponse:
+) -> AppsResponse:
     declarations = get_all()
     pool = _pool(request)
-    apps: list[SubApp] = []
+    apps: list[AppInfo] = []
     async with pool.acquire() as conn:
         for decl in declarations:
             bank_type = decl.focus_works[0].content_bank_type if decl.focus_works else ""
             stats = await _query_app_stats(conn, decl.id, bank_type)
-            apps.append(SubApp(
+            apps.append(AppInfo(
                 id=decl.id,
                 name=decl.name,
                 icon=ICON_EMOJI.get(decl.icon, "📦"),
                 description=decl.description,
-                url=f"apps-{decl.id}.html" if decl.id not in ("vocab", "erc") else f"apps-{decl.id}.html",
+                url=f"apps-{decl.id}.html" if decl.id not in ("flash", "erc") else f"apps-{'vocab' if decl.id == 'flash' else decl.id}.html",
                 stats=stats,
             ))
-    return SubAppsResponse(apps=apps)
+    return AppsResponse(apps=apps)
 
 
 # ---- Register new sub-app ----
@@ -459,11 +459,11 @@ async def list_apps(
 class NewFocusWork(BaseModel):
     type: str
     label: str
-    template: str = "choice_question"
+    template: str = "choice"
     content_bank_type: str = "article_set"
     content_fields: list[dict] = []
 
-class NewSubAppRequest(BaseModel):
+class NewAppRequest(BaseModel):
     id: str
     name: str
     description: str
@@ -482,13 +482,13 @@ async def create_app(
     description: str = Form(...),
     icon: str = Form("book-open"),
     route: str = Form(...),
-    template: str = Form("choice_question"),
+    template: str = Form("choice"),
     content_bank_type: str = Form("article_set"),
     fw_type: str = Form(...),
     fw_label: str = Form(...),
     admin_only: bool = Form(False),
 ):
-    """Register a new sub-app, generate backend skeleton, and import question bank."""
+    """Register a new app, generate backend skeleton, and import question bank."""
     if not id.replace("-", "").replace("_", "").isalnum():
         raise HTTPException(status_code=400, detail="应用 ID 只能包含字母、数字、连字符和下划线")
 
@@ -511,7 +511,7 @@ async def create_app(
         content_selector=derive_content_selector(template, fw_type),
         content_fields=[],
     )
-    decl = SubAppDeclaration(
+    decl = AppDeclaration(
         id=id, name=name, description=description,
         icon=icon, route=f"/{id}", admin_only=admin_only, focus_works=[fw],
     )
@@ -642,7 +642,7 @@ async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]
     print(f"[app_registry] Imported {len(questions)} questions into '{app_id}' with user progress tables")
 
 
-def _generate_app_skeleton(decl: SubAppDeclaration) -> None:
+def _generate_app_skeleton(decl: AppDeclaration) -> None:
     """Generate backend domain skeleton for a new app."""
     app_id = decl.id
     app_name = decl.name

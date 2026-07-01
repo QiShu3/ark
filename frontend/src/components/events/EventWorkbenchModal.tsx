@@ -18,15 +18,13 @@ import {
   updateEventArrangementAppointment,
   updateEventArrangementTask,
 } from '../../lib/events/arrangementApi';
-import { activateEventSubApps } from '../../lib/events/eventAppSync';
+import { activateEventApps } from '../../lib/events/eventAppSync';
 import { fetchVocabDecks, initializeVocabAppTask } from '../../lib/vocab/api';
 import { saveEventChoiceConfig } from '../../lib/erc/configSync';
 import {
   getAppTypeLabel,
-  inferChoiceMode,
   normalizeAppType,
   type CanonicalAppType,
-  type ChoiceAppMode,
 } from '../../lib/events/appConfigTypes';
 import AppModalFrame from '../AppModalFrame';
 import WorkflowPresetModal from '../WorkflowPresetModal';
@@ -66,11 +64,9 @@ type EventEditFormState = {
 
 type AppConfigEditorState = {
   appType: CanonicalAppType;
-  choiceMode: ChoiceAppMode;
   deckId: string;
   dailyTargetCount: number;
   dailyArticleTarget: number;
-  reviewScope: 'due' | 'mistakes' | 'all';
   dailyQuestionTarget: number;
   focusDurationMin: number;
   addToTodayPlan: boolean;
@@ -508,7 +504,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
     setError(null);
     try {
       await updateEvent(currentEvent.id, { is_primary: true });
-      await activateEventSubApps(currentEvent.id);
+      await activateEventApps(currentEvent.id);
       await Promise.resolve(onChanged?.());
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (err) {
@@ -545,7 +541,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
         is_primary: eventEditForm.isPrimary,
       });
       if (eventEditForm.isPrimary) {
-        await activateEventSubApps(currentEvent.id);
+        await activateEventApps(currentEvent.id);
       }
       setEventEditForm({
         name: updatedEvent.name,
@@ -767,11 +763,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
     const appType = available[0];
     setAppConfigEditor({
       appType,
-      choiceMode: 'practice',
       deckId: appType === 'flash_card' ? (appConfigDecks[0]?.id ?? '') : '',
       dailyTargetCount: 20,
       dailyArticleTarget: 1,
-      reviewScope: 'due',
       dailyQuestionTarget: 10,
       focusDurationMin: 25,
       addToTodayPlan: true,
@@ -785,11 +779,9 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
     const appType = normalizeAppType(task.app_task_type) ?? 'choice';
     setAppConfigEditor({
       appType,
-      choiceMode: appType === 'choice' ? inferChoiceMode(task.app_task_type, config) : 'practice',
       deckId: (config.deckId as string) ?? '',
       dailyTargetCount: (config.dailyTargetCount as number) ?? 20,
       dailyArticleTarget: (config.dailyArticleTarget as number) ?? 1,
-      reviewScope: (config.reviewScope as AppConfigEditorState['reviewScope']) ?? 'due',
       dailyQuestionTarget: (config.dailyQuestionTarget as number) ?? 10,
       focusDurationMin: Math.round(((config.defaultFocusDuration as number) ?? 1500) / 60),
       addToTodayPlan: (config.addToTodayPlan as boolean) ?? true,
@@ -834,21 +826,11 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
           add_to_today_plan: appConfigEditor.addToTodayPlan,
           event_id: currentEvent.id,
         });
-      } else if (appConfigEditor.appType === 'choice' && appConfigEditor.choiceMode === 'practice') {
-        await saveEventChoiceConfig({
-          eventId: currentEvent.id,
-          practice: {
-            daily_article_target: appConfigEditor.dailyArticleTarget,
-            default_focus_duration: focusDuration,
-            add_to_today_plan: appConfigEditor.addToTodayPlan,
-          },
-        });
       } else if (appConfigEditor.appType === 'choice') {
         await saveEventChoiceConfig({
           eventId: currentEvent.id,
-          review: {
-            review_scope: appConfigEditor.reviewScope,
-            daily_question_target: appConfigEditor.dailyQuestionTarget,
+          choice: {
+            daily_article_target: appConfigEditor.dailyArticleTarget,
             default_focus_duration: focusDuration,
             add_to_today_plan: appConfigEditor.addToTodayPlan,
           },
@@ -1035,7 +1017,6 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
                 setAppConfigEditor((s) => s ? {
                   ...s,
                   appType,
-                  choiceMode: appType === 'choice' ? s.choiceMode : 'practice',
                   deckId: appType === 'flash_card' ? (appConfigDecks[0]?.id ?? '') : '',
                 } : s);
               }}
@@ -1050,7 +1031,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
           </label>
         ) : (
           <div className="text-sm text-ark-text">
-            {getAppTypeLabel(appConfigEditor.appType, { choiceMode: appConfigEditor.choiceMode })}
+            {getAppTypeLabel(appConfigEditor.appType)}
           </div>
         )}
 
@@ -1086,56 +1067,16 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
         {appConfigEditor.appType === 'choice' ? (
           <>
             <label className="grid gap-1 text-xs text-ark-text-muted">
-              选择练习类型
-              <select
-                value={appConfigEditor.choiceMode}
-                onChange={(e) => setAppConfigEditor((s) => s ? { ...s, choiceMode: e.target.value as ChoiceAppMode } : s)}
+              每日目标文章数
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={appConfigEditor.dailyArticleTarget}
+                onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyArticleTarget: Math.max(1, Math.min(50, Number(e.target.value) || 1)) } : s)}
                 className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-              >
-                <option value="practice">真题练习</option>
-                <option value="review">错题复习</option>
-              </select>
+              />
             </label>
-            {appConfigEditor.choiceMode === 'practice' ? (
-              <label className="grid gap-1 text-xs text-ark-text-muted">
-                每日目标文章数
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={appConfigEditor.dailyArticleTarget}
-                  onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyArticleTarget: Math.max(1, Math.min(50, Number(e.target.value) || 1)) } : s)}
-                  className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                />
-              </label>
-            ) : null}
-            {appConfigEditor.choiceMode === 'review' ? (
-              <>
-                <label className="grid gap-1 text-xs text-ark-text-muted">
-                  复习范围
-                  <select
-                    value={appConfigEditor.reviewScope}
-                    onChange={(e) => setAppConfigEditor((s) => s ? { ...s, reviewScope: e.target.value as AppConfigEditorState['reviewScope'] } : s)}
-                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                  >
-                    <option value="due">到期复习</option>
-                    <option value="mistakes">全部错题</option>
-                    <option value="all">全部题目</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-xs text-ark-text-muted">
-                  每日目标题数
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={appConfigEditor.dailyQuestionTarget}
-                    onChange={(e) => setAppConfigEditor((s) => s ? { ...s, dailyQuestionTarget: Math.max(1, Math.min(200, Number(e.target.value) || 10)) } : s)}
-                    className="rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text"
-                  />
-                </label>
-              </>
-            ) : null}
           </>
         ) : null}
 
@@ -1408,17 +1349,13 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
                   const config = parseAppTaskConfig(task);
                   const isEditing = appConfigEditor?.editingTaskId === task.id;
                   const appType = normalizeAppType(task.app_task_type) ?? 'choice';
-                  const choiceMode = appType === 'choice' ? inferChoiceMode(task.app_task_type, config) : undefined;
-                  const typeLabel = getAppTypeLabel(appType, { ...config, choiceMode });
+                  const typeLabel = getAppTypeLabel(appType);
                   const summaryParts: string[] = [];
                   if (appType === 'flash_card') {
                     if (config.deckName) summaryParts.push(`词书 ${config.deckName}`);
                     if (config.dailyTargetCount) summaryParts.push(`每日 ${config.dailyTargetCount} 词`);
-                  } else if (appType === 'choice' && choiceMode === 'practice') {
-                    if (config.dailyArticleTarget) summaryParts.push(`每日 ${config.dailyArticleTarget} 篇`);
                   } else if (appType === 'choice') {
-                    if (config.reviewScope) summaryParts.push(config.reviewScope === 'due' ? '到期复习' : config.reviewScope === 'mistakes' ? '错题复习' : '全部');
-                    if (config.dailyQuestionTarget) summaryParts.push(`每日 ${config.dailyQuestionTarget} 题`);
+                    if (config.dailyArticleTarget) summaryParts.push(`每日 ${config.dailyArticleTarget} 篇`);
                   } else {
                     if (config.dailyQuestionTarget) summaryParts.push(`每日 ${config.dailyQuestionTarget} 题`);
                   }

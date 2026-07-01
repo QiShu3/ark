@@ -278,7 +278,7 @@ async def init_todo(app: Any) -> None:
               CONSTRAINT chk_tasks_status CHECK (status IN ('todo', 'done')),
               CONSTRAINT chk_tasks_type CHECK (task_type IN ('focus', 'checkin')),
               CONSTRAINT chk_tasks_source_type CHECK (source_type IN ('user', 'app')),
-              CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc', 'input')),
+              CONSTRAINT chk_tasks_app_id CHECK (app_id IS NULL OR app_id IN ('flash', 'vocab', 'erc', 'input')),
               CONSTRAINT chk_tasks_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('flash_card', 'choice', 'input')),
               CONSTRAINT chk_tasks_app_metadata_consistency CHECK (
                   (
@@ -356,18 +356,18 @@ async def init_todo(app: Any) -> None:
             conn,
             table="tasks",
             name="chk_tasks_app_id",
-            condition="app_id IS NULL OR app_id IN ('vocab', 'erc', 'input')",
+            condition="app_id IS NULL OR app_id IN ('flash', 'vocab', 'erc', 'input')",
         )
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS chk_tasks_app_task_type;")
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_task_type;")
         await conn.execute("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS fk_tasks_app_config_id;")
         await conn.execute("UPDATE app_task_configs SET app_task_type = 'flash_card' WHERE app_task_type = 'vocab_today'")
-        await conn.execute("UPDATE app_task_configs SET app_task_type = 'choice' WHERE app_task_type IN ('erc_review', 'erc_practice', 'review', 'practice')")
+        await conn.execute("DELETE FROM app_task_configs WHERE app_task_type IN ('erc_review', 'erc_practice', 'review', 'practice')")
         await conn.execute("UPDATE focus_work_runs SET app_task_type = 'flash_card' WHERE app_task_type = 'vocab_today'")
-        await conn.execute("UPDATE focus_work_runs SET app_task_type = 'choice' WHERE app_task_type IN ('erc_review', 'erc_practice', 'review', 'practice')")
+        await conn.execute("DELETE FROM focus_work_runs WHERE app_task_type IN ('erc_review', 'erc_practice', 'review', 'practice')")
         await conn.execute("UPDATE tasks SET app_task_type = 'flash_card' WHERE app_task_type = 'vocab_today'")
-        await conn.execute("UPDATE tasks SET app_task_type = 'choice' WHERE app_task_type IN ('erc_review', 'erc_practice', 'review', 'practice')")
+        await conn.execute("DELETE FROM tasks WHERE app_task_type IN ('erc_review', 'erc_practice', 'review', 'practice')")
         await _ensure_check_constraint(
             conn,
             table="tasks",
@@ -452,7 +452,7 @@ async def init_todo(app: Any) -> None:
               created_task_id UUID NULL REFERENCES tasks(id) ON DELETE SET NULL,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-              CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc', 'input')),
+              CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('flash', 'vocab', 'erc', 'input')),
               CONSTRAINT chk_app_task_configs_app_task_type CHECK (app_task_type IN ('flash_card', 'choice', 'input')),
               CONSTRAINT chk_app_task_configs_status CHECK (status IN ('active', 'disabled', 'invalid')),
               CONSTRAINT uniq_app_task_configs_identity UNIQUE (id, user_id, app_id, app_task_type)
@@ -481,7 +481,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_id;")
         await conn.execute(
-            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('vocab', 'erc', 'input'));"
+            "ALTER TABLE app_task_configs ADD CONSTRAINT chk_app_task_configs_app_id CHECK (app_id IN ('flash', 'vocab', 'erc', 'input'));"
         )
         await conn.execute("ALTER TABLE app_task_configs DROP CONSTRAINT IF EXISTS chk_app_task_configs_app_task_type;")
         await conn.execute(
@@ -779,7 +779,7 @@ async def init_todo(app: Any) -> None:
               updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               CONSTRAINT chk_focus_work_runs_status CHECK (status IN ('running', 'paused', 'content_completed', 'completed', 'abandoned')),
               CONSTRAINT chk_focus_work_runs_type CHECK (focus_work_type IN ('flash_card', 'choice', 'input', 'task_focus')),
-              CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc', 'input')),
+              CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('flash', 'vocab', 'erc', 'input')),
               CONSTRAINT chk_focus_work_runs_app_task_type CHECK (app_task_type IS NULL OR app_task_type IN ('flash_card', 'choice', 'input'))
             );
             """
@@ -829,7 +829,7 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_id;")
         await conn.execute(
-            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('vocab', 'erc', 'input'));"
+            "ALTER TABLE focus_work_runs ADD CONSTRAINT chk_focus_work_runs_app_id CHECK (app_id IS NULL OR app_id IN ('flash', 'vocab', 'erc', 'input'));"
         )
         await conn.execute("ALTER TABLE focus_work_runs DROP CONSTRAINT IF EXISTS chk_focus_work_runs_app_task_type;")
         await conn.execute(
