@@ -72,7 +72,7 @@ describe('ReviewFocusWork', () => {
     expect(screen.getByRole('button', { name: '提交答案' })).toBeDisabled();
   });
 
-  it('emits content completion when no review items are due', async () => {
+  it('shows empty state without completing when no review items are due', async () => {
     fetchChoiceReviewNext.mockResolvedValue({
       has_item: false,
       next_due_at: null,
@@ -94,9 +94,11 @@ describe('ReviewFocusWork', () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByText('暂无可复习内容')).toBeInTheDocument();
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({ answered_count: 0, no_available_content: true }));
+      expect(fetchChoiceReviewNext).toHaveBeenCalled();
     });
+    expect(onContentCompleted).not.toHaveBeenCalled();
   });
 
   it('submits through choice API and shows the next-question action after feedback', async () => {
@@ -161,7 +163,10 @@ describe('ReviewFocusWork', () => {
     await user.click(screen.getByRole('button', { name: '提交答案' }));
 
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith({ answered_count: 1, target_question_count: 1 });
+      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({
+        answered_count: 1,
+        target_question_count: 1,
+      }));
     });
   });
 

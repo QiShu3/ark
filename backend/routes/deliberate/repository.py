@@ -182,7 +182,7 @@ def run_to_summary(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
         "focus_work_type": normalize_focus_work_type(row["focus_work_type"]),
         "bank_id": row["bank_id"],
         "snapshot_id": str(row["snapshot_id"]) if row["snapshot_id"] is not None else None,
-        "snapshot_type": normalize_snapshot_type(row["snapshot_type"]),
+        "snapshot_type": normalize_snapshot_type(row["snapshot_type"]) or None,
         "status": row["status"],
         "progress_snapshot": _json_value(row["progress_snapshot"]) or {},
         "created_at": _iso(row["created_at"]),

@@ -878,7 +878,7 @@ async def get_recommended_article(conn: asyncpg.Connection, *, user_id: int, set
 
 
 async def list_mistake_rows(conn: asyncpg.Connection, *, user_id: int, set_id: str | None = None) -> list[asyncpg.Record]:
-    set_filter = "AND a.set_id = $4::uuid" if set_id else ""
+    set_filter = "AND a.set_id = $2::uuid" if set_id else ""
     params: list[Any] = [user_id]
     if set_id:
         params.append(set_id)

@@ -63,6 +63,7 @@ export default function FlashcardFocusTemplate({
   emptyDescription,
   completedCount,
   targetCount,
+  completeOnEmpty,
   batchNumber,
   totalBatches,
   disabled,
@@ -91,12 +92,12 @@ export default function FlashcardFocusTemplate({
   }, [completedCount, disabled, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
-    if (completedRef.current || disabled || loading || item || currentItem) return;
+    const shouldCompleteEmpty = completeOnEmpty ?? completedCount > 0;
+    if (completedRef.current || disabled || loading || error || currentItem || !shouldCompleteEmpty) return;
     if (targetCount == null) return;
-    if (completedCount === 0 && !error) return;
     completedRef.current = true;
     onContentCompleted(buildProgressSnapshot('completed_count', 'target_count', completedCount, targetCount, completedCount === 0));
-  }, [completedCount, currentItem, disabled, error, item, loading, onContentCompleted, targetCount]);
+  }, [completeOnEmpty, completedCount, currentItem, disabled, error, loading, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

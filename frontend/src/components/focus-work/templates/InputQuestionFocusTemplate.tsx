@@ -24,6 +24,7 @@ export default function InputQuestionFocusTemplate({
   emptyDescription,
   answeredCount,
   targetCount,
+  completeOnEmpty,
   disabled,
   onSubmitAnswer,
   onLoadNext,
@@ -64,11 +65,11 @@ export default function InputQuestionFocusTemplate({
   }, [answeredCount, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
-    if (completedRef.current || loading || question) return;
-    if (answeredCount === 0 && !error) return;
+    const shouldCompleteEmpty = completeOnEmpty ?? answeredCount > 0;
+    if (completedRef.current || loading || error || question || !shouldCompleteEmpty) return;
     completedRef.current = true;
     onContentCompleted({ answered_count: answeredCount, target_question_count: targetCount, no_available_content: answeredCount === 0 });
-  }, [answeredCount, error, question, loading, onContentCompleted, targetCount]);
+  }, [answeredCount, completeOnEmpty, error, question, loading, onContentCompleted, targetCount]);
 
   async function handleSubmit() {
     if (!question || submitting || disabled || !userInput.trim()) return;

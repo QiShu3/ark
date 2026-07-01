@@ -60,6 +60,7 @@ export type InputQuestionFocusTemplateProps = {
   emptyDescription?: string;
   answeredCount: number;
   targetCount: number;
+  completeOnEmpty?: boolean;
   disabled: boolean;
   onSubmitAnswer(question: InputQuestionItem, userInput: string): Promise<InputSubmitResult>;
   onLoadNext(): { article: InputArticleItem; question: InputQuestionItem } | null;

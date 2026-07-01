@@ -1074,6 +1074,12 @@ class _FakeTodoConn:
                 if not (workflow["user_id"] == user_id and workflow.get("event_id") == event_id)
             ]
             return f"DELETE {before - len(self.focus_workflow_presets)}"
+        if sql.startswith("DELETE FROM app_task_configs WHERE app_task_type IN"):
+            return "DELETE 0"
+        if sql.startswith("DELETE FROM focus_work_runs WHERE app_task_type IN"):
+            return "DELETE 0"
+        if sql.startswith("DELETE FROM tasks WHERE app_task_type IN"):
+            return "DELETE 0"
         if sql.startswith("DELETE FROM app_task_configs"):
             user_id, event_id = args
             before = len(self.app_task_configs)

@@ -25,6 +25,7 @@ export type FlashcardFocusTemplateProps = {
   emptyDescription: string;
   completedCount: number;
   targetCount?: number | null;
+  completeOnEmpty?: boolean;
   batchNumber?: number;
   totalBatches?: number;
   disabled: boolean;

@@ -117,7 +117,7 @@ describe('PracticeFocusWork', () => {
     }));
   });
 
-  it('emits content completion when no choice items are available', async () => {
+  it('shows empty state without completing when no choice items are available', async () => {
     fetchChoiceItems.mockResolvedValue([]);
 
     const onContentCompleted = vi.fn();
@@ -132,12 +132,11 @@ describe('PracticeFocusWork', () => {
       </MemoryRouter>,
     );
 
+    expect(await screen.findByText('暂无真题')).toBeInTheDocument();
     await waitFor(() => {
-      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({
-        article_count: 0,
-        no_available_content: true,
-      }));
+      expect(fetchChoiceItems).toHaveBeenCalled();
     });
+    expect(onContentCompleted).not.toHaveBeenCalled();
   });
 
   it('records answers and completes at the configured question count', async () => {

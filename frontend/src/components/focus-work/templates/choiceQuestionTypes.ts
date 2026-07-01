@@ -54,6 +54,7 @@ export type ChoiceQuestionFocusTemplateProps = {
   emptyDescription: string;
   answeredCount: number;
   targetCount: number;
+  completeOnEmpty?: boolean;
   disabled: boolean;
   onSubmitAnswer: (item: ChoiceQuestionItem, optionKey: string) => Promise<ChoiceQuestionSubmitResult>;
   onLoadNext: () => Promise<ChoiceQuestionItem | null>;

@@ -26,7 +26,8 @@ class _NormalizedDeliberateBase(BaseModel):
     @field_validator("snapshot_type", mode="before", check_fields=False)
     @classmethod
     def _normalize_snapshot_type(cls, value: Any) -> Any:
-        return normalize_snapshot_type(value)
+        result = normalize_snapshot_type(value)
+        return result or None
 
 
 class DeliberateBankSummary(_NormalizedDeliberateBase):

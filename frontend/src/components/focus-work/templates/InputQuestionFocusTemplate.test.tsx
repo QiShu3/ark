@@ -31,6 +31,7 @@ const subjectiveItem: InputQuestionItem = {
 
 describe('InputQuestionFocusTemplate', () => {
   it('renders empty state when no question', () => {
+    const onContentCompleted = vi.fn();
     render(
       <InputQuestionFocusTemplate
         title="测试"
@@ -42,10 +43,11 @@ describe('InputQuestionFocusTemplate', () => {
         disabled={false}
         onSubmitAnswer={vi.fn()}
         onLoadNext={vi.fn()}
-        onContentCompleted={vi.fn()}
+        onContentCompleted={onContentCompleted}
       />,
     );
     expect(screen.getByText('暂无题目')).toBeInTheDocument();
+    expect(onContentCompleted).not.toHaveBeenCalled();
   });
 
   it('renders loading state', () => {
@@ -64,6 +66,32 @@ describe('InputQuestionFocusTemplate', () => {
       />,
     );
     expect(screen.getByText('加载中...')).toBeInTheDocument();
+  });
+
+  it('completes when content is exhausted after progress exists', async () => {
+    const onContentCompleted = vi.fn();
+    render(
+      <InputQuestionFocusTemplate
+        title="测试"
+        article={null}
+        currentQuestion={null}
+        loading={false}
+        answeredCount={1}
+        targetCount={10}
+        disabled={false}
+        onSubmitAnswer={vi.fn()}
+        onLoadNext={vi.fn()}
+        onContentCompleted={onContentCompleted}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onContentCompleted).toHaveBeenCalledWith({
+        answered_count: 1,
+        target_question_count: 10,
+        no_available_content: false,
+      });
+    });
   });
 
   it('renders fill question with input', () => {

@@ -92,7 +92,6 @@ export default function PracticeFocusWork({
   const [loading, setLoading] = useState(true);
   const answeredQuestionsRef = useRef<Array<{ question_id: string; correct: boolean; subject?: string; year?: number; tag?: string }>>([]);
   const startTimeRef = useRef<number>(Date.now());
-  const noContentCompletedRef = useRef(false);
   const totalChoiceQuestionCount = choiceItems.reduce((sum, item) => sum + item.question_count, 0);
   const targetQuestionCount = choiceTargetQuestionCount(run, totalChoiceQuestionCount);
 
@@ -124,7 +123,6 @@ export default function PracticeFocusWork({
     }
     setLoading(true);
     setError(null);
-    noContentCompletedRef.current = false;
     try {
       const year = choiceScope?.years?.[0];
       const subject = choiceScope?.subjects?.[0];
@@ -151,18 +149,6 @@ export default function PracticeFocusWork({
   useEffect(() => {
     void loadItems();
   }, [loadItems]);
-
-  useEffect(() => {
-    if (loading || error || !bankId || choiceItems.length > 0 || noContentCompletedRef.current) return;
-    noContentCompletedRef.current = true;
-    onContentCompleted({
-      article_count: 0,
-      target_article_count: targetQuestionCount,
-      correct_count: 0,
-      question_count: 0,
-      no_available_content: true,
-    });
-  }, [bankId, choiceItems.length, error, loading, onContentCompleted, targetQuestionCount]);
 
   const handleSubmit = useCallback(async (item: ChoiceQuestionItem, optionKey: string): Promise<ChoiceQuestionSubmitResult> => {
     const currentItem = choiceItems[currentChoiceItemIndex];

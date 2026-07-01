@@ -141,19 +141,25 @@ describe('ChoiceQuestionFocusTemplate', () => {
     expect(onContentCompleted).toHaveBeenCalledTimes(1);
   });
 
-  it('emits empty content completion once when no item is available after loading', async () => {
+  it('shows empty state without completing when no item is available before any progress', async () => {
     const onContentCompleted = vi.fn();
     renderTemplate({ item: null, loading: false, answeredCount: 0, onContentCompleted });
 
     expect(screen.getByText('暂无可复习内容')).toBeInTheDocument();
+    expect(onContentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('emits completion when content is exhausted after progress exists', async () => {
+    const onContentCompleted = vi.fn();
+    renderTemplate({ item: null, loading: false, answeredCount: 1, targetCount: 10, onContentCompleted });
+
     await waitFor(() => {
       expect(onContentCompleted).toHaveBeenCalledWith({
-        answered_count: 0,
+        answered_count: 1,
         target_question_count: 10,
-        no_available_content: true,
+        no_available_content: false,
       });
     });
-    expect(onContentCompleted).toHaveBeenCalledTimes(1);
   });
 
   it('disables interactions while paused', () => {

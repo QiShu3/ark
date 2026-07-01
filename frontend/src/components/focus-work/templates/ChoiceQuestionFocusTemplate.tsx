@@ -18,6 +18,7 @@ export default function ChoiceQuestionFocusTemplate({
   emptyDescription,
   answeredCount,
   targetCount,
+  completeOnEmpty,
   disabled,
   onSubmitAnswer,
   onLoadNext,
@@ -49,10 +50,11 @@ export default function ChoiceQuestionFocusTemplate({
   }, [answeredCount, onContentCompleted, targetCount]);
 
   React.useEffect(() => {
-    if (completedRef.current || loading || item || currentItem) return;
+    const shouldCompleteEmpty = completeOnEmpty ?? answeredCount > 0;
+    if (completedRef.current || loading || error || currentItem || !shouldCompleteEmpty) return;
     completedRef.current = true;
-    onContentCompleted(buildProgressSnapshot('answered_count', 'target_question_count', answeredCount, targetCount, answeredCount === 0));
-  }, [answeredCount, currentItem, error, item, loading, onContentCompleted, targetCount]);
+    onContentCompleted(buildProgressSnapshot('answered_count', 'target_question_count', answeredCount, targetCount, false));
+  }, [answeredCount, completeOnEmpty, currentItem, error, loading, onContentCompleted, targetCount]);
 
   async function handleSubmit() {
     if (disabled || submitting || !currentItem || !selected || result) return;
