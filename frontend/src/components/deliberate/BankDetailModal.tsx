@@ -30,9 +30,29 @@ function getTypeLabel(kind: string, questionType: string) {
   return questionType;
 }
 
+function normalizeOptions(options: unknown): Record<string, string> | null {
+  if (!options) return null;
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+    } catch {
+      // 解析失败，返回 null
+    }
+    return null;
+  }
+  if (typeof options === 'object' && !Array.isArray(options)) {
+    return options as Record<string, string>;
+  }
+  return null;
+}
+
 function getAnswerPreview(question: BankPreviewQuestion, kind: string): string {
-  if (kind === 'choice' && question.options && question.answer) {
-    const optVal = question.options[question.answer];
+  const opts = normalizeOptions(question.options);
+  if (kind === 'choice' && opts && question.answer) {
+    const optVal = opts[question.answer];
     if (optVal) {
       const text = String(optVal);
       return `${question.answer}. ${text.length > 30 ? text.slice(0, 30) + '…' : text}`;
@@ -333,36 +353,40 @@ export default function BankDetailModal({
                           <div className="line-clamp-2 mb-1.5 text-sm">
                             {q.stem}
                           </div>
-                          {q.options && bankKind === 'choice' && (
-                            <div className="space-y-0.5 break-words">
-                              {Object.entries(q.options).map(([key, val]) => {
-                                const isCorrect = key === q.answer;
-                                return (
-                                  <div
-                                    key={key}
-                                    className={`flex items-start gap-1.5 text-xs leading-relaxed ${
-                                      isCorrect
-                                        ? 'text-green-600'
-                                        : 'text-ark-text-muted'
-                                    }`}
-                                  >
-                                    <span
-                                      className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-[10px] font-medium ${
+                          {(() => {
+                            const opts = normalizeOptions(q.options);
+                            if (!opts || bankKind !== 'choice') return null;
+                            return (
+                              <div className="space-y-0.5 break-words">
+                                {Object.entries(opts).map(([key, val]) => {
+                                  const isCorrect = key === q.answer;
+                                  return (
+                                    <div
+                                      key={key}
+                                      className={`flex items-start gap-1.5 text-xs leading-relaxed ${
                                         isCorrect
-                                          ? 'bg-green-500/15 text-green-600'
-                                          : 'bg-ark-surface-strong text-ark-text-faint'
+                                          ? 'text-green-600'
+                                          : 'text-ark-text-muted'
                                       }`}
                                     >
-                                      {key}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      {String(val)}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
+                                      <span
+                                        className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-[10px] font-medium ${
+                                          isCorrect
+                                            ? 'bg-green-500/15 text-green-600'
+                                            : 'bg-ark-surface-strong text-ark-text-faint'
+                                        }`}
+                                      >
+                                        {key}
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        {String(val)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-3 py-2 text-green-600 w-48 text-xs">
                           <div className="line-clamp-2">

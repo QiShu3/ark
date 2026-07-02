@@ -8,6 +8,25 @@ type Props = {
   onClose: () => void;
 };
 
+function normalizeOptions(options: unknown): Record<string, string> | null {
+  if (!options) return null;
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+    } catch {
+      // 解析失败，返回 null
+    }
+    return null;
+  }
+  if (typeof options === 'object' && !Array.isArray(options)) {
+    return options as Record<string, string>;
+  }
+  return null;
+}
+
 function ContentBlockRenderer({ block }: { block: { type: string; text?: string; src?: string; alt?: string; content?: unknown } }) {
   if (block.type === 'image' && block.src) {
     return (
@@ -91,26 +110,30 @@ export default function QuestionDetailModal({ question, bankKind, onClose }: Pro
             {renderStem(question.stem, evidenceJson)}
           </div>
 
-          {isChoice && question.options && (
-            <div>
-              <div className="mb-2 text-xs font-medium text-ark-text-muted">选项</div>
-              <div className="space-y-1.5">
-                {Object.entries(question.options).map(([key, val]) => (
-                  <div
-                    key={key}
-                    className={`rounded-md border px-3 py-2 text-sm ${
-                      key === question.answer
-                        ? 'border-green-500/30 bg-green-500/5 text-green-600'
-                        : 'border-ark-border bg-ark-surface-subtle text-ark-text'
-                    }`}
-                  >
-                    <span className="font-medium">{key}.</span>{' '}
-                    {String(val)}
-                  </div>
-                ))}
+          {(() => {
+            const opts = normalizeOptions(question.options);
+            if (!isChoice || !opts) return null;
+            return (
+              <div>
+                <div className="mb-2 text-xs font-medium text-ark-text-muted">选项</div>
+                <div className="space-y-1.5">
+                  {Object.entries(opts).map(([key, val]) => (
+                    <div
+                      key={key}
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        key === question.answer
+                          ? 'border-green-500/30 bg-green-500/5 text-green-600'
+                          : 'border-ark-border bg-ark-surface-subtle text-ark-text'
+                      }`}
+                    >
+                      <span className="font-medium">{key}.</span>{' '}
+                      {String(val)}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {question.answer && !isChoice && (
             <div>
