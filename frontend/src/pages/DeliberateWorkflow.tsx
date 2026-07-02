@@ -8,6 +8,7 @@ import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
 import CreateFocusWorkModal from '../components/deliberate/CreateFocusWorkModal';
 import DeliberateWorkflowEditorModal from '../components/deliberate/DeliberateWorkflowEditorModal';
+import DeliberateWorkflowPreviewModal from '../components/deliberate/DeliberateWorkflowPreviewModal';
 import EditFocusWorkModal from '../components/deliberate/EditFocusWorkModal';
 import UploadBankModal from '../components/deliberate/UploadBankModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
@@ -175,6 +176,7 @@ export default function DeliberateWorkflow() {
   const [showAllConfigs, setShowAllConfigs] = useState(false);
   const [selectedId, setSelectedId] = useState<string>('');
   const [runs, setRuns] = useState<DeliberateWorkflowRun[]>([]);
+  const [showAllRuns, setShowAllRuns] = useState(false);
   const [snapshots, setSnapshots] = useState<SetSnapshot[]>([]);
   const [banks, setBanks] = useState<DeliberateBankOption[]>([]);
   const [showAllBanks, setShowAllBanks] = useState(false);
@@ -197,9 +199,12 @@ export default function DeliberateWorkflow() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditorModal, setShowEditorModal] = useState(false);
   const [editingPresetForModal, setEditingPresetForModal] = useState<WorkflowPreset | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewPreset, setPreviewPreset] = useState<WorkflowPreset | null>(null);
   const [previewBankId, setPreviewBankId] = useState<string | null>(null);
   const [editingConfig, setEditingConfig] = useState<DeliberateWorkflowConfig | null>(null);
   const [workflowRecords, setWorkflowRecords] = useState<WorkflowRecord[]>([]);
+  const [showAllRecords, setShowAllRecords] = useState(false);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [startingMulti, setStartingMulti] = useState(false);
   const [snapshotBankId, setSnapshotBankId] = useState<string>('');
@@ -692,6 +697,24 @@ export default function DeliberateWorkflow() {
     setShowEditorModal(true);
   }
 
+  function handleOpenPreviewModal(preset: WorkflowPreset) {
+    setPreviewPreset(preset);
+    setShowPreviewModal(true);
+  }
+
+  function handlePreviewEdit() {
+    if (previewPreset) {
+      setEditingPresetForModal(previewPreset);
+      setShowPreviewModal(false);
+      setShowEditorModal(true);
+    }
+  }
+
+  function handlePreviewStart(configIds: string[]) {
+    setShowPreviewModal(false);
+    void handleStartMultiWorkflow(configIds);
+  }
+
   const toggleSection = useCallback((section: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev);
@@ -1012,7 +1035,8 @@ export default function DeliberateWorkflow() {
               return (
                 <div
                   key={preset.id}
-                  className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition hover:border-ark-accent/50"
+                  className="flex cursor-pointer items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition hover:border-ark-accent/50 hover:bg-ark-surface"
+                  onClick={() => handleOpenPreviewModal(preset)}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-ark-text">
@@ -1022,7 +1046,7 @@ export default function DeliberateWorkflow() {
                       {configCount} 个工作：{configNames.join(' → ')}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="primary"
                       size="sm"
@@ -1074,7 +1098,7 @@ export default function DeliberateWorkflow() {
               </div>
             ) : (
               <div className="space-y-2">
-                {runs.slice(0, 6).map((run) => (
+                {(showAllRuns ? runs : runs.slice(0, 3)).map((run) => (
                   <button
                     key={run.id}
                     type="button"
@@ -1091,6 +1115,23 @@ export default function DeliberateWorkflow() {
                     </div>
                   </button>
                 ))}
+                {runs.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllRuns(!showAllRuns)}
+                    className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ark-border px-4 py-2 text-xs text-ark-text-muted transition hover:border-ark-accent/50 hover:text-ark-text"
+                  >
+                    {showAllRuns ? (
+                      <>
+                        收起 <ChevronUp className="h-3.5 w-3.5" />
+                      </>
+                    ) : (
+                      <>
+                        展开全部（{runs.length} 条记录）<ChevronDown className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )}
           </section>
@@ -1107,7 +1148,7 @@ export default function DeliberateWorkflow() {
               </div>
             ) : (
               <div className="space-y-2">
-                {workflowRecords.slice(0, 6).map((record) => (
+                {(showAllRecords ? workflowRecords : workflowRecords.slice(0, 3)).map((record) => (
                   <button
                     key={record.id}
                     type="button"
@@ -1144,6 +1185,23 @@ export default function DeliberateWorkflow() {
                     )}
                   </button>
                 ))}
+                {workflowRecords.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllRecords(!showAllRecords)}
+                    className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ark-border px-4 py-2 text-xs text-ark-text-muted transition hover:border-ark-accent/50 hover:text-ark-text"
+                  >
+                    {showAllRecords ? (
+                      <>
+                        收起 <ChevronUp className="h-3.5 w-3.5" />
+                      </>
+                    ) : (
+                      <>
+                        展开全部（{workflowRecords.length} 条记录）<ChevronDown className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )}
           </section>
@@ -1527,6 +1585,15 @@ export default function DeliberateWorkflow() {
         editingPreset={editingPresetForModal}
         onClose={() => setShowEditorModal(false)}
         onSaved={() => void refreshWorkflowPresets()}
+      />
+
+      {/* 编排预览弹窗 */}
+      <DeliberateWorkflowPreviewModal
+        open={showPreviewModal}
+        preset={previewPreset}
+        onClose={() => setShowPreviewModal(false)}
+        onStart={handlePreviewStart}
+        onEdit={handlePreviewEdit}
       />
 
       {/* 新建专注工作弹窗 */}
