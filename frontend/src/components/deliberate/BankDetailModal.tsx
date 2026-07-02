@@ -321,25 +321,38 @@ export default function BankDetailModal({
                         <td className="px-3 py-2 text-ark-text-muted w-28 text-xs truncate max-w-[7rem]">
                           {q.subject || '—'}
                         </td>
-                        <td className="px-3 py-2 text-ark-text">
-                          <div className="line-clamp-2 max-w-[420px]">
+                        <td className="px-3 py-2 text-ark-text align-top">
+                          <div className="line-clamp-2 mb-1.5 text-sm">
                             {q.stem}
                           </div>
                           {q.options && bankKind === 'choice' && (
-                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ark-text-muted">
-                              {Object.entries(q.options).slice(0, 2).map(([key, val]) => (
-                                <span key={key}>
-                                  <span className="font-medium text-ark-text-faint">{key}.</span>{' '}
-                                  {String(val).length > 20
-                                    ? String(val).slice(0, 20) + '…'
-                                    : String(val)}
-                                </span>
-                              ))}
-                              {Object.keys(q.options).length > 2 && (
-                                <span className="text-ark-text-faint">
-                                  +{Object.keys(q.options).length - 2}
-                                </span>
-                              )}
+                            <div className="space-y-0.5">
+                              {Object.entries(q.options).map(([key, val]) => {
+                                const isCorrect = key === q.answer;
+                                return (
+                                  <div
+                                    key={key}
+                                    className={`flex items-start gap-1.5 text-xs ${
+                                      isCorrect
+                                        ? 'text-green-600'
+                                        : 'text-ark-text-muted'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-[10px] font-medium ${
+                                        isCorrect
+                                          ? 'bg-green-500/15 text-green-600'
+                                          : 'bg-ark-surface-strong text-ark-text-faint'
+                                      }`}
+                                    >
+                                      {key}
+                                    </span>
+                                    <span className="line-clamp-1">
+                                      {String(val)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </td>
