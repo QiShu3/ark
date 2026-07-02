@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Database, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowDownAZ, ArrowUpAZ, Database, Eye, Search, X } from 'lucide-react';
 import AppModalFrame from '../AppModalFrame';
 import QuestionDetailModal from './QuestionDetailModal';
 import {
@@ -19,55 +19,31 @@ type Props = {
   onClose: () => void;
 };
 
-function QuestionItem({
-  question,
-  kind,
-  onClick,
-}: {
-  question: BankPreviewQuestion;
-  kind: string;
-  onClick: () => void;
-}) {
-  const typeLabel =
-    kind === 'flash_card'
-      ? '单词'
-      : question.type === 'choice'
-        ? '选择'
-        : question.type === 'fill'
-          ? '填空'
-          : '主观';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-md border border-ark-border bg-ark-surface px-3 py-2 text-left transition hover:border-ark-accent/50 hover:bg-ark-surface-subtle"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="inline-block rounded bg-ark-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-ark-accent">
-              {typeLabel}
-            </span>
-            {question.subject && (
-              <span className="text-xs text-ark-text-faint">{question.subject}</span>
-            )}
-          </div>
-          <p className="mt-1 line-clamp-2 text-sm text-ark-text">{question.stem}</p>
-          {question.options && kind === 'choice' && (
-            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ark-text-muted">
-              {Object.entries(question.options).map(([key, val]) => (
-                <span key={key}>
-                  <span className="font-medium text-ark-text">{key}.</span>{' '}
-                  {String(val).slice(0, 40)}
-                  {String(val).length > 40 ? '…' : ''}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </button>
-  );
+type SortField = 'index' | 'type' | 'subject' | 'stem' | 'answer';
+type SortDirection = 'asc' | 'desc';
+
+function getTypeLabel(kind: string, questionType: string) {
+  if (kind === 'flash_card') return '单词';
+  if (questionType === 'choice') return '选择';
+  if (questionType === 'fill') return '填空';
+  if (questionType === 'subjective') return '主观';
+  return questionType;
+}
+
+function getAnswerPreview(question: BankPreviewQuestion, kind: string): string {
+  if (kind === 'choice' && question.options && question.answer) {
+    const optVal = question.options[question.answer];
+    if (optVal) {
+      const text = String(optVal);
+      return `${question.answer}. ${text.length > 30 ? text.slice(0, 30) + '…' : text}`;
+    }
+    return question.answer;
+  }
+  if (question.answer) {
+    const text = String(question.answer);
+    return text.length > 40 ? text.slice(0, 40) + '…' : text;
+  }
+  return '—';
 }
 
 export default function BankDetailModal({
@@ -84,6 +60,8 @@ export default function BankDetailModal({
   const [searchResults, setSearchResults] = useState<BankPreviewQuestion[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<BankPreviewQuestion | null>(null);
+  const [sortField, setSortField] = useState<SortField>('index');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const loadPreview = useCallback(async () => {
     if (!open) return;
@@ -104,6 +82,8 @@ export default function BankDetailModal({
       setSearch('');
       setSearchResults(null);
       setSelectedQuestion(null);
+      setSortField('index');
+      setSortDirection('asc');
       void loadPreview();
     }
   }, [open, bankId, loadPreview]);
@@ -124,14 +104,70 @@ export default function BankDetailModal({
     }
   }, [bankId, search]);
 
-  const displayQuestions = searchResults ?? preview?.questions ?? [];
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const displayQuestions = useMemo(() => {
+    const list = searchResults ?? preview?.questions ?? [];
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      let aVal: string | number = '';
+      let bVal: string | number = '';
+
+      switch (sortField) {
+        case 'index':
+          // 没有原始索引，保持原始顺序（稳定排序）
+          return sortDirection === 'asc' ? 0 : 0;
+        case 'type':
+          aVal = getTypeLabel(bankKind, a.type);
+          bVal = getTypeLabel(bankKind, b.type);
+          break;
+        case 'subject':
+          aVal = a.subject || '';
+          bVal = b.subject || '';
+          break;
+        case 'stem':
+          aVal = a.stem || '';
+          bVal = b.stem || '';
+          break;
+        case 'answer':
+          aVal = a.answer || '';
+          bVal = b.answer || '';
+          break;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDirection === 'asc'
+          ? aVal.localeCompare(bVal, 'zh-CN')
+          : bVal.localeCompare(aVal, 'zh-CN');
+      }
+      return 0;
+    });
+    return sorted;
+  }, [searchResults, preview?.questions, sortField, sortDirection, bankKind]);
+
   const subjectCount = preview?.subjects?.length ?? 0;
   const kindLabel = bankKind === 'flash_card' ? '闪卡' : bankKind === 'choice' ? '选择题' : '输入题';
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' ? (
+      <ArrowUpAZ className="h-3 w-3" />
+    ) : (
+      <ArrowDownAZ className="h-3 w-3" />
+    );
+  };
 
   return (
     <>
       <AppModalFrame open={open} onClose={onClose} ariaLabel="题库详情">
-        <div className="w-[680px] max-w-[92vw] max-h-[80vh] flex flex-col rounded-xl border border-ark-border bg-ark-surface shadow-xl">
+        <div className="w-[960px] max-w-[95vw] max-h-[85vh] flex flex-col rounded-xl border border-ark-border bg-ark-surface shadow-xl">
           {/* 头部 */}
           <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
             <div className="flex items-center gap-3">
@@ -145,7 +181,7 @@ export default function BankDetailModal({
                     {kindLabel}
                   </span>
                   <span>
-                    {totalCount} {bankKind === 'flash_card' ? '词' : '题'}
+                    共 {totalCount} {bankKind === 'flash_card' ? '词' : '题'}
                   </span>
                   {subjectCount > 0 && <span>· {subjectCount} 个科目</span>}
                 </div>
@@ -162,8 +198,8 @@ export default function BankDetailModal({
 
           {/* 搜索栏 */}
           <div className="border-b border-ark-border px-5 py-3">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
+            <div className="flex items-center justify-between gap-4">
+              <div className="relative flex-1 max-w-md">
                 <Search
                   className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ark-text-faint"
                   aria-hidden="true"
@@ -175,59 +211,176 @@ export default function BankDetailModal({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void handleSearch();
                   }}
-                  placeholder="搜索题目内容..."
+                  placeholder="搜索题干、选项、答案..."
                   className="w-full rounded-md border border-ark-border bg-ark-input py-2 pl-9 pr-3 text-sm text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-1 focus:ring-[var(--ark-focus-ring)]"
                 />
               </div>
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearch('');
-                    setSearchResults(null);
-                  }}
-                  className="text-xs text-ark-text-muted hover:text-ark-text"
-                >
-                  清除
-                </button>
-              )}
-            </div>
-            {searchResults !== null && (
-              <div className="mt-2 text-xs text-ark-text-faint">
-                找到 {searchResults.length} 条结果
-                {searchResults.length >= 50 && '（最多显示 50 条）'}
+              <div className="flex items-center gap-2">
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      setSearchResults(null);
+                    }}
+                    className="text-xs text-ark-text-muted hover:text-ark-text"
+                  >
+                    清除搜索
+                  </button>
+                )}
+                {searchResults !== null && (
+                  <span className="text-xs text-ark-text-faint">
+                    找到 {searchResults.length} 条
+                    {searchResults.length >= 50 && '（上限 50）'}
+                  </span>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* 题目列表 */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          {/* 表格区域 */}
+          <div className="flex-1 overflow-hidden flex flex-col">
             {loading && !preview ? (
-              <div className="py-10 text-center text-sm text-ark-text-muted">加载中...</div>
+              <div className="flex-1 flex items-center justify-center text-sm text-ark-text-muted">
+                加载中...
+              </div>
             ) : displayQuestions.length === 0 ? (
-              <div className="py-10 text-center text-sm text-ark-text-muted">
+              <div className="flex-1 flex items-center justify-center text-sm text-ark-text-muted">
                 {search ? '没有找到匹配的题目' : '暂无题目'}
               </div>
             ) : (
-              <div className="space-y-2">
-                {displayQuestions.map((q) => (
-                  <QuestionItem
-                    key={q.id}
-                    question={q}
-                    kind={bankKind}
-                    onClick={() => setSelectedQuestion(q)}
-                  />
-                ))}
+              <div className="flex-1 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-ark-surface-strong">
+                    <tr className="text-left text-xs text-ark-text-muted">
+                      <th
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-14 whitespace-nowrap border-b border-ark-border"
+                        onClick={() => handleSort('index')}
+                      >
+                        <div className="flex items-center gap-1">
+                          序号
+                          <SortIcon field="index" />
+                        </div>
+                      </th>
+                      <th
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-20 whitespace-nowrap border-b border-ark-border"
+                        onClick={() => handleSort('type')}
+                      >
+                        <div className="flex items-center gap-1">
+                          题型
+                          <SortIcon field="type" />
+                        </div>
+                      </th>
+                      <th
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-28 whitespace-nowrap border-b border-ark-border"
+                        onClick={() => handleSort('subject')}
+                      >
+                        <div className="flex items-center gap-1">
+                          科目
+                          <SortIcon field="subject" />
+                        </div>
+                      </th>
+                      <th
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium border-b border-ark-border"
+                        onClick={() => handleSort('stem')}
+                      >
+                        <div className="flex items-center gap-1">
+                          {bankKind === 'flash_card' ? '单词' : '题干'}
+                          <SortIcon field="stem" />
+                        </div>
+                      </th>
+                      <th
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-48 border-b border-ark-border"
+                        onClick={() => handleSort('answer')}
+                      >
+                        <div className="flex items-center gap-1">
+                          答案
+                          <SortIcon field="answer" />
+                        </div>
+                      </th>
+                      <th className="px-3 py-2.5 font-medium w-16 text-right whitespace-nowrap border-b border-ark-border">
+                        操作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayQuestions.map((q, idx) => (
+                      <tr
+                        key={q.id}
+                        className="border-b border-ark-border/50 hover:bg-ark-surface-subtle transition-colors cursor-pointer"
+                        onClick={() => setSelectedQuestion(q)}
+                      >
+                        <td className="px-3 py-2 text-ark-text-faint w-14 text-xs">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-2 w-20">
+                          <span className="inline-block rounded bg-ark-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-ark-accent">
+                            {getTypeLabel(bankKind, q.type)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-ark-text-muted w-28 text-xs truncate max-w-[7rem]">
+                          {q.subject || '—'}
+                        </td>
+                        <td className="px-3 py-2 text-ark-text">
+                          <div className="line-clamp-2 max-w-[420px]">
+                            {q.stem}
+                          </div>
+                          {q.options && bankKind === 'choice' && (
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ark-text-muted">
+                              {Object.entries(q.options).slice(0, 2).map(([key, val]) => (
+                                <span key={key}>
+                                  <span className="font-medium text-ark-text-faint">{key}.</span>{' '}
+                                  {String(val).length > 20
+                                    ? String(val).slice(0, 20) + '…'
+                                    : String(val)}
+                                </span>
+                              ))}
+                              {Object.keys(q.options).length > 2 && (
+                                <span className="text-ark-text-faint">
+                                  +{Object.keys(q.options).length - 2}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-green-600 w-48 text-xs">
+                          <div className="line-clamp-2">
+                            {getAnswerPreview(q, bankKind)}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 w-16 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedQuestion(q);
+                            }}
+                            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-ark-text-muted hover:bg-ark-surface-strong hover:text-ark-text transition-colors"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            查看
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 
             {searching && (
-              <div className="mt-3 text-center text-xs text-ark-text-muted">搜索中...</div>
+              <div className="py-2 text-center text-xs text-ark-text-muted border-t border-ark-border/50">
+                搜索中...
+              </div>
             )}
           </div>
 
           {/* 底部操作 */}
-          <div className="border-t border-ark-border px-5 py-3 text-right">
+          <div className="flex items-center justify-between border-t border-ark-border px-5 py-3">
+            <div className="text-xs text-ark-text-faint">
+              显示 {displayQuestions.length} / {totalCount} 条
+              {searchResults && searchResults.length >= 50 && '（搜索结果最多 50 条）'}
+            </div>
             <button
               type="button"
               onClick={onClose}
