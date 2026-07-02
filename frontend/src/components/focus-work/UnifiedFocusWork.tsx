@@ -40,21 +40,43 @@ function stemToBlocks(stem: string): ContentBlockData[] {
   return [{ type: 'paragraph', text: stem }];
 }
 
+function paragraphsToBlocks(paragraphs: string[]): ContentBlockData[] {
+  if (!paragraphs || paragraphs.length === 0) return [];
+  return paragraphs
+    .filter((p) => p && p.trim())
+    .map((p) => ({ type: 'paragraph' as const, text: p }));
+}
+
 function buildUnifiedChoiceItem(question: UnifiedQuestion | null, answeredCount: number, targetCount: number): ChoiceQuestionItem | null {
   if (!question) return null;
+
+  const hasArticleMaterial =
+    question.article_pk &&
+    Array.isArray(question.article_paragraphs) &&
+    question.article_paragraphs.length > 0;
+
+  const articleTitle = question.article_title || '阅读材料';
+  const stemBlocks = stemToBlocks(question.stem);
+  const materialBlocks = hasArticleMaterial
+    ? paragraphsToBlocks(question.article_paragraphs)
+    : stemBlocks;
+  const stemPlacement = hasArticleMaterial ? 'question' : 'material';
 
   return {
     id: question.id,
     numberLabel: `Q${question.index + 1}`,
     stem: question.stem,
-    stemBlocks: stemToBlocks(question.stem),
-    stemPlacement: 'material',
+    stemBlocks: stemBlocks,
+    stemPlacement,
     options: parseChoiceOptions(question.options_json),
     material: {
-      title: '题目',
-      paragraphs: [],
+      title: hasArticleMaterial ? articleTitle : '题目',
+      paragraphs: hasArticleMaterial ? [{ id: 'main', text: '' }] : [],
     },
-    materialBlocks: stemToBlocks(question.stem),
+    materialBlocks,
+    explanationBlocks: question.explanation
+      ? [{ type: 'paragraph', text: question.explanation }]
+      : undefined,
     meta: [{ label: `题目 ${Math.min(answeredCount + 1, Math.max(targetCount, 1))} / ${Math.max(targetCount, 1)}` }],
   };
 }
@@ -435,9 +457,25 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
 
       {kind === 'input' && question && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
-            <p className="text-sm font-medium text-ark-text">{question.stem}</p>
-          </div>
+          {question.article_pk && Array.isArray(question.article_paragraphs) && question.article_paragraphs.length > 0 && (
+            <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+              <p className="mb-2 text-xs font-medium text-ark-text-muted">
+                {question.article_title || '阅读材料'}
+              </p>
+              <div className="space-y-3">
+                {question.article_paragraphs.map((p: string, i: number) => (
+                  <p key={i} className="text-sm leading-7 text-ark-text">
+                    {p}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+          {question.stem && (
+            <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
+              <p className="text-sm font-medium text-ark-text">{question.stem}</p>
+            </div>
+          )}
           {!showAnswer ? (
             <div className="space-y-3">
               <input

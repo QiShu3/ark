@@ -20,6 +20,10 @@ export type UnifiedQuestion = {
   backflow_count: number;
   wrong_count: number;
   right_count: number;
+  article_pk: string | null;
+  article_title: string;
+  article_paragraphs: string[];
+  explanation: string;
 };
 
 export type UnifiedNextResult = {

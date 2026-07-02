@@ -87,7 +87,13 @@ class ChoiceQuestionAdapter(QuestionAdapter):
                    q.explanation, COALESCE(c.wrong_count, 0) AS wrong_count,
                    COALESCE(c.right_count, 0) AS right_count,
                    c.last_review_at, c.last_answer_correct, c.due_at,
-                   c.fsrs_card_json
+                   c.fsrs_card_json,
+                   a.id AS article_pk, a.title AS article_title, a.sort_order AS article_sort_order,
+                   (
+                       SELECT json_agg(p.text ORDER BY p.paragraph_no)
+                       FROM choice_paragraphs p
+                       WHERE p.article_pk = a.id
+                   ) AS article_paragraphs
             FROM choice_questions q
             JOIN choice_articles a
                 ON a.id = q.article_pk
@@ -260,9 +266,10 @@ class InputQuestionAdapter(QuestionAdapter):
             f"""
             SELECT COUNT(*)::int AS cnt
             FROM input_questions q
+            JOIN input_articles art ON q.article_pk = art.id
             LEFT JOIN input_user_answers a
-                ON a.question_id = q.id AND a.user_id = $1
-            WHERE q.set_id = $2::uuid
+                ON a.question_id = q.id::text AND a.user_id = $1
+            WHERE art.set_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             """,
             *params["args"],
@@ -286,12 +293,19 @@ class InputQuestionAdapter(QuestionAdapter):
             f"""
             SELECT q.id AS question_pk, q.question_id, q.stem, q.mode AS input_mode,
                    q.accepted_answers, q.reference_answer,
-                   a.is_correct AS last_answer_correct, a.score,
-                   COUNT(a.id) OVER (PARTITION BY q.id) AS attempt_count
+                   q.reference_answer AS answer,
+                   COUNT(a.id) OVER (PARTITION BY q.id) AS attempt_count,
+                   art.id AS article_pk, art.title AS article_title, art.sort_order AS article_sort_order,
+                   (
+                       SELECT json_agg(p.text ORDER BY p.paragraph_no)
+                       FROM input_paragraphs p
+                       WHERE p.article_pk = art.id
+                   ) AS article_paragraphs
             FROM input_questions q
+            JOIN input_articles art ON q.article_pk = art.id
             LEFT JOIN input_user_answers a
-                ON a.question_id = q.id AND a.user_id = $1
-            WHERE q.set_id = $2::uuid
+                ON a.question_id = q.id::text AND a.user_id = $1
+            WHERE art.set_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             {order_sql}
             LIMIT ${params['idx']}

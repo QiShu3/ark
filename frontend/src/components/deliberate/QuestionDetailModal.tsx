@@ -8,6 +8,25 @@ type Props = {
   onClose: () => void;
 };
 
+function normalizeOptions(options: unknown): Record<string, string> | null {
+  if (!options) return null;
+  if (typeof options === 'string') {
+    try {
+      const parsed = JSON.parse(options);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+    } catch {
+      // 解析失败，返回 null
+    }
+    return null;
+  }
+  if (typeof options === 'object' && !Array.isArray(options)) {
+    return options as Record<string, string>;
+  }
+  return null;
+}
+
 function ContentBlockRenderer({ block }: { block: { type: string; text?: string; src?: string; alt?: string; content?: unknown } }) {
   if (block.type === 'image' && block.src) {
     return (
@@ -39,6 +58,59 @@ function ContentBlockRenderer({ block }: { block: { type: string; text?: string;
     return <div className="my-2 font-mono text-sm text-ark-text">{block.text}</div>;
   }
   return null;
+}
+
+// 把包含 markdown 图片的文本解析成交替的文本块和图片块
+function parseTextWithImages(text: string): Array<{ type: 'text' | 'image'; content: string; alt?: string }> {
+  const result: Array<{ type: 'text' | 'image'; content: string; alt?: string }> = [];
+  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      result.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+    }
+    result.push({ type: 'image', content: match[2], alt: match[1] || undefined });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    result.push({ type: 'text', content: text.slice(lastIndex) });
+  }
+
+  if (result.length === 0) {
+    result.push({ type: 'text', content: text });
+  }
+
+  return result;
+}
+
+function renderOptionText(text: string) {
+  const blocks = parseTextWithImages(text);
+  if (blocks.length === 1 && blocks[0].type === 'text') {
+    return <span>{text}</span>;
+  }
+  return (
+    <div className="space-y-1">
+      {blocks.map((block, i) => {
+        if (block.type === 'image') {
+          return (
+            <img
+              key={i}
+              src={block.content}
+              alt={block.alt || '选项图片'}
+              className="max-h-24 max-w-full rounded border border-ark-border/50 object-contain inline-block align-middle"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          );
+        }
+        return <span key={i}>{block.content}</span>;
+      })}
+    </div>
+  );
 }
 
 function renderStem(stem: string, evidenceJson?: Record<string, unknown>) {
@@ -91,26 +163,30 @@ export default function QuestionDetailModal({ question, bankKind, onClose }: Pro
             {renderStem(question.stem, evidenceJson)}
           </div>
 
-          {isChoice && question.options && (
-            <div>
-              <div className="mb-2 text-xs font-medium text-ark-text-muted">选项</div>
-              <div className="space-y-1.5">
-                {Object.entries(question.options).map(([key, val]) => (
-                  <div
-                    key={key}
-                    className={`rounded-md border px-3 py-2 text-sm ${
-                      key === question.answer
-                        ? 'border-green-500/30 bg-green-500/5 text-green-600'
-                        : 'border-ark-border bg-ark-surface-subtle text-ark-text'
-                    }`}
-                  >
-                    <span className="font-medium">{key}.</span>{' '}
-                    {String(val)}
-                  </div>
-                ))}
+          {(() => {
+            const opts = normalizeOptions(question.options);
+            if (!isChoice || !opts) return null;
+            return (
+              <div>
+                <div className="mb-2 text-xs font-medium text-ark-text-muted">选项</div>
+                <div className="space-y-1.5">
+                  {Object.entries(opts).map(([key, val]) => (
+                    <div
+                      key={key}
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        key === question.answer
+                          ? 'border-green-500/30 bg-green-500/5 text-green-600'
+                          : 'border-ark-border bg-ark-surface-subtle text-ark-text'
+                      }`}
+                    >
+                      <span className="font-medium">{key}.</span>{' '}
+                      {renderOptionText(String(val))}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {question.answer && !isChoice && (
             <div>

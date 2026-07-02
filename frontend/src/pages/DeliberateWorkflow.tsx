@@ -3,6 +3,7 @@ import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, 
 import { useNavigate } from 'react-router-dom';
 
 import AppModalFrame from '../components/AppModalFrame';
+import BankDetailModal from '../components/deliberate/BankDetailModal';
 import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
 import CreateFocusWorkModal from '../components/deliberate/CreateFocusWorkModal';
@@ -191,6 +192,7 @@ export default function DeliberateWorkflow() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [previewBankId, setPreviewBankId] = useState<string | null>(null);
   const [editingConfig, setEditingConfig] = useState<DeliberateWorkflowConfig | null>(null);
   const [workflowRecords, setWorkflowRecords] = useState<WorkflowRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -843,12 +845,18 @@ export default function DeliberateWorkflow() {
                 key={bank.id}
                 className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
               >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-ark-text">{bank.name}</div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewBankId(bank.id)}
+                  className="min-w-0 text-left transition hover:opacity-80"
+                >
+                  <div className="text-sm font-medium text-ark-text underline-offset-2 hover:underline">
+                    {bank.name}
+                  </div>
                   <div className="text-xs text-ark-text-muted">
                     {bank.count} {kind === 'flash_card' ? '词' : '题'}
                   </div>
-                </div>
+                </button>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
@@ -1676,6 +1684,22 @@ export default function DeliberateWorkflow() {
           onClose={() => setShowUploadModal(false)}
         />
       )}
+
+      {/* 题库详情弹窗 */}
+      {(() => {
+        const bank = allBanks.find((b) => b.id === previewBankId);
+        if (!bank) return null;
+        return (
+          <BankDetailModal
+            open={true}
+            bankId={bank.id}
+            bankName={bank.name}
+            bankKind={bank.kind}
+            totalCount={bank.count}
+            onClose={() => setPreviewBankId(null)}
+          />
+        );
+      })()}
 
       {/* 组合工作流结算弹窗 */}
       {settlementRecord && (
