@@ -1698,6 +1698,17 @@ def _normalize_workflow_phases(
                         "deliberate_config_id",
                         "deliberate_kind",
                         "deliberate_name",
+                        "config_id",
+                        "name",
+                        "kind",
+                        "bank_id",
+                        "target_count",
+                        "scope",
+                        "completion",
+                        "primary_filter",
+                        "sort_order",
+                        "use_fsrs",
+                        "backflow_rule",
                     ):
                         if key in phase:
                             normalized[key] = phase[key]
@@ -1778,6 +1789,16 @@ def _phase_models_from_row(row: asyncpg.Record) -> list[FocusWorkflowPhase]:
                         "deliberate_kind",
                         "deliberate_name",
                         "config_id",
+                        "name",
+                        "kind",
+                        "bank_id",
+                        "target_count",
+                        "scope",
+                        "completion",
+                        "primary_filter",
+                        "sort_order",
+                        "use_fsrs",
+                        "backflow_rule",
                     ):
                         if key in phase:
                             extra_fields[key] = phase[key]

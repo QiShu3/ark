@@ -4,11 +4,60 @@ import { AlertTriangle, Check, RotateCcw, Volume2, X } from 'lucide-react';
 import Button from '../Button';
 import { initUnifiedPool, submitUnifiedAnswer, type UnifiedPoolInitResult, type UnifiedQuestion, type UnifiedSubmitResult } from '../../lib/focus-work/unifiedApi';
 import type { FocusWorkRendererProps } from './focusWorkTypes';
+import ChoiceQuestionFocusTemplate from './templates/ChoiceQuestionFocusTemplate';
+import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from './templates/choiceQuestionTypes';
+import type { ContentBlockData } from './ContentBlockRenderer';
 
 type Phase = 'loading' | 'warning_init' | 'active' | 'submit_confirm' | 'done' | 'error';
 
 const inputClass =
   'w-full rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)]';
+
+function parseChoiceOptions(options: UnifiedQuestion['options_json']): Array<{ key: string; text: string }> {
+  if (!options) return [];
+  const normalized = typeof options === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(options) as unknown;
+        } catch {
+          return null;
+        }
+      })()
+    : options;
+
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) {
+    return [];
+  }
+
+  return Object.entries(normalized as Record<string, unknown>).map(([key, value]) => ({
+    key,
+    text: String(value ?? ''),
+  }));
+}
+
+function stemToBlocks(stem: string): ContentBlockData[] {
+  if (!stem.trim()) return [];
+  return [{ type: 'paragraph', text: stem }];
+}
+
+function buildUnifiedChoiceItem(question: UnifiedQuestion | null, answeredCount: number, targetCount: number): ChoiceQuestionItem | null {
+  if (!question) return null;
+
+  return {
+    id: question.id,
+    numberLabel: `Q${question.index + 1}`,
+    stem: question.stem,
+    stemBlocks: stemToBlocks(question.stem),
+    stemPlacement: 'material',
+    options: parseChoiceOptions(question.options_json),
+    material: {
+      title: '题目',
+      paragraphs: [],
+    },
+    materialBlocks: stemToBlocks(question.stem),
+    meta: [{ label: `题目 ${Math.min(answeredCount + 1, Math.max(targetCount, 1))} / ${Math.max(targetCount, 1)}` }],
+  };
+}
 
 export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: FocusWorkRendererProps) {
   const [phase, setPhase] = useState<Phase>('loading');
@@ -23,6 +72,16 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
   const [backflowMessage, setBackflowMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const submitInFlight = useRef(false);
+  const sessionStartedAtRef = useRef<number>(Date.now());
+  const questionStartedAtRef = useRef<number>(Date.now());
+
+  const buildRunSummary = useCallback((nextAnsweredCount: number, nextCorrectCount: number) => ({
+    answered_count: nextAnsweredCount,
+    correct_count: nextCorrectCount,
+    total_questions: initResult?.total ?? 0,
+    accuracy: nextAnsweredCount > 0 ? nextCorrectCount / nextAnsweredCount : 0,
+    duration_seconds: Math.max(0, Math.round((Date.now() - sessionStartedAtRef.current) / 1000)),
+  }), [initResult?.total]);
 
   const initPool = useCallback(async () => {
     setPhase('loading');
@@ -49,6 +108,8 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       }
 
       setQuestion(result.first_question);
+      sessionStartedAtRef.current = Date.now();
+      questionStartedAtRef.current = Date.now();
       setPhase('active');
     } catch (err) {
       setPhase('error');
@@ -74,7 +135,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       const result = await submitUnifiedAnswer(run.id, {
         question_id: question.id,
         is_correct: isCorrect,
-        time_spent_ms: timeSpentMs ?? 1000,
+        time_spent_ms: timeSpentMs ?? Math.max(0, Date.now() - questionStartedAtRef.current),
         user_input: userInput,
       });
       setSubmitResult(result);
@@ -92,16 +153,16 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
     if (submitResult?.done || (!submitResult?.next_question && phase === 'submit_confirm')) {
       setPhase('done');
       onContentCompleted({
-        run_summary: {
-          answered_count: submitResult?.answered_count ?? answeredCount,
-          correct_count: submitResult?.correct_count ?? 0,
-          total_questions: initResult?.total ?? 0,
-        },
+        run_summary: buildRunSummary(
+          submitResult?.answered_count ?? answeredCount,
+          submitResult?.correct_count ?? 0,
+        ),
       });
       return;
     }
 
     setQuestion(submitResult?.next_question ?? null);
+    questionStartedAtRef.current = Date.now();
     setShowAnswer(false);
     setSelectedOption('');
     setUserInput('');
@@ -113,13 +174,18 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
   function handleStartAnyway() {
     if (initResult && initResult.total > 0 && initResult.first_question) {
       setQuestion(initResult.first_question);
+      sessionStartedAtRef.current = Date.now();
+      questionStartedAtRef.current = Date.now();
       setPhase('active');
     } else {
-      onContentCompleted({ run_summary: { answered_count: 0, correct_count: 0, total_questions: 0 } });
+      onContentCompleted({ run_summary: buildRunSummary(0, 0) });
     }
   }
 
   const totalQuestions = initResult?.total ?? 0;
+  const choiceItem = kind === 'choice'
+    ? buildUnifiedChoiceItem(question, submitResult?.answered_count ?? answeredCount, totalQuestions)
+    : null;
 
   if (phase === 'loading') {
     return (
@@ -147,7 +213,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
           <>
             <p className="text-sm font-medium text-ark-text">当前筛选项下没有可用的题目</p>
             <p className="text-xs text-ark-text-muted">请返回调整配置后重试</p>
-            <Button variant="secondary" onClick={() => onContentCompleted({ run_summary: { answered_count: 0 } })}>
+            <Button variant="secondary" onClick={() => onContentCompleted({ run_summary: buildRunSummary(0, 0) })}>
               结束本次专注
             </Button>
           </>
@@ -156,7 +222,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
             <p className="text-sm font-medium text-ark-text">{initResult?.warning}</p>
             <p className="text-xs text-ark-text-muted">将按实际题量（{totalQuestions} 题）开始</p>
             <div className="flex justify-center gap-3">
-              <Button variant="secondary" onClick={() => onContentCompleted({ run_summary: { answered_count: 0 } })}>
+              <Button variant="secondary" onClick={() => onContentCompleted({ run_summary: buildRunSummary(0, 0) })}>
                 取消
               </Button>
               <Button variant="primary" onClick={handleStartAnyway}>
@@ -175,6 +241,97 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
         <Check className="mx-auto h-8 w-8 text-green-500" />
         <p className="text-sm font-medium text-ark-text">专注完成</p>
         <p className="text-xs text-ark-text-muted">共完成 {answeredCount} 题</p>
+      </div>
+    );
+  }
+
+  if (kind === 'choice' && (phase === 'active' || phase === 'submit_confirm') && choiceItem) {
+    return (
+      <div className="space-y-4">
+        {backflowMessage && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm text-amber-400">
+            <RotateCcw className="h-4 w-4 shrink-0" />
+            <span>{backflowMessage}</span>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-2 text-sm text-red-400">
+            {errorMessage}
+          </div>
+        )}
+
+        <ChoiceQuestionFocusTemplate
+          title="选择练习"
+          subtitle="阅读训练"
+          statusLabel="选择练习"
+          item={choiceItem}
+          loading={false}
+          error={null}
+          emptyTitle="暂无题目"
+          emptyDescription="当前没有可用的题目。"
+          answeredCount={submitResult?.answered_count ?? answeredCount}
+          targetCount={Math.max(totalQuestions, 1)}
+          disabled={disabled}
+          onSubmitAnswer={async (_item, optionKey): Promise<ChoiceQuestionSubmitResult> => {
+            setSelectedOption(optionKey);
+            const isCorrect = optionKey === question?.answer;
+            const result = await submitUnifiedAnswer(run.id, {
+              question_id: question?.id || '',
+              is_correct: isCorrect,
+              time_spent_ms: Math.max(0, Date.now() - questionStartedAtRef.current),
+              user_input: optionKey,
+            });
+            setSubmitResult(result);
+            setAnsweredCount(result.answered_count);
+            setBackflowMessage(result.backflow_info);
+            setPhase('submit_confirm');
+            return {
+              correctOptionKey: isCorrect ? optionKey : question?.answer,
+            };
+          }}
+          onLoadNext={async () => {
+            if (submitResult?.done || !submitResult?.next_question) {
+              setPhase('done');
+              onContentCompleted({
+                run_summary: buildRunSummary(
+                  submitResult?.answered_count ?? answeredCount,
+                  submitResult?.correct_count ?? 0,
+                ),
+              });
+              return null;
+            }
+
+            setQuestion(submitResult.next_question);
+            questionStartedAtRef.current = Date.now();
+            setShowAnswer(false);
+            setSelectedOption('');
+            setUserInput('');
+            setBackflowMessage(null);
+            setSubmitResult(null);
+            setPhase('active');
+            return buildUnifiedChoiceItem(
+              submitResult.next_question,
+              submitResult.answered_count,
+              totalQuestions,
+            );
+          }}
+          onContentCompleted={(progressSnapshot) => {
+            const snapshotAnsweredCount = typeof progressSnapshot?.answered_count === 'number'
+              ? progressSnapshot.answered_count
+              : 0;
+            if (submitResult?.done || snapshotAnsweredCount >= Math.max(totalQuestions, 1)) {
+              setPhase('done');
+              onContentCompleted({
+                ...progressSnapshot,
+                run_summary: buildRunSummary(
+                  submitResult?.answered_count ?? answeredCount,
+                  submitResult?.correct_count ?? 0,
+                ),
+              });
+            }
+          }}
+        />
       </div>
     );
   }

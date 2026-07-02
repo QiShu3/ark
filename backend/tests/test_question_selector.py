@@ -177,7 +177,10 @@ class TestChoiceQuestionAdapter:
         class MockConn:
             async def fetchrow(self, query: str, *args: object):
                 assert "choice_questions" in query
+                assert "JOIN choice_articles a" in query
                 assert "choice_user_question_cards" in query
+                assert "a.set_id = $2::uuid" in query
+                assert "q.set_id" not in query
                 assert args == (1, "bank-1")
                 return _make_record({"cnt": 5})
 
@@ -205,7 +208,10 @@ class TestChoiceQuestionAdapter:
         class MockConn:
             async def fetch(self, query: str, *args: object):
                 assert "choice_questions" in query
+                assert "JOIN choice_articles a" in query
                 assert "choice_user_question_cards" in query
+                assert "a.set_id = $2::uuid" in query
+                assert "q.set_id" not in query
                 return [
                     _make_record({
                         "question_pk": "pk-1",

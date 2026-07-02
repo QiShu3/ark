@@ -4017,20 +4017,20 @@ async def _ensure_deliberate_run_for_phase(
     if config_snapshot.get("choice_completion") is not None:
         completion = dict(config_snapshot["choice_completion"])
 
-    deliberate_run_snapshot = {
-        "config_id": str(deliberate_config_id),
-        "name": str(config_row["name"]),
-        "kind": str(config_row["kind"]),
-        "focus_work_type": focus_work_type,
-        "bank_id": bank_id,
-        "target_count": target_count,
-        "scope": scope,
-        "completion": completion,
-        "primary_filter": primary_filter,
-        "sort_order": sort_order,
-        "use_fsrs": use_fsrs,
-        "backflow_rule": backflow_rule,
-    }
+    deliberate_run_snapshot = _deliberate_config_snapshot_payload(
+        config_id=str(deliberate_config_id),
+        name=str(config_row["name"]),
+        kind=str(config_row["kind"]),
+        focus_work_type=focus_work_type,
+        bank_id=str(bank_id) if bank_id is not None else None,
+        target_count=target_count,
+        scope=scope,
+        completion=completion,
+        primary_filter=primary_filter,
+        sort_order=sort_order,
+        use_fsrs=use_fsrs,
+        backflow_rule=backflow_rule,
+    )
     deliberate_run = await deliberate_repository.create_run(
         conn,
         user_id=user_id,
@@ -5475,6 +5475,40 @@ async def _resolve_countup_focus_bank_id(conn: Any, focus_work_type: str, bank_i
     return bank_id
 
 
+def _deliberate_config_snapshot_payload(
+    *,
+    config_id: str | None,
+    name: str,
+    kind: str,
+    focus_work_type: str,
+    bank_id: str | None,
+    target_count: int,
+    scope: dict[str, Any] | None,
+    completion: dict[str, Any] | None,
+    primary_filter: str = "all",
+    sort_order: str = "sequential",
+    use_fsrs: bool = False,
+    backflow_rule: str = "none",
+) -> dict[str, Any]:
+    return {
+        "config_id": config_id,
+        "deliberate_config_id": config_id,
+        "name": name,
+        "deliberate_name": name,
+        "kind": kind,
+        "deliberate_kind": kind,
+        "focus_work_type": focus_work_type,
+        "bank_id": bank_id,
+        "target_count": target_count,
+        "scope": dict(scope or {}),
+        "completion": dict(completion or {}),
+        "primary_filter": primary_filter,
+        "sort_order": sort_order,
+        "use_fsrs": use_fsrs,
+        "backflow_rule": backflow_rule,
+    }
+
+
 async def _create_countup_focus_workflow(
     conn: Any,
     *,
@@ -5486,6 +5520,7 @@ async def _create_countup_focus_workflow(
     scope: dict[str, Any] | None,
     completion: dict[str, Any] | None,
     deliberate_context: dict[str, Any] | None = None,
+    deliberate_snapshot: dict[str, Any] | None = None,
 ) -> Any:
     normalized = normalize_focus_work_type(focus_work_type)
     if normalized not in {FLASH_CARD_KIND, CHOICE_KIND, INPUT_KIND}:
@@ -5527,6 +5562,8 @@ async def _create_countup_focus_workflow(
         focus_phase["choice_completion"] = completion
     if deliberate_context:
         focus_phase.update(deliberate_context)
+    if deliberate_snapshot:
+        focus_phase.update(deliberate_snapshot)
 
     try:
         created = await conn.fetchrow(
@@ -5606,6 +5643,10 @@ async def start_deliberate_workflow(
                 target_count = int(config_row["target_count"])
                 scope = _config_payload(config_row["scope_json"])
                 completion = _config_payload(config_row["completion_json"])
+                primary_filter = str(config_row.get("primary_filter", "all"))
+                sort_order = str(config_row.get("sort_order", "sequential"))
+                use_fsrs = bool(config_row.get("use_fsrs", False))
+                backflow_rule = str(config_row.get("backflow_rule", "none"))
             else:
                 if not body.focus_work_type:
                     raise HTTPException(status_code=400, detail="缺少 focus_work_type")
@@ -5623,22 +5664,30 @@ async def start_deliberate_workflow(
                 target_count = int(body.target_count)
                 scope = body.scope or {}
                 completion = body.completion or {}
+                primary_filter = "all"
+                sort_order = "sequential"
+                use_fsrs = False
+                backflow_rule = "none"
 
             validate_config_shape(kind, focus_work_type, target_count)
             resolved_bank_id = await _resolve_countup_focus_bank_id(conn, focus_work_type, bank_id)
             if resolved_bank_id and normalize_focus_work_type(focus_work_type) == CHOICE_KIND:
                 scope = dict(scope or {})
                 scope["bank_id"] = resolved_bank_id
-            config_snapshot = {
-                "config_id": config_id,
-                "name": name,
-                "kind": kind,
-                "focus_work_type": focus_work_type,
-                "bank_id": resolved_bank_id,
-                "target_count": target_count,
-                "scope": scope,
-                "completion": completion,
-            }
+            config_snapshot = _deliberate_config_snapshot_payload(
+                config_id=config_id,
+                name=name,
+                kind=kind,
+                focus_work_type=focus_work_type,
+                bank_id=resolved_bank_id,
+                target_count=target_count,
+                scope=scope,
+                completion=completion,
+                primary_filter=primary_filter,
+                sort_order=sort_order,
+                use_fsrs=use_fsrs,
+                backflow_rule=backflow_rule,
+            )
             deliberate_run = await deliberate_repository.create_run(
                 conn,
                 user_id=int(user.id),
@@ -5664,6 +5713,7 @@ async def start_deliberate_workflow(
                 scope=scope,
                 completion=completion,
                 deliberate_context=deliberate_context,
+                deliberate_snapshot=config_snapshot,
             )
             await deliberate_repository.attach_workflow(
                 conn,

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from lib.question_selector import build_question_list
 from lib.study_ledger import record_answer
 from routes.auth_routes import _AuthUser, get_current_user
+from routes.deliberate import repository as deliberate_repository
 
 router = APIRouter(prefix="/api/focus-work/unified", tags=["focus-work-unified"])
 
@@ -41,6 +42,52 @@ def _config_int(snapshot: dict[str, Any], key: str, default: int = 10) -> int:
         return default
 
 
+async def _resolve_unified_config_snapshot(
+    conn: Any,
+    *,
+    user_id: int,
+    run_focus_work_type: str,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    resolved = dict(snapshot)
+
+    bank_id = _config_str(resolved, "bank_id", "")
+    if not bank_id:
+        bank_id = (
+            _config_str(resolved, "deck_id", "")
+            or _config_str(resolved, "set_id", "")
+            or _config_str(resolved, "input_bank_id", "")
+        )
+        choice_scope = resolved.get("choice_scope")
+        if not bank_id and isinstance(choice_scope, dict):
+            scoped_bank_id = choice_scope.get("bank_id")
+            if scoped_bank_id is not None:
+                bank_id = str(scoped_bank_id)
+        if bank_id:
+            resolved["bank_id"] = bank_id
+
+    config_id = _config_str(resolved, "deliberate_config_id", "") or _config_str(resolved, "config_id", "")
+    missing_fields = [
+        key for key in ("kind", "target_count", "primary_filter", "sort_order", "use_fsrs", "backflow_rule")
+        if key not in resolved
+    ]
+    if config_id and (not bank_id or missing_fields):
+        config_row = await deliberate_repository.get_config(conn, user_id=user_id, config_id=config_id)
+        if config_row is not None:
+            resolved.setdefault("kind", str(config_row["kind"]))
+            resolved.setdefault("focus_work_type", str(config_row["focus_work_type"]))
+            resolved.setdefault("target_count", int(config_row["target_count"]))
+            resolved.setdefault("primary_filter", str(config_row.get("primary_filter", "all")))
+            resolved.setdefault("sort_order", str(config_row.get("sort_order", "sequential")))
+            resolved.setdefault("use_fsrs", bool(config_row.get("use_fsrs", False)))
+            resolved.setdefault("backflow_rule", str(config_row.get("backflow_rule", "none")))
+            if not bank_id and config_row["bank_id"] is not None:
+                resolved["bank_id"] = str(config_row["bank_id"])
+
+    resolved.setdefault("kind", run_focus_work_type)
+    return resolved
+
+
 @router.post("/{run_id}/init")
 async def init_question_pool(
     run_id: str,
@@ -65,6 +112,12 @@ async def init_question_pool(
             config_snapshot = json.loads(config_snapshot)
         if not isinstance(config_snapshot, dict):
             config_snapshot = {}
+        config_snapshot = await _resolve_unified_config_snapshot(
+            conn,
+            user_id=int(user.id),
+            run_focus_work_type=str(run["focus_work_type"]),
+            snapshot=config_snapshot,
+        )
 
         kind = _config_str(config_snapshot, "kind", run["focus_work_type"])
         bank_id = _config_str(config_snapshot, "bank_id", "")
@@ -198,7 +251,7 @@ async def submit_answer(
     pool = _pool(request)
     async with pool.acquire() as conn:
         run = await conn.fetchrow(
-            "SELECT id, user_id, config_snapshot, progress_snapshot, status FROM focus_work_runs "
+            "SELECT id, user_id, config_snapshot, progress_snapshot, focus_work_type, status FROM focus_work_runs "
             "WHERE id = $1::uuid AND user_id = $2",
             run_id,
             int(user.id),
@@ -213,6 +266,12 @@ async def submit_answer(
             config_snapshot = json.loads(config_snapshot)
         if not isinstance(config_snapshot, dict):
             config_snapshot = {}
+        config_snapshot = await _resolve_unified_config_snapshot(
+            conn,
+            user_id=int(user.id),
+            run_focus_work_type=str(run["focus_work_type"]),
+            snapshot=config_snapshot,
+        )
 
         progress_snapshot = run["progress_snapshot"]
         if isinstance(progress_snapshot, str):

@@ -185,6 +185,24 @@ async def _record_choice(
     detail: dict[str, Any] | None,
 ) -> str | None:
     backflow_rule = (detail or {}).get("backflow_rule", "none")
+    chosen_option = str((detail or {}).get("user_input", ""))
+    rating = "good" if is_correct else "again"
+
+    question_row = await conn.fetchrow(
+        """
+        SELECT q.article_pk, q.answer
+        FROM choice_questions q
+        JOIN choice_articles a ON a.id = q.article_pk
+        WHERE q.id = $1::uuid AND a.set_id = $2::uuid
+        """,
+        question_pk,
+        bank_id,
+    )
+    if question_row is None:
+        raise ValueError(f"Choice question {question_pk} not found in bank {bank_id}")
+
+    article_pk = str(question_row["article_pk"])
+    correct_option = str(question_row["answer"])
 
     row = await conn.fetchrow(
         """
@@ -203,13 +221,13 @@ async def _record_choice(
             """
             INSERT INTO choice_user_question_cards
                 (user_id, question_pk, wrong_count, right_count, due_at,
-                 last_review_at, last_answer_correct)
-            VALUES ($1, $2::uuid, $3, $4, $5, $6, $7)
+                 last_review_at, last_answer_correct, last_chosen_option)
+            VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8)
             """,
             user_id, question_pk,
             0 if is_correct else 1,
             1 if is_correct else 0,
-            due_at, now, is_correct,
+            due_at, now, is_correct, chosen_option or None,
         )
     else:
         wrong_count = row["wrong_count"] + (0 if is_correct else 1)
@@ -231,12 +249,13 @@ async def _record_choice(
                     UPDATE choice_user_question_cards
                     SET wrong_count = $1, right_count = $2, lapse_count = $3,
                         last_review_at = $4, last_answer_correct = $5,
-                        due_at = $6, fsrs_card_json = $7::jsonb
-                    WHERE user_id = $8 AND question_pk = $9::uuid
+                        due_at = $6, fsrs_card_json = $7::jsonb, last_chosen_option = $8
+                    WHERE user_id = $9 AND question_pk = $10::uuid
                     """,
                     wrong_count, right_count, lapse_count,
                     now, is_correct, due_at,
                     card.to_dict(),
+                    chosen_option or None,
                     user_id, question_pk,
                 )
             except ImportError:
@@ -247,21 +266,47 @@ async def _record_choice(
                 """
                 UPDATE choice_user_question_cards
                 SET wrong_count = $1, right_count = $2, lapse_count = $3,
-                    last_review_at = $4, last_answer_correct = $5, due_at = $6
-                WHERE user_id = $7 AND question_pk = $8::uuid
+                    last_review_at = $4, last_answer_correct = $5, due_at = $6,
+                    last_chosen_option = $7
+                WHERE user_id = $8 AND question_pk = $9::uuid
                 """,
                 wrong_count, right_count, lapse_count,
                 now, is_correct, due_at,
+                chosen_option or None,
                 user_id, question_pk,
             )
 
     await conn.execute(
         """
-        INSERT INTO choice_review_logs (user_id, question_pk, result, time_spent_ms, created_at)
-        VALUES ($1, $2::uuid, $3, $4, $5)
+        INSERT INTO choice_review_logs (
+            user_id, article_pk, question_pk, attempt_id, mode, chosen_option,
+            correct_option, is_correct, rating, time_spent_ms, created_at
+        )
+        VALUES ($1, $2::uuid, $3::uuid, NULL, $4, $5, $6, $7, $8, $9, $10)
         """,
-        user_id, question_pk, "correct" if is_correct else "wrong",
-        time_spent_ms, now,
+        user_id, article_pk, question_pk, "practice", chosen_option,
+        correct_option,
+        is_correct, rating, time_spent_ms, now,
+    )
+
+    await conn.execute(
+        """
+        INSERT INTO choice_mistake_bucket(user_id, article_pk, question_pk, wrong_count, last_wrong_at, is_active)
+        VALUES ($1, $2::uuid, $3::uuid, CASE WHEN $4 THEN 0 ELSE 1 END, NOW(), NOT $4)
+        ON CONFLICT (user_id, question_pk)
+        DO UPDATE SET
+          wrong_count = CASE
+            WHEN $4 THEN choice_mistake_bucket.wrong_count
+            ELSE choice_mistake_bucket.wrong_count + 1
+          END,
+          last_wrong_at = CASE
+            WHEN $4 THEN choice_mistake_bucket.last_wrong_at
+            ELSE NOW()
+          END,
+          is_active = NOT $4,
+          article_pk = EXCLUDED.article_pk
+        """,
+        user_id, article_pk, question_pk, is_correct,
     )
 
     return backflow_rule

@@ -13,6 +13,7 @@ from routes.todo.helpers import (
 )
 from routes.todo.schemas import FocusWorkflowOut, FocusWorkflowPhase, FocusWorkRunSummaryOut
 from routes.todo_routes import (
+    _deliberate_config_snapshot_payload,
     _build_run_metadata,
     _content_bank_article_seed,
     _content_bank_word_seed,
@@ -538,6 +539,35 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
     assert config_snapshot["choice_scope"] == choice_scope
     assert config_snapshot["choice_completion"] == choice_completion
     assert config_snapshot["task_title"] == "选择练习"
+
+
+def test_deliberate_config_snapshot_payload_includes_unified_bank_fields():
+    payload = _deliberate_config_snapshot_payload(
+        config_id="cfg-1",
+        name="408",
+        kind="choice",
+        focus_work_type="choice",
+        bank_id="bank-1",
+        target_count=10,
+        scope={"bank_id": "bank-1", "years": [2025]},
+        completion={"mode": "question_count", "question_count": 10},
+        primary_filter="mistake",
+        sort_order="random",
+        use_fsrs=True,
+        backflow_rule="wrong_to_end",
+    )
+
+    assert payload["config_id"] == "cfg-1"
+    assert payload["deliberate_config_id"] == "cfg-1"
+    assert payload["name"] == "408"
+    assert payload["deliberate_name"] == "408"
+    assert payload["kind"] == "choice"
+    assert payload["deliberate_kind"] == "choice"
+    assert payload["bank_id"] == "bank-1"
+    assert payload["primary_filter"] == "mistake"
+    assert payload["sort_order"] == "random"
+    assert payload["use_fsrs"] is True
+    assert payload["backflow_rule"] == "wrong_to_end"
 
 
 @pytest.mark.asyncio

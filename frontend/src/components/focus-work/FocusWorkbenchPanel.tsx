@@ -11,6 +11,16 @@ const primaryButtonClass =
 const secondaryButtonClass =
   'rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-3 text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:cursor-not-allowed disabled:opacity-50';
 
+function formatSummaryDuration(secondsLike: unknown): string {
+  const seconds = typeof secondsLike === 'number' ? secondsLike : 0;
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0s';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 type ActionPanelProps = {
   label: string;
   heading: string;
@@ -125,7 +135,7 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {summary.duration_seconds ? `${Math.round((summary.duration_seconds as number) / 60)}m` : '0m'}
+              {formatSummaryDuration(summary.duration_seconds)}
             </div>
             <div className="text-xs text-ark-text-muted">用时</div>
           </div>
@@ -150,7 +160,7 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {summary.duration_seconds ? `${Math.round((summary.duration_seconds as number) / 60)}m` : '0m'}
+              {formatSummaryDuration(summary.duration_seconds)}
             </div>
             <div className="text-xs text-ark-text-muted">用时</div>
           </div>

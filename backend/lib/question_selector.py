@@ -57,9 +57,11 @@ class ChoiceQuestionAdapter(QuestionAdapter):
             f"""
             SELECT COUNT(*)::int AS cnt
             FROM choice_questions q
+            JOIN choice_articles a
+                ON a.id = q.article_pk
             LEFT JOIN choice_user_question_cards c
                 ON c.question_pk = q.id AND c.user_id = $1
-            WHERE q.set_id = $2::uuid
+            WHERE a.set_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             """,
             *params["args"],
@@ -87,9 +89,11 @@ class ChoiceQuestionAdapter(QuestionAdapter):
                    c.last_review_at, c.last_answer_correct, c.due_at,
                    c.fsrs_card_json
             FROM choice_questions q
+            JOIN choice_articles a
+                ON a.id = q.article_pk
             LEFT JOIN choice_user_question_cards c
                 ON c.question_pk = q.id AND c.user_id = $1
-            WHERE q.set_id = $2::uuid
+            WHERE a.set_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             {order_sql}
             LIMIT ${params['idx']}

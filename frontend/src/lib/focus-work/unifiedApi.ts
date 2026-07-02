@@ -14,7 +14,7 @@ export type UnifiedQuestion = {
   id: string;
   question_id: string;
   stem: string;
-  options_json: Record<string, string> | null;
+  options_json: Record<string, string> | string | null;
   answer: string;
   answered: boolean;
   backflow_count: number;
