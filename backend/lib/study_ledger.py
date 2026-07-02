@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -127,6 +128,11 @@ async def _record_vocab(
                 rating = Rating.Good if is_correct else Rating.Again
                 card, _ = scheduler.review_card(card, rating, review_datetime=now)
                 next_review = card.due
+                interval_days = 0
+                if card.due:
+                    delta = card.due - now
+                    interval_days = max(0, delta.days)
+
                 await conn.execute(
                     """
                     UPDATE vocab_user_word_progress
@@ -138,8 +144,8 @@ async def _record_vocab(
                     """,
                     correct_count, wrong_count, lapse_count,
                     mastery, "good" if is_correct else "again", now,
-                    next_review, card.due - now if card.due else 0,
-                    card.to_dict(),
+                    next_review, interval_days,
+                    json.dumps(card.to_dict()),
                     user_id, question_pk,
                 )
             except ImportError:
@@ -162,11 +168,13 @@ async def _record_vocab(
 
     await conn.execute(
         """
-        INSERT INTO vocab_review_logs (user_id, word_id, result, time_spent_ms, created_at)
-        VALUES ($1, $2::uuid, $3, $4, $5)
+        INSERT INTO vocab_review_logs (user_id, deck_id, word_id, review_mode, prompt_type, result, response_ms, created_at)
+        VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8)
         """,
-        user_id, question_pk, "correct" if is_correct else "wrong",
-        time_spent_ms, now,
+        user_id, bank_id, question_pk,
+        "practice", "recall",
+        "correct" if is_correct else "wrong",
+        int(time_spent_ms), now,
     )
 
     return backflow_rule
@@ -254,7 +262,7 @@ async def _record_choice(
                     """,
                     wrong_count, right_count, lapse_count,
                     now, is_correct, due_at,
-                    card.to_dict(),
+                    json.dumps(card.to_dict()),
                     chosen_option or None,
                     user_id, question_pk,
                 )

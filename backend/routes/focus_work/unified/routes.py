@@ -141,6 +141,21 @@ async def init_question_pool(
             use_fsrs=use_fsrs,
         )
 
+        def _parse_paragraphs(raw: Any) -> list[str]:
+            if raw is None:
+                return []
+            if isinstance(raw, list):
+                return [str(p) for p in raw if p is not None]
+            if isinstance(raw, str):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(p) for p in parsed if p is not None]
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                return [raw] if raw.strip() else []
+            return []
+
         question_pool = [
             {
                 "index": i,
@@ -153,6 +168,10 @@ async def init_question_pool(
                 "right_count": q.get("right_count", 0),
                 "answered": False,
                 "backflow_count": 0,
+                "article_pk": str(q.get("article_pk", "")) if q.get("article_pk") else None,
+                "article_title": q.get("article_title", ""),
+                "article_paragraphs": _parse_paragraphs(q.get("article_paragraphs")),
+                "explanation": q.get("explanation", ""),
             }
             for i, q in enumerate(questions)
         ]
