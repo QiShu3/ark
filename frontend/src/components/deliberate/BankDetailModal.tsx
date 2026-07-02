@@ -19,7 +19,7 @@ type Props = {
   onClose: () => void;
 };
 
-type SortField = 'index' | 'type' | 'subject' | 'stem' | 'answer';
+type SortField = 'index' | 'subject' | 'stem' | 'options' | 'answer';
 type SortDirection = 'asc' | 'desc';
 
 function getTypeLabel(kind: string, questionType: string) {
@@ -137,17 +137,13 @@ export default function BankDetailModal({
     const list = searchResults ?? preview?.questions ?? [];
     const sorted = [...list];
     sorted.sort((a, b) => {
-      let aVal: string | number = '';
-      let bVal: string | number = '';
+      let aVal: string = '';
+      let bVal: string = '';
 
       switch (sortField) {
         case 'index':
-          // 没有原始索引，保持原始顺序（稳定排序）
-          return sortDirection === 'asc' ? 0 : 0;
-        case 'type':
-          aVal = getTypeLabel(bankKind, a.type);
-          bVal = getTypeLabel(bankKind, b.type);
-          break;
+          // 保持原始顺序（稳定排序）
+          return 0;
         case 'subject':
           aVal = a.subject || '';
           bVal = b.subject || '';
@@ -156,21 +152,26 @@ export default function BankDetailModal({
           aVal = a.stem || '';
           bVal = b.stem || '';
           break;
+        case 'options':
+          {
+            const aOpts = normalizeOptions(a.options);
+            const bOpts = normalizeOptions(b.options);
+            aVal = aOpts ? Object.values(aOpts).join(' ') : '';
+            bVal = bOpts ? Object.values(bOpts).join(' ') : '';
+          }
+          break;
         case 'answer':
           aVal = a.answer || '';
           bVal = b.answer || '';
           break;
       }
 
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDirection === 'asc'
-          ? aVal.localeCompare(bVal, 'zh-CN')
-          : bVal.localeCompare(aVal, 'zh-CN');
-      }
-      return 0;
+      return sortDirection === 'asc'
+        ? aVal.localeCompare(bVal, 'zh-CN')
+        : bVal.localeCompare(aVal, 'zh-CN');
     });
     return sorted;
-  }, [searchResults, preview?.questions, sortField, sortDirection, bankKind]);
+  }, [searchResults, preview?.questions, sortField, sortDirection]);
 
   const subjectCount = preview?.subjects?.length ?? 0;
   const kindLabel = bankKind === 'flash_card' ? '闪卡' : bankKind === 'choice' ? '选择题' : '输入题';
@@ -187,7 +188,7 @@ export default function BankDetailModal({
   return (
     <>
       <AppModalFrame open={open} onClose={onClose} ariaLabel="题库详情">
-        <div className="w-[960px] max-w-[95vw] max-h-[85vh] flex flex-col rounded-xl border border-ark-border bg-ark-surface shadow-xl">
+        <div className="w-[1100px] max-w-[96vw] max-h-[85vh] flex flex-col rounded-xl border border-ark-border bg-ark-surface shadow-xl">
           {/* 头部 */}
           <div className="flex items-center justify-between border-b border-ark-border px-5 py-4">
             <div className="flex items-center gap-3">
@@ -273,16 +274,16 @@ export default function BankDetailModal({
                 <table className="w-full text-sm table-fixed">
                   <colgroup>
                     <col className="w-12" />
-                    <col className="w-16" />
                     <col className="w-24" />
-                    <col />
-                    <col className="w-48" />
+                    <col className="w-72" />
+                    <col className="w-80" />
+                    <col className="w-40" />
                     <col className="w-16" />
                   </colgroup>
                   <thead className="sticky top-0 z-10 bg-ark-surface-strong">
                     <tr className="text-left text-xs text-ark-text-muted">
                       <th
-                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-14 whitespace-nowrap border-b border-ark-border"
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium whitespace-nowrap border-b border-ark-border"
                         onClick={() => handleSort('index')}
                       >
                         <div className="flex items-center gap-1">
@@ -291,16 +292,7 @@ export default function BankDetailModal({
                         </div>
                       </th>
                       <th
-                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-20 whitespace-nowrap border-b border-ark-border"
-                        onClick={() => handleSort('type')}
-                      >
-                        <div className="flex items-center gap-1">
-                          题型
-                          <SortIcon field="type" />
-                        </div>
-                      </th>
-                      <th
-                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-28 whitespace-nowrap border-b border-ark-border"
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium whitespace-nowrap border-b border-ark-border"
                         onClick={() => handleSort('subject')}
                       >
                         <div className="flex items-center gap-1">
@@ -318,7 +310,16 @@ export default function BankDetailModal({
                         </div>
                       </th>
                       <th
-                        className="cursor-pointer select-none px-3 py-2.5 font-medium w-48 border-b border-ark-border"
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium border-b border-ark-border"
+                        onClick={() => handleSort('options')}
+                      >
+                        <div className="flex items-center gap-1">
+                          选项
+                          <SortIcon field="options" />
+                        </div>
+                      </th>
+                      <th
+                        className="cursor-pointer select-none px-3 py-2.5 font-medium border-b border-ark-border"
                         onClick={() => handleSort('answer')}
                       >
                         <div className="flex items-center gap-1">
@@ -326,74 +327,71 @@ export default function BankDetailModal({
                           <SortIcon field="answer" />
                         </div>
                       </th>
-                      <th className="px-3 py-2.5 font-medium w-16 text-right whitespace-nowrap border-b border-ark-border">
+                      <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap border-b border-ark-border">
                         操作
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {displayQuestions.map((q, idx) => (
+                    {displayQuestions.map((q, idx) => {
+                      const opts = normalizeOptions(q.options);
+                      return (
                       <tr
                         key={q.id}
                         className="border-b border-ark-border/50 hover:bg-ark-surface-subtle transition-colors cursor-pointer"
                         onClick={() => setSelectedQuestion(q)}
                       >
-                        <td className="px-3 py-2 text-ark-text-faint w-14 text-xs">
+                        <td className="px-3 py-2 text-ark-text-faint text-xs align-top">
                           {idx + 1}
                         </td>
-                        <td className="px-3 py-2 w-20">
-                          <span className="inline-block rounded bg-ark-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-ark-accent">
-                            {getTypeLabel(bankKind, q.type)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-ark-text-muted w-28 text-xs truncate max-w-[7rem]">
+                        <td className="px-3 py-2 text-ark-text-muted text-xs truncate align-top">
                           {q.subject || '—'}
                         </td>
                         <td className="px-3 py-2 text-ark-text align-top break-words">
-                          <div className="line-clamp-2 mb-1.5 text-sm">
+                          <div className="line-clamp-3 text-sm leading-relaxed">
                             {q.stem}
                           </div>
-                          {(() => {
-                            const opts = normalizeOptions(q.options);
-                            if (!opts || bankKind !== 'choice') return null;
-                            return (
-                              <div className="space-y-0.5 break-words">
-                                {Object.entries(opts).map(([key, val]) => {
-                                  const isCorrect = key === q.answer;
-                                  return (
-                                    <div
-                                      key={key}
-                                      className={`flex items-start gap-1.5 text-xs leading-relaxed ${
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {opts && bankKind === 'choice' ? (
+                            <div className="space-y-0.5 break-words">
+                              {Object.entries(opts).map(([key, val]) => {
+                                const isCorrect = key === q.answer;
+                                return (
+                                  <div
+                                    key={key}
+                                    className={`flex items-start gap-1.5 text-xs leading-relaxed ${
+                                      isCorrect
+                                        ? 'text-green-600'
+                                        : 'text-ark-text-muted'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-[10px] font-medium ${
                                         isCorrect
-                                          ? 'text-green-600'
-                                          : 'text-ark-text-muted'
+                                          ? 'bg-green-500/15 text-green-600'
+                                          : 'bg-ark-surface-strong text-ark-text-faint'
                                       }`}
                                     >
-                                      <span
-                                        className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-[10px] font-medium ${
-                                          isCorrect
-                                            ? 'bg-green-500/15 text-green-600'
-                                            : 'bg-ark-surface-strong text-ark-text-faint'
-                                        }`}
-                                      >
-                                        {key}
-                                      </span>
-                                      <span className="min-w-0 flex-1">
-                                        {String(val)}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
+                                      {key}
+                                    </span>
+                                    <span className="min-w-0 flex-1 line-clamp-1">
+                                      {String(val)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-ark-text-faint">—</span>
+                          )}
                         </td>
-                        <td className="px-3 py-2 text-green-600 w-48 text-xs">
+                        <td className="px-3 py-2 text-green-600 text-xs align-top">
                           <div className="line-clamp-2">
                             {getAnswerPreview(q, bankKind)}
                           </div>
                         </td>
-                        <td className="px-3 py-2 w-16 text-right">
+                        <td className="px-3 py-2 text-right align-top">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -407,7 +405,8 @@ export default function BankDetailModal({
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
