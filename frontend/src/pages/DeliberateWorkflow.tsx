@@ -7,6 +7,7 @@ import BankDetailModal from '../components/deliberate/BankDetailModal';
 import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
 import CreateFocusWorkModal from '../components/deliberate/CreateFocusWorkModal';
+import DeliberateWorkflowEditorModal from '../components/deliberate/DeliberateWorkflowEditorModal';
 import EditFocusWorkModal from '../components/deliberate/EditFocusWorkModal';
 import UploadBankModal from '../components/deliberate/UploadBankModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
@@ -194,21 +195,17 @@ export default function DeliberateWorkflow() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [editingPresetForModal, setEditingPresetForModal] = useState<WorkflowPreset | null>(null);
   const [previewBankId, setPreviewBankId] = useState<string | null>(null);
   const [editingConfig, setEditingConfig] = useState<DeliberateWorkflowConfig | null>(null);
   const [workflowRecords, setWorkflowRecords] = useState<WorkflowRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
-  const [selectedConfigIds, setSelectedConfigIds] = useState<string[]>([]);
   const [startingMulti, setStartingMulti] = useState(false);
   const [snapshotBankId, setSnapshotBankId] = useState<string>('');
   const [snapshotBankKind, setSnapshotBankKind] = useState<DeliberateKind>('choice');
   const [allBanks, setAllBanks] = useState<{ id: string; name: string; count: number; kind: DeliberateKind }[]>([]);
   const [workflowPresets, setWorkflowPresets] = useState<WorkflowPreset[]>([]);
-  const [presetName, setPresetName] = useState('');
-  const [savingPreset, setSavingPreset] = useState(false);
-  const [selectedPresetId, setSelectedPresetId] = useState('');
-  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
-  const [editingPresetName, setEditingPresetName] = useState('');
   const [settlementRecord, setSettlementRecord] = useState<WorkflowRecord | null>(null);
   const [settlementData, setSettlementData] = useState<WorkflowSettlement | null>(null);
   const [loadingSettlement, setLoadingSettlement] = useState(false);
@@ -407,6 +404,12 @@ export default function DeliberateWorkflow() {
       .then(setWorkflowPresets)
       .catch(() => setWorkflowPresets([]));
   }, []);
+
+  const deliberatePresets = useMemo(() => {
+    return workflowPresets.filter(p =>
+      p.phases.some(ph => ph.phase_type === 'deliberate_group'),
+    );
+  }, [workflowPresets]);
 
   const scope = useMemo(() => {
     if (kind === 'flash_card') return {};
@@ -641,15 +644,7 @@ export default function DeliberateWorkflow() {
     setSettlementData(null);
   }, []);
 
-  const handleToggleConfigSelection = useCallback((configId: string) => {
-    setSelectedConfigIds(prev => 
-      prev.includes(configId) 
-        ? prev.filter(id => id !== configId)
-        : [...prev, configId]
-    );
-  }, []);
-
-  const handleStartMultiWorkflow = useCallback(async (configIds = selectedConfigIds) => {
+  const handleStartMultiWorkflow = useCallback(async (configIds: string[]) => {
     if (configIds.length === 0) {
       setError('请至少选择一个专注工作配置');
       return;
@@ -665,58 +660,7 @@ export default function DeliberateWorkflow() {
     } finally {
       setStartingMulti(false);
     }
-  }, [selectedConfigIds, navigate]);
-
-  async function handleSavePreset() {
-    if (!presetName.trim() || selectedConfigIds.length === 0) return;
-    setSavingPreset(true);
-    try {
-      const selectedNames = selectedConfigIds.map(id => {
-        const config = configs.find(c => c.id === id);
-        return config?.name ?? id;
-      });
-      await apiJson('/todo/focus/workflows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: presetName.trim(),
-          phases: [{
-            phase_type: 'deliberate_group',
-            duration: 3600,
-            timer_mode: 'countup',
-            config_ids: selectedConfigIds,
-            config_names: selectedNames,
-          }],
-          focus_duration: 3600,
-          break_duration: 300,
-          default_focus_timer_mode: 'countup',
-          is_default: false,
-        }),
-      });
-      setPresetName('');
-      const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
-      setWorkflowPresets(presets);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存编排失败');
-    } finally {
-      setSavingPreset(false);
-    }
-  }
-
-  function handleLoadPreset(presetId: string) {
-    setSelectedPresetId(presetId);
-    const preset = workflowPresets.find(p => p.id === presetId);
-    if (!preset) return;
-    const groupPhase = preset.phases.find(p => p.phase_type === 'deliberate_group');
-    if (groupPhase?.config_ids) {
-      setSelectedConfigIds(groupPhase.config_ids);
-    }
-  }
-
-  function getPresetConfigIds(preset: WorkflowPreset) {
-    const groupPhase = preset.phases.find(phase => phase.phase_type === 'deliberate_group');
-    return groupPhase?.config_ids ?? [];
-  }
+  }, [navigate]);
 
   async function handleDeletePreset(presetId: string) {
     if (!window.confirm('确认删除该编排？')) return;
@@ -724,42 +668,28 @@ export default function DeliberateWorkflow() {
       await apiJson(`/todo/focus/workflows/${presetId}`, { method: 'DELETE' });
       const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
       setWorkflowPresets(presets);
-      if (selectedPresetId === presetId) {
-        setSelectedPresetId('');
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除编排失败');
     }
   }
 
-  async function handleUpdatePreset() {
-    if (!editingPresetId || !editingPresetName.trim()) return;
-    setSavingPreset(true);
+  const refreshWorkflowPresets = useCallback(async () => {
     try {
-      const preset = workflowPresets.find(p => p.id === editingPresetId);
-      if (!preset) return;
-
-      await apiJson(`/todo/focus/workflows/${editingPresetId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editingPresetName.trim(),
-          phases: preset.phases,
-          focus_duration: preset.focus_duration,
-          break_duration: preset.break_duration,
-          default_focus_timer_mode: preset.default_focus_timer_mode,
-          is_default: preset.is_default,
-        }),
-      });
-      setEditingPresetId(null);
-      setEditingPresetName('');
       const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
       setWorkflowPresets(presets);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '更新编排失败');
-    } finally {
-      setSavingPreset(false);
+    } catch {
+      // ignore
     }
+  }, []);
+
+  function handleOpenNewPresetModal() {
+    setEditingPresetForModal(null);
+    setShowEditorModal(true);
+  }
+
+  function handleOpenEditPresetModal(preset: WorkflowPreset) {
+    setEditingPresetForModal(preset);
+    setShowEditorModal(true);
   }
 
   const toggleSection = useCallback((section: string) => {
@@ -1045,192 +975,86 @@ export default function DeliberateWorkflow() {
           </div>
           <Button
             variant="primary"
-            loading={startingMulti}
-            loadingText="启动中"
-            disabled={selectedConfigIds.length === 0}
-            leftIcon={<Play className="h-4 w-4" />}
-            onClick={() => void handleStartMultiWorkflow()}
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={handleOpenNewPresetModal}
           >
-            启动组合工作流 ({selectedConfigIds.length})
+            新建编排
           </Button>
         </div>
 
         {/* 已保存编排列表 */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-ark-text-muted">已保存的编排</h4>
-            <div className="flex items-center gap-2">
-              <input
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-                placeholder="编排名称"
-                className="rounded-lg border border-ark-border bg-ark-input px-3 py-1.5 text-sm text-ark-text w-40"
-              />
+        <div className="space-y-2">
+          {deliberatePresets.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-ark-border p-8 text-center">
+              <p className="mb-2 text-sm text-ark-text-muted">
+                还没有编排
+              </p>
+              <p className="mb-4 text-xs text-ark-text-faint">
+                创建编排来组合多个专注工作，按顺序执行
+              </p>
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Save className="h-3 w-3" />}
-                loading={savingPreset}
-                disabled={!presetName.trim() || selectedConfigIds.length === 0}
-                onClick={() => void handleSavePreset()}
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={handleOpenNewPresetModal}
               >
-                保存当前编排
+                创建第一个编排
               </Button>
             </div>
-          </div>
-
-          {workflowPresets.filter(p => p.phases.some(ph => ph.phase_type === 'deliberate_group')).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
-              暂无已保存的编排，请先保存
-            </div>
           ) : (
-            workflowPresets
-              .filter(p => p.phases.some(ph => ph.phase_type === 'deliberate_group'))
-              .map(preset => {
-                const groupPhase = preset.phases.find(ph => ph.phase_type === 'deliberate_group');
-                const configNames = groupPhase?.config_names ?? [];
-                const isEditing = editingPresetId === preset.id;
+            deliberatePresets.map((preset) => {
+              const groupPhase = preset.phases.find(
+                (ph) => ph.phase_type === 'deliberate_group',
+              );
+              const configNames = groupPhase?.config_names ?? [];
+              const configCount = groupPhase?.config_ids?.length ?? 0;
 
-                return (
-                  <div
-                    key={preset.id}
-                    className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
-                      selectedPresetId === preset.id
-                        ? 'border-ark-accent bg-ark-surface'
-                        : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      {isEditing ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={editingPresetName}
-                            onChange={(e) => setEditingPresetName(e.target.value)}
-                            className="rounded border border-ark-border bg-ark-input px-2 py-1 text-sm text-ark-text"
-                            autoFocus
-                          />
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => void handleUpdatePreset()}
-                            loading={savingPreset}
-                          >
-                            保存
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditingPresetId(null);
-                              setEditingPresetName('');
-                            }}
-                          >
-                            取消
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="text-sm font-medium text-ark-text">{preset.name}</div>
-                          <div className="text-xs text-ark-text-muted">
-                            {configNames.length} 个配置：{configNames.join(' → ')}
-                          </div>
-                        </>
-                      )}
+              return (
+                <div
+                  key={preset.id}
+                  className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 transition hover:border-ark-accent/50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-ark-text">
+                      {preset.name}
                     </div>
-                    {!isEditing && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          leftIcon={<Play className="h-3 w-3" />}
-                          onClick={() => {
-                            const configIds = getPresetConfigIds(preset);
-                            setSelectedPresetId(preset.id);
-                            setSelectedConfigIds(configIds);
-                            void handleStartMultiWorkflow(configIds);
-                          }}
-                        >
-                          启动
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            handleLoadPreset(preset.id);
-                          }}
-                        >
-                          加载
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingPresetId(preset.id);
-                            setEditingPresetName(preset.name);
-                          }}
-                        >
-                          编辑
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={<Trash2 className="h-3 w-3" />}
-                          onClick={() => void handleDeletePreset(preset.id)}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    )}
+                    <div className="mt-0.5 truncate text-xs text-ark-text-muted">
+                      {configCount} 个工作：{configNames.join(' → ')}
+                    </div>
                   </div>
-                );
-              })
-          )}
-        </div>
-
-        {/* 选择专注工作面板 */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Workflow className="h-5 w-5 text-ark-accent" aria-hidden="true" />
-              <h4 className="text-base font-semibold text-ark-text">选择专注工作（按顺序执行）</h4>
-            </div>
-            <div className="space-y-2">
-              {configs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
-                  暂无专注工作配置，请先创建
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Play className="h-3 w-3" />}
+                      onClick={() => {
+                        const configIds =
+                          groupPhase?.config_ids ?? [];
+                        void handleStartMultiWorkflow(configIds);
+                      }}
+                    >
+                      启动
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenEditPresetModal(preset)}
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<Trash2 className="h-3 w-3" />}
+                      onClick={() => void handleDeletePreset(preset.id)}
+                    >
+                      删除
+                    </Button>
+                  </div>
                 </div>
-              ) : (
-                configs.map((config, index) => (
-                  <div
-                    key={config.id}
-                    className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition cursor-pointer ${
-                      selectedConfigIds.includes(config.id)
-                        ? 'border-ark-accent bg-ark-surface'
-                        : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
-                    }`}
-                    onClick={() => handleToggleConfigSelection(config.id)}
-                  >
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-ark-border bg-ark-surface text-xs font-medium text-ark-text-muted">
-                      {selectedConfigIds.includes(config.id) 
-                        ? selectedConfigIds.indexOf(config.id) + 1 
-                        : index + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-ark-text">{config.name}</div>
-                      <div className="text-xs text-ark-text-muted">
-                        {focusTypeLabel(config.focus_work_type)} · {config.bank_summary?.name ?? '未绑定题库'} · 目标 {config.target_count}
-                      </div>
-                    </div>
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-ark-border">
-                      {selectedConfigIds.includes(config.id) && (
-                        <CheckCircle2 className="h-4 w-4 text-ark-accent" />
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
+              );
+            })
+          )}
         </div>
       </section>
 
@@ -1694,6 +1518,15 @@ export default function DeliberateWorkflow() {
         expandedSections={expandedSections}
         onToggleSection={toggleSection}
         onClose={handleCloseModal}
+      />
+
+      {/* 编排编辑器弹窗 */}
+      <DeliberateWorkflowEditorModal
+        open={showEditorModal}
+        configs={configs}
+        editingPreset={editingPresetForModal}
+        onClose={() => setShowEditorModal(false)}
+        onSaved={() => void refreshWorkflowPresets()}
       />
 
       {/* 新建专注工作弹窗 */}
