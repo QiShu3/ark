@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, Database, FileUp, Play, Plus, Save, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
+import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Database, FileUp, Play, Plus, Save, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import AppModalFrame from '../components/AppModalFrame';
@@ -171,10 +171,12 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 export default function DeliberateWorkflow() {
   const navigate = useNavigate();
   const [configs, setConfigs] = useState<DeliberateWorkflowConfig[]>([]);
+  const [showAllConfigs, setShowAllConfigs] = useState(false);
   const [selectedId, setSelectedId] = useState<string>('');
   const [runs, setRuns] = useState<DeliberateWorkflowRun[]>([]);
   const [snapshots, setSnapshots] = useState<SetSnapshot[]>([]);
   const [banks, setBanks] = useState<DeliberateBankOption[]>([]);
+  const [showAllBanks, setShowAllBanks] = useState(false);
   const [filters, setFilters] = useState<ChoiceFilters | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -274,6 +276,7 @@ export default function DeliberateWorkflow() {
     try {
       const data = await listDeliberateWorkflows();
       setConfigs(data);
+      setShowAllConfigs(false);
       setSelectedId((current) => {
         let stored = '';
         try {
@@ -297,6 +300,7 @@ export default function DeliberateWorkflow() {
     try {
       const data = await listDeliberateBanks(bankKind);
       setBanks(data);
+      setShowAllBanks(false);
       setBankId((current) => current && data.some((item) => item.id === current) ? current : '');
     } catch (err) {
       setBanks([]);
@@ -840,35 +844,54 @@ export default function DeliberateWorkflow() {
               暂无题库，请上传新题库
             </div>
           ) : (
-            banks.map((bank) => (
-              <div
-                key={bank.id}
-                className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
-              >
+            <>
+              {(showAllBanks ? banks : banks.slice(0, 3)).map((bank) => (
+                <div
+                  key={bank.id}
+                  className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPreviewBankId(bank.id)}
+                    className="min-w-0 text-left transition hover:opacity-80"
+                  >
+                    <div className="text-sm font-medium text-ark-text underline-offset-2 hover:underline">
+                      {bank.name}
+                    </div>
+                    <div className="text-xs text-ark-text-muted">
+                      {bank.count} {kind === 'flash_card' ? '词' : '题'}
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={() => void handleDeleteBank(bank.id, bank.name)}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {banks.length > 3 && (
                 <button
                   type="button"
-                  onClick={() => setPreviewBankId(bank.id)}
-                  className="min-w-0 text-left transition hover:opacity-80"
+                  onClick={() => setShowAllBanks(!showAllBanks)}
+                  className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ark-border px-4 py-2 text-xs text-ark-text-muted transition hover:border-ark-accent/50 hover:text-ark-text"
                 >
-                  <div className="text-sm font-medium text-ark-text underline-offset-2 hover:underline">
-                    {bank.name}
-                  </div>
-                  <div className="text-xs text-ark-text-muted">
-                    {bank.count} {kind === 'flash_card' ? '词' : '题'}
-                  </div>
+                  {showAllBanks ? (
+                    <>
+                      收起 <ChevronUp className="h-3.5 w-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      展开全部（{banks.length} 个题库）<ChevronDown className="h-3.5 w-3.5" />
+                    </>
+                  )}
                 </button>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={<Trash2 className="h-4 w-4" />}
-                    onClick={() => void handleDeleteBank(bank.id, bank.name)}
-                  >
-                    删除
-                  </Button>
-                </div>
-              </div>
-            ))
+              )}
+            </>
           )}
         </div>
 
@@ -946,50 +969,69 @@ export default function DeliberateWorkflow() {
               暂无专注工作配置，请新建
             </div>
           ) : (
-            configs.map((config) => (
-              <div
-                key={config.id}
-                className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
-                  selectedId === config.id
-                    ? 'border-ark-accent bg-ark-surface'
-                    : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-ark-text">{config.name}</div>
-                  <div className="text-xs text-ark-text-muted">
-                    {focusTypeLabel(config.focus_work_type)} · {config.bank_summary?.name ?? '未绑定题库'} · 目标 {config.target_count}
+            <>
+              {(showAllConfigs ? configs : configs.slice(0, 3)).map((config) => (
+                <div
+                  key={config.id}
+                  className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
+                    selectedId === config.id
+                      ? 'border-ark-accent bg-ark-surface'
+                      : 'border-ark-border bg-ark-surface-subtle hover:border-ark-accent/50'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-ark-text">{config.name}</div>
+                    <div className="text-xs text-ark-text-muted">
+                      {focusTypeLabel(config.focus_work_type)} · {config.bank_summary?.name ?? '未绑定题库'} · 目标 {config.target_count}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={startingId === config.id}
+                      loadingText="启动中"
+                      leftIcon={<Play className="h-3 w-3" />}
+                      onClick={() => void handleStart(config)}
+                    >
+                      开始
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingConfig(config)}
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<Trash2 className="h-3 w-3" />}
+                      onClick={() => void handleDelete(config)}
+                    >
+                      删除
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    loading={startingId === config.id}
-                    loadingText="启动中"
-                    leftIcon={<Play className="h-3 w-3" />}
-                    onClick={() => void handleStart(config)}
-                  >
-                    开始
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingConfig(config)}
-                  >
-                    编辑
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={<Trash2 className="h-3 w-3" />}
-                    onClick={() => void handleDelete(config)}
-                  >
-                    删除
-                  </Button>
-                </div>
-              </div>
-            ))
+              ))}
+              {configs.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllConfigs(!showAllConfigs)}
+                  className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-ark-border px-4 py-2 text-xs text-ark-text-muted transition hover:border-ark-accent/50 hover:text-ark-text"
+                >
+                  {showAllConfigs ? (
+                    <>
+                      收起 <ChevronUp className="h-3.5 w-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      展开全部（{configs.length} 个专注工作）<ChevronDown className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
         </div>
       </section>

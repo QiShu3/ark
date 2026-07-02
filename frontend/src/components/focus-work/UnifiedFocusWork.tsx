@@ -7,6 +7,7 @@ import type { FocusWorkRendererProps } from './focusWorkTypes';
 import ChoiceQuestionFocusTemplate from './templates/ChoiceQuestionFocusTemplate';
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from './templates/choiceQuestionTypes';
 import type { ContentBlockData } from './ContentBlockRenderer';
+import MarkdownContent from '../MarkdownContent';
 
 type Phase = 'loading' | 'warning_init' | 'active' | 'submit_confirm' | 'done' | 'error';
 
@@ -464,16 +465,18 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
               </p>
               <div className="space-y-3">
                 {question.article_paragraphs.map((p: string, i: number) => (
-                  <p key={i} className="text-sm leading-7 text-ark-text">
-                    {p}
-                  </p>
+                  <div key={i} className="text-sm leading-7 text-ark-text">
+                    <MarkdownContent content={p} />
+                  </div>
                 ))}
               </div>
             </div>
           )}
           {question.stem && (
             <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-4">
-              <p className="text-sm font-medium text-ark-text">{question.stem}</p>
+              <div className="text-sm font-medium text-ark-text">
+                <MarkdownContent content={question.stem} />
+              </div>
             </div>
           )}
           {!showAnswer ? (
