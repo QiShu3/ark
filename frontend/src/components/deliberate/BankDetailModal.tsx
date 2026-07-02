@@ -35,6 +35,17 @@ type SortDirection = 'asc' | 'desc';
 
 const PAGE_SIZE = 20;
 
+// 匹配 markdown 图片语法 ![alt](url)
+const IMAGE_MARKDOWN_REGEX = /!\[[^\]]*\]\([^)]+\)/g;
+
+function stripImages(text: string): string {
+  if (!text) return '';
+  const hasImages = IMAGE_MARKDOWN_REGEX.test(text);
+  if (!hasImages) return text;
+  // 把所有图片替换成 [图片]
+  return text.replace(IMAGE_MARKDOWN_REGEX, '[图片]').trim();
+}
+
 function normalizeOptions(options: unknown): Record<string, string> | null {
   if (!options) return null;
   if (typeof options === 'string') {
@@ -59,14 +70,14 @@ function getAnswerPreview(question: BankPreviewQuestion, kind: string): string {
   if (kind === 'choice' && opts && question.answer) {
     const optVal = opts[question.answer];
     if (optVal) {
-      const text = String(optVal);
-      return `${question.answer}. ${text.length > 30 ? text.slice(0, 30) + '…' : text}`;
+      const text = stripImages(String(optVal));
+      return `${question.answer}. ${text.length > 30 ? text.slice(0, 30) + '…' : text || '（图片）'}`;
     }
     return question.answer;
   }
   if (question.answer) {
-    const text = String(question.answer);
-    return text.length > 40 ? text.slice(0, 40) + '…' : text;
+    const text = stripImages(String(question.answer));
+    return text.length > 40 ? text.slice(0, 40) + '…' : text || '（图片）';
   }
   return '—';
 }
@@ -371,7 +382,7 @@ export default function BankDetailModal({
                           </td>
                           <td className="px-3 py-2 text-ark-text align-top break-words">
                             <div className="line-clamp-3 text-sm leading-relaxed">
-                              {q.stem}
+                              {stripImages(q.stem) || '（图片题）'}
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
@@ -379,6 +390,7 @@ export default function BankDetailModal({
                               <div className="space-y-0.5 break-words">
                                 {Object.entries(opts).map(([key, val]) => {
                                   const isCorrect = key === q.answer;
+                                  const optText = stripImages(String(val));
                                   return (
                                     <div
                                       key={key}
@@ -398,7 +410,7 @@ export default function BankDetailModal({
                                         {key}
                                       </span>
                                       <span className="min-w-0 flex-1 line-clamp-1">
-                                        {String(val)}
+                                        {optText || '（图片）'}
                                       </span>
                                     </div>
                                   );

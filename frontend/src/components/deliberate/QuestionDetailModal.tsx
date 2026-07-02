@@ -60,6 +60,59 @@ function ContentBlockRenderer({ block }: { block: { type: string; text?: string;
   return null;
 }
 
+// 把包含 markdown 图片的文本解析成交替的文本块和图片块
+function parseTextWithImages(text: string): Array<{ type: 'text' | 'image'; content: string; alt?: string }> {
+  const result: Array<{ type: 'text' | 'image'; content: string; alt?: string }> = [];
+  const regex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      result.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+    }
+    result.push({ type: 'image', content: match[2], alt: match[1] || undefined });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    result.push({ type: 'text', content: text.slice(lastIndex) });
+  }
+
+  if (result.length === 0) {
+    result.push({ type: 'text', content: text });
+  }
+
+  return result;
+}
+
+function renderOptionText(text: string) {
+  const blocks = parseTextWithImages(text);
+  if (blocks.length === 1 && blocks[0].type === 'text') {
+    return <span>{text}</span>;
+  }
+  return (
+    <div className="space-y-1">
+      {blocks.map((block, i) => {
+        if (block.type === 'image') {
+          return (
+            <img
+              key={i}
+              src={block.content}
+              alt={block.alt || '选项图片'}
+              className="max-h-24 max-w-full rounded border border-ark-border/50 object-contain inline-block align-middle"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          );
+        }
+        return <span key={i}>{block.content}</span>;
+      })}
+    </div>
+  );
+}
+
 function renderStem(stem: string, evidenceJson?: Record<string, unknown>) {
   const stemBlocks = evidenceJson?.stem_blocks as Array<{ type: string; text?: string; src?: string; alt?: string; content?: unknown }> | undefined;
 
@@ -127,7 +180,7 @@ export default function QuestionDetailModal({ question, bankKind, onClose }: Pro
                       }`}
                     >
                       <span className="font-medium">{key}.</span>{' '}
-                      {String(val)}
+                      {renderOptionText(String(val))}
                     </div>
                   ))}
                 </div>
