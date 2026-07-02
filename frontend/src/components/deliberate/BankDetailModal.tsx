@@ -250,7 +250,15 @@ export default function BankDetailModal({
               </div>
             ) : (
               <div className="flex-1 overflow-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-12" />
+                    <col className="w-16" />
+                    <col className="w-24" />
+                    <col />
+                    <col className="w-48" />
+                    <col className="w-16" />
+                  </colgroup>
                   <thead className="sticky top-0 z-10 bg-ark-surface-strong">
                     <tr className="text-left text-xs text-ark-text-muted">
                       <th
@@ -321,18 +329,18 @@ export default function BankDetailModal({
                         <td className="px-3 py-2 text-ark-text-muted w-28 text-xs truncate max-w-[7rem]">
                           {q.subject || '—'}
                         </td>
-                        <td className="px-3 py-2 text-ark-text align-top">
+                        <td className="px-3 py-2 text-ark-text align-top break-words">
                           <div className="line-clamp-2 mb-1.5 text-sm">
                             {q.stem}
                           </div>
                           {q.options && bankKind === 'choice' && (
-                            <div className="space-y-0.5">
+                            <div className="space-y-0.5 break-words">
                               {Object.entries(q.options).map(([key, val]) => {
                                 const isCorrect = key === q.answer;
                                 return (
                                   <div
                                     key={key}
-                                    className={`flex items-start gap-1.5 text-xs ${
+                                    className={`flex items-start gap-1.5 text-xs leading-relaxed ${
                                       isCorrect
                                         ? 'text-green-600'
                                         : 'text-ark-text-muted'
@@ -347,7 +355,7 @@ export default function BankDetailModal({
                                     >
                                       {key}
                                     </span>
-                                    <span className="line-clamp-1">
+                                    <span className="min-w-0 flex-1">
                                       {String(val)}
                                     </span>
                                   </div>
