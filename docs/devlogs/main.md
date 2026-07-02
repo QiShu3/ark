@@ -6,6 +6,23 @@
 
 ## 提交记录
 
+### 2026-07-02 · `c30a998` · fix(focus-work): restore unified run config and summary stats
+
+**用户需求**：“专注工作 计算页面 的 正确率 用时似乎都没有正常运行？”以及“可以了，提交代码吧”
+
+**完成工作**：
+- 修复统一题目选择在 choice 题库下按错误字段过滤的问题，改为通过 `choice_articles.set_id` 关联题库。
+- 补全 deliberate workflow 写入和恢复的统一配置快照，保证 `bank_id`、筛选规则、排序、FSRS 与回流策略能在运行态正确还原。
+- 调整 choice 答题记账，补充 `chosen_option`、`correct_option`、practice review log 与错题桶同步更新。
+- 重构统一 choice 专注题目的前端渲染，兼容字符串形式的 `options_json`，恢复左右分栏题面布局。
+- 在统一专注完成时补齐 `accuracy` 与 `duration_seconds`，并把结算卡片的耗时展示改成秒/分/小时的真实格式。
+- 新增并修正统一专注工作相关测试，覆盖完成结算统计与题库查询路径。
+
+**验证情况**：
+- `backend`: `uv run pytest tests/test_question_selector.py tests/test_focus_workflow_app_work.py -q`，56 passed
+- `frontend`: `pnpm test -- --run src/components/focus-work/UnifiedFocusWork.test.tsx src/components/focus-work/templates/ChoiceQuestionFocusTemplate.test.tsx src/components/ERC/PracticeFocusWork.test.tsx`，18 passed
+- `frontend`: `pnpm check`，passed
+
 ### 2026-06-26 · `c9b2aa2` · refactor(focus-work): extract duplicate utility functions and add browser automation tests
 
 **用户需求**：重构三种刻意工作流组件，提取重复代码，并创建浏览器自动化测试。
