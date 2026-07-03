@@ -529,30 +529,14 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       </div>
 
       {kind === 'flash_card' && question && (
-        <div className="space-y-4">
-          {/* Flashcard */}
-          <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] px-6 py-5 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] flex flex-col">
+        <div className="flex flex-col h-full min-h-0 gap-4">
+          {/* Flashcard - 居中区域 */}
+          <section className="relative flex-1 flex items-center justify-center rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] px-6 py-4 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] min-h-0">
             {/* Radial Background Mesh Glow */}
             <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.08),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.12),transparent_60%)]" />
 
-            {/* Pronunciation button - top left */}
-            <div className="flex justify-start shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  const utterance = new SpeechSynthesisUtterance(question.question_id);
-                  utterance.lang = 'en-US';
-                  window.speechSynthesis.speak(utterance);
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)] hover:border-[var(--focus-work-border-strong)] active:scale-95"
-                aria-label="播放发音"
-              >
-                <Volume2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="flex flex-col justify-center items-center w-full px-2 py-3">
+            {/* Content */}
+            <div className="w-full max-w-md">
               {/* Word */}
               <div className="text-4xl font-bold tracking-wide text-[var(--focus-work-text)] animate-fade-in">
                 {question.question_id}
@@ -591,7 +575,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                   </button>
                 </>
               ) : (
-                <div className="w-full animate-fade-in">
+                <div className="animate-fade-in">
                   {/* Separator Decorator */}
                   <div className="my-4 flex items-center justify-center">
                     <div className="h-[1px] w-16 bg-[var(--focus-work-border)] opacity-60" />
@@ -623,10 +607,24 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                 </div>
               )}
             </div>
+
+            {/* Pronunciation button - top left */}
+            <button
+              type="button"
+              onClick={() => {
+                const utterance = new SpeechSynthesisUtterance(question.question_id);
+                utterance.lang = 'en-US';
+                window.speechSynthesis.speak(utterance);
+              }}
+              className="absolute top-4 left-4 flex h-8 w-8 items-center justify-center rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)] hover:border-[var(--focus-work-border-strong)] active:scale-95"
+              aria-label="播放发音"
+            >
+              <Volume2 className="h-3.5 w-3.5" />
+            </button>
           </section>
 
-          {/* Four-point Rating Buttons (always visible) */}
-          <div className="space-y-2">
+          {/* Four-point Rating Buttons - 底部固定 */}
+          <div className="space-y-2 shrink-0">
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
               {FLASHCARD_RATINGS.map((rating) => {
                 const Icon = rating.icon;
