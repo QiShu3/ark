@@ -164,7 +164,29 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       setSubmitResult(result);
       setAnsweredCount(result.answered_count);
       setBackflowMessage(result.backflow_info);
-      setPhase('submit_confirm');
+
+      // 闪卡模式：非重试情况下直接进入下一题，不需要手动点击
+      if (kind === 'flash_card' && result.backflow_action !== 'retry') {
+        if (result.done || !result.next_question) {
+          setPhase('done');
+          onContentCompleted({
+            run_summary: buildRunSummary(
+              result.answered_count,
+              result.correct_count ?? 0,
+            ),
+          });
+        } else {
+          setQuestion(result.next_question);
+          questionStartedAtRef.current = Date.now();
+          setShowAnswer(false);
+          setSelectedOption('');
+          setUserInput('');
+          setBackflowMessage(null);
+          setSubmitResult(null);
+        }
+      } else {
+        setPhase('submit_confirm');
+      }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : '提交失败');
     } finally {
@@ -382,43 +404,116 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       </div>
 
       {kind === 'flash_card' && question && (
-        <div className="space-y-4">
-          <div className="rounded-lg border border-ark-border bg-ark-surface-subtle p-6 text-center">
-            {!showAnswer ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center gap-2">
-                  <Volume2 className="h-5 w-5 text-ark-text-muted" />
-                  <span className="text-2xl font-semibold text-ark-text">{question.question_id}</span>
-                </div>
-                <p className="text-sm text-ark-text-muted">点击下方按钮查看释义</p>
+        <div className="space-y-5">
+          {/* 闪卡主体 - StudyCard 精致风格 */}
+          <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-8 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] min-h-[360px] flex flex-col justify-between">
+            {/* Radial Background Mesh Glow */}
+            <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.06),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.1),transparent_60%)]" />
+
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col justify-center items-center overflow-y-auto min-h-0 w-full">
+              {/* Word with pronunciation */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const utterance = new SpeechSynthesisUtterance(question.question_id);
+                    utterance.lang = 'en-US';
+                    window.speechSynthesis.speak(utterance);
+                  }}
+                  className="text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)]"
+                  aria-label="播放发音"
+                >
+                  <Volume2 className="h-5 w-5" />
+                </button>
+                <span className="text-4xl font-bold tracking-tight text-[var(--focus-work-text)]">
+                  {question.question_id}
+                </span>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="text-2xl font-semibold text-ark-text">{question.question_id}</div>
-                <div className="mx-auto max-w-md rounded-lg bg-ark-surface-strong p-4">
-                  <p className="text-base text-ark-text">{question.answer}</p>
-                </div>
-                <div className="flex items-center justify-center gap-4 text-xs text-ark-text-muted">
-                  <span>正确: {question.right_count}</span>
-                  <span>错误: {question.wrong_count}</span>
-                </div>
+
+              {!showAnswer ? (
+                <>
+                  {/* Separator Decorator */}
+                  <div className="my-6 flex items-center justify-center">
+                    <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_8px_rgba(110,231,183,0.6)] animate-pulse" />
+                    <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+                  </div>
+
+                  {/* Recall Hint */}
+                  <div className="text-sm text-[var(--focus-work-text-faint)] select-none">
+                    先在脑中回忆释义
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Answer */}
+                  <div className="text-2xl font-medium text-[var(--focus-work-text)] mt-6 leading-normal tracking-wide">
+                    {question.answer}
+                  </div>
+
+                  {/* Separator Decorator */}
+                  <div className="my-5 flex items-center justify-center">
+                    <div className="h-[1px] w-24 bg-[var(--focus-work-border)] opacity-60" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_8px_rgba(110,231,183,0.6)] animate-pulse" />
+                    <div className="h-[1px] w-24 bg-[var(--focus-work-border)] opacity-60" />
+                  </div>
+
+                  {/* Stats */}
+                  <div className="flex items-center justify-center gap-6 text-xs text-[var(--focus-work-text-muted)]">
+                    <span>正确: <span className="text-[var(--focus-work-emerald-text)] font-medium">{question.right_count}</span></span>
+                    <span>错误: <span className="text-[var(--focus-work-rose-text)] font-medium">{question.wrong_count}</span></span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Display Toggle Button */}
+            {!showAnswer && (
+              <div className="mt-4 flex justify-center shrink-0">
+                <button
+                  type="button"
+                  onClick={handleShowAnswer}
+                  disabled={disabled}
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-6 py-2.5 text-sm font-medium text-[var(--focus-work-text-muted)] transition hover:border-[var(--focus-work-border-strong)] hover:bg-[var(--focus-work-surface-soft)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>显示释义</span>
+                  <svg
+                    className="h-4 w-4 transition-transform duration-300"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
               </div>
             )}
-          </div>
-          <div className="flex justify-center gap-2">
-            {!showAnswer ? (
-              <Button variant="primary" onClick={handleShowAnswer} disabled={disabled}>显示答案</Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => void handleSubmitAnswer(false)} disabled={disabled} leftIcon={<X className="h-4 w-4" />}>
-                  没记住
-                </Button>
-                <Button variant="primary" onClick={() => void handleSubmitAnswer(true)} disabled={disabled} leftIcon={<Check className="h-4 w-4" />}>
-                  记住了
-                </Button>
-              </div>
-            )}
-          </div>
+          </section>
+
+          {/* Rating Buttons */}
+          {showAnswer && (
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmitAnswer(false)}
+                disabled={disabled}
+                className="flex items-center gap-2 rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm font-medium text-[var(--focus-work-text)] transition hover:bg-[var(--focus-work-rose-bg)] hover:border-[var(--focus-work-rose-border)] hover:text-[var(--focus-work-rose-text)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="h-4 w-4" />
+                没记住
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSubmitAnswer(true)}
+                disabled={disabled}
+                className="flex items-center gap-2 rounded-xl border border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] px-5 py-3 text-sm font-medium text-[var(--focus-work-emerald-text)] transition hover:bg-[var(--focus-work-emerald-bg)] hover:border-[var(--focus-work-emerald-border)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check className="h-4 w-4" />
+                记住了
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -33,6 +33,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   const [snapshot, setSnapshot] = React.useState<FocusWorkSnapshot | null>(null);
   const [pendingStart, setPendingStart] = React.useState<PendingStart | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [showAbandonConfirm, setShowAbandonConfirm] = React.useState(false);
   const creatingRunRef = React.useRef(false);
 
   const activeRun = snapshot?.active_run ?? null;
@@ -230,16 +231,23 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   }
 
   function abandonCurrentWork() {
-    if (!window.confirm('确定要放弃当前专注阶段吗？这只会结束当前阶段，不会结束整个工作流。')) return;
-    void apiJson<FocusWorkSnapshot>('/todo/focus/workflow/skip_phase', { method: 'POST' })
-      .then((next) => {
-        setSnapshot(next);
-        window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-      })
-      .catch((err) => {
-        console.error('Failed to abandon focus phase', err);
-        alert(err instanceof Error ? err.message : '放弃本阶段失败');
-      });
+    setShowAbandonConfirm(true);
+  }
+
+  async function confirmAbandonWork() {
+    setBusy(true);
+    try {
+      const next = await apiJson<FocusWorkSnapshot>('/todo/focus/workflow/skip_phase', { method: 'POST' });
+      setSnapshot(next);
+      setShowAbandonConfirm(false);
+      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    } catch (err) {
+      console.error('Failed to abandon focus phase', err);
+      // 用项目内弹窗提示错误
+      alert(err instanceof Error ? err.message : '放弃本阶段失败');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function forkToWeakArea(parentRun: FocusWorkRunSummary) {
@@ -425,6 +433,43 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
             />
         </FocusWorkModalShell>
       ) : null}
+
+      {/* 放弃阶段确认弹窗 */}
+      {showAbandonConfirm && (
+        <AppModalFrame
+          open={true}
+          zIndexClassName="z-[100]"
+          backdropClassName="ark-focus-work-backdrop"
+          ariaLabelledBy="abandon-confirm-title"
+          panelClassName="ark-focus-work-dialog w-[min(92vw,28rem)] rounded-[2rem] border p-6 shadow-2xl"
+        >
+          <div className="text-xs uppercase tracking-[0.24em] text-[var(--focus-work-text-faint)]">Warning</div>
+          <h2 id="abandon-confirm-title" className="mt-3 text-2xl font-semibold text-[var(--focus-work-text)]">
+            确定要放弃当前阶段吗？
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">
+            放弃当前专注阶段后会进入下一阶段，不会结束整个工作流。
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setShowAbandonConfirm(false)}
+              disabled={busy}
+              className="rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-5 py-3 text-sm font-medium text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAbandonWork()}
+              disabled={busy}
+              className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-gray-100 disabled:opacity-60"
+            >
+              {busy ? '放弃中…' : '确认放弃'}
+            </button>
+          </div>
+        </AppModalFrame>
+      )}
 
       {snapshot?.phase_runtime_state === 'workflow_settlement' && snapshot?.workflow_settlement ? (
         <WorkflowSettlementModal
