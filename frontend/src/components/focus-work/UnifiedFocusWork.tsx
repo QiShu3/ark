@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, CheckCircle2, Frown, Meh, RotateCcw, Rocket, Volume2, X } from 'lucide-react';
+import { AlertTriangle, BarChart3, Check, CheckCircle2, Frown, Meh, RotateCcw, Rocket, Volume2, X } from 'lucide-react';
 
 import Button from '../Button';
 import { initUnifiedPool, submitUnifiedAnswer, type FlashcardRating, type UnifiedPoolInitResult, type UnifiedQuestion, type UnifiedSubmitResult } from '../../lib/focus-work/unifiedApi';
@@ -8,6 +8,7 @@ import ChoiceQuestionFocusTemplate from './templates/ChoiceQuestionFocusTemplate
 import type { ChoiceQuestionItem, ChoiceQuestionSubmitResult } from './templates/choiceQuestionTypes';
 import type { ContentBlockData } from './ContentBlockRenderer';
 import MarkdownContent from '../MarkdownContent';
+import { useFocusWorkHeaderRight } from './FocusWorkProvider';
 
 type Phase = 'loading' | 'warning_init' | 'active' | 'submit_confirm' | 'done' | 'error';
 
@@ -139,6 +140,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
   const submitInFlight = useRef(false);
   const sessionStartedAtRef = useRef<number>(Date.now());
   const questionStartedAtRef = useRef<number>(Date.now());
+  const { setHeaderRight } = useFocusWorkHeaderRight();
 
   const buildRunSummary = useCallback((nextAnsweredCount: number, nextCorrectCount: number) => ({
     answered_count: nextAnsweredCount,
@@ -357,6 +359,23 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
     ? buildUnifiedChoiceItem(question, submitResult?.answered_count ?? answeredCount, totalQuestions)
     : null;
 
+  // 同步进度徽章到外层 header 右侧（仅选择题模式）
+  useEffect(() => {
+    if (kind === 'choice' && (phase === 'active' || phase === 'submit_confirm')) {
+      const current = Math.min(submitResult?.answered_count ?? answeredCount, Math.max(totalQuestions, 1));
+      const total = Math.max(totalQuestions, 1);
+      setHeaderRight(
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--focus-work-text-muted)]">
+          <BarChart3 className="h-3.5 w-3.5" />
+          题目 {current} / {total}
+        </span>,
+      );
+    } else {
+      setHeaderRight(null);
+    }
+    return () => setHeaderRight(null);
+  }, [answeredCount, submitResult?.answered_count, totalQuestions, phase, kind, setHeaderRight]);
+
   if (phase === 'loading') {
     return (
       <div className="flex items-center justify-center py-12">
@@ -417,19 +436,21 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
 
   if (kind === 'choice' && (phase === 'active' || phase === 'submit_confirm') && choiceItem) {
     return (
-      <div className="space-y-4">
+      <div className="flex h-full flex-col gap-4">
         {backflowMessage && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm text-amber-400">
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm text-amber-400">
             <RotateCcw className="h-4 w-4 shrink-0" />
             <span>{backflowMessage}</span>
           </div>
         )}
 
         {errorMessage && (
-          <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-2 text-sm text-red-400">
+          <div className="shrink-0 rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-2 text-sm text-red-400">
             {errorMessage}
           </div>
         )}
+
+        <div className="min-h-0 flex-1">
 
         <ChoiceQuestionFocusTemplate
           title="选择练习"
@@ -502,26 +523,27 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
             }
           }}
         />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       {backflowMessage && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm text-amber-400">
+        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm text-amber-400">
           <RotateCcw className="h-4 w-4 shrink-0" />
           <span>{backflowMessage}</span>
         </div>
       )}
 
       {errorMessage && (
-        <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-2 text-sm text-red-400">
+        <div className="shrink-0 rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-2 text-sm text-red-400">
           {errorMessage}
         </div>
       )}
 
-      <div className="flex items-center justify-between text-xs text-ark-text-muted">
+      <div className="flex shrink-0 items-center justify-between text-xs text-ark-text-muted">
         <span>进度：{submitResult?.answered_count ?? answeredCount} / {totalQuestions}</span>
         {initResult?.target_count && initResult.target_count > totalQuestions && (
           <span className="text-amber-400">目标 {initResult.target_count} 题，实际 {totalQuestions} 题</span>
@@ -529,7 +551,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       </div>
 
       {kind === 'flash_card' && question && (
-        <div className="flex flex-col h-full min-h-0 gap-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
           {/* Flashcard - 居中区域 */}
           <section className="relative flex-1 flex items-center justify-center rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] px-6 py-4 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] min-h-0">
             {/* Radial Background Mesh Glow */}

@@ -16,6 +16,18 @@ import {
   type FocusWorkType,
 } from './focusWorkTypes';
 
+/**
+ * 专注工作 header 右侧内容注入 context
+ * 内层答题组件可以通过此 context 设置外层弹窗标题栏右侧的内容
+ */
+const FocusWorkHeaderRightContext = React.createContext<{
+  setHeaderRight: (node: React.ReactNode) => void;
+}>({ setHeaderRight: () => {} });
+
+export function useFocusWorkHeaderRight() {
+  return React.useContext(FocusWorkHeaderRightContext);
+}
+
 type FocusWorkProviderProps = {
   children: React.ReactNode;
 };
@@ -34,6 +46,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   const [pendingStart, setPendingStart] = React.useState<PendingStart | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [showAbandonConfirm, setShowAbandonConfirm] = React.useState(false);
+  const [headerRight, setHeaderRight] = React.useState<React.ReactNode>(null);
   const creatingRunRef = React.useRef(false);
 
   const activeRun = snapshot?.active_run ?? null;
@@ -411,26 +424,29 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           recordFocus={recordFocus}
           isPaused={snapshot.is_paused === true}
           busy={busy}
+          headerRight={headerRight}
           onPause={() => void pauseFocusWork()}
           onResume={() => void resumeFocusWork()}
           onAbandon={abandonCurrentWork}
         >
-          <FocusWorkbenchPanel
-            phaseRuntimeState={derivedPhaseRuntimeState}
-            activeRun={activeRun}
-            activeDefinition={activeDefinition}
-            busy={busy}
-            isPaused={snapshot?.is_paused === true}
-            onCompleteTaskAndEndPhase={() => void completeTaskAndEndPhase()}
-            onEndPhase={() => void endPhase()}
-            onExtendPhase={() => void extendPhase()}
-            onCreateExtraRun={() => void createRun('extra')}
-            onFork={activeRun ? () => void forkToWeakArea(activeRun) : undefined}
-            onForkWithChild={activeRun ? (childId) => void forkToChild(activeRun, childId) : undefined}
-            forkChildren={activeRun?.config_snapshot?.children as { config_id: string; label: string; is_recommended: boolean }[] | undefined}
-            onReturnToParent={activeRun ? () => void returnToParent(activeRun.id) : undefined}
-            onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
-            />
+          <FocusWorkHeaderRightContext.Provider value={{ setHeaderRight }}>
+            <FocusWorkbenchPanel
+              phaseRuntimeState={derivedPhaseRuntimeState}
+              activeRun={activeRun}
+              activeDefinition={activeDefinition}
+              busy={busy}
+              isPaused={snapshot?.is_paused === true}
+              onCompleteTaskAndEndPhase={() => void completeTaskAndEndPhase()}
+              onEndPhase={() => void endPhase()}
+              onExtendPhase={() => void extendPhase()}
+              onCreateExtraRun={() => void createRun('extra')}
+              onFork={activeRun ? () => void forkToWeakArea(activeRun) : undefined}
+              onForkWithChild={activeRun ? (childId) => void forkToChild(activeRun, childId) : undefined}
+              forkChildren={activeRun?.config_snapshot?.children as { config_id: string; label: string; is_recommended: boolean }[] | undefined}
+              onReturnToParent={activeRun ? () => returnToParent(activeRun.id) : undefined}
+              onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
+              />
+          </FocusWorkHeaderRightContext.Provider>
         </FocusWorkModalShell>
       ) : null}
 

@@ -6,6 +6,7 @@ type FocusWorkModalShellProps = {
   recordFocus: boolean;
   isPaused?: boolean;
   busy?: boolean;
+  headerRight?: React.ReactNode;
   onPause: () => void;
   onResume: () => void;
   onAbandon: () => void;
@@ -18,6 +19,7 @@ export default function FocusWorkModalShell({
   recordFocus,
   isPaused = false,
   busy = false,
+  headerRight,
   onPause,
   onResume,
   onAbandon,
@@ -41,6 +43,9 @@ export default function FocusWorkModalShell({
               {title}
             </h2>
           </div>
+          {headerRight && (
+            <div className="flex shrink-0 items-center gap-2">{headerRight}</div>
+          )}
           <div className="flex items-center gap-3">
             {!recordFocus ? (
               <span className="rounded-full border border-[var(--focus-work-amber-border)] bg-[var(--focus-work-amber-bg)] px-3 py-1 text-xs text-[var(--focus-work-amber-text)]">

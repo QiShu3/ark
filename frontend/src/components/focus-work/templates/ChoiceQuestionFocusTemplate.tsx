@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, BookOpen, ChevronRight, Trophy } from 'lucide-react';
+import { ChevronRight, Trophy } from 'lucide-react';
 
 import type {
   ChoiceQuestionFocusTemplateProps,
@@ -8,7 +8,7 @@ import type {
 } from './choiceQuestionTypes';
 import MarkdownContent from '../../MarkdownContent';
 import ContentBlockRenderer from '../ContentBlockRenderer';
-import { buildProgressSnapshot, metaClass } from '../focusWorkUtils';
+import { buildProgressSnapshot } from '../focusWorkUtils';
 
 export default function ChoiceQuestionFocusTemplate({
   item,
@@ -111,21 +111,7 @@ export default function ChoiceQuestionFocusTemplate({
           <div className={`grid min-h-0 flex-1 gap-4 overflow-hidden ${hasMaterial ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]' : ''}`}>
             {hasMaterial ? (
               <article aria-label="阅读原文" className="flex min-h-0 max-h-[46vh] flex-col overflow-hidden rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-6 shadow-sm lg:max-h-none lg:p-8">
-                <div className="mb-5 flex shrink-0 items-center justify-between gap-4 border-b border-[var(--focus-work-border)] pb-4">
-                  <h2 className="flex items-center gap-2.5 text-xl font-bold text-[var(--focus-work-text)] font-serif lg:text-2xl">
-                    <BookOpen className="h-5.5 w-5.5 text-[var(--focus-work-blue-text)]" />
-                    {currentItem.material?.title ?? '题目'}
-                  </h2>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm text-[var(--focus-work-text-muted)]">
-                    {(currentItem.meta ?? []).map((meta) => (
-                      <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${metaClass(meta.tone)}`}>
-                        <BarChart3 className="h-3.5 w-3.5" />
-                        {meta.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex-1 space-y-6 overflow-y-auto pr-3">
+                <div className="flex-1 space-y-6 overflow-y-auto pr-3 pt-1">
                   {currentItem.materialBlocks?.length ? (
                     <ContentBlockRenderer blocks={currentItem.materialBlocks} />
                   ) : (
@@ -147,37 +133,8 @@ export default function ChoiceQuestionFocusTemplate({
             ) : null}
 
             <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-sm">
-              <div className="min-h-0 overflow-y-auto pr-1">
-                <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="min-w-0">
-                      <h2 className="text-base font-bold text-[var(--focus-work-text)] font-serif">Current Question</h2>
-                    </div>
-                  </div>
-                  <div className="z-10 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void handleSubmit()}
-                      disabled={disabled || submitting || !selected || !!result}
-                      className="inline-flex rounded-lg bg-[var(--focus-work-blue-text)] px-4 py-1.5 text-xs font-semibold text-[var(--focus-work-primary-button-text)] shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {submitting ? '提交中...' : '提交答案'}
-                    </button>
-                    {result ? (
-                      <button
-                        type="button"
-                        disabled={disabled || loadingNext}
-                        onClick={() => void handleLoadNext()}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-2.5 py-1.5 text-xs font-semibold text-[var(--focus-work-blue-text)] transition hover:bg-[var(--focus-work-blue-bg)] disabled:pointer-events-none disabled:opacity-30"
-                      >
-                        {loadingNext ? '加载中...' : '下一题'}
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-4">
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                <div>
                   {currentItem.stemPlacement !== 'material' ? (
                     currentItem.stemBlocks ? (
                       <div className="space-y-2">
@@ -237,6 +194,28 @@ export default function ChoiceQuestionFocusTemplate({
                     <div className="mb-2 text-xs font-semibold text-[var(--focus-work-emerald-text)]">解析</div>
                     <ContentBlockRenderer blocks={result.explanationBlocks ?? currentItem.explanationBlocks!} />
                   </div>
+                )}
+              </div>
+              <div className="shrink-0 mt-4 flex justify-end gap-2">
+                {result ? (
+                  <button
+                    type="button"
+                    disabled={disabled || loadingNext}
+                    onClick={() => void handleLoadNext()}
+                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--focus-work-blue-text)] px-4 py-2 text-xs font-semibold text-[var(--focus-work-primary-button-text)] shadow-sm transition hover:opacity-95 disabled:pointer-events-none disabled:opacity-30"
+                  >
+                    {loadingNext ? '加载中...' : '下一题'}
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmit()}
+                    disabled={disabled || submitting || !selected || !!result}
+                    className="inline-flex rounded-lg bg-[var(--focus-work-blue-text)] px-4 py-2 text-xs font-semibold text-[var(--focus-work-primary-button-text)] shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? '提交中...' : '提交答案'}
+                  </button>
                 )}
               </div>
             </section>
