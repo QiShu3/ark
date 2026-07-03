@@ -9,6 +9,7 @@ import asyncpg
 from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND
 
 BackflowRule = Literal["none", "wrong_to_end", "wrong_retry"]
+FlashcardRating = Literal["again", "hard", "good", "easy"]
 
 
 async def record_answer(
@@ -23,6 +24,7 @@ async def record_answer(
     backflow_rule: BackflowRule = "none",
     time_spent_ms: int = 0,
     detail: dict[str, Any] | None = None,
+    rating: FlashcardRating | None = None,
 ) -> tuple[str | None, dict[str, Any]]:
     """Record an answer and update the study ledger.
 
@@ -38,6 +40,7 @@ async def record_answer(
             conn, user_id=user_id, bank_id=bank_id, question_pk=question_pk,
             is_correct=is_correct, use_fsrs=use_fsrs, now=now,
             time_spent_ms=time_spent_ms, detail=detail,
+            rating=rating,
         )
     elif kind == CHOICE_KIND:
         backflow_action = await _record_choice(
@@ -60,7 +63,7 @@ async def record_answer(
     elif backflow_action == "wrong_retry" and not is_correct:
         triggered = "retry"
 
-    return triggered, {"is_correct": is_correct, "answered_at": now.isoformat()}
+    return triggered, {"is_correct": is_correct, "answered_at": now.isoformat(), "rating": rating}
 
 
 async def _record_vocab(
@@ -74,8 +77,22 @@ async def _record_vocab(
     now: datetime,
     time_spent_ms: int,
     detail: dict[str, Any] | None,
+    rating: FlashcardRating | None = None,
 ) -> str | None:
     backflow_rule = (detail or {}).get("backflow_rule", "none")
+
+    # Normalize: if rating is provided, derive is_correct from it;
+    # if rating is None (legacy callers), keep the provided is_correct.
+    if rating is not None:
+        is_correct = rating != "again"
+    else:
+        # Back-compat: map legacy boolean to rating label for storage
+        rating = "good" if is_correct else "again"  # type: ignore[assignment]
+
+    # Mastery score delta per rating (aligned with flash service)
+    mastery_deltas = {"again": -1, "hard": 1, "good": 2, "easy": 3}
+    mastery_delta = mastery_deltas[rating]  # type: ignore[index]
+    is_again = rating == "again"
 
     row = await conn.fetchrow(
         """
@@ -90,34 +107,59 @@ async def _record_vocab(
     )
 
     if row is None:
+        # First review for this word
+        initial_mastery = mastery_delta
+        initial_correct = 0 if is_again else 1
+        initial_wrong = 1 if is_again else 0
+        initial_lapse = 1 if is_again else 0
+        # Simple fixed interval for first review (non-FSRS path)
+        if is_again:
+            initial_next = now + timedelta(hours=1)
+        elif rating == "hard":
+            initial_next = now + timedelta(days=1)
+        elif rating == "easy":
+            initial_next = now + timedelta(days=4)
+        else:  # good
+            initial_next = now + timedelta(days=3)
+
         await conn.execute(
             """
             INSERT INTO vocab_user_word_progress
                 (user_id, deck_id, word_id, mastery_score, correct_count, wrong_count,
-                 last_result, last_review_at, next_review_at)
-            VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9)
+                 lapse_count, last_result, last_review_at, next_review_at)
+            VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
             """,
             user_id,
             bank_id,
             question_pk,
-            1 if is_correct else -1,
-            1 if is_correct else 0,
-            0 if is_correct else 1,
-            "good" if is_correct else "again",
+            initial_mastery,
+            initial_correct,
+            initial_wrong,
+            initial_lapse,
+            rating,
             now,
-            now + timedelta(days=1) if not is_correct else now + timedelta(days=3),
+            initial_next,
         )
     else:
-        correct_count = row["correct_count"] + (1 if is_correct else 0)
-        wrong_count = row["wrong_count"] + (0 if is_correct else 1)
-        lapse_count = row["lapse_count"] + (0 if is_correct else 1)
-        mastery = max(-5, min(5, row["mastery_score"] + (1 if is_correct else -1)))
+        correct_count = row["correct_count"] + (0 if is_again else 1)
+        wrong_count = row["wrong_count"] + (1 if is_again else 0)
+        lapse_count = row["lapse_count"] + (1 if is_again else 0)
+        mastery = max(-5, min(5, row["mastery_score"] + mastery_delta))
 
+        # Default non-FSRS interval calculation
         next_review = now
-        if is_correct:
-            next_review = now + timedelta(days=min(row["interval_days"] + 1, 365) if row["interval_days"] else 1)
-        else:
+        interval_days = 0
+        if is_again:
             next_review = now + timedelta(hours=1)
+        else:
+            base_interval = row["interval_days"] or 1
+            if rating == "hard":
+                interval_days = max(1, int(base_interval * 1.2))
+            elif rating == "easy":
+                interval_days = min(int(base_interval * 2.5), 365)
+            else:  # good
+                interval_days = min(base_interval + 1, 365)
+            next_review = now + timedelta(days=interval_days)
 
         if use_fsrs:
             try:
@@ -125,8 +167,15 @@ async def _record_vocab(
                 card_json = row["fsrs_card_json"]
                 card = Card.from_dict(card_json) if card_json and isinstance(card_json, dict) else Card()
                 scheduler = Scheduler()
-                rating = Rating.Good if is_correct else Rating.Again
-                card, _ = scheduler.review_card(card, rating, review_datetime=now)
+                # Map rating string to FSRS Rating enum
+                rating_map = {
+                    "again": Rating.Again,
+                    "hard": Rating.Hard,
+                    "good": Rating.Good,
+                    "easy": Rating.Easy,
+                }
+                fsrs_rating = rating_map[rating]  # type: ignore[index]
+                card, _ = scheduler.review_card(card, fsrs_rating, review_datetime=now)
                 next_review = card.due
                 interval_days = 0
                 if card.due:
@@ -143,7 +192,7 @@ async def _record_vocab(
                     WHERE user_id = $10 AND word_id = $11::uuid
                     """,
                     correct_count, wrong_count, lapse_count,
-                    mastery, "good" if is_correct else "again", now,
+                    mastery, rating, now,
                     next_review, interval_days,
                     json.dumps(card.to_dict()),
                     user_id, question_pk,
@@ -161,8 +210,8 @@ async def _record_vocab(
                 WHERE user_id = $9 AND word_id = $10::uuid
                 """,
                 correct_count, wrong_count, lapse_count,
-                mastery, "good" if is_correct else "again", now,
-                next_review, 0,
+                mastery, rating, now,
+                next_review, interval_days,
                 user_id, question_pk,
             )
 
@@ -173,7 +222,7 @@ async def _record_vocab(
         """,
         user_id, bank_id, question_pk,
         "practice", "recall",
-        "correct" if is_correct else "wrong",
+        rating,
         int(time_spent_ms), now,
     )
 

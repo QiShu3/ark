@@ -266,6 +266,7 @@ async def submit_answer(
     is_correct = bool(payload.get("is_correct", False))
     time_spent_ms = int(payload.get("time_spent_ms", 0))
     user_input = str(payload.get("user_input", ""))
+    rating = payload.get("rating")  # flashcard four-point rating: again/hard/good/easy
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -317,12 +318,18 @@ async def submit_answer(
             backflow_rule=backflow_rule,
             time_spent_ms=time_spent_ms,
             detail={"user_input": user_input, "backflow_rule": backflow_rule},
+            rating=rating,
         )
 
         pool_data = progress_snapshot.get("unified_question_pool", [])
         run_summary = progress_snapshot.get("run_summary", {})
         run_summary["answered_count"] = (run_summary.get("answered_count", 0)) + 1
-        if is_correct:
+        # For flashcards with four-point rating, "correct" means not "again"
+        if kind == "flash_card" and rating:
+            is_actually_correct = rating != "again"
+        else:
+            is_actually_correct = is_correct
+        if is_actually_correct:
             run_summary["correct_count"] = (run_summary.get("correct_count", 0)) + 1
         run_summary["accuracy"] = (
             run_summary["correct_count"] / run_summary["answered_count"]
@@ -334,7 +341,9 @@ async def submit_answer(
         for q in pool_data:
             if str(q.get("id", "")) == question_id:
                 q["answered"] = True
-                q["is_correct"] = is_correct
+                q["is_correct"] = is_actually_correct
+                if rating:
+                    q["rating"] = rating
                 if triggered_action == "requeue":
                     q["backflow_count"] = q.get("backflow_count", 0) + 1
                     q["answered"] = False
@@ -370,7 +379,8 @@ async def submit_answer(
             backflow_info = "请重新作答本题"
 
         return {
-            "is_correct": is_correct,
+            "is_correct": is_actually_correct,
+            "rating": rating,
             "next_question": next_question,
             "done": done,
             "answered_count": answered_count,

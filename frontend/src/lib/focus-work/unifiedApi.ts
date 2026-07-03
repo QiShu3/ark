@@ -38,6 +38,7 @@ export type UnifiedNextResult = {
 
 export type UnifiedSubmitResult = {
   is_correct: boolean;
+  rating?: string | null;
   next_question: UnifiedQuestion | null;
   done: boolean;
   answered_count: number;
@@ -47,6 +48,8 @@ export type UnifiedSubmitResult = {
   backflow_info: string | null;
   warning: string | null;
 };
+
+export type FlashcardRating = 'again' | 'hard' | 'good' | 'easy';
 
 export function initUnifiedPool(runId: string) {
   return apiJson<UnifiedPoolInitResult>(`/api/focus-work/unified/${encodeURIComponent(runId)}/init`, {
@@ -60,7 +63,13 @@ export function getUnifiedNext(runId: string) {
 
 export function submitUnifiedAnswer(
   runId: string,
-  payload: { question_id: string; is_correct: boolean; time_spent_ms?: number; user_input?: string }
+  payload: {
+    question_id: string;
+    is_correct?: boolean;
+    time_spent_ms?: number;
+    user_input?: string;
+    rating?: FlashcardRating;
+  }
 ) {
   return apiJson<UnifiedSubmitResult>(`/api/focus-work/unified/${encodeURIComponent(runId)}/submit`, {
     method: 'POST',
