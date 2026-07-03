@@ -647,38 +647,60 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
             </div>
           </section>
 
-          {/* Four-point Rating Buttons */}
-          {showAnswer && (
-            <div className="space-y-3 animate-fade-in">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {FLASHCARD_RATINGS.map((rating) => {
-                  const Icon = rating.icon;
-                  return (
-                    <button
-                      key={rating.value}
-                      type="button"
-                      onClick={() => void handleFlashcardRating(rating.value)}
-                      disabled={disabled}
-                      className={`flex flex-col items-center gap-2 rounded-2xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-3 py-4 text-center transition-all duration-200 hover:-translate-y-0.5 active:scale-95 disabled:pointer-events-none disabled:opacity-50 ${rating.colorClass}`}
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--focus-work-surface-raised)] border border-[var(--focus-work-border)] text-[var(--focus-work-text-muted)]">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="text-sm font-semibold text-[var(--focus-work-text)]">
-                        {rating.label}
-                      </div>
-                      <div className="text-[11px] text-[var(--focus-work-text-muted)] leading-tight">
-                        {rating.hint}
-                      </div>
-                      <div className="inline-flex h-4 w-4 items-center justify-center rounded bg-[var(--focus-work-surface-raised)] border border-[var(--focus-work-border)] text-[10px] font-mono text-[var(--focus-work-text-faint)]">
-                        {rating.shortcut}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Four-point Rating Buttons (always visible) */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {FLASHCARD_RATINGS.map((rating) => {
+                const Icon = rating.icon;
+                const isDisabled = disabled || !showAnswer;
+                return (
+                  <button
+                    key={rating.value}
+                    type="button"
+                    onClick={() => {
+                      if (!showAnswer) {
+                        // 未显示释义时，点击按钮先显示释义
+                        handleShowAnswer();
+                        return;
+                      }
+                      void handleFlashcardRating(rating.value);
+                    }}
+                    disabled={disabled}
+                    className={`flex flex-col items-center gap-2 rounded-2xl border bg-[var(--focus-work-surface-soft)] px-3 py-4 text-center transition-all duration-200 active:scale-95 ${
+                      showAnswer
+                        ? 'border-[var(--focus-work-border)] hover:-translate-y-0.5'
+                        : 'border-[var(--focus-work-border)]/50 opacity-60 hover:opacity-80'
+                    } ${showAnswer ? rating.colorClass : ''}`}
+                  >
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl border bg-[var(--focus-work-surface-raised)] ${
+                      showAnswer ? 'border-[var(--focus-work-border)] text-[var(--focus-work-text-muted)]' : 'border-[var(--focus-work-border)]/50 text-[var(--focus-work-text-faint)]'
+                    }`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className={`text-sm font-semibold ${
+                      showAnswer ? 'text-[var(--focus-work-text)]' : 'text-[var(--focus-work-text-muted)]'
+                    }`}>
+                      {rating.label}
+                    </div>
+                    <div className="text-[11px] text-[var(--focus-work-text-muted)] leading-tight">
+                      {rating.hint}
+                    </div>
+                    <div className={`inline-flex h-4 w-4 items-center justify-center rounded border bg-[var(--focus-work-surface-raised)] text-[10px] font-mono ${
+                      showAnswer ? 'border-[var(--focus-work-border)] text-[var(--focus-work-text-faint)]' : 'border-[var(--focus-work-border)]/50 text-[var(--focus-work-text-faint)]/60'
+                    }`}>
+                      {rating.shortcut}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-              {/* Shortcut hint */}
+            {/* Status hint */}
+            {!showAnswer ? (
+              <div className="flex items-center justify-center text-[11px] text-[var(--focus-work-text-faint)]">
+                <span>点击任意按钮或按 [Space] 显示释义</span>
+              </div>
+            ) : (
               <div className="flex items-center justify-center text-[11px] text-[var(--focus-work-text-faint)]">
                 <span>⌨️ 快捷键：</span>
                 <span className="mx-1">[1] 没记住</span>
@@ -688,11 +710,9 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                 <span className="mx-1">[3] 记住了</span>
                 <span className="text-[var(--focus-work-border)]">·</span>
                 <span className="mx-1">[4] 很轻松</span>
-                <span className="text-[var(--focus-work-border)]">·</span>
-                <span className="mx-1">[Space] 显示释义</span>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
