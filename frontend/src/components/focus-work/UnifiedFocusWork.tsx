@@ -529,27 +529,9 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       </div>
 
       {kind === 'flash_card' && question && (
-        <div className="space-y-5">
-          {/* Progress Bar */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-[var(--focus-work-text-muted)]">
-              <span>进度</span>
-              <span>
-                {submitResult?.answered_count ?? answeredCount} / {totalQuestions}
-              </span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--focus-work-surface-muted)]">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--focus-work-emerald-text)] to-[var(--focus-work-sky-text)] transition-all duration-500 ease-out"
-                style={{
-                  width: `${totalQuestions > 0 ? ((submitResult?.answered_count ?? answeredCount) / totalQuestions) * 100 : 0}%`,
-                }}
-              />
-            </div>
-          </div>
-
+        <div className="space-y-4">
           {/* Flashcard */}
-          <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] p-6 pb-5 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] min-h-[380px] flex flex-col">
+          <section className="relative rounded-[2rem] border border-[var(--focus-work-border-strong)] bg-[var(--focus-work-surface-soft)] px-6 py-5 text-center backdrop-blur-md overflow-hidden shadow-[var(--focus-work-card-shadow)] flex flex-col">
             {/* Radial Background Mesh Glow */}
             <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.08),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(147,197,253,0.12),transparent_60%)]" />
 
@@ -562,27 +544,27 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                   utterance.lang = 'en-US';
                   window.speechSynthesis.speak(utterance);
                 }}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)] hover:border-[var(--focus-work-border-strong)] active:scale-95"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] text-[var(--focus-work-text-muted)] transition hover:text-[var(--focus-work-text)] hover:border-[var(--focus-work-border-strong)] active:scale-95"
                 aria-label="播放发音"
               >
-                <Volume2 className="h-4 w-4" />
+                <Volume2 className="h-3.5 w-3.5" />
               </button>
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col justify-center items-center overflow-y-auto min-h-0 w-full px-2">
+            <div className="flex flex-col justify-center items-center w-full px-2 py-3">
               {/* Word */}
-              <div className="text-5xl font-bold tracking-wide text-[var(--focus-work-text)] animate-fade-in">
+              <div className="text-4xl font-bold tracking-wide text-[var(--focus-work-text)] animate-fade-in">
                 {question.question_id}
               </div>
 
               {!showAnswer ? (
                 <>
                   {/* Separator Decorator */}
-                  <div className="mt-6 mb-4 flex items-center justify-center">
-                    <div className="h-[1px] w-16 bg-[var(--focus-work-border)] opacity-60" />
-                    <div className="h-2 w-2 rounded-full bg-emerald-400/80 mx-3 shadow-[0_0_10px_rgba(110,231,183,0.7)] animate-pulse" />
-                    <div className="h-[1px] w-16 bg-[var(--focus-work-border)] opacity-60" />
+                  <div className="mt-4 mb-3 flex items-center justify-center">
+                    <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/80 mx-2.5 shadow-[0_0_8px_rgba(110,231,183,0.7)] animate-pulse" />
+                    <div className="h-[1px] w-12 bg-[var(--focus-work-border)] opacity-60" />
                   </div>
 
                   {/* Recall Hint */}
@@ -595,11 +577,11 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
                     type="button"
                     onClick={handleShowAnswer}
                     disabled={disabled}
-                    className="mt-6 inline-flex items-center gap-2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-6 py-2.5 text-sm font-medium text-[var(--focus-work-text-muted)] transition hover:border-[var(--focus-work-border-strong)] hover:text-[var(--focus-work-text)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-slow"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] px-5 py-2 text-sm font-medium text-[var(--focus-work-text-muted)] transition hover:border-[var(--focus-work-border-strong)] hover:text-[var(--focus-work-text)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed animate-pulse-slow"
                   >
                     <span>显示释义</span>
                     <svg
-                      className="h-4 w-4 transition-transform duration-300"
+                      className="h-3.5 w-3.5 transition-transform duration-300"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -611,35 +593,31 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
               ) : (
                 <div className="w-full animate-fade-in">
                   {/* Separator Decorator */}
-                  <div className="my-5 flex items-center justify-center">
-                    <div className="h-[1px] w-20 bg-[var(--focus-work-border)] opacity-60" />
-                    <div className="h-2 w-2 rounded-full bg-emerald-400/90 mx-3 shadow-[0_0_12px_rgba(110,231,183,0.8)]" />
-                    <div className="h-[1px] w-20 bg-[var(--focus-work-border)] opacity-60" />
+                  <div className="my-4 flex items-center justify-center">
+                    <div className="h-[1px] w-16 bg-[var(--focus-work-border)] opacity-60" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400/90 mx-2.5 shadow-[0_0_10px_rgba(110,231,183,0.8)]" />
+                    <div className="h-[1px] w-16 bg-[var(--focus-work-border)] opacity-60" />
                   </div>
 
                   {/* Answer */}
-                  <div className="text-2xl font-medium text-[var(--focus-work-text)] leading-relaxed tracking-wide">
+                  <div className="text-xl font-medium text-[var(--focus-work-text)] leading-relaxed tracking-wide">
                     {question.answer}
                   </div>
 
                   {/* Stats */}
-                  <div className="mt-5 flex items-center justify-center gap-6 text-xs text-[var(--focus-work-text-muted)]">
+                  <div className="mt-4 flex items-center justify-center gap-5 text-xs text-[var(--focus-work-text-muted)]">
                     <span>
-                      正确：
-                      <span className="text-[var(--focus-work-emerald-text)] font-semibold">{question.right_count}</span>
+                      正确 <span className="text-[var(--focus-work-emerald-text)] font-semibold">{question.right_count}</span>
                     </span>
                     <span className="h-3 w-px bg-[var(--focus-work-border)]" />
                     <span>
-                      错误：
-                      <span className="text-[var(--focus-work-rose-text)] font-semibold">{question.wrong_count}</span>
+                      错误 <span className="text-[var(--focus-work-rose-text)] font-semibold">{question.wrong_count}</span>
                     </span>
                     <span className="h-3 w-px bg-[var(--focus-work-border)]" />
                     <span>
-                      已复习：
-                      <span className="text-[var(--focus-work-text)] font-semibold">
+                      已复习 <span className="text-[var(--focus-work-text)] font-semibold">
                         {(question.right_count ?? 0) + (question.wrong_count ?? 0)}
                       </span>
-                      {' '}次
                     </span>
                   </div>
                 </div>
@@ -648,47 +626,40 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
           </section>
 
           {/* Four-point Rating Buttons (always visible) */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
               {FLASHCARD_RATINGS.map((rating) => {
                 const Icon = rating.icon;
-                const isDisabled = disabled || !showAnswer;
                 return (
                   <button
                     key={rating.value}
                     type="button"
                     onClick={() => {
                       if (!showAnswer) {
-                        // 未显示释义时，点击按钮先显示释义
                         handleShowAnswer();
                         return;
                       }
                       void handleFlashcardRating(rating.value);
                     }}
                     disabled={disabled}
-                    className={`flex flex-col items-center gap-2 rounded-2xl border bg-[var(--focus-work-surface-soft)] px-3 py-4 text-center transition-all duration-200 active:scale-95 ${
+                    className={`flex flex-col items-center gap-1.5 rounded-2xl border bg-[var(--focus-work-surface-soft)] px-2 py-3 text-center transition-all duration-200 active:scale-95 ${
                       showAnswer
                         ? 'border-[var(--focus-work-border)] hover:-translate-y-0.5'
                         : 'border-[var(--focus-work-border)]/50 opacity-60 hover:opacity-80'
                     } ${showAnswer ? rating.colorClass : ''}`}
                   >
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl border bg-[var(--focus-work-surface-raised)] ${
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg border bg-[var(--focus-work-surface-raised)] ${
                       showAnswer ? 'border-[var(--focus-work-border)] text-[var(--focus-work-text-muted)]' : 'border-[var(--focus-work-border)]/50 text-[var(--focus-work-text-faint)]'
                     }`}>
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-4 w-4" />
                     </div>
                     <div className={`text-sm font-semibold ${
                       showAnswer ? 'text-[var(--focus-work-text)]' : 'text-[var(--focus-work-text-muted)]'
                     }`}>
                       {rating.label}
                     </div>
-                    <div className="text-[11px] text-[var(--focus-work-text-muted)] leading-tight">
+                    <div className="text-[10px] text-[var(--focus-work-text-muted)] leading-tight">
                       {rating.hint}
-                    </div>
-                    <div className={`inline-flex h-4 w-4 items-center justify-center rounded border bg-[var(--focus-work-surface-raised)] text-[10px] font-mono ${
-                      showAnswer ? 'border-[var(--focus-work-border)] text-[var(--focus-work-text-faint)]' : 'border-[var(--focus-work-border)]/50 text-[var(--focus-work-text-faint)]/60'
-                    }`}>
-                      {rating.shortcut}
                     </div>
                   </button>
                 );
@@ -697,19 +668,12 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
 
             {/* Status hint */}
             {!showAnswer ? (
-              <div className="flex items-center justify-center text-[11px] text-[var(--focus-work-text-faint)]">
+              <div className="flex items-center justify-center text-[10px] text-[var(--focus-work-text-faint)]">
                 <span>点击任意按钮或按 [Space] 显示释义</span>
               </div>
             ) : (
-              <div className="flex items-center justify-center text-[11px] text-[var(--focus-work-text-faint)]">
-                <span>⌨️ 快捷键：</span>
-                <span className="mx-1">[1] 没记住</span>
-                <span className="text-[var(--focus-work-border)]">·</span>
-                <span className="mx-1">[2] 有点难</span>
-                <span className="text-[var(--focus-work-border)]">·</span>
-                <span className="mx-1">[3] 记住了</span>
-                <span className="text-[var(--focus-work-border)]">·</span>
-                <span className="mx-1">[4] 很轻松</span>
+              <div className="flex items-center justify-center text-[10px] text-[var(--focus-work-text-faint)]">
+                <span>⌨️ 快捷键：[1] 没记住 · [2] 有点难 · [3] 记住了 · [4] 很轻松</span>
               </div>
             )}
           </div>
