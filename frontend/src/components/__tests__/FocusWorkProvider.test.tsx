@@ -324,7 +324,7 @@ describe('FocusWorkProvider', () => {
     expect(await screen.findByText('选择fork到：')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /错题复习/ }));
 
-    expect(apiJson).toHaveBeenCalledWith('/api/admin/deliberate-workflows/child-cfg-1');
+    expect(apiJson).toHaveBeenCalledWith('/api/deliberate-workflows/child-cfg-1');
     expect(apiJson).toHaveBeenCalledWith(
       '/todo/focus/workflow/runs/fork',
       expect.objectContaining({

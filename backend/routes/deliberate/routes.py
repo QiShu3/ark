@@ -38,7 +38,7 @@ from .schemas import (
 )
 from .service import import_deliberate_bank, validate_config_shape
 
-router = APIRouter(prefix="/api/admin", tags=["admin-deliberate"])
+router = APIRouter(prefix="/api", tags=["deliberate"])
 
 
 def _pool(request: Request) -> asyncpg.Pool:
@@ -46,12 +46,6 @@ def _pool(request: Request) -> asyncpg.Pool:
     if pool is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
     return pool
-
-
-async def _require_admin(user: Annotated[_AuthUser, Depends(get_current_user)]) -> _AuthUser:
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
 
 
 async def _bank_summary(conn: asyncpg.Connection, *, kind: str, bank_id: str | None) -> dict[str, Any] | None:
@@ -130,19 +124,19 @@ async def _config_out(conn: asyncpg.Connection, row: Any, *, user_id: int) -> De
 @router.get("/deliberate-workflows", response_model=list[DeliberateWorkflowConfigOut])
 async def list_deliberate_workflows(
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> list[DeliberateWorkflowConfigOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        rows = await repository.list_configs(conn, user_id=int(admin.id))
-        return [await _config_out(conn, row, user_id=int(admin.id)) for row in rows]
+        rows = await repository.list_configs(conn, user_id=int(user.id))
+        return [await _config_out(conn, row, user_id=int(user.id)) for row in rows]
 
 
 @router.post("/deliberate-workflows", response_model=DeliberateWorkflowConfigOut)
 async def create_deliberate_workflow(
     payload: DeliberateWorkflowConfigCreate,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> DeliberateWorkflowConfigOut:
     validate_config_shape(payload.kind, payload.focus_work_type, payload.target_count)
 
@@ -155,7 +149,7 @@ async def create_deliberate_workflow(
     async with pool.acquire() as conn:
         row = await repository.create_config(
             conn,
-            user_id=int(admin.id),
+            user_id=int(user.id),
             name=payload.name.strip(),
             kind=payload.kind,
             focus_work_type=payload.focus_work_type,
@@ -170,21 +164,21 @@ async def create_deliberate_workflow(
             use_fsrs=payload.use_fsrs,
             backflow_rule=payload.backflow_rule,
         )
-        return await _config_out(conn, row, user_id=int(admin.id))
+        return await _config_out(conn, row, user_id=int(user.id))
 
 
 @router.get("/deliberate-workflows/{config_id:uuid}", response_model=DeliberateWorkflowConfigOut)
 async def get_deliberate_workflow(
     config_id: UUID,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> DeliberateWorkflowConfigOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        row = await repository.get_config(conn, user_id=int(admin.id), config_id=str(config_id))
+        row = await repository.get_config(conn, user_id=int(user.id), config_id=str(config_id))
         if row is None:
             raise HTTPException(status_code=404, detail="配置不存在")
-        return await _config_out(conn, row, user_id=int(admin.id))
+        return await _config_out(conn, row, user_id=int(user.id))
 
 
 @router.patch("/deliberate-workflows/{config_id:uuid}", response_model=DeliberateWorkflowConfigOut)
@@ -192,7 +186,7 @@ async def update_deliberate_workflow(
     config_id: UUID,
     payload: DeliberateWorkflowConfigPatch,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> DeliberateWorkflowConfigOut:
     patch = payload.model_dump(exclude_unset=True)
 
@@ -205,28 +199,28 @@ async def update_deliberate_workflow(
 
     pool = _pool(request)
     async with pool.acquire() as conn:
-        current = await repository.get_config(conn, user_id=int(admin.id), config_id=str(config_id))
+        current = await repository.get_config(conn, user_id=int(user.id), config_id=str(config_id))
         if current is None:
             raise HTTPException(status_code=404, detail="配置不存在")
         next_kind = patch.get("kind", current["kind"])
         next_type = patch.get("focus_work_type", current["focus_work_type"])
         next_count = patch.get("target_count", current["target_count"])
         validate_config_shape(next_kind, next_type, int(next_count))
-        row = await repository.update_config(conn, user_id=int(admin.id), config_id=str(config_id), patch=patch)
+        row = await repository.update_config(conn, user_id=int(user.id), config_id=str(config_id), patch=patch)
         if row is None:
             raise HTTPException(status_code=404, detail="配置不存在")
-        return await _config_out(conn, row, user_id=int(admin.id))
+        return await _config_out(conn, row, user_id=int(user.id))
 
 
 @router.delete("/deliberate-workflows/{config_id:uuid}")
 async def delete_deliberate_workflow(
     config_id: UUID,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> dict[str, str]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        ok = await repository.delete_config(conn, user_id=int(admin.id), config_id=str(config_id))
+        ok = await repository.delete_config(conn, user_id=int(user.id), config_id=str(config_id))
     if not ok:
         raise HTTPException(status_code=404, detail="配置不存在")
     return {"detail": "配置已删除"}
@@ -235,7 +229,7 @@ async def delete_deliberate_workflow(
 @router.post("/deliberate-workflows/banks", response_model=DeliberateBankUploadOut)
 async def upload_deliberate_bank(
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
     kind: str = Form(...),
     name: str = Form(...),
     description: str = Form(""),
@@ -260,7 +254,7 @@ async def upload_deliberate_bank(
 @router.get("/deliberate-workflows/banks", response_model=list[DeliberateBankOptionOut])
 async def list_deliberate_banks(
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
     kind: str = Query(...),
 ) -> list[DeliberateBankOptionOut]:
     pool = _pool(request)
@@ -312,7 +306,7 @@ async def list_deliberate_banks(
 async def delete_deliberate_bank(
     bank_id: str,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
     kind: str = Query(...),
 ) -> dict[str, str]:
     pool = _pool(request)
@@ -363,14 +357,14 @@ async def delete_deliberate_bank(
 async def list_deliberate_runs(
     config_id: UUID,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> list[DeliberateWorkflowRunSummary]:
     pool = _pool(request)
     async with pool.acquire() as conn:
         config_id_str = str(config_id)
-        if await repository.get_config(conn, user_id=int(admin.id), config_id=config_id_str) is None:
+        if await repository.get_config(conn, user_id=int(user.id), config_id=config_id_str) is None:
             raise HTTPException(status_code=404, detail="配置不存在")
-        rows = await repository.list_runs_for_config(conn, user_id=int(admin.id), config_id=config_id_str)
+        rows = await repository.list_runs_for_config(conn, user_id=int(user.id), config_id=config_id_str)
     return [DeliberateWorkflowRunSummary(**repository.run_to_summary(row)) for row in rows]
 
 
@@ -378,11 +372,11 @@ async def list_deliberate_runs(
 async def get_deliberate_run(
     run_id: str,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> DeliberateWorkflowRunOut:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        row = await repository.get_run(conn, user_id=int(admin.id), run_id=run_id)
+        row = await repository.get_run(conn, user_id=int(user.id), run_id=run_id)
     if row is None:
         raise HTTPException(status_code=404, detail="运行档案不存在")
     return DeliberateWorkflowRunOut(**repository.run_to_dict(row))
@@ -392,7 +386,7 @@ async def get_deliberate_run(
 async def get_bank_preview(
     bank_id: str,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -487,7 +481,7 @@ async def get_bank_preview(
 async def list_bank_questions(
     bank_id: str,
     request: Request,
-    admin: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     search: str = Query(""),

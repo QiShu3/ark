@@ -306,7 +306,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   async function forkToChild(parentRun: FocusWorkRunSummary, childConfigId: string) {
     try {
       setBusy(true);
-      const response = await apiJson(`/api/admin/deliberate-workflows/${childConfigId}`);
+      const response = await apiJson(`/api/deliberate-workflows/${childConfigId}`);
       const childConfig = response as Record<string, unknown>;
 
       await forkFocusWorkRun({

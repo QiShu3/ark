@@ -118,15 +118,15 @@ export type DeliberateUploadError = {
 };
 
 export function listDeliberateWorkflows() {
-  return apiJson<DeliberateWorkflowConfig[]>('/api/admin/deliberate-workflows');
+  return apiJson<DeliberateWorkflowConfig[]>('/api/deliberate-workflows');
 }
 
 export function listDeliberateBanks(kind: DeliberateKind) {
-  return apiJson<DeliberateBankOption[]>(`/api/admin/deliberate-workflows/banks?kind=${encodeURIComponent(kind)}`);
+  return apiJson<DeliberateBankOption[]>(`/api/deliberate-workflows/banks?kind=${encodeURIComponent(kind)}`);
 }
 
 export function deleteDeliberateBank(bankId: string, kind: DeliberateKind) {
-  return apiJson<{ detail: string }>(`/api/admin/deliberate-workflows/banks/${encodeURIComponent(bankId)}?kind=${encodeURIComponent(kind)}`, {
+  return apiJson<{ detail: string }>(`/api/deliberate-workflows/banks/${encodeURIComponent(bankId)}?kind=${encodeURIComponent(kind)}`, {
     method: 'DELETE',
   });
 }
@@ -156,7 +156,7 @@ export type BankQuestionsResponse = BankPreviewData & {
 };
 
 export function fetchBankPreview(bankId: string) {
-  return apiJson<BankPreviewData>(`/api/admin/deliberate-workflows/banks/${encodeURIComponent(bankId)}/preview`);
+  return apiJson<BankPreviewData>(`/api/deliberate-workflows/banks/${encodeURIComponent(bankId)}/preview`);
 }
 
 export function fetchBankQuestions(bankId: string, params: { page?: number; limit?: number; search?: string } = {}) {
@@ -166,12 +166,12 @@ export function fetchBankQuestions(bankId: string, params: { page?: number; limi
   if (params.search) searchParams.set('search', params.search);
   const qs = searchParams.toString();
   return apiJson<BankQuestionsResponse>(
-    `/api/admin/deliberate-workflows/banks/${encodeURIComponent(bankId)}/questions${qs ? `?${qs}` : ''}`
+    `/api/deliberate-workflows/banks/${encodeURIComponent(bankId)}/questions${qs ? `?${qs}` : ''}`
   );
 }
 
 export function createDeliberateWorkflow(payload: DeliberateWorkflowPayload) {
-  return apiJson<DeliberateWorkflowConfig>('/api/admin/deliberate-workflows', {
+  return apiJson<DeliberateWorkflowConfig>('/api/deliberate-workflows', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -179,7 +179,7 @@ export function createDeliberateWorkflow(payload: DeliberateWorkflowPayload) {
 }
 
 export function patchDeliberateWorkflow(configId: string, payload: DeliberateWorkflowPatch) {
-  return apiJson<DeliberateWorkflowConfig>(`/api/admin/deliberate-workflows/${encodeURIComponent(configId)}`, {
+  return apiJson<DeliberateWorkflowConfig>(`/api/deliberate-workflows/${encodeURIComponent(configId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -187,13 +187,13 @@ export function patchDeliberateWorkflow(configId: string, payload: DeliberateWor
 }
 
 export function deleteDeliberateWorkflow(configId: string) {
-  return apiJson<{ detail: string }>(`/api/admin/deliberate-workflows/${encodeURIComponent(configId)}`, {
+  return apiJson<{ detail: string }>(`/api/deliberate-workflows/${encodeURIComponent(configId)}`, {
     method: 'DELETE',
   });
 }
 
 export function listDeliberateRuns(configId: string) {
-  return apiJson<DeliberateWorkflowRun[]>(`/api/admin/deliberate-workflows/${encodeURIComponent(configId)}/runs`);
+  return apiJson<DeliberateWorkflowRun[]>(`/api/deliberate-workflows/${encodeURIComponent(configId)}/runs`);
 }
 
 export function startDeliberateWorkflow(configId: string) {
@@ -205,7 +205,7 @@ export function startDeliberateWorkflow(configId: string) {
 }
 
 export function getDeliberateRun(runId: string) {
-  return apiJson<DeliberateWorkflowRun>(`/api/admin/deliberate-runs/${encodeURIComponent(runId)}`);
+  return apiJson<DeliberateWorkflowRun>(`/api/deliberate-runs/${encodeURIComponent(runId)}`);
 }
 
 export function forkFocusWorkRun(params: {
@@ -234,7 +234,7 @@ export async function uploadDeliberateBank(params: {
   form.append('name', params.name);
   form.append('description', params.description);
   form.append('file', params.file);
-  const res = await apiFetch('/api/admin/deliberate-workflows/banks', {
+  const res = await apiFetch('/api/deliberate-workflows/banks', {
     method: 'POST',
     body: form,
   });
