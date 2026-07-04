@@ -13,13 +13,14 @@ from routes.todo.helpers import (
 )
 from routes.todo.schemas import FocusWorkflowOut, FocusWorkflowPhase, FocusWorkRunSummaryOut
 from routes.todo_routes import (
-    _deliberate_config_snapshot_payload,
     _build_run_metadata,
     _content_bank_article_seed,
     _content_bank_word_seed,
+    _deliberate_config_snapshot_payload,
     _resolve_erc_app_set_id,
     _resolve_vocab_app_deck_id,
     complete_focus_workflow_run_task_and_end_phase,
+    get_workflow_record_settlement,
 )
 
 
@@ -98,6 +99,19 @@ class FakeSettlementConn:
             return self.rows
         allowed = set(args[2])
         return [row for row in self.rows if row["id"] in allowed]
+
+
+class FakeWorkflowRecordSettlementConn(FakeSettlementConn):
+    def __init__(self, rows: list[Row], record_row: Row):
+        super().__init__(rows)
+        self.record_row = record_row
+        self.fetchrow_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def fetchrow(self, query: str, *args: object):
+        self.fetchrow_calls.append((query, args))
+        if "wr.workflow_name" in query:
+            raise AssertionError("workflow_records does not have workflow_name; use focus_workflows alias")
+        return self.record_row
 
 
 def test_focus_workflow_phase_accepts_task_focus_type():
@@ -254,6 +268,57 @@ async def test_build_workflow_settlement_filters_to_record_run_ids():
     assert len(settlement.nodes) == 1
     assert settlement.nodes[0].name == "A 本次记录"
     assert "id = ANY" in conn.fetch_calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_workflow_record_settlement_uses_focus_workflow_name_and_record_run_ids(monkeypatch):
+    workflow_id = uuid4()
+    record_id = uuid4()
+    run_id = uuid4()
+    conn = FakeWorkflowRecordSettlementConn(
+        [
+            Row(
+                id=run_id,
+                focus_work_type="choice",
+                config_snapshot={"deliberate_name": "英语二阅读"},
+                progress_snapshot={
+                    "run_summary": {
+                        "answered_count": 10,
+                        "correct_count": 8,
+                        "accuracy": 80,
+                        "duration_seconds": 600,
+                    },
+                    "mastery_check": {"enabled": True, "passed": True, "accuracy": 80},
+                },
+                phase_index=0,
+                completion_reason="task_confirmed",
+                source_run_id=None,
+                created_at=datetime.now(UTC),
+            )
+        ],
+        Row(
+            workflow_id=workflow_id,
+            workflow_name="刻意学习流：英语二阅读 → 408",
+            nodes=[{"id": str(run_id), "run_id": str(run_id)}],
+        ),
+    )
+
+    monkeypatch.setattr("routes.todo_routes._pool_from_request", lambda _request: FakePool(conn))
+
+    settlement = await get_workflow_record_settlement(
+        request=object(),
+        record_id=record_id,
+        user=Row(id=1),
+    )
+
+    assert settlement.workflow_name == "刻意学习流：英语二阅读 → 408"
+    assert settlement.total_answered == 10
+    assert settlement.total_correct == 8
+    assert settlement.best_accuracy == 80
+    assert len(settlement.nodes) == 1
+    assert settlement.nodes[0].name == "A 英语二阅读"
+    assert "fw.workflow_name" in conn.fetchrow_calls[0][0]
+    assert conn.fetch_calls[0][1][2] == [run_id]
 
 
 @pytest.mark.asyncio

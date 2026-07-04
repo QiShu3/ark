@@ -3617,7 +3617,7 @@ async def get_workflow_record_settlement(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT wr.workflow_id, wr.workflow_name, wr.nodes
+            SELECT wr.workflow_id, fw.workflow_name, wr.nodes
             FROM workflow_records wr
             LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
             WHERE wr.id = $1 AND wr.user_id = $2
