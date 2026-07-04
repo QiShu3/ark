@@ -17,6 +17,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
+from lib.captcha_service import (
+    generate_captcha,
+    needs_captcha as _needs_captcha,
+    record_login_failure,
+    reset_login_failures,
+    verify_captcha,
+)
+
 _UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 _ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 _MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5MB
@@ -31,11 +39,15 @@ class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     email: str = Field(min_length=5, max_length=254)
     password: str = Field(min_length=8, max_length=256)
+    captcha_id: str | None = None
+    captcha_code: str | None = None
 
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=256)
+    captcha_id: str | None = None
+    captcha_code: str | None = None
 
 
 class VerifyEmailRequest(BaseModel):
@@ -58,6 +70,12 @@ class ResetPasswordRequest(BaseModel):
 
 class OkResponse(BaseModel):
     ok: bool = True
+
+
+class CaptchaResponse(BaseModel):
+    captcha_id: str
+    image_base64: str
+    needs_captcha: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -611,9 +629,43 @@ async def get_current_user(
     return user
 
 
+@router.get("/captcha", response_model=CaptchaResponse)
+async def get_captcha(request: Request) -> CaptchaResponse:
+    """获取图形验证码。
+
+    返回 captcha_id 和 base64 编码的图片。登录/注册时需同时提交 captcha_id 和用户输入的验证码。
+    """
+    import asyncio
+
+    captcha_id, image_bytes = await asyncio.to_thread(generate_captcha)
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    return CaptchaResponse(captcha_id=captcha_id, image_base64=image_b64)
+
+
+@router.get("/captcha/required")
+async def captcha_required(request: Request) -> dict[str, bool]:
+    """查询当前 IP 是否需要输入验证码（登录失败达到阈值后返回 true）。"""
+    ip = _client_ip(request)
+    return {"required": _needs_captcha(ip)}
+
+
+def _client_ip(request: Request) -> str:
+    """获取客户端 IP（优先取 X-Forwarded-For 第一个）。"""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/register", response_model=UserPublic)
 async def register(request: Request, payload: RegisterRequest) -> UserPublic:
     """注册新用户。"""
+    # 注册必须校验验证码
+    if not payload.captcha_id or not payload.captcha_code:
+        raise HTTPException(status_code=400, detail="请输入验证码")
+    if not verify_captcha(payload.captcha_id, payload.captcha_code):
+        raise HTTPException(status_code=400, detail="验证码错误或已过期")
+
     pool = _pool_from_request(request)
     email = _normalize_email(payload.email)
     existing = await _get_user_by_username(pool, payload.username)
@@ -646,9 +698,19 @@ async def register(request: Request, payload: RegisterRequest) -> UserPublic:
 @router.post("/login", response_model=TokenResponse)
 async def login(request: Request, payload: LoginRequest) -> TokenResponse:
     """用户登录并获取访问令牌。"""
+    ip = _client_ip(request)
+
+    # 失败达到阈值后必须输入验证码
+    if _needs_captcha(ip):
+        if not payload.captcha_id or not payload.captcha_code:
+            raise HTTPException(status_code=400, detail="请输入验证码")
+        if not verify_captcha(payload.captcha_id, payload.captcha_code):
+            raise HTTPException(status_code=400, detail="验证码错误或已过期")
+
     pool = _pool_from_request(request)
     row = await _get_user_by_username(pool, payload.username)
     if row is None:
+        record_login_failure(ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
     if not bool(row["is_active"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用")
@@ -661,8 +723,10 @@ async def login(request: Request, payload: LoginRequest) -> TokenResponse:
         salt_b64=str(row["password_salt"]),
     )
     if not ok:
+        record_login_failure(ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
 
+    reset_login_failures(ip)
     token, ttl = await _issue_token(pool, int(row["id"]))
     return TokenResponse(access_token=token, expires_in=ttl)
 

@@ -17,6 +17,16 @@ const mockApiJson = vi.mocked(apiJson);
 describe('Login page', () => {
   beforeEach(() => {
     mockApiJson.mockReset();
+    // 默认 mock 验证码接口和 captcha/required 接口
+    mockApiJson.mockImplementation(async (path: string) => {
+      if (path === '/auth/captcha') {
+        return { captcha_id: 'test-captcha-id', image_base64: 'fakebase64' };
+      }
+      if (path === '/auth/captcha/required') {
+        return { required: false };
+      }
+      return { ok: true };
+    });
     useAuthStore.getState().clear();
     window.localStorage.clear();
   });
@@ -36,7 +46,15 @@ describe('Login page', () => {
 
   it('registers with email and verifies with a code without logging in', async () => {
     const user = userEvent.setup();
-    mockApiJson.mockResolvedValue({ ok: true });
+    mockApiJson.mockImplementation(async (path: string) => {
+      if (path === '/auth/captcha') {
+        return { captcha_id: 'test-captcha-id', image_base64: 'fakebase64' };
+      }
+      if (path === '/auth/captcha/required') {
+        return { required: false };
+      }
+      return { ok: true };
+    });
 
     render(
       <MemoryRouter>
@@ -49,6 +67,7 @@ describe('Login page', () => {
     await user.type(screen.getByLabelText('邮箱'), 'tester@example.com');
     await user.type(screen.getByLabelText('密码'), 'password123');
     await user.type(screen.getByLabelText('确认密码'), 'password123');
+    await user.type(screen.getByLabelText('验证码'), 'ABCD');
     await user.click(screen.getByRole('button', { name: '注册并发送验证码' }));
 
     await waitFor(() => {
@@ -59,6 +78,8 @@ describe('Login page', () => {
       username: 'tester',
       email: 'tester@example.com',
       password: 'password123',
+      captcha_id: 'test-captcha-id',
+      captcha_code: 'ABCD',
     });
     expect(await screen.findByText('验证码已发送，请输入邮箱中的 6 位验证码。')).toBeInTheDocument();
     await user.type(screen.getByLabelText('邮箱验证码'), '123456');
@@ -80,6 +101,12 @@ describe('Login page', () => {
   it('resends verification when login is blocked by an unverified email', async () => {
     const user = userEvent.setup();
     mockApiJson.mockImplementation(async (path: string) => {
+      if (path === '/auth/captcha') {
+        return { captcha_id: 'test-captcha-id', image_base64: 'fakebase64' };
+      }
+      if (path === '/auth/captcha/required') {
+        return { required: false };
+      }
       if (path === '/auth/login') throw new Error('邮箱未验证，请先查收邮箱验证码');
       return { ok: true };
     });
@@ -92,7 +119,7 @@ describe('Login page', () => {
 
     await user.type(screen.getByLabelText('用户名'), 'tester');
     await user.type(screen.getByLabelText('密码'), 'password123');
-    await user.click(screen.getByRole('button', { name: '登录' }));
+    await user.click(screen.getByTestId('auth-submit-btn'));
     await user.click(await screen.findByRole('button', { name: '重发验证码' }));
 
     await waitFor(() => {
