@@ -150,6 +150,12 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
     duration_seconds: Math.max(0, Math.round((Date.now() - sessionStartedAtRef.current) / 1000)),
   }), [initResult?.total]);
 
+  const handleAbort = useCallback(() => {
+    // 发送事件触发快照重载，清除过期的 active_run
+    window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+    onContentCompleted({ aborted: true });
+  }, [onContentCompleted]);
+
   const initPool = useCallback(async () => {
     setPhase('loading');
     setErrorMessage(null);
@@ -179,8 +185,15 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       questionStartedAtRef.current = Date.now();
       setPhase('active');
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '初始化失败';
+      // 404 表示专注运行记录不存在（过期/无效），提供退出选项而非死循环重试
+      const isNotFound = errorMsg.includes('不存在') || errorMsg.includes('404') || errorMsg.includes('not found');
+      if (isNotFound) {
+        // 自动触发快照重载以清除过期状态
+        window.dispatchEvent(new CustomEvent('ark:reload-focus'));
+      }
       setPhase('error');
-      setErrorMessage(err instanceof Error ? err.message : '初始化失败');
+      setErrorMessage(errorMsg);
     }
   }, [run.id, run.config_snapshot]);
 
@@ -389,7 +402,10 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       <div className="space-y-4 rounded-lg border border-red-400/30 bg-red-400/5 p-6 text-center">
         <AlertTriangle className="mx-auto h-8 w-8 text-red-400" />
         <p className="text-sm text-ark-text">{errorMessage || '加载失败'}</p>
-        <Button variant="secondary" onClick={() => void initPool()}>重试</Button>
+        <div className="flex justify-center gap-3">
+          <Button variant="secondary" onClick={() => void initPool()}>重试</Button>
+          <Button variant="primary" onClick={handleAbort}>返回工作台</Button>
+        </div>
       </div>
     );
   }
