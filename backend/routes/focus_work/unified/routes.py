@@ -81,11 +81,90 @@ async def _resolve_unified_config_snapshot(
             resolved.setdefault("sort_order", str(config_row.get("sort_order", "sequential")))
             resolved.setdefault("use_fsrs", bool(config_row.get("use_fsrs", False)))
             resolved.setdefault("backflow_rule", str(config_row.get("backflow_rule", "none")))
+            if config_row.get("name"):
+                resolved.setdefault("config_name", str(config_row["name"]))
             if not bank_id and config_row["bank_id"] is not None:
                 resolved["bank_id"] = str(config_row["bank_id"])
+                bank_id = str(config_row["bank_id"])
+
+    # 解析题库名（用于前端显示标题）
+    kind = resolved.get("kind") or run_focus_work_type
+    if bank_id and "bank_name" not in resolved:
+        bank_name = await _lookup_bank_name(conn, user_id=user_id, bank_id=bank_id, kind=str(kind))
+        if bank_name:
+            resolved["bank_name"] = bank_name
 
     resolved.setdefault("kind", run_focus_work_type)
     return resolved
+
+
+async def _lookup_bank_name(conn: Any, *, user_id: int, bank_id: str, kind: str) -> str | None:
+    """根据 kind 和 bank_id 查询题库名称，查不到返回 None。"""
+    try:
+        if kind == "choice":
+            row = await conn.fetchrow(
+                "SELECT name FROM choice_sets WHERE id = $1::uuid",
+                bank_id,
+            )
+            return str(row["name"]) if row else None
+        if kind == "flash_card":
+            row = await conn.fetchrow(
+                "SELECT name FROM vocab_decks WHERE id = $1::uuid AND user_id = $2",
+                bank_id,
+                user_id,
+            )
+            return str(row["name"]) if row else None
+        if kind == "input":
+            row = await conn.fetchrow(
+                "SELECT name FROM input_sets WHERE id = $1::uuid",
+                bank_id,
+            )
+            return str(row["name"]) if row else None
+    except Exception:
+        return None
+    return None
+
+
+async def enrich_focus_work_run_config_names(
+    conn: Any,
+    *,
+    user_id: int,
+    focus_work_type: str,
+    config_snapshot: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """给 config_snapshot 补充 bank_name 和 config_name（用于前端显示标题）。"""
+    if config_snapshot is None:
+        return None
+    result = dict(config_snapshot)
+
+    bank_id = (
+        result.get("bank_id")
+        or result.get("deck_id")
+        or result.get("set_id")
+        or result.get("input_bank_id")
+    )
+    if isinstance(result.get("choice_scope"), dict):
+        bank_id = bank_id or result["choice_scope"].get("bank_id")
+
+    config_id = result.get("deliberate_config_id") or result.get("config_id")
+
+    # 查配置名
+    if config_id and "config_name" not in result:
+        try:
+            config_row = await deliberate_repository.get_config(conn, user_id=user_id, config_id=str(config_id))
+            if config_row and config_row.get("name"):
+                result["config_name"] = str(config_row["name"])
+        except Exception:
+            pass
+
+    # 查题库名
+    kind = result.get("kind") or focus_work_type
+    if bank_id and "bank_name" not in result:
+        bank_name = await _lookup_bank_name(conn, user_id=user_id, bank_id=str(bank_id), kind=str(kind))
+        if bank_name:
+            result["bank_name"] = bank_name
+
+    return result
 
 
 @router.post("/{run_id}/init")
@@ -190,6 +269,13 @@ async def init_question_pool(
                 "answered_count": 0,
                 "correct_count": 0,
                 "total_questions": len(questions),
+                # 前端 RunSummaryCard 期望的字段
+                "reviewed_count": 0,
+                "memorized_count": 0,
+                "new_count": 0,
+                "correct_rate": 0.0,
+                "accuracy": 0.0,
+                "duration_seconds": 0,
             },
         }
 
@@ -336,6 +422,23 @@ async def submit_answer(
             if run_summary["answered_count"] > 0
             else 0.0
         )
+
+        # 同步前端 RunSummaryCard 期望的字段
+        run_summary["reviewed_count"] = run_summary["answered_count"]
+        run_summary["correct_rate"] = run_summary["accuracy"]
+
+        # 统计新学/已掌握（基于该题历史答题记录判断是否为新词）
+        current_q = None
+        for q in pool_data:
+            if str(q.get("id", "")) == question_id:
+                current_q = q
+                break
+        if current_q is not None:
+            is_new_word = (current_q.get("right_count", 0) or 0) == 0 and (current_q.get("wrong_count", 0) or 0) == 0
+            if is_new_word:
+                run_summary["new_count"] = (run_summary.get("new_count", 0)) + 1
+            if is_actually_correct:
+                run_summary["memorized_count"] = (run_summary.get("memorized_count", 0)) + 1
 
         next_question = None
         for q in pool_data:

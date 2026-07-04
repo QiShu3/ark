@@ -28,6 +28,7 @@ from routes.focus_work.flash.repository import (
     import_deck,
     insert_vocab_snapshot,
 )
+from routes.focus_work.unified.routes import enrich_focus_work_run_config_names
 
 from .db import _pool_from_request
 from .event_store import (
@@ -440,6 +441,14 @@ async def _row_to_focus_workflow_with_task_check(
     active_run_id = _row_value(row, "active_run_id")
     if active_run_id is not None:
         active_run = await _fetch_focus_work_run_summary(conn, user_id=user_id, run_id=active_run_id)
+        if active_run is not None:
+            enriched = await enrich_focus_work_run_config_names(
+                conn,
+                user_id=user_id,
+                focus_work_type=active_run.focus_work_type,
+                config_snapshot=active_run.config_snapshot,
+            )
+            active_run.config_snapshot = enriched
 
     workflow_settlement = None
     if str(_row_value(row, "current_phase", "")) == "settlement":

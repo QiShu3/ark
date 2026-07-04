@@ -76,6 +76,14 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
   const masteryCheck = masteryCheckFromProgress ?? summary.mastery_check as Record<string, unknown> | undefined;
   const hasMasteryCheck = masteryCheck && masteryCheck.enabled === true;
 
+  // 字段兼容：统一不同接口返回的字段名
+  const reviewedCount = (summary.reviewed_count as number) ?? (summary.answered_count as number) ?? 0;
+  const correctCount = (summary.correct_count as number) ?? 0;
+  const memorizedCount = (summary.memorized_count as number) ?? correctCount;
+  const newCount = (summary.new_count as number) ?? 0;
+  const correctRate = (summary.correct_rate as number) ?? (summary.accuracy as number) ?? 0;
+  const durationSeconds = (summary.duration_seconds as number) ?? 0;
+
   return (
     <div className="rounded-lg border border-ark-border bg-ark-surface p-4 text-sm">
       <div className="mb-3 text-xs font-medium text-ark-text-muted">本轮专注数据</div>
@@ -97,20 +105,20 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
       {normalizeFocusWorkType(focusWorkType) === 'flash_card' && (
         <div className="grid grid-cols-4 gap-3">
           <div className="text-center">
-            <div className="text-lg font-semibold text-ark-text">{String((summary.reviewed_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-ark-text">{String(reviewedCount)}</div>
             <div className="text-xs text-ark-text-muted">已复习</div>
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold text-green-500">{String((summary.memorized_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-green-500">{String(memorizedCount)}</div>
             <div className="text-xs text-ark-text-muted">已掌握</div>
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold text-yellow-500">{String((summary.new_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-yellow-500">{String(newCount)}</div>
             <div className="text-xs text-ark-text-muted">新学</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {summary.correct_rate ? `${Math.round((summary.correct_rate as number) * 100)}%` : '0%'}
+              {correctRate ? `${Math.round(correctRate * 100)}%` : '0%'}
             </div>
             <div className="text-xs text-ark-text-muted">正确率</div>
           </div>
@@ -120,22 +128,22 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
       {normalizeFocusWorkType(focusWorkType) === 'choice' && (
         <div className="grid grid-cols-4 gap-3">
           <div className="text-center">
-            <div className="text-lg font-semibold text-ark-text">{String((summary.answered_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-ark-text">{String(reviewedCount)}</div>
             <div className="text-xs text-ark-text-muted">已答题</div>
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold text-green-500">{String((summary.correct_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-green-500">{String(correctCount)}</div>
             <div className="text-xs text-ark-text-muted">正确</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {summary.accuracy ? `${Math.round((summary.accuracy as number) * 100)}%` : '0%'}
+              {correctRate ? `${Math.round(correctRate * 100)}%` : '0%'}
             </div>
             <div className="text-xs text-ark-text-muted">正确率</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {formatSummaryDuration(summary.duration_seconds)}
+              {formatSummaryDuration(durationSeconds)}
             </div>
             <div className="text-xs text-ark-text-muted">用时</div>
           </div>
@@ -145,22 +153,22 @@ function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { 
       {focusWorkType === 'input' && (
         <div className="grid grid-cols-4 gap-3">
           <div className="text-center">
-            <div className="text-lg font-semibold text-ark-text">{String((summary.answered_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-ark-text">{String(reviewedCount)}</div>
             <div className="text-xs text-ark-text-muted">已答题</div>
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold text-green-500">{String((summary.correct_count as number) ?? 0)}</div>
+            <div className="text-lg font-semibold text-green-500">{String(correctCount)}</div>
             <div className="text-xs text-ark-text-muted">正确</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {summary.accuracy ? `${Math.round((summary.accuracy as number) * 100)}%` : '0%'}
+              {correctRate ? `${Math.round(correctRate * 100)}%` : '0%'}
             </div>
             <div className="text-xs text-ark-text-muted">正确率</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-ark-text">
-              {formatSummaryDuration(summary.duration_seconds)}
+              {formatSummaryDuration(durationSeconds)}
             </div>
             <div className="text-xs text-ark-text-muted">用时</div>
           </div>

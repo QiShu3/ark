@@ -65,6 +65,13 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     && activeDefinition;
   const recordFocus = snapshot?.record_focus ?? true;
 
+  // 动态副标题：优先用题库名/配置名，fallback 到题型默认描述
+  const configSnapshot = activeRun?.config_snapshot as Record<string, unknown> | undefined;
+  const displaySubtitle =
+    ((configSnapshot?.bank_name as string) || (configSnapshot?.config_name as string)) ||
+    activeDefinition?.subtitle ||
+    '';
+
   const loadSnapshot = React.useCallback(async () => {
     try {
       const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
@@ -420,7 +427,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
       {isFullscreen && activeDefinition ? (
         <FocusWorkModalShell
           title={activeDefinition.title}
-          subtitle={activeDefinition.subtitle}
+          subtitle={displaySubtitle}
           recordFocus={recordFocus}
           isPaused={snapshot.is_paused === true}
           busy={busy}
