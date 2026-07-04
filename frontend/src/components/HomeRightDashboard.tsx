@@ -1,19 +1,19 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy, X } from 'lucide-react';
+import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
-import { fetchCurrentFocusWorkflow } from '../lib/focusWorkflow';
+import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../lib/focusWorkflow';
 import { useEventArrangements } from '../hooks/useEventArrangements';
 import { usePrimaryEvent } from '../hooks/usePrimaryEvent';
 import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
 import type { AchievementSummary } from './achievementTypes';
-import AppModalFrame from './AppModalFrame';
 import HomeCard from './HomeCard';
 import HomeSectionHeader from './HomeSectionHeader';
-import { getWorkflowPresetPhases, type WorkflowPreset } from './workflowPresetForm';
+import DeliberateWorkflowPreviewModal from './deliberate/DeliberateWorkflowPreviewModal';
+import { isDeliberateWorkflowPreset, type WorkflowPreset } from './workflowPresetForm';
 import WorkflowPhaseChips from './WorkflowPhaseChips';
 import { normalizeFocusWorkType, type FocusWorkType } from './focus-work/focusWorkTypes';
 import timerClockPng from '../assets/timer-clock.png';
@@ -45,6 +45,10 @@ type TodayFocusSummary = {
 
 const DAILY_GOAL_MINUTES = 120;
 const DISPLAY_COUNT_SWITCH_TOLERANCE_PX = 10;
+
+function filterDeliberateWorkflowPresets(presets: WorkflowPreset[]): WorkflowPreset[] {
+  return presets.filter(isDeliberateWorkflowPreset);
+}
 
 function formatTimer(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
@@ -108,13 +112,7 @@ function formatAppointmentTime(appointment: Appointment): string {
   return formatClock(appointment.starts_at ?? appointment.ends_at);
 }
 
-function getWorkflowSummary(preset: WorkflowPreset | null): string {
-  if (!preset) return '尚未选择工作流';
-  const phases = getWorkflowPresetPhases(preset);
-  const focusMinutes = Math.round(phases.filter((phase) => phase.phase_type === 'focus').reduce((total, phase) => total + phase.duration, 0) / 60);
-  const breakMinutes = Math.round(phases.filter((phase) => phase.phase_type === 'break').reduce((total, phase) => total + phase.duration, 0) / 60);
-  return `${phases.length} 个阶段 · 专注 ${focusMinutes} 分钟 · 休息 ${breakMinutes} 分钟`;
-}
+
 
 function TimerCardArt() {
   return (
@@ -200,7 +198,10 @@ export default function HomeRightDashboard() {
     if (workflowRes.status === 'fulfilled') setWorkflow(workflowRes.value);
     if (todayFocusRes.status === 'fulfilled') setTodayFocusMinutes(todayFocusRes.value.minutes);
     if (achievementRes.status === 'fulfilled') setAchievementSummary(achievementRes.value);
-    if (presetsRes.status === 'fulfilled') setWorkflowStartPresets(Array.isArray(presetsRes.value) ? presetsRes.value : []);
+    if (presetsRes.status === 'fulfilled') {
+      const allPresets = Array.isArray(presetsRes.value) ? presetsRes.value : [];
+      setWorkflowStartPresets(filterDeliberateWorkflowPresets(allPresets));
+    }
   }
 
   useEffect(() => {
@@ -275,10 +276,6 @@ export default function HomeRightDashboard() {
     () => workflowStartPresets.find((preset) => preset.id === selectedWorkflowStartId) ?? workflowStartPresets[0] ?? null,
     [selectedWorkflowStartId, workflowStartPresets],
   );
-  const selectedWorkflowPhases = useMemo(
-    () => getWorkflowPresetPhases(selectedWorkflowStartPreset),
-    [selectedWorkflowStartPreset],
-  );
 
   const defaultWorkflowName = useMemo(() => {
     const defaultPreset = workflowStartPresets.find((item) => item.is_default) ?? workflowStartPresets[0];
@@ -331,10 +328,11 @@ export default function HomeRightDashboard() {
         return;
       }
       if (!workflow || workflow.state === 'normal') {
-        const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
+        const allPresets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
+        const presets = filterDeliberateWorkflowPresets(allPresets);
         const preset = presets.find((item) => item.is_default) ?? presets[0];
         if (!preset) {
-          window.dispatchEvent(new Event('ark:open-workflow-modal'));
+          navigate('/deliberate-workflow');
           return;
         }
         setWorkflowStartPresets(presets);
@@ -357,33 +355,16 @@ export default function HomeRightDashboard() {
     }
   }
 
-  async function startSelectedWorkflow() {
-    if (!selectedWorkflowStartPreset || isSubmittingAction) return;
+  async function handlePreviewStart(configIds: string[]) {
+    if (configIds.length === 0 || isSubmittingAction) return;
     setIsSubmittingAction(true);
     try {
-      await apiJson(`/todo/focus/workflows/${selectedWorkflowStartPreset.id}/start`, { method: 'POST' });
+      await startMultiDeliberateWorkflow(configIds);
       setWorkflowStartOpen(false);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       await loadDashboard();
     } catch (error) {
       console.error('Failed to start workflow', error);
-    } finally {
-      setIsSubmittingAction(false);
-    }
-  }
-
-  async function handleSetDefault(presetId: string) {
-    if (isSubmittingAction) return;
-    setIsSubmittingAction(true);
-    try {
-      await apiJson(`/todo/focus/workflows/${presetId}/default`, { method: 'POST' });
-      const presets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
-      setWorkflowStartPresets(presets);
-      setSelectedWorkflowStartId(presetId);
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-      await loadDashboard();
-    } catch (error) {
-      console.error('Failed to set default workflow', error);
     } finally {
       setIsSubmittingAction(false);
     }
@@ -683,119 +664,18 @@ export default function HomeRightDashboard() {
         </section>
       </div>
 
-      <AppModalFrame
+      <DeliberateWorkflowPreviewModal
         open={workflowStartOpen}
+        preset={selectedWorkflowStartPreset}
         onClose={() => {
           if (!isSubmittingAction) setWorkflowStartOpen(false);
         }}
-        zIndexClassName="z-[70]"
-        ariaLabelledBy="workflow-start-title"
-        panelClassName="w-[760px] max-w-[94vw] overflow-hidden rounded-2xl border border-ark-border bg-ark-surface-strong text-ark-text shadow-2xl"
-      >
-        <div className="flex h-14 items-center justify-between border-b border-ark-border bg-ark-surface-subtle px-5">
-          <div>
-            <h3 id="workflow-start-title" className="text-base font-semibold text-ark-text">开始学习</h3>
-            <p className="mt-0.5 text-xs text-ark-text-muted">本次将启动选中的工作流</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setWorkflowStartOpen(false)}
-            disabled={isSubmittingAction}
-            className="rounded-full p-2 text-ark-text-muted transition hover:bg-ark-surface-subtle hover:text-ark-text disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="关闭开始学习提示"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="grid max-h-[calc(82vh-7rem)] grid-cols-[240px_minmax(0,1fr)] overflow-hidden">
-          <aside className="min-h-0 border-r border-ark-border bg-ark-surface-subtle p-4">
-            <div className="mb-3 text-xs font-medium text-ark-text-faint">可选工作流</div>
-            <div className="flex max-h-[calc(82vh-12rem)] flex-col gap-2 overflow-y-auto pr-1">
-              {workflowStartPresets.map((preset) => {
-                const selected = preset.id === selectedWorkflowStartPreset?.id;
-                return (
-                  <div
-                    key={preset.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedWorkflowStartId(preset.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelectedWorkflowStartId(preset.id);
-                      }
-                    }}
-                    className={`group relative rounded-lg border px-3 py-3 text-left transition cursor-pointer select-none ${
-                      selected
-                        ? 'border-ark-border bg-ark-surface-strong text-ark-text'
-                        : 'border-ark-border bg-ark-surface-subtle text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold">{preset.name}</span>
-                      {preset.is_default ? (
-                        <span className="shrink-0 rounded-full bg-ark-surface-subtle px-2 py-0.5 text-[10px] text-ark-text-muted">
-                          默认
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={isSubmittingAction}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleSetDefault(preset.id);
-                          }}
-                          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity rounded border border-ark-border bg-ark-surface-subtle px-2 py-0.5 text-[10px] text-ark-text-muted hover:bg-ark-surface-strong hover:text-ark-text disabled:cursor-wait disabled:opacity-50"
-                        >
-                          设为默认
-                        </button>
-                      )}
-                    </div>
-                    <div className="mt-1 truncate text-xs text-ark-text-faint">{getWorkflowSummary(preset)}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </aside>
-
-          <section className="min-h-0 overflow-y-auto p-5">
-            <div className="mb-5">
-              <div className="text-xs text-ark-text-faint">本次工作流</div>
-              <h4 className="mt-1 text-2xl font-semibold text-ark-text">{selectedWorkflowStartPreset?.name ?? '未选择工作流'}</h4>
-              <div className="mt-2 text-sm text-ark-text-muted">{getWorkflowSummary(selectedWorkflowStartPreset)}</div>
-            </div>
-
-            <div className="rounded-xl border border-ark-border bg-ark-surface-subtle px-4 py-4">
-              <WorkflowPhaseChips
-                phases={selectedWorkflowPhases.filter((p): p is typeof p & { phase_type: 'focus' | 'break' } => p.phase_type === 'focus' || p.phase_type === 'break')}
-                getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
-                maxTaskWidthClassName="max-w-[150px]"
-              />
-            </div>
-          </section>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-ark-border bg-ark-surface-strong p-5 pt-3">
-          <button
-            type="button"
-            onClick={() => setWorkflowStartOpen(false)}
-            disabled={isSubmittingAction}
-            className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-2 text-sm text-ark-text transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => void startSelectedWorkflow()}
-            disabled={!selectedWorkflowStartPreset || isSubmittingAction}
-            className="inline-flex items-center gap-2 rounded-lg border border-ark-border bg-white px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-ark-surface-subtle disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Play className="h-4 w-4 fill-current" aria-hidden="true" />
-            开始本次工作流
-          </button>
-        </div>
-      </AppModalFrame>
+        onStart={(configIds) => void handlePreviewStart(configIds)}
+        onEdit={() => {
+          setWorkflowStartOpen(false);
+          navigate('/deliberate-workflow');
+        }}
+      />
 
       <AchievementModal
         isOpen={achievementOpen}

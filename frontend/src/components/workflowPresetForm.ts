@@ -119,6 +119,30 @@ export function getWorkflowPresetPhases(preset: WorkflowPreset | null | undefine
   ];
 }
 
+export function getDeliberateWorkflowPhase(preset: WorkflowPreset | null | undefined): WorkflowPresetPhase | null {
+  return getWorkflowPresetPhases(preset).find((phase) => phase.phase_type === 'deliberate_group') ?? null;
+}
+
+export function isDeliberateWorkflowPreset(preset: WorkflowPreset | null | undefined): boolean {
+  return getDeliberateWorkflowPhase(preset) !== null;
+}
+
+export function getDeliberateWorkflowConfigIds(preset: WorkflowPreset | null | undefined): string[] {
+  return (getDeliberateWorkflowPhase(preset)?.config_ids ?? [])
+    .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+}
+
+export function getDeliberateWorkflowConfigNames(preset: WorkflowPreset | null | undefined): string[] {
+  const ids = getDeliberateWorkflowConfigIds(preset);
+  const names = (getDeliberateWorkflowPhase(preset)?.config_names ?? [])
+    .filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+  return ids.map((_, index) => names[index] ?? `专注工作 ${index + 1}`);
+}
+
+export function isStartableDeliberateWorkflowPreset(preset: WorkflowPreset | null | undefined): boolean {
+  return getDeliberateWorkflowConfigIds(preset).length > 0;
+}
+
 export function createWorkflowCopyDraft(preset: WorkflowPreset): WorkflowFormState {
   const next = createWorkflowFormFromPreset(preset);
   return {

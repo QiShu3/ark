@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiJson } from '../lib/api';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
-import { fetchCurrentFocusWorkflow } from '../lib/focusWorkflow';
+import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../lib/focusWorkflow';
 import FocusStats from './FocusStats';
 import Button from './Button';
 import AppModalFrame from './AppModalFrame';
@@ -19,7 +19,10 @@ import {
   createDefaultWorkflowForm,
   createWorkflowCopyDraft,
   createWorkflowFormFromPreset,
+  getDeliberateWorkflowConfigIds,
+  getDeliberateWorkflowConfigNames,
   isWorkflowFormDirty,
+  isDeliberateWorkflowPreset,
   normalizeWorkflowFormPhases,
   type WorkflowFormState,
   type WorkflowPreset,
@@ -332,6 +335,10 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     ));
   }, [workflowPresets, primaryEvent]);
 
+  const visibleDeliberateWorkflowPresets = React.useMemo(() => {
+    return visibleWorkflowPresets.filter(isDeliberateWorkflowPreset);
+  }, [visibleWorkflowPresets]);
+
   const arrangementTasks = React.useMemo(() => {
     return primaryEvent ? tasks.filter((t) => t.event_id === primaryEvent.id) : tasks;
   }, [tasks, primaryEvent]);
@@ -517,15 +524,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   }, [focusWorkflow, workflowRenderTick]);
 
   const sortedWorkflowPresets = React.useMemo(() => {
-    return [...visibleWorkflowPresets].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  }, [visibleWorkflowPresets]);
+    return [...visibleDeliberateWorkflowPresets].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  }, [visibleDeliberateWorkflowPresets]);
 
   const effectiveSelectedWorkflow = React.useMemo(() => {
     const saved = selectedWorkflowPresetId
-      ? visibleWorkflowPresets.find((item) => item.id === selectedWorkflowPresetId)
+      ? visibleDeliberateWorkflowPresets.find((item) => item.id === selectedWorkflowPresetId)
       : null;
-    return saved ?? visibleWorkflowPresets.find((item) => item.is_default) ?? sortedWorkflowPresets[0] ?? null;
-  }, [selectedWorkflowPresetId, sortedWorkflowPresets, visibleWorkflowPresets]);
+    return saved ?? visibleDeliberateWorkflowPresets.find((item) => item.is_default) ?? sortedWorkflowPresets[0] ?? null;
+  }, [selectedWorkflowPresetId, sortedWorkflowPresets, visibleDeliberateWorkflowPresets]);
 
   const selectedWorkflowDisplayName = effectiveSelectedWorkflow
     ? (effectiveSelectedWorkflow.event_name
@@ -534,15 +541,15 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     : null;
 
   const defaultWorkflowName = selectedWorkflowDisplayName || '工作流';
-  const selectedWorkflowPhaseCount = effectiveSelectedWorkflow?.phases.length ?? 0;
+  const selectedWorkflowPhaseCount = getDeliberateWorkflowConfigIds(effectiveSelectedWorkflow).length;
 
   useEffect(() => {
     if (!selectedWorkflowPresetId) return;
-    if (visibleWorkflowPresets.length === 0) return;
-    if (visibleWorkflowPresets.some((item) => item.id === selectedWorkflowPresetId)) return;
+    if (visibleDeliberateWorkflowPresets.length === 0) return;
+    if (visibleDeliberateWorkflowPresets.some((item) => item.id === selectedWorkflowPresetId)) return;
     setSelectedWorkflowPresetId(null);
     window.localStorage.removeItem(SELECTED_WORKFLOW_PRESET_STORAGE_KEY);
-  }, [selectedWorkflowPresetId, visibleWorkflowPresets]);
+  }, [selectedWorkflowPresetId, visibleDeliberateWorkflowPresets]);
 
   useEffect(() => {
     if (showTaskModal && activeTab === 'all') {
@@ -1171,13 +1178,17 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
   async function _startSelectedWorkflow() {
     if (startingWorkflow) return;
     if (!effectiveSelectedWorkflow) {
-      _replaceWorkflowDraft(createDefaultWorkflowForm(manageableWorkflowPresets.length === 0), null);
-      setShowWorkflowModal(true);
+      navigate('/deliberate-workflow');
+      return;
+    }
+    const configIds = getDeliberateWorkflowConfigIds(effectiveSelectedWorkflow);
+    if (configIds.length === 0) {
+      navigate('/deliberate-workflow');
       return;
     }
     setStartingWorkflow(true);
     try {
-      const res = await apiJson(`/todo/focus/workflows/${effectiveSelectedWorkflow.id}/start`, { method: 'POST' }) as FocusWorkflow;
+      const res = await startMultiDeliberateWorkflow(configIds) as FocusWorkflow;
       setFocusWorkflow(res);
       await Promise.all([_loadCurrentFocus(), _loadTodayFocus(), _loadFocusWorkflow(), _loadTasks()]);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
@@ -1198,8 +1209,7 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
 
   function _openNewWorkflowFromPicker() {
     setShowWorkflowPicker(false);
-    _replaceWorkflowDraft(createDefaultWorkflowForm(manageableWorkflowPresets.length === 0), null);
-    setShowWorkflowModal(true);
+    navigate('/deliberate-workflow');
   }
 
   async function _confirmFocusWorkflowPhase() {
@@ -1976,13 +1986,13 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
     }
     const primaryActionLabel = isWorkflowActive
       ? (hasPendingTaskSelection ? '选择任务' : (hasPendingTransition ? '确认流转' : (isBreakPhase ? '结束休息' : '查看工作台')))
-      : (isFocusing ? '结束专注' : (effectiveSelectedWorkflow ? '开始工作流' : '新建工作流'));
+      : (isFocusing ? '结束专注' : (effectiveSelectedWorkflow ? '开始工作流' : '新建学习编排'));
     const primaryActionSubtext = isFocusing || isWorkflowActive
       ? `${isWorkflowActive && isBreakPhase ? '' : '正在专注于：'}${displayTaskTitle}`
-      : (selectedWorkflowDisplayName ?? '还没有可启动的工作流');
+      : (selectedWorkflowDisplayName ?? '还没有可启动的学习编排');
     const primaryActionAriaLabel = isFocusing || isWorkflowActive
       ? `${primaryActionLabel} ${displayTaskTitle}`
-      : (selectedWorkflowDisplayName ? `开始工作流 ${selectedWorkflowDisplayName}` : '新建工作流');
+      : (selectedWorkflowDisplayName ? `开始工作流 ${selectedWorkflowDisplayName}` : '新建学习编排');
 
     return (
       <>
@@ -2141,8 +2151,16 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                 </Button>
               </div>
               <div className="flex max-h-[calc(72vh-56px)] flex-col gap-2 overflow-y-auto p-4">
-                {visibleWorkflowPresets.map((preset) => {
+                {visibleDeliberateWorkflowPresets.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-ark-border bg-ark-surface-subtle px-4 py-6 text-center">
+                    <div className="text-sm font-medium text-ark-text">暂无可启动的学习编排</div>
+                    <div className="mt-1 text-xs text-ark-text-muted">请先创建包含专注工作的编排。</div>
+                  </div>
+                ) : null}
+                {visibleDeliberateWorkflowPresets.map((preset) => {
                   const selected = preset.id === effectiveSelectedWorkflow?.id;
+                  const configNames = getDeliberateWorkflowConfigNames(preset);
+                  const configCount = getDeliberateWorkflowConfigIds(preset).length;
                   return (
                     <button
                       key={preset.id}
@@ -2159,20 +2177,22 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                           <span className="font-medium">{preset.name}</span>
                           {preset.is_default ? <span className="text-xs text-blue-200/70">默认</span> : null}
                         </div>
-                        <div className="mt-1 text-xs text-ark-text-faint">共 {preset.phases.length} 个阶段</div>
+                        <div className="mt-1 truncate text-xs text-ark-text-faint">
+                          共 {configCount} 个专注工作{configNames.length > 0 ? `：${configNames.join(' → ')}` : ''}
+                        </div>
                         {preset.event_name ? (
                           <div className="mt-1 text-xs text-ark-text-faint">事件：{preset.event_name}</div>
                         ) : null}
                       </button>
                     );
                 })}
-                <Button
-                  onClick={_openNewWorkflowFromPicker}
-                  variant="secondary"
-                  className="mt-2 w-full text-left justify-start border-dashed px-4 py-3 font-semibold shadow-none rounded-xl"
-                >
-                  新建工作流
-                </Button>
+	                <Button
+	                  onClick={_openNewWorkflowFromPicker}
+	                  variant="secondary"
+	                  className="mt-2 w-full text-left justify-start border-dashed px-4 py-3 font-semibold shadow-none rounded-xl"
+	                >
+	                  新建学习编排
+	                </Button>
               </div>
           </AppModalFrame>
         )}
@@ -3095,24 +3115,24 @@ const PlaceholderCard: React.FC<PlaceholderCardProps> = ({ index, split = 1 }) =
                       <span className="text-[11px] font-medium text-[var(--ark-text-muted)]">
                         当前工作流
                       </span>
-                      <span className="max-w-full truncate text-sm font-semibold text-[var(--ark-text)]">
-                        {defaultWorkflowName}
-                      </span>
-                      <span className="text-xs text-[var(--ark-text-faint)]">
-                        {effectiveSelectedWorkflow ? `${selectedWorkflowPhaseCount} 个阶段` : '尚未配置专注节奏'}
-                      </span>
+	                      <span className="max-w-full truncate text-sm font-semibold text-[var(--ark-text)]">
+	                        {defaultWorkflowName}
+	                      </span>
+	                      <span className="text-xs text-[var(--ark-text-faint)]">
+	                        {effectiveSelectedWorkflow ? `${selectedWorkflowPhaseCount} 个专注工作` : '尚未配置学习编排'}
+	                      </span>
                     </div>
                   </div>
                   {/* 右侧：设置弹窗 */}
                   <div
                     data-onboarding-anchor="workflow-settings-button"
                     className="flex-[1] bg-[var(--ark-surface-subtle)] hover:bg-[var(--ark-accent-soft)] transition-colors flex items-center justify-center cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.dispatchEvent(new Event('ark:open-workflow-modal'));
-                      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowSettingsOpened);
-                    }}
-                    title="工作流设置"
+	                    onClick={(e) => {
+	                      e.stopPropagation();
+	                      navigate('/deliberate-workflow');
+	                      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowSettingsOpened);
+	                    }}
+	                    title="学习编排设置"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--ark-text-muted)] transition-colors group-hover:text-[var(--ark-text)]">
                       <circle cx="12" cy="12" r="3"></circle>

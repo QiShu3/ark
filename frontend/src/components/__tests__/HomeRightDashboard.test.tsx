@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HomeRightDashboard from '../HomeRightDashboard';
 import { apiJson } from '../../lib/api';
+import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../../lib/focusWorkflow';
 import type { WorkflowPreset } from '../workflowPresetForm';
 
 vi.mock('../CalendarWidget', () => ({
@@ -16,11 +17,39 @@ vi.mock('../AchievementModal', () => ({
   default: () => null,
 }));
 
+vi.mock('../deliberate/DeliberateWorkflowPreviewModal', () => ({
+  default: ({ open, preset, onClose, onStart }: { open: boolean; preset: WorkflowPreset | null; onClose: () => void; onStart: (configIds: string[]) => void }) => {
+    if (!open || !preset) return null;
+    const groupPhase = preset.phases.find((ph) => ph.phase_type === 'deliberate_group');
+    const configIds = groupPhase?.config_ids ?? [];
+    const configNames = groupPhase?.config_names ?? [];
+    return (
+      <div role="dialog" aria-label="编排预览">
+        <div>{preset.name}</div>
+        <div>{configNames.length} 个专注工作</div>
+        {configNames.map((name: string, i: number) => (
+          <div key={i}>{name}</div>
+        ))}
+        <button onClick={onClose}>关闭</button>
+        <button onClick={() => onStart(configIds)}>启动工作流</button>
+        <button onClick={onClose}>编辑编排</button>
+      </div>
+    );
+  },
+}));
+
 vi.mock('../../lib/api', () => ({
   apiJson: vi.fn(),
 }));
 
+vi.mock('../../lib/focusWorkflow', () => ({
+  fetchCurrentFocusWorkflow: vi.fn(),
+  startMultiDeliberateWorkflow: vi.fn(),
+}));
+
 const mockApiJson = vi.mocked(apiJson);
+const mockStartMulti = vi.mocked(startMultiDeliberateWorkflow);
+const mockFetchWorkflow = vi.mocked(fetchCurrentFocusWorkflow);
 
 function buildWorkflowPreset(overrides: Partial<WorkflowPreset> = {}): WorkflowPreset {
   return {
@@ -33,8 +62,7 @@ function buildWorkflowPreset(overrides: Partial<WorkflowPreset> = {}): WorkflowP
     break_duration: 300,
     default_focus_timer_mode: 'countdown',
     phases: [
-      { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null },
-      { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+      { phase_type: 'deliberate_group', duration: 0, config_ids: ['cfg-a', 'cfg-b'], config_names: ['选择练习A', '闪卡复习'] },
     ],
     is_default: true,
     created_at: '2026-04-16T08:00:00+08:00',
@@ -74,6 +102,7 @@ describe('HomeRightDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockApiJson.mockImplementation((path: string) => defaultApiResponse(path));
+    mockStartMulti.mockResolvedValue(undefined as never);
   });
 
   it('renders the unified home dashboard sections and shortcuts', async () => {
@@ -90,7 +119,7 @@ describe('HomeRightDashboard', () => {
     expect(screen.getByText('应用中心')).toBeInTheDocument();
   });
 
-  it('previews and switches the workflow before starting study', async () => {
+  it('previews and starts the deliberate workflow', async () => {
     const user = userEvent.setup();
     const defaultWorkflow = buildWorkflowPreset();
     const longWorkflow = buildWorkflowPreset({
@@ -98,16 +127,12 @@ describe('HomeRightDashboard', () => {
       name: '长专注',
       is_default: false,
       phases: [
-        { phase_type: 'focus', duration: 2700, timer_mode: 'countup', task_id: null },
-        { phase_type: 'break', duration: 600, timer_mode: 'countdown', task_id: null },
+        { phase_type: 'deliberate_group', duration: 0, config_ids: ['cfg-c', 'cfg-d', 'cfg-e'], config_names: ['选择练习C', '输入练习D', '闪卡E'] },
       ],
     });
 
-    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
+    mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([defaultWorkflow, longWorkflow]);
-      if (path === '/todo/focus/workflows/workflow-2/start' && init?.method === 'POST') {
-        return Promise.resolve({ state: 'focus' });
-      }
       return defaultApiResponse(path);
     });
 
@@ -115,39 +140,38 @@ describe('HomeRightDashboard', () => {
 
     await user.click(await screen.findByRole('button', { name: '开始学习' }));
 
-    expect(await screen.findByRole('dialog', { name: '开始学习' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /默认番茄/ })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '编排预览' })).toBeInTheDocument();
+    expect(screen.getByText('默认番茄')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /长专注/ }));
-
-    expect(screen.getByRole('heading', { name: '长专注' })).toBeInTheDocument();
-    expect(screen.getAllByText('2 个阶段 · 专注 45 分钟 · 休息 10 分钟').length).toBeGreaterThan(0);
-
-    await user.click(screen.getByRole('button', { name: '开始本次工作流' }));
+    await user.click(screen.getByRole('button', { name: '启动工作流' }));
 
     await waitFor(() => {
-      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/workflow-2/start', { method: 'POST' });
+      expect(mockStartMulti).toHaveBeenCalledWith(['cfg-a', 'cfg-b']);
     });
   });
 
-  it('sets a workflow as default', async () => {
+  it('skips legacy workflow presets when opening the deliberate workflow preview', async () => {
     const user = userEvent.setup();
-    const defaultWorkflow = buildWorkflowPreset();
-    const longWorkflow = buildWorkflowPreset({
-      id: 'workflow-2',
-      name: '长专注',
+    const legacyWorkflow = buildWorkflowPreset({
+      id: 'legacy-workflow',
+      name: '旧番茄',
+      is_default: true,
+      phases: [
+        { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null },
+        { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+      ],
+    });
+    const deliberateWorkflow = buildWorkflowPreset({
+      id: 'workflow-deliberate',
+      name: '英语编排',
       is_default: false,
       phases: [
-        { phase_type: 'focus', duration: 2700, timer_mode: 'countup', task_id: null },
-        { phase_type: 'break', duration: 600, timer_mode: 'countdown', task_id: null },
+        { phase_type: 'deliberate_group', duration: 60, config_ids: ['cfg-reading'], config_names: ['英语二阅读'] },
       ],
     });
 
-    mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === '/todo/focus/workflows') return Promise.resolve([defaultWorkflow, longWorkflow]);
-      if (path === '/todo/focus/workflows/workflow-2/default' && init?.method === 'POST') {
-        return Promise.resolve({ ...longWorkflow, is_default: true });
-      }
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows') return Promise.resolve([legacyWorkflow, deliberateWorkflow]);
       return defaultApiResponse(path);
     });
 
@@ -155,39 +179,26 @@ describe('HomeRightDashboard', () => {
 
     await user.click(await screen.findByRole('button', { name: '开始学习' }));
 
-    const presetItem = screen.getByRole('button', { name: /长专注/ });
-    expect(presetItem).toBeInTheDocument();
-
-    const setDefaultButton = screen.getByRole('button', { name: '设为默认' });
-    expect(setDefaultButton).toBeInTheDocument();
-
-    await user.click(setDefaultButton);
-
-    await waitFor(() => {
-      expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/workflow-2/default', { method: 'POST' });
-    });
+    expect(await screen.findByRole('dialog', { name: '编排预览' })).toBeInTheDocument();
+    expect(screen.getByText('英语编排')).toBeInTheDocument();
+    expect(screen.queryByText('旧番茄')).not.toBeInTheDocument();
   });
 
   it('renders the active workflow name and its phases chain when a workflow is active', async () => {
-    mockApiJson.mockImplementation((path: string) => {
-      if (path === '/todo/focus/workflow/current') {
-        return Promise.resolve({
-          state: 'focus',
-          workflow_name: '考研英语',
-          current_phase_index: 1,
-          phases: [
-            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'vocab_today' },
-            { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
-            { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'practice' },
-          ],
-          task_id: null,
-          task_title: null,
-          pending_confirmation: false,
-          pending_task_selection: false,
-          remaining_seconds: 600,
-        });
-      }
-      return defaultApiResponse(path);
+    mockFetchWorkflow.mockResolvedValue({
+      state: 'focus',
+      workflow_name: '考研英语',
+      current_phase_index: 1,
+      phases: [
+        { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'vocab_today' },
+        { phase_type: 'break', duration: 300, timer_mode: 'countdown', task_id: null },
+        { phase_type: 'focus', duration: 1500, timer_mode: 'countdown', task_id: null, focus_work_type: 'practice' },
+      ],
+      task_id: null,
+      task_title: null,
+      pending_confirmation: false,
+      pending_task_selection: false,
+      remaining_seconds: 600,
     });
 
     renderDashboard();

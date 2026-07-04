@@ -1,7 +1,11 @@
 import { Play, Settings2, X } from 'lucide-react';
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
-import type { WorkflowPreset } from '../workflowPresetForm';
+import {
+  getDeliberateWorkflowConfigIds,
+  getDeliberateWorkflowConfigNames,
+  type WorkflowPreset,
+} from '../workflowPresetForm';
 
 type Props = {
   open: boolean;
@@ -20,12 +24,10 @@ export default function DeliberateWorkflowPreviewModal({
 }: Props) {
   if (!preset) return null;
 
-  const groupPhase = preset.phases.find(
-    (ph) => ph.phase_type === 'deliberate_group',
-  );
-  const configIds = groupPhase?.config_ids ?? [];
-  const configNames = groupPhase?.config_names ?? [];
+  const configIds = getDeliberateWorkflowConfigIds(preset);
+  const configNames = getDeliberateWorkflowConfigNames(preset);
   const totalCount = configIds.length;
+  const canStart = totalCount > 0;
 
   return (
     <AppModalFrame open={open} onClose={onClose} ariaLabel="编排预览">
@@ -56,26 +58,33 @@ export default function DeliberateWorkflowPreviewModal({
 
         {/* 工作流列表 */}
         <div className="max-h-[60vh] overflow-y-auto p-4">
-          <div className="space-y-2">
-            {configNames.map((name, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2.5"
-              >
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ark-accent/15 text-xs font-semibold text-ark-accent">
-                  {index + 1}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ark-text">
-                    {name}
+          {canStart ? (
+            <div className="space-y-2">
+              {configNames.map((name, index) => (
+                <div
+                  key={`${configIds[index] ?? index}-${name}`}
+                  className="flex items-center gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle px-3 py-2.5"
+                >
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ark-accent/15 text-xs font-semibold text-ark-accent">
+                    {index + 1}
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-ark-text">
+                      {name}
+                    </div>
+                  </div>
+                  {index < totalCount - 1 && (
+                    <div className="hidden" aria-hidden="true" />
+                  )}
                 </div>
-                {index < totalCount - 1 && (
-                  <div className="hidden" aria-hidden="true" />
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle px-4 py-8 text-center">
+              <div className="text-sm font-medium text-ark-text">还没有专注工作</div>
+              <div className="mt-1 text-xs text-ark-text-muted">请先编辑编排，添加至少一个专注工作后再启动。</div>
+            </div>
+          )}
 
           {/* 流程连接线效果 */}
           {totalCount > 1 && (
@@ -93,6 +102,7 @@ export default function DeliberateWorkflowPreviewModal({
           <Button
             variant="primary"
             leftIcon={<Play className="h-4 w-4" />}
+            disabled={!canStart}
             onClick={() => onStart(configIds)}
           >
             启动工作流

@@ -16,7 +16,12 @@ import SubAppPageShell from '../components/SubAppPageShell';
 import WorkflowSettlementModal from '../components/focus-work/WorkflowSettlementModal';
 import type { WorkflowSettlement } from '../components/focus-work/focusWorkTypes';
 import type { Task } from '../components/taskTypes';
-import type { WorkflowPreset } from '../components/workflowPresetForm';
+import {
+  getDeliberateWorkflowConfigIds,
+  getDeliberateWorkflowConfigNames,
+  isDeliberateWorkflowPreset,
+  type WorkflowPreset,
+} from '../components/workflowPresetForm';
 import { fetchChoiceFilters, fetchSetSnapshots } from '../lib/choice/api';
 import type { ChoiceFilters, InputSetSnapshot, SetSnapshot } from '../lib/choice/types';
 import { apiJson } from '../lib/api';
@@ -411,9 +416,7 @@ export default function DeliberateWorkflow() {
   }, []);
 
   const deliberatePresets = useMemo(() => {
-    return workflowPresets.filter(p =>
-      p.phases.some(ph => ph.phase_type === 'deliberate_group'),
-    );
+    return workflowPresets.filter(isDeliberateWorkflowPreset);
   }, [workflowPresets]);
 
   const scope = useMemo(() => {
@@ -1026,11 +1029,9 @@ export default function DeliberateWorkflow() {
             </div>
           ) : (
             deliberatePresets.map((preset) => {
-              const groupPhase = preset.phases.find(
-                (ph) => ph.phase_type === 'deliberate_group',
-              );
-              const configNames = groupPhase?.config_names ?? [];
-              const configCount = groupPhase?.config_ids?.length ?? 0;
+              const configNames = getDeliberateWorkflowConfigNames(preset);
+              const configIds = getDeliberateWorkflowConfigIds(preset);
+              const configCount = configIds.length;
 
               return (
                 <div
@@ -1052,10 +1053,9 @@ export default function DeliberateWorkflow() {
                       size="sm"
                       leftIcon={<Play className="h-3 w-3" />}
                       onClick={() => {
-                        const configIds =
-                          groupPhase?.config_ids ?? [];
                         void handleStartMultiWorkflow(configIds);
                       }}
+                      disabled={configCount === 0}
                     >
                       启动
                     </Button>

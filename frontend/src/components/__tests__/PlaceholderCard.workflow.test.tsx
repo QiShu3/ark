@@ -57,6 +57,22 @@ function buildWorkflowPreset(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function buildDeliberateWorkflowPreset(overrides: Partial<Record<string, unknown>> = {}) {
+  return buildWorkflowPreset({
+    id: 'deliberate-preset-1',
+    name: '英语学习编排',
+    phases: [
+      {
+        phase_type: 'deliberate_group',
+        duration: 60,
+        config_ids: ['cfg-a', 'cfg-b'],
+        config_names: ['英语二阅读', '408'],
+      },
+    ],
+    ...overrides,
+  });
+}
+
 const primaryEvent = {
   id: 'event-1',
   user_id: 7,
@@ -209,15 +225,15 @@ describe('PlaceholderCard workflow UI', () => {
     expect(screen.getAllByText('今日任务').length).toBeGreaterThan(0);
   });
 
-  it('shows the default workflow as the selected start target and starts it directly', async () => {
+  it('shows the default deliberate workflow as the selected start target and starts it through the unified API', async () => {
     const user = userEvent.setup();
     const workflowStarted = vi.fn();
     window.addEventListener(ONBOARDING_EVENTS.workflowStarted, workflowStarted);
-    const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
+    const preset = buildDeliberateWorkflowPreset({ id: 'preset-default', name: '英语学习编排', is_default: true });
 
     mockApiJson.mockImplementation((path: string, init?: RequestInit) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
-      if (path === '/todo/focus/workflows/preset-default/start' && init?.method === 'POST') {
+      if (path === '/todo/focus/workflow/start-multi-deliberate' && init?.method === 'POST') {
         return Promise.resolve({
           state: 'focus',
           workflow_name: preset.name,
@@ -236,13 +252,19 @@ describe('PlaceholderCard workflow UI', () => {
     renderCard();
 
     expect(await screen.findByText('开始工作流')).toBeInTheDocument();
-    expect(screen.getByText('深度工作流')).toBeInTheDocument();
+    expect(screen.getByText('英语学习编排')).toBeInTheDocument();
 
     try {
-      await user.click(screen.getByRole('button', { name: '开始工作流 深度工作流' }));
+      await user.click(screen.getByRole('button', { name: '开始工作流 英语学习编排' }));
 
       await waitFor(() => {
-        expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows/preset-default/start', { method: 'POST' });
+        expect(mockApiJson).toHaveBeenCalledWith(
+          '/todo/focus/workflow/start-multi-deliberate',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ config_ids: ['cfg-a', 'cfg-b'] }),
+          }),
+        );
         expect(workflowStarted).toHaveBeenCalledTimes(1);
       });
     } finally {
@@ -402,8 +424,8 @@ describe('PlaceholderCard workflow UI', () => {
 
   it('uses the last selected workflow from localStorage before the default workflow', async () => {
     window.localStorage.setItem('ark-home-selected-workflow-preset-id', 'preset-last');
-    const defaultPreset = buildWorkflowPreset({ id: 'preset-default', name: '默认工作流', is_default: true });
-    const lastPreset = buildWorkflowPreset({ id: 'preset-last', name: '上次工作流', is_default: false });
+    const defaultPreset = buildDeliberateWorkflowPreset({ id: 'preset-default', name: '默认工作流', is_default: true });
+    const lastPreset = buildDeliberateWorkflowPreset({ id: 'preset-last', name: '上次工作流', is_default: false });
 
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([defaultPreset, lastPreset]);
@@ -428,17 +450,17 @@ describe('PlaceholderCard workflow UI', () => {
 
     renderCard();
 
-    expect(await screen.findByRole('button', { name: '新建工作流' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '新建学习编排' })).toBeInTheDocument();
 
     presets.push(
-      buildWorkflowPreset({
+      buildDeliberateWorkflowPreset({
         id: 'preset-event',
         name: '期末冲刺',
         event_id: 'event-1',
         event_name: '高数期末',
         is_default: false,
       }),
-      buildWorkflowPreset({
+      buildDeliberateWorkflowPreset({
         id: 'preset-other',
         name: '其他事件工作流',
         event_id: 'event-other',
@@ -559,8 +581,8 @@ describe('PlaceholderCard workflow UI', () => {
 
   it('opens the workflow picker from the workflow name and switches without starting', async () => {
     const user = userEvent.setup();
-    const first = buildWorkflowPreset({ id: 'preset-a', name: 'A 工作流', is_default: true });
-    const second = buildWorkflowPreset({ id: 'preset-b', name: 'B 工作流', is_default: false });
+    const first = buildDeliberateWorkflowPreset({ id: 'preset-a', name: 'A 工作流', is_default: true });
+    const second = buildDeliberateWorkflowPreset({ id: 'preset-b', name: 'B 工作流', is_default: false });
 
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([first, second]);
@@ -575,11 +597,12 @@ describe('PlaceholderCard workflow UI', () => {
     expect(window.localStorage.getItem('ark-home-selected-workflow-preset-id')).toBe('preset-b');
     expect(screen.getByRole('button', { name: '切换工作流 B 工作流' })).toBeInTheDocument();
     expect(mockApiJson.mock.calls.some(([path]) => path === '/todo/focus/workflows/preset-b/start')).toBe(false);
+    expect(mockApiJson.mock.calls.some(([path]) => path === '/todo/focus/workflow/start-multi-deliberate')).toBe(false);
   });
 
-  it('opens the workflow preset modal when creating from the picker', async () => {
+  it('does not open the legacy workflow modal when creating from the picker', async () => {
     const user = userEvent.setup();
-    const preset = buildWorkflowPreset({ id: 'preset-a', name: 'A 工作流', is_default: true });
+    const preset = buildDeliberateWorkflowPreset({ id: 'preset-a', name: 'A 工作流', is_default: true });
 
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
@@ -589,12 +612,12 @@ describe('PlaceholderCard workflow UI', () => {
     renderCard();
 
     await user.click(await screen.findByRole('button', { name: '切换工作流 A 工作流' }));
-    await user.click(screen.getByRole('button', { name: '新建工作流' }));
+    await user.click(screen.getByRole('button', { name: '新建学习编排' }));
 
-    expect(await screen.findByRole('heading', { name: '工作流' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '工作流' })).not.toBeInTheDocument();
   });
 
-  it('opens the workflow preset modal from the empty workflow state', async () => {
+  it('does not open the legacy workflow modal from the empty workflow state', async () => {
     const user = userEvent.setup();
 
     mockApiJson.mockImplementation((path: string) => {
@@ -604,13 +627,13 @@ describe('PlaceholderCard workflow UI', () => {
 
     renderCard();
 
-    await user.click(await screen.findByRole('button', { name: '新建工作流' }));
+    await user.click(await screen.findByRole('button', { name: '新建学习编排' }));
 
-    expect(await screen.findByRole('heading', { name: '工作流' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '工作流' })).not.toBeInTheDocument();
   });
 
   it('keeps the normal start-workflow hover scoped to workflow switching only', async () => {
-    const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
+    const preset = buildDeliberateWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
 
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
@@ -628,7 +651,7 @@ describe('PlaceholderCard workflow UI', () => {
   });
 
   it('keeps the inactive split-card workflow status outside the main task entry', async () => {
-    const preset = buildWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
+    const preset = buildDeliberateWorkflowPreset({ id: 'preset-default', name: '深度工作流', is_default: true });
 
     mockApiJson.mockImplementation((path: string) => {
       if (path === '/todo/focus/workflows') return Promise.resolve([preset]);
@@ -646,9 +669,9 @@ describe('PlaceholderCard workflow UI', () => {
     });
     expect(screen.getByText('当前工作流')).toBeInTheDocument();
     expect(screen.getByText('深度工作流')).toBeInTheDocument();
-    expect(screen.getByText('2 个阶段')).toBeInTheDocument();
+    expect(screen.getByText('2 个专注工作')).toBeInTheDocument();
     expect(screen.queryByText('运行 深度工作流')).not.toBeInTheDocument();
-    expect(screen.getByTitle('工作流设置')).toBeInTheDocument();
+    expect(screen.getByTitle('学习编排设置')).toBeInTheDocument();
   });
 
   it('hides the duration input for countup focus phases but still submits a default target duration', async () => {
