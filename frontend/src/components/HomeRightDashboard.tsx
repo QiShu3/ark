@@ -667,6 +667,7 @@ export default function HomeRightDashboard() {
       <DeliberateWorkflowPreviewModal
         open={workflowStartOpen}
         preset={selectedWorkflowStartPreset}
+        presets={workflowStartPresets}
         onClose={() => {
           if (!isSubmittingAction) setWorkflowStartOpen(false);
         }}
@@ -675,6 +676,7 @@ export default function HomeRightDashboard() {
           setWorkflowStartOpen(false);
           navigate('/deliberate-workflow');
         }}
+        onPresetChange={(presetId) => setSelectedWorkflowStartId(presetId)}
       />
 
       <AchievementModal

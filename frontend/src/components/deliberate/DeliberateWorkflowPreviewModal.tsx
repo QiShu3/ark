@@ -1,4 +1,5 @@
-import { Play, Settings2, X } from 'lucide-react';
+import { ChevronDown, Play, Settings2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
 import {
@@ -10,24 +11,51 @@ import {
 type Props = {
   open: boolean;
   preset: WorkflowPreset | null;
+  presets?: WorkflowPreset[];
   onClose: () => void;
   onStart: (configIds: string[]) => void;
   onEdit: () => void;
+  onPresetChange?: (presetId: string) => void;
 };
 
 export default function DeliberateWorkflowPreviewModal({
   open,
   preset,
+  presets,
   onClose,
   onStart,
   onEdit,
+  onPresetChange,
 }: Props) {
-  if (!preset) return null;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
 
   const configIds = getDeliberateWorkflowConfigIds(preset);
   const configNames = getDeliberateWorkflowConfigNames(preset);
   const totalCount = configIds.length;
   const canStart = totalCount > 0;
+
+  const showPresetPicker =
+    Array.isArray(presets) && presets.length > 1 && typeof onPresetChange === 'function';
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [pickerOpen]);
+
+  // 弹窗关闭时重置下拉状态
+  useEffect(() => {
+    if (!open) setPickerOpen(false);
+  }, [open]);
+
+  if (!preset) return null;
 
   return (
     <AppModalFrame open={open} onClose={onClose} ariaLabel="编排预览">
@@ -38,13 +66,73 @@ export default function DeliberateWorkflowPreviewModal({
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ark-accent/10">
               <Settings2 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
             </div>
-            <div>
-              <div className="text-base font-semibold text-ark-text">
-                {preset.name}
-              </div>
-              <div className="mt-0.5 text-xs text-ark-text-muted">
-                共 {totalCount} 个专注工作
-              </div>
+            <div ref={pickerRef} className="relative">
+              {showPresetPicker ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen((v) => !v)}
+                    className="flex items-center gap-1.5 text-left transition hover:opacity-80"
+                    aria-haspopup="listbox"
+                    aria-expanded={pickerOpen}
+                    aria-label="切换工作流预设"
+                  >
+                    <div className="text-base font-semibold text-ark-text">
+                      {preset.name}
+                    </div>
+                    <ChevronDown
+                      className={`h-4 w-4 text-ark-text-muted transition-transform ${
+                        pickerOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  <div className="mt-0.5 text-xs text-ark-text-muted">
+                    共 {totalCount} 个专注工作
+                  </div>
+                  {pickerOpen && (
+                    <div
+                      role="listbox"
+                      className="absolute left-0 top-full z-50 mt-1 w-[280px] max-h-[50vh] overflow-y-auto rounded-lg border border-ark-border bg-ark-surface-strong py-1 shadow-xl animate-fadeIn"
+                    >
+                      {presets!.map((p) => {
+                        const selected = p.id === preset.id;
+                        const count = getDeliberateWorkflowConfigIds(p).length;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            onClick={() => {
+                              onPresetChange(p.id);
+                              setPickerOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
+                              selected
+                                ? 'bg-ark-accent/10 text-ark-text'
+                                : 'text-ark-text-muted hover:bg-ark-surface-subtle hover:text-ark-text'
+                            }`}
+                          >
+                            <span className="truncate font-medium">{p.name}</span>
+                            <span className="shrink-0 text-[11px] text-ark-text-faint">
+                              {count} 个专注工作
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div>
+                  <div className="text-base font-semibold text-ark-text">
+                    {preset.name}
+                  </div>
+                  <div className="mt-0.5 text-xs text-ark-text-muted">
+                    共 {totalCount} 个专注工作
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <button
