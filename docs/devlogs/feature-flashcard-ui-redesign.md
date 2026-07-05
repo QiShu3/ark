@@ -2,6 +2,28 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-07-05 13:00 · d3738e2 · fix: 修复闪卡专注工作评分按钮卡死
+
+- 提交哈希：`d3738e2`
+- 用户提出的需求：
+  - "还是有问题：点击 记住了等功能按钮又卡住了"
+  - "我已经疲惫修代码了，这bug总是修不好。我在想要不要直接重新写一个这个闪卡类型的专注工作。"
+  - 同意继续调试："好"
+- 本次完成的工作（三个互相关联的 bug）：
+  1. 后端 submit 死循环：`routes/focus_work/unified/routes.py` 中 requeue 逻辑在 `for q in pool_data` 循环内调用 `pool_data.append(dict(q))`，新副本与原题同 id 且 `answered=False`，下一次迭代再次命中、再次 append，形成无限循环。修复为先收集 `requeue_copy`，`break` 跳出循环后再 append。
+  2. `is_correct` 误判：前端 `handleFlashcardRating` 只发 `rating` 不发 `is_correct`，后端默认 `is_correct=False` 传入 `record_answer`。`_record_vocab` 内部虽按 rating 重算了局部 `is_correct`，但不影响外层 `record_answer` 的变量，导致 `wrong_to_end + not is_correct` 错误触发 requeue（即使 rating=good）。修复为在 `submit_answer` 入口处由 rating 推导 `is_correct`（`rating != "again"`）。
+  3. 请求循环（前一轮已修）：`FocusWorkProvider.tsx` 的 `createRun` 后 dispatch `ark:reload-focus` 会覆盖刚设置的 snapshot；`UnifiedFocusWork.tsx` 在 init 404 时也 dispatch `reload-focus`，与 createRun 形成循环。移除这两处 dispatch。
+  4. 同步修复 `vocab_decks` 查询误加 `user_id` 列（该表是共享表无此列）导致 PostgreSQL 整事务回滚、run 记录消失的问题。
+  5. 清理前期排错时遗留的 `logging.warning("DEBUG submit: ...")` 调试日志。
+- 验证情况：
+  - 重启后端 `uv run python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000`
+  - agent-browser 内置浏览器实测四个评分按钮：
+    - 记住了(good): POST submit 200，进度 0→1，题目 a→abandon
+    - 没记住(again): POST submit 200，进度 1→2，requeue 生效（abandon 保留）
+    - 有点难(hard): POST submit 200，进度 2→3，abandon→abdomen
+    - 很轻松(easy): POST submit 200，进度 3→4，abdomen→abide
+  - 后端不再 hang，health check 正常响应
+
 ### 2026-07-05 10:01 · 5a95f78 · feat(frontend): add workflow settlement clear hero asset
 
 - 提交哈希：`5a95f78450e0d1578cbc79afdb1cda501e4c958b`
