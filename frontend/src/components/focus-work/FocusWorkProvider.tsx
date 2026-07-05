@@ -136,7 +136,6 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
         body: JSON.stringify({ mode }),
       });
       setSnapshot(next);
-      window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       return true;
     } catch (err) {
       console.error('Failed to create focus work run', err);

@@ -109,9 +109,8 @@ async def _lookup_bank_name(conn: Any, *, user_id: int, bank_id: str, kind: str)
             return str(row["name"]) if row else None
         if kind == "flash_card":
             row = await conn.fetchrow(
-                "SELECT name FROM vocab_decks WHERE id = $1::uuid AND user_id = $2",
+                "SELECT name FROM vocab_decks WHERE id = $1::uuid",
                 bank_id,
-                user_id,
             )
             return str(row["name"]) if row else None
         if kind == "input":
@@ -353,6 +352,9 @@ async def submit_answer(
     time_spent_ms = int(payload.get("time_spent_ms", 0))
     user_input = str(payload.get("user_input", ""))
     rating = payload.get("rating")  # flashcard four-point rating: again/hard/good/easy
+    # 闪卡四分制评分：由 rating 推导 is_correct，避免前端漏传导致 backflow 误触发
+    if rating:
+        is_correct = rating != "again"
 
     pool = _pool(request)
     async with pool.acquire() as conn:
@@ -441,6 +443,7 @@ async def submit_answer(
                 run_summary["memorized_count"] = (run_summary.get("memorized_count", 0)) + 1
 
         next_question = None
+        requeue_copy = None
         for q in pool_data:
             if str(q.get("id", "")) == question_id:
                 q["answered"] = True
@@ -450,10 +453,15 @@ async def submit_answer(
                 if triggered_action == "requeue":
                     q["backflow_count"] = q.get("backflow_count", 0) + 1
                     q["answered"] = False
-                    pool_data.append(dict(q))
+                    requeue_copy = dict(q)
                 elif triggered_action == "retry":
                     q["backflow_count"] = q.get("backflow_count", 0) + 1
                     q["answered"] = False
+                break  # 命中即跳出，避免 append 后又迭代到副本导致死循环
+
+        # requeue 时把副本追加到队尾（在迭代之外完成）
+        if requeue_copy is not None:
+            pool_data.append(requeue_copy)
 
         for q in pool_data:
             if not q.get("answered"):

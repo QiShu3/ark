@@ -186,12 +186,7 @@ export default function UnifiedFocusWork({ run, disabled, onContentCompleted }: 
       setPhase('active');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '初始化失败';
-      // 404 表示专注运行记录不存在（过期/无效），提供退出选项而非死循环重试
-      const isNotFound = errorMsg.includes('不存在') || errorMsg.includes('404') || errorMsg.includes('not found');
-      if (isNotFound) {
-        // 自动触发快照重载以清除过期状态
-        window.dispatchEvent(new CustomEvent('ark:reload-focus'));
-      }
+      // 404 仅显示错误并提供退出选项，不再触发 reload-focus 以避免与 createRun 形成循环
       setPhase('error');
       setErrorMessage(errorMsg);
     }
