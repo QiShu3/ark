@@ -2,6 +2,27 @@
 
 > 完整历史记录分片。维护规则见 [../开发日志.md](../开发日志.md)。
 
+### 2026-07-05 10:01 · 5a95f78 · feat(frontend): add workflow settlement clear hero asset
+
+- 提交哈希：`5a95f78450e0d1578cbc79afdb1cda501e4c958b`
+
+- 用户提出的需求：
+  - "这个结算弹窗太丑了，我重新设计了一版，你看看怎么样？后端要不要加东西？尽可能不要动后端。"
+  - "要视觉化通关。你看看你这个背景就不怎么好看，你可以截图自己看一下。"
+  - "你可以给我一个提示词，我去帮你生图。"
+  - 用户提供生成后的通关背景图，并要求："好，提交代码吧"
+
+- 本次完成的工作：
+  - 将用户生成的通关背景图压缩为 `frontend/public/images/workflow-settlement-clear.webp`，用于工作流结算弹窗的视觉化通关 hero。
+  - 补充 `WorkflowSettlementModal.test.tsx`，覆盖小于 1 分钟的工作流结算时长展示，避免历史记录显示空时长。
+  - 保持结算弹窗继续使用现有 `WorkflowSettlement` DTO；本次视觉接入不新增后端字段。
+
+- 验证情况：
+  - `cd frontend && pnpm test -- WorkflowSettlementModal.test.tsx` — 通过
+  - `cd frontend && pnpm exec eslint src/components/focus-work/WorkflowSettlementModal.tsx src/components/focus-work/WorkflowSettlementModal.test.tsx` — 通过
+  - `cd frontend && pnpm exec tsc --noEmit --pretty false` — 通过
+  - in-app browser 桌面截图验证结算弹窗；390px 窄屏视口验证布局无明显挤压
+
 ### 2026-07-05 · 5df46ac1 · feat(frontend): 登录页改版与图形验证码
 
 - 用户提出的需求：
