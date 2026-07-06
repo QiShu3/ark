@@ -1,0 +1,73 @@
+- generic [ref=e3]:
+  - navigation [ref=e7]:
+    - generic [ref=e8]:
+      - button "返回首页" [ref=e9]
+      - button "打开主事件：测试事件，倒计时 100d 21h" [ref=e10]:
+        - generic [ref=e11]: 测试事件
+        - generic [ref=e12]: 100d 21h
+      - button "重新进入首次体验引导" [ref=e13]:
+        - img [ref=e14]
+    - generic [ref=e17]:
+      - button "打开导航栏日历" [ref=e18]:
+        - img [ref=e19]
+      - button "切换为夜间模式" [ref=e842]:
+        - img [ref=e22]
+      - button "通知中心" [ref=e24]:
+        - img [ref=e25]
+      - button "打开界面设置" [ref=e28]:
+        - img [ref=e29]
+      - button "打开用户菜单" [ref=e34]:
+        - img "qishuadmin" [ref=e35]
+  - generic [ref=e606]:
+    - generic [ref=e607]:
+      - generic [ref=e608]:
+        - generic [ref=e609]: Admin
+        - heading "刻意学习流" [level=1] [ref=e610]
+        - paragraph [ref=e611]: 管理题库、专注工作和工作流，通过刻意练习提升学习效果。
+      - link "返回应用中心" [ref=e612] [cursor=pointer]:
+        - /url: "#/apps"
+    - generic [ref=e613]:
+      - generic [ref=e614]:
+        - generic [ref=e615]: 当前状态
+        - combobox "当前状态" [ref=e906]:
+          - option "正在新建工作流" [selected]
+          - option "408"
+      - button "重新开始" [ref=e907] [cursor=pointer]:
+        - img [ref=e620]
+        - generic [ref=e621]: 重新开始
+    - navigation "刻意工作流步骤" [ref=e908]:
+      - button "1. 选择类型 选择题" [ref=e909]:
+        - img [ref=e911]
+        - generic [ref=e915]:
+          - generic [ref=e916]: 1. 选择类型
+          - generic [ref=e917]: 选择题
+      - button "2. 题库资产 未选择" [ref=e918]:
+        - img [ref=e920]
+        - generic [ref=e924]:
+          - generic [ref=e925]: 2. 题库资产
+          - generic [ref=e926]: 未选择
+      - button "3. 工作参数 等待题库" [disabled] [ref=e927]:
+        - img [ref=e929]
+        - generic [ref=e932]:
+          - generic [ref=e933]: 3. 工作参数
+          - generic [ref=e934]: 等待题库
+      - button "4. 运行复盘 保存后进入" [disabled] [ref=e935]:
+        - img [ref=e937]
+        - generic [ref=e940]:
+          - generic [ref=e941]: 4. 运行复盘
+          - generic [ref=e942]: 保存后进入
+    - generic [ref=e622]:
+      - generic [ref=e624]:
+        - generic [ref=e625]: 步骤 1 / 4
+        - heading "选择类型" [level=2] [ref=e943]
+        - paragraph [ref=e627]: 选择题
+      - generic [ref=e944]:
+        - generic [ref=e945]:
+          - button "选择题" [ref=e946]
+          - button "闪卡" [ref=e947]
+          - button "输入题" [ref=e948]
+        - button "下一步" [ref=e950] [cursor=pointer]:
+          - generic [ref=e951]: 下一步
+  - contentinfo [ref=e260]:
+    - link "粤ICP备2026047635号" [ref=e261] [cursor=pointer]:
+      - /url: https://beian.miit.gov.cn/

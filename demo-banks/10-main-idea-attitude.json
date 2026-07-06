@@ -1,0 +1,64 @@
+[
+  {
+    "title": "篇章主旨与态度专项",
+    "passage": "篇章主旨与作者态度专项训练。",
+    "examination": "篇章主旨与态度",
+    "questions": [
+      {
+        "question_text": "一篇文章开头提出问题，中间分析原因，结尾给出解决方案。\n这篇文章的主旨最可能是：",
+        "options": {
+          "A": "描述一个历史事件",
+          "B": "介绍一个科学发现",
+          "C": "探讨一个社会问题并提出对策",
+          "D": "比较两种不同观点"
+        },
+        "correct_answer": "C",
+        "analysis": "提出问题-分析原因-给出对策是典型的问题解决型文章结构，主旨是探讨问题并提出解决方案。"
+      },
+      {
+        "question_text": "作者在文中使用了 \"remarkable\", \"impressive\", \"groundbreaking\" 等词来描述一项新研究。\n作者对这项研究的态度是：",
+        "options": {
+          "A": "批评的",
+          "B": "赞赏的",
+          "C": "怀疑的",
+          "D": "客观中立的"
+        },
+        "correct_answer": "B",
+        "analysis": "remarkable（非凡的）、impressive（令人印象深刻的）、groundbreaking（突破性的）都是正面褒义词，表明作者持赞赏态度。"
+      },
+      {
+        "question_text": "作者写道：\"While the proposal has some merits, its practical implementation faces significant challenges that cannot be ignored.\"\n作者的态度是：",
+        "options": {
+          "A": "完全支持",
+          "B": "完全反对",
+          "C": "有保留的/审慎的",
+          "D": "漠不关心"
+        },
+        "correct_answer": "C",
+        "analysis": "While 引导让步，既承认有优点（some merits），又指出重大挑战（significant challenges），态度是有保留的、审慎的。"
+      },
+      {
+        "question_text": "以下哪个词最能表达\"怀疑的\"态度？",
+        "options": {
+          "A": "enthusiastic",
+          "B": "skeptical",
+          "C": "supportive",
+          "D": "indifferent"
+        },
+        "correct_answer": "B",
+        "analysis": "skeptical 意为\"怀疑的\"。enthusiastic 是热情的，supportive 是支持的，indifferent 是漠不关心的。"
+      },
+      {
+        "question_text": "关于主旨题，以下哪种做法是正确的？",
+        "options": {
+          "A": "只看第一段就选答案",
+          "B": "选择包含具体细节的选项",
+          "C": "综合各段首句和首尾段，选择概括性最强的选项",
+          "D": "选择最长的选项"
+        },
+        "correct_answer": "C",
+        "analysis": "主旨题需要综合全文，关注各段主题句和首尾段的呼应，选择最具概括性的选项。不能只看一段，也不能选只包含细节的选项。"
+      }
+    ]
+  }
+]

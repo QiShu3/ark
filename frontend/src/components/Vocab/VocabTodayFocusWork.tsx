@@ -3,10 +3,10 @@ import React from 'react';
 import { useVocabDeck } from '../../hooks/vocab/useVocabDeck';
 import { fetchVocabFocusQueue, submitVocabContentReview } from '../../lib/vocab/api';
 import type { VocabReviewItem } from '../../lib/vocab/types';
-import { extractRunConfigNumber, toErrorMessage } from '../focus-work/focusWorkUtils';
+import { computeFsrsStage, extractRunConfigNumber, formatDueLabel, toErrorMessage } from '../focus-work/focusWorkUtils';
 import type { FocusWorkRendererProps } from '../focus-work/focusWorkTypes';
 import FlashcardFocusTemplate from '../focus-work/templates/FlashcardFocusTemplate';
-import type { FlashcardItem, FlashcardRating, FlashcardSubmitResult } from '../focus-work/templates/flashcardTypes';
+import type { FlashcardItem, FlashcardMeta, FlashcardRating, FlashcardSubmitResult } from '../focus-work/templates/flashcardTypes';
 
 const FOCUS_ROUND_LIMIT = 500;
 
@@ -14,7 +14,18 @@ type VocabTodayFocusWorkProps = FocusWorkRendererProps;
 
 type VocabMode = 'learning' | 'review' | 'study';
 
-function vocabItemToFlashcardItem(item: VocabReviewItem, mode: VocabMode): FlashcardItem {
+function vocabItemToFlashcardItem(item: VocabReviewItem, mode: VocabMode, fsrs: boolean): FlashcardItem {
+  const meta: FlashcardMeta[] = [
+    { label: mode === 'study' ? '新词' : mode === 'learning' ? '学习中' : '复习', tone: mode === 'study' ? 'blue' : 'emerald' },
+  ];
+
+  if (fsrs) {
+    const stage = computeFsrsStage(item.fsrs_card_json, item.next_review_at);
+    const stageLabel = stage === 'new' ? '新卡' : stage === 'learning' ? '学习中' : '复习中';
+    const stageTone = stage === 'new' ? 'blue' : stage === 'learning' ? 'amber' : 'emerald';
+    meta.push({ label: stageLabel, tone: stageTone, fsrsStage: stage, dueLabel: formatDueLabel(item.next_review_at) });
+  }
+
   return {
     id: item.id,
     front: item.word,
@@ -29,9 +40,7 @@ function vocabItemToFlashcardItem(item: VocabReviewItem, mode: VocabMode): Flash
         </div>
       </div>
     ),
-    meta: [
-      { label: mode === 'study' ? '新词' : mode === 'learning' ? '学习中' : '复习', tone: mode === 'study' ? 'blue' : 'emerald' },
-    ],
+    meta,
   };
 }
 
@@ -46,6 +55,7 @@ export default function VocabTodayFocusWork({
   const activeDeckId = configuredDeckId ?? activeDeck?.id ?? null;
   const isPaused = disabled;
   const isExtraRun = !run.counts_for_task_completion;
+  const isFsrsMode = run.config_snapshot?.scheduling_mode === 'fsrs';
   const roundTargetCount = React.useMemo(() => extractRunConfigNumber(run, ['target_word_count', 'daily_target_count'], 10, FOCUS_ROUND_LIMIT), [run]);
   const [items, setItems] = React.useState<VocabReviewItem[]>([]);
   const [loadedRunId, setLoadedRunId] = React.useState<string | null>(null);
@@ -120,11 +130,11 @@ export default function VocabTodayFocusWork({
           const [current] = next.splice(index, 1);
           return [...next, current];
         });
-        return { shouldRepeat: true };
+        return { shouldRepeat: true, nextDueAt: payload.next_review_at ?? null };
       }
       setCompletedCount((prev) => prev + 1);
       setItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
-      return { shouldRepeat: false };
+      return { shouldRepeat: false, nextDueAt: payload.next_review_at ?? null };
     } catch (err) {
       setError(toErrorMessage(err, '提交失败'));
       return { shouldRepeat: false };
@@ -135,10 +145,10 @@ export default function VocabTodayFocusWork({
 
   const handleLoadNext = React.useCallback(async (): Promise<FlashcardItem | null> => {
     if (currentItem) {
-      return vocabItemToFlashcardItem(currentItem, currentItem.review_mode as VocabMode);
+      return vocabItemToFlashcardItem(currentItem, currentItem.review_mode as VocabMode, isFsrsMode);
     }
     return null;
-  }, [currentItem]);
+  }, [currentItem, isFsrsMode]);
 
   const handleContentCompleted = React.useCallback((progressSnapshot?: Record<string, unknown>) => {
     onContentCompleted({
@@ -157,7 +167,14 @@ export default function VocabTodayFocusWork({
     });
   }, [completedCount, isExtraRun, onContentCompleted, plannedCount, roundTargetCount]);
 
-  const currentFlashcardItem = currentItem ? vocabItemToFlashcardItem(currentItem, currentItem.review_mode as VocabMode) : null;
+  const currentFlashcardItem = currentItem ? vocabItemToFlashcardItem(currentItem, currentItem.review_mode as VocabMode, isFsrsMode) : null;
+
+  const emptyTitle = isFsrsMode ? '今日已无待复习' : '暂无可练习词卡';
+  const emptyDescription = isFsrsMode
+    ? '所有到期卡片已完成,请明天再来。'
+    : loadedRunId === run.id
+      ? '当前词库暂时没有可练习的词卡。'
+      : '正在准备词卡。';
 
   return (
     <FlashcardFocusTemplate
@@ -167,10 +184,11 @@ export default function VocabTodayFocusWork({
       item={currentFlashcardItem}
       loading={loading}
       error={error}
-      emptyTitle="暂无可练习词卡"
-      emptyDescription={loadedRunId === run.id ? '当前词库暂时没有可练习的词卡。' : '正在准备词卡。'}
+      emptyTitle={emptyTitle}
+      emptyDescription={emptyDescription}
       completedCount={completedCount}
       targetCount={roundTargetCount}
+      completeOnEmpty={isFsrsMode ? true : undefined}
       disabled={isPaused}
       onSubmitRating={handleFlashcardSubmit}
       onLoadNext={handleLoadNext}

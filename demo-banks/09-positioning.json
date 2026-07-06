@@ -1,0 +1,64 @@
+[
+  {
+    "title": "题干定位技巧专项",
+    "passage": "题干定位技巧专项训练：学习如何快速在原文中找到定位句。",
+    "examination": "题干定位技巧",
+    "questions": [
+      {
+        "question_text": "题干：According to Paragraph 3, what caused the company's financial crisis?\n\n这道题最佳的定位词是？",
+        "options": {
+          "A": "company",
+          "B": "Paragraph 3 + financial crisis",
+          "C": "caused",
+          "D": "what"
+        },
+        "correct_answer": "B",
+        "analysis": "段落号 Paragraph 3 是强定位信号，加上具体的名词短语 financial crisis，可以精准定位。普通名词 company 太泛，动词和疑问词不适合做定位词。"
+      },
+      {
+        "question_text": "题干：What does the example of the Amazon rainforest illustrate?\n\n这道题的核心定位词是：",
+        "options": {
+          "A": "example",
+          "B": "illustrate",
+          "C": "Amazon rainforest（专有名词）",
+          "D": "What"
+        },
+        "correct_answer": "C",
+        "analysis": "专有名词 Amazon rainforest 是最佳定位词，因为它在文中形式唯一，容易找到。example 和 illustrate 是功能词，在文中可能以多种形式出现。"
+      },
+      {
+        "question_text": "题干：In what year did the scientist win the Nobel Prize?\n\n这道题应该优先用什么方法定位？",
+        "options": {
+          "A": "找动词 win",
+          "B": "找名词 scientist",
+          "C": "找数字/专有名词：Nobel Prize + 年份相关内容",
+          "D": "找介词 In"
+        },
+        "correct_answer": "C",
+        "analysis": "数字（年份）和专有名词（Nobel Prize）是最可靠的定位词，因为它们在文中形式固定，容易扫描找到。"
+      },
+      {
+        "question_text": "题干：The author's attitude toward artificial intelligence is one of...\n\n这类态度题的定位方法是：",
+        "options": {
+          "A": "只找人工 intelligence 这个词出现的句子",
+          "B": "找全文中带有感情色彩的形容词/副词，结合主题判断",
+          "C": "只看文章第一段",
+          "D": "找文中 attitude 这个词"
+        },
+        "correct_answer": "B",
+        "analysis": "态度题通常没有直接的定位句，需要通过全文中带有情感色彩的词汇（形容词、副词、情态动词等）来综合判断作者态度。"
+      },
+      {
+        "question_text": "关于定位原则，下列说法错误的是：",
+        "options": {
+          "A": "专有名词、数字、年份是最佳定位词",
+          "B": "应该尽量使用题干中多次出现的普通名词定位",
+          "C": "定位时要注意同义替换，正确答案的表述可能与原文不同",
+          "D": "段落号可以帮助缩小定位范围"
+        },
+        "correct_answer": "B",
+        "analysis": "多次出现的普通名词太泛，不适合做定位词。应该选择独特、出现次数少的词来定位，如专有名词、数字、特殊术语等。"
+      }
+    ]
+  }
+]

@@ -97,3 +97,59 @@ export function buildProgressSnapshot(
   }
   return snapshot;
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Formats a human-readable label for the next review time of an FSRS card.
+ *
+ * Returns an empty string when `nextReviewAt` is null/undefined.
+ * Otherwise computes the difference from now and returns:
+ * - `'即将复习'` when due within 1 hour (including past-due)
+ * - `'今日到期'` when due on the same calendar day as now
+ * - `'X 小时后'` when due within 24 hours but on a later day
+ * - `'X 天后'` when due beyond 24 hours (X = rounded day count)
+ *
+ * @param nextReviewAt - ISO string or null/undefined.
+ * @returns A display label, or empty string when no due date is provided.
+ */
+export function formatDueLabel(nextReviewAt: string | null | undefined): string {
+  if (!nextReviewAt) return '';
+  const due = new Date(nextReviewAt);
+  if (Number.isNaN(due.getTime())) return '';
+  const now = new Date();
+  const diffMs = due.getTime() - now.getTime();
+  if (diffMs < HOUR_MS) return '即将复习';
+  if (diffMs < DAY_MS) {
+    if (due.toDateString() === now.toDateString()) return '今日到期';
+    const hours = Math.max(1, Math.round(diffMs / HOUR_MS));
+    return `${hours} 小时后`;
+  }
+  const days = Math.round(diffMs / DAY_MS);
+  return `${days} 天后`;
+}
+
+/**
+ * Determines the FSRS stage of a card based on its serialized state and due time.
+ *
+ * - `'new'` — `fsrsCardJson` is null/undefined (never reviewed)
+ * - `'learning'` — `fsrsCardJson` exists and `nextReviewAt` is within 24h (learning steps still active today)
+ * - `'review'` — `fsrsCardJson` exists and `nextReviewAt` is beyond 24h (long-term review)
+ *
+ * @param fsrsCardJson - Serialized FSRS Card JSON string, or null/undefined.
+ * @param nextReviewAt - ISO string of next due time, or null/undefined.
+ * @returns The FSRS stage, defaulting to `'new'` when no card state exists.
+ */
+export function computeFsrsStage(
+  fsrsCardJson: string | null | undefined,
+  nextReviewAt: string | null | undefined,
+): 'new' | 'learning' | 'review' {
+  if (!fsrsCardJson) return 'new';
+  if (!nextReviewAt) return 'learning';
+  const due = new Date(nextReviewAt);
+  if (Number.isNaN(due.getTime())) return 'learning';
+  const diffMs = due.getTime() - Date.now();
+  if (diffMs < DAY_MS) return 'learning';
+  return 'review';
+}

@@ -1,0 +1,64 @@
+[
+  {
+    "title": "长难句专项练习",
+    "passage": "长难句结构拆解专项训练：分析下列句子的主干、从句类型和修饰关系。",
+    "examination": "长难句结构拆解",
+    "questions": [
+      {
+        "question_text": "The idea that some groups of people may be more intelligent than others is one of those hypotheses that dare not speak its name.\n\n这句话的主干是什么？",
+        "options": {
+          "A": "The idea is one of those hypotheses",
+          "B": "some groups may be more intelligent",
+          "C": "hypotheses dare not speak its name",
+          "D": "people may be more intelligent than others"
+        },
+        "correct_answer": "A",
+        "analysis": "句子主干是 The idea is one of those hypotheses。that some groups...others 是同位语从句修饰 idea，that dare not speak its name 是定语从句修饰 hypotheses。"
+      },
+      {
+        "question_text": "It is not easy to explain why some animals survive in environments where most others would perish.\n\n句中 where 引导的是什么从句？",
+        "options": {
+          "A": "宾语从句",
+          "B": "定语从句",
+          "C": "状语从句",
+          "D": "同位语从句"
+        },
+        "correct_answer": "C",
+        "analysis": "where 引导地点状语从句，修饰 survive，表示\"在大多数其他动物会灭亡的环境中\"。"
+      },
+      {
+        "question_text": "Having been ignored for decades, the old building, which was once a grand palace, now faces demolition.\n\n句中 Having been ignored 是什么成分？",
+        "options": {
+          "A": "谓语动词",
+          "B": "现在分词作状语",
+          "C": "过去分词作定语",
+          "D": "动名词作主语"
+        },
+        "correct_answer": "B",
+        "analysis": "Having been ignored 是现在分词完成被动式作原因状语，逻辑主语是 the old building。"
+      },
+      {
+        "question_text": "The report, published last week, shows that the economy is growing faster than most analysts had predicted.\n\n句中有几个从句？",
+        "options": {
+          "A": "1个",
+          "B": "2个",
+          "C": "3个",
+          "D": "4个"
+        },
+        "correct_answer": "B",
+        "analysis": "两个从句：1) that the economy...predicted 是宾语从句；2) than most analysts had predicted 是比较状语从句。published last week 是过去分词短语作定语，不是从句。"
+      },
+      {
+        "question_text": "Not only did the company fail to meet its targets, but it also had to lay off hundreds of employees.\n\n这句话使用了什么语法结构？",
+        "options": {
+          "A": "强调句",
+          "B": "倒装句",
+          "C": "虚拟语气",
+          "D": "独立主格"
+        },
+        "correct_answer": "B",
+        "analysis": "Not only 置于句首引起部分倒装，助动词 did 提前。这是 not only...but also... 的倒装结构。"
+      }
+    ]
+  }
+]

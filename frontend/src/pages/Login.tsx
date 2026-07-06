@@ -97,8 +97,6 @@ export default function Login() {
     }
   }
 
-  if (alreadyLoggedIn) return <Navigate to={from} replace />;
-
   const syncUserSettings = async () => {
     try {
       const data = await apiJson<User & Record<string, unknown>>('/auth/me');
@@ -164,6 +162,8 @@ export default function Login() {
       setPanelHeight(el.scrollHeight);
     }
   }, [mode, error, notice, pendingVerificationEmail, showCaptcha, password, confirmPassword]);
+
+  if (alreadyLoggedIn) return <Navigate to={from} replace />;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();

@@ -1,0 +1,64 @@
+[
+  {
+    "title": "段落逻辑关系专项",
+    "passage": "段落逻辑关系专项训练：判断段落间或段落内的逻辑关系。",
+    "examination": "段落逻辑关系",
+    "questions": [
+      {
+        "question_text": "句1：Regular exercise improves cardiovascular health.\n句2：It also helps reduce stress and improve mood.\n\n第二句与第一句的逻辑关系是：",
+        "options": {
+          "A": "转折关系",
+          "B": "递进关系",
+          "C": "因果关系",
+          "D": "让步关系"
+        },
+        "correct_answer": "B",
+        "analysis": "also 表示\"也\"，是递进关系，补充说明运动的另一个好处。"
+      },
+      {
+        "question_text": "句1：The economy showed signs of recovery last quarter.\n句2：However, unemployment rates remain high.\n\n第二句与第一句的逻辑关系是：",
+        "options": {
+          "A": "转折关系",
+          "B": "因果关系",
+          "C": "例证关系",
+          "D": "条件关系"
+        },
+        "correct_answer": "A",
+        "analysis": "However 表示转折，经济复苏和高失业率之间形成对比。"
+      },
+      {
+        "question_text": "句1：Many species are facing extinction.\n句2：For example, the giant panda's habitat has shrunk by 50% in the last 30 years.\n\n第二句与第一句的逻辑关系是：",
+        "options": {
+          "A": "递进关系",
+          "B": "因果关系",
+          "C": "例证关系",
+          "D": "对比关系"
+        },
+        "correct_answer": "C",
+        "analysis": "For example 表示举例说明，用熊猫的例子说明物种灭绝问题。"
+      },
+      {
+        "question_text": "句1：Due to the pandemic, many small businesses closed down.\n句2：As a result, unemployment rates rose sharply.\n\n第二句与第一句的逻辑关系是：",
+        "options": {
+          "A": "条件关系",
+          "B": "因果关系",
+          "C": "让步关系",
+          "D": "并列关系"
+        },
+        "correct_answer": "B",
+        "analysis": "As a result 表示结果，小企业倒闭导致失业率上升，是因果关系。"
+      },
+      {
+        "question_text": "Although the study had a small sample size, its findings were consistent with previous research.\n\n这句话中包含什么逻辑关系？",
+        "options": {
+          "A": "因果关系",
+          "B": "条件关系",
+          "C": "让步关系",
+          "D": "目的关系"
+        },
+        "correct_answer": "C",
+        "analysis": "Although 引导让步状语从句，表示\"尽管样本量小，但研究结果与之前的研究一致\"。"
+      }
+    ]
+  }
+]

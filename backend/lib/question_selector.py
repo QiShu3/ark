@@ -2,18 +2,30 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import asyncpg
 
 from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND
+
+if TYPE_CHECKING:
+    # 仅用于类型注解(避免与 routes.deliberate 的循环导入)
+    from routes.deliberate.schemas import FsrsConfig
+
+SchedulingMode = Literal["manual", "fsrs"]
 
 PrimaryFilter = Literal["all", "unstarted", "mistake", "last_wrong", "due_review"]
 SortOrder = Literal["sequential", "due", "mistake_first", "random"]
 
 
 class QuestionAdapter(ABC):
-    """Per-question-type adapter for unified question selection."""
+    """Per-question-type adapter for unified question selection.
+
+    scheduling_mode 决定调度策略:
+    - "manual": 沿用 primary_filter + sort_order + backflow_rule 的手动筛选逻辑
+    - "fsrs":   忽略 primary_filter / sort_order,改为 (due_at IS NULL OR due_at <= now)
+                + due_at ASC NULLS LAST + 当日新词配额(target_count)
+    """
 
     @abstractmethod
     async def count_available(
@@ -23,7 +35,8 @@ class QuestionAdapter(ABC):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
     ) -> int:
         ...
 
@@ -36,7 +49,8 @@ class QuestionAdapter(ABC):
         bank_id: str,
         primary_filter: PrimaryFilter,
         sort_order: SortOrder,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
         limit: int,
     ) -> list[dict[str, Any]]:
         ...
@@ -50,9 +64,12 @@ class ChoiceQuestionAdapter(QuestionAdapter):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
     ) -> int:
-        _, params = self._build_filter_clause(user_id, bank_id, primary_filter, use_fsrs, count=True)
+        if scheduling_mode == "fsrs":
+            return await self._count_fsrs(conn, user_id=user_id, bank_id=bank_id)
+        _, params = self._build_filter_clause(user_id, bank_id, primary_filter)
         row = await conn.fetchrow(
             f"""
             SELECT COUNT(*)::int AS cnt
@@ -76,10 +93,13 @@ class ChoiceQuestionAdapter(QuestionAdapter):
         bank_id: str,
         primary_filter: PrimaryFilter,
         sort_order: SortOrder,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
         limit: int,
     ) -> list[dict[str, Any]]:
-        order_clause, params = self._build_filter_clause(user_id, bank_id, primary_filter, use_fsrs, limit=limit)
+        if scheduling_mode == "fsrs":
+            return await self._select_fsrs(conn, user_id=user_id, bank_id=bank_id, limit=limit)
+        _, params = self._build_filter_clause(user_id, bank_id, primary_filter)
         order_sql = self._sort_sql(sort_order, params)
         rows = await conn.fetch(
             f"""
@@ -114,9 +134,6 @@ class ChoiceQuestionAdapter(QuestionAdapter):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
-        count: bool = False,
-        limit: int = 0,
     ) -> tuple[str, dict[str, Any]]:
         args: list[Any] = [user_id, bank_id]
         idx = 3
@@ -147,6 +164,118 @@ class ChoiceQuestionAdapter(QuestionAdapter):
             return "ORDER BY RANDOM()"
         return "ORDER BY q.id ASC"
 
+    async def _count_fsrs(self, conn: asyncpg.Connection, *, user_id: int, bank_id: str) -> int:
+        now = datetime.now(UTC)
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*)::int AS cnt
+            FROM choice_questions q
+            JOIN choice_articles a ON a.id = q.article_pk
+            LEFT JOIN choice_user_question_cards c
+                ON c.question_pk = q.id AND c.user_id = $1
+            WHERE a.set_id = $2::uuid
+              AND (
+                c.question_pk IS NULL
+                OR (c.due_at IS NOT NULL AND c.due_at <= $3::timestamptz)
+              )
+            """,
+            user_id,
+            bank_id,
+            now,
+        )
+        return row["cnt"] if row else 0
+
+    async def _select_fsrs(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        user_id: int,
+        bank_id: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        now = datetime.now(UTC)
+        learned_today = await self._count_learned_today(conn, user_id=user_id, bank_id=bank_id)
+        remaining_quota = max(0, limit - learned_today)
+
+        review_rows = await conn.fetch(
+            """
+            SELECT q.id AS question_pk, q.question_id, q.stem, q.options_json, q.answer,
+                   q.explanation, COALESCE(c.wrong_count, 0) AS wrong_count,
+                   COALESCE(c.right_count, 0) AS right_count,
+                   c.last_review_at, c.last_answer_correct, c.due_at,
+                   c.fsrs_card_json,
+                   a.id AS article_pk, a.title AS article_title, a.sort_order AS article_sort_order,
+                   (
+                       SELECT json_agg(p.text ORDER BY p.paragraph_no)
+                       FROM choice_paragraphs p
+                       WHERE p.article_pk = a.id
+                   ) AS article_paragraphs
+            FROM choice_questions q
+            JOIN choice_articles a ON a.id = q.article_pk
+            LEFT JOIN choice_user_question_cards c
+                ON c.question_pk = q.id AND c.user_id = $1
+            WHERE a.set_id = $2::uuid
+              AND c.due_at IS NOT NULL
+              AND c.due_at <= $3::timestamptz
+            ORDER BY c.due_at ASC
+            LIMIT $4
+            """,
+            user_id,
+            bank_id,
+            now,
+            limit,
+        )
+        review_list = [dict(r) for r in review_rows]
+
+        if len(review_list) >= limit or remaining_quota == 0:
+            return review_list[:limit]
+
+        new_limit = min(remaining_quota, limit - len(review_list))
+        new_rows = await conn.fetch(
+            """
+            SELECT q.id AS question_pk, q.question_id, q.stem, q.options_json, q.answer,
+                   q.explanation, COALESCE(c.wrong_count, 0) AS wrong_count,
+                   COALESCE(c.right_count, 0) AS right_count,
+                   c.last_review_at, c.last_answer_correct, c.due_at,
+                   c.fsrs_card_json,
+                   a.id AS article_pk, a.title AS article_title, a.sort_order AS article_sort_order,
+                   (
+                       SELECT json_agg(p.text ORDER BY p.paragraph_no)
+                       FROM choice_paragraphs p
+                       WHERE p.article_pk = a.id
+                   ) AS article_paragraphs
+            FROM choice_questions q
+            JOIN choice_articles a ON a.id = q.article_pk
+            LEFT JOIN choice_user_question_cards c
+                ON c.question_pk = q.id AND c.user_id = $1
+            WHERE a.set_id = $2::uuid
+              AND c.question_pk IS NULL
+            ORDER BY a.sort_order ASC, q.sort_order ASC, q.id ASC
+            LIMIT $3
+            """,
+            user_id,
+            bank_id,
+            new_limit,
+        )
+        return review_list + [dict(r) for r in new_rows]
+
+    async def _count_learned_today(self, conn: asyncpg.Connection, *, user_id: int, bank_id: str) -> int:
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*)::int AS cnt
+            FROM choice_user_question_cards c
+            JOIN choice_questions q ON q.id = c.question_pk
+            JOIN choice_articles a ON a.id = q.article_pk
+            WHERE c.user_id = $1
+              AND a.set_id = $2::uuid
+              AND c.fsrs_card_json IS NOT NULL
+              AND c.last_review_at::date = CURRENT_DATE
+            """,
+            user_id,
+            bank_id,
+        )
+        return row["cnt"] if row else 0
+
 
 class VocabQuestionAdapter(QuestionAdapter):
     async def count_available(
@@ -156,9 +285,12 @@ class VocabQuestionAdapter(QuestionAdapter):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
     ) -> int:
-        _, params = self._build_filter_clause(user_id, bank_id, primary_filter, use_fsrs, count=True)
+        if scheduling_mode == "fsrs":
+            return await self._count_fsrs(conn, user_id=user_id, bank_id=bank_id)
+        _, params = self._build_filter_clause(user_id, bank_id, primary_filter)
         row = await conn.fetchrow(
             f"""
             SELECT COUNT(*)::int AS cnt
@@ -180,10 +312,13 @@ class VocabQuestionAdapter(QuestionAdapter):
         bank_id: str,
         primary_filter: PrimaryFilter,
         sort_order: SortOrder,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
         limit: int,
     ) -> list[dict[str, Any]]:
-        _, params = self._build_filter_clause(user_id, bank_id, primary_filter, use_fsrs, limit=limit)
+        if scheduling_mode == "fsrs":
+            return await self._select_fsrs(conn, user_id=user_id, bank_id=bank_id, limit=limit)
+        _, params = self._build_filter_clause(user_id, bank_id, primary_filter)
         order_sql = self._sort_sql(sort_order, params)
         rows = await conn.fetch(
             f"""
@@ -217,9 +352,6 @@ class VocabQuestionAdapter(QuestionAdapter):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
-        count: bool = False,
-        limit: int = 0,
     ) -> tuple[str, dict[str, Any]]:
         args: list[Any] = [user_id, bank_id]
         idx = 3
@@ -250,8 +382,120 @@ class VocabQuestionAdapter(QuestionAdapter):
             return "ORDER BY RANDOM()"
         return "ORDER BY w.id ASC"
 
+    async def _count_fsrs(self, conn: asyncpg.Connection, *, user_id: int, bank_id: str) -> int:
+        now = datetime.now(UTC)
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*)::int AS cnt
+            FROM vocab_words w
+            LEFT JOIN vocab_user_word_progress p
+                ON p.word_id = w.id AND p.user_id = $1
+            WHERE w.deck_id = $2::uuid
+              AND (
+                p.word_id IS NULL
+                OR (p.next_review_at IS NOT NULL AND p.next_review_at <= $3::timestamptz)
+              )
+            """,
+            user_id,
+            bank_id,
+            now,
+        )
+        return row["cnt"] if row else 0
+
+    async def _select_fsrs(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        user_id: int,
+        bank_id: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        now = datetime.now(UTC)
+        learned_today = await self._count_learned_today(conn, user_id=user_id, bank_id=bank_id)
+        remaining_quota = max(0, limit - learned_today)
+
+        review_rows = await conn.fetch(
+            """
+            SELECT w.id AS question_pk, w.word AS question_id, w.word AS stem,
+                   COALESCE(vt.translation, '') AS answer, w.us_pronunciation,
+                   COALESCE(p.wrong_count, 0) AS wrong_count,
+                   COALESCE(p.correct_count, 0) AS right_count,
+                   p.last_review_at, p.last_result, p.next_review_at,
+                   p.fsrs_card_json
+            FROM vocab_words w
+            LEFT JOIN LATERAL (
+                SELECT translation FROM vocab_word_translations
+                WHERE word_id = w.id
+                ORDER BY sort_order ASC
+                LIMIT 1
+            ) vt ON TRUE
+            LEFT JOIN vocab_user_word_progress p
+                ON p.word_id = w.id AND p.user_id = $1
+            WHERE w.deck_id = $2::uuid
+              AND p.next_review_at IS NOT NULL
+              AND p.next_review_at <= $3::timestamptz
+            ORDER BY p.next_review_at ASC
+            LIMIT $4
+            """,
+            user_id,
+            bank_id,
+            now,
+            limit,
+        )
+        review_list = [dict(r) for r in review_rows]
+
+        if len(review_list) >= limit or remaining_quota == 0:
+            return review_list[:limit]
+
+        new_limit = min(remaining_quota, limit - len(review_list))
+        new_rows = await conn.fetch(
+            """
+            SELECT w.id AS question_pk, w.word AS question_id, w.word AS stem,
+                   COALESCE(vt.translation, '') AS answer, w.us_pronunciation,
+                   COALESCE(p.wrong_count, 0) AS wrong_count,
+                   COALESCE(p.correct_count, 0) AS right_count,
+                   p.last_review_at, p.last_result, p.next_review_at,
+                   p.fsrs_card_json
+            FROM vocab_words w
+            LEFT JOIN LATERAL (
+                SELECT translation FROM vocab_word_translations
+                WHERE word_id = w.id
+                ORDER BY sort_order ASC
+                LIMIT 1
+            ) vt ON TRUE
+            LEFT JOIN vocab_user_word_progress p
+                ON p.word_id = w.id AND p.user_id = $1
+            WHERE w.deck_id = $2::uuid
+              AND p.word_id IS NULL
+            ORDER BY w.sort_order ASC, w.id ASC
+            LIMIT $3
+            """,
+            user_id,
+            bank_id,
+            new_limit,
+        )
+        return review_list + [dict(r) for r in new_rows]
+
+    async def _count_learned_today(self, conn: asyncpg.Connection, *, user_id: int, bank_id: str) -> int:
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*)::int AS cnt
+            FROM vocab_user_word_progress p
+            JOIN vocab_words w ON w.id = p.word_id
+            WHERE p.user_id = $1
+              AND w.deck_id = $2::uuid
+              AND p.fsrs_card_json IS NOT NULL
+              AND p.last_review_at::date = CURRENT_DATE
+            """,
+            user_id,
+            bank_id,
+        )
+        return row["cnt"] if row else 0
+
 
 class InputQuestionAdapter(QuestionAdapter):
+    """Input 题型没有 due_at / fsrs_card_json 字段,FSRS 模式回退到 manual 逻辑。"""
+
     async def count_available(
         self,
         conn: asyncpg.Connection,
@@ -259,9 +503,11 @@ class InputQuestionAdapter(QuestionAdapter):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
     ) -> int:
-        _, params = self._build_filter_clause(user_id, bank_id, primary_filter, use_fsrs, count=True)
+        # scheduling_mode=="fsrs" 时回退到 manual 逻辑(input 表无 fsrs 字段)
+        _, params = self._build_filter_clause(user_id, bank_id, primary_filter)
         row = await conn.fetchrow(
             f"""
             SELECT COUNT(*)::int AS cnt
@@ -284,10 +530,12 @@ class InputQuestionAdapter(QuestionAdapter):
         bank_id: str,
         primary_filter: PrimaryFilter,
         sort_order: SortOrder,
-        use_fsrs: bool,
+        scheduling_mode: SchedulingMode = "manual",
+        fsrs_config: FsrsConfig | None = None,
         limit: int,
     ) -> list[dict[str, Any]]:
-        _, params = self._build_filter_clause(user_id, bank_id, primary_filter, use_fsrs, limit=limit)
+        # scheduling_mode=="fsrs" 时回退到 manual 逻辑(input 表无 fsrs 字段)
+        _, params = self._build_filter_clause(user_id, bank_id, primary_filter)
         order_sql = self._sort_sql(sort_order, params)
         rows = await conn.fetch(
             f"""
@@ -320,9 +568,6 @@ class InputQuestionAdapter(QuestionAdapter):
         user_id: int,
         bank_id: str,
         primary_filter: PrimaryFilter,
-        use_fsrs: bool,
-        count: bool = False,
-        limit: int = 0,
     ) -> tuple[str, dict[str, Any]]:
         args: list[Any] = [user_id, bank_id]
         idx = 3
@@ -368,11 +613,17 @@ async def count_questions(
     user_id: int,
     bank_id: str,
     primary_filter: PrimaryFilter = "all",
-    use_fsrs: bool = False,
+    scheduling_mode: SchedulingMode = "manual",
+    fsrs_config: FsrsConfig | None = None,
 ) -> int:
     adapter = get_adapter(kind)
     return await adapter.count_available(
-        conn, user_id=user_id, bank_id=bank_id, primary_filter=primary_filter, use_fsrs=use_fsrs,
+        conn,
+        user_id=user_id,
+        bank_id=bank_id,
+        primary_filter=primary_filter,
+        scheduling_mode=scheduling_mode,
+        fsrs_config=fsrs_config,
     )
 
 
@@ -385,7 +636,8 @@ async def build_question_list(
     target_count: int,
     primary_filter: PrimaryFilter = "all",
     sort_order: SortOrder = "sequential",
-    use_fsrs: bool = False,
+    scheduling_mode: SchedulingMode = "manual",
+    fsrs_config: FsrsConfig | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Build a fixed question list with strict mode rules.
 
@@ -401,7 +653,8 @@ async def build_question_list(
         bank_id=bank_id,
         primary_filter=primary_filter,
         sort_order=sort_order,
-        use_fsrs=use_fsrs,
+        scheduling_mode=scheduling_mode,
+        fsrs_config=fsrs_config,
         limit=target_count,
     )
 

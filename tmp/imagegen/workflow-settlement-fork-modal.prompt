@@ -1,0 +1,12 @@
+Use case: ui-mockup
+Asset type: high-fidelity product design concept image for a desktop web app modal
+Primary request: Create a polished UI mockup of a workflow settlement modal for a focus-learning app. The modal must clearly show a fork mechanism inside the settlement phase: a main workflow path with two main phases and forked child remediation branches. Make the fork path the central visual structure.
+Scene/backdrop: soft blurred light blue app background behind a centered modal, similar to a glassy productivity app.
+Subject: centered rounded modal titled "Workflow Complete" and "刻意学习流：英语阅读选择 → 408选择". Include a prominent result badge "补强后完成". Show top metrics: "总用时 28分", "主阶段 2", "Fork 2次", "总正确率 64%".
+Layout: modal width about 720px, tall enough to show a vertical timeline/tree. Use the central area for a path review: main node "阶段 1 英语阅读选择" with status "未通过 40% / 标准 80%", a curved branch arrow labeled "Fork" to child node "闪卡 补强完成", then return to main path; second main node "阶段 2 408选择" with status "未通过 0% / 标准 80%", branch to child node "408选择2 推荐 · 补强完成". Use connecting lines and subtle arrows so the parent-child relationship is unmistakable.
+Style/medium: crisp modern SaaS UI mockup, realistic app screenshot style, readable typography, light theme glassmorphism, soft shadows, restrained blue and green accents, small warning amber for failed checks.
+Composition/framing: 16:9 landscape screenshot crop, centered modal, enough padding around modal, all text legible.
+Color palette: light icy blue background, white translucent modal, slate text, blue lines for main path, green badges for completed remediation, amber/red small badges for failed checks.
+Text (verbatim where possible): "Workflow Complete", "补强后完成", "刻意学习流：英语阅读选择 → 408选择", "路径回顾", "阶段 1 英语阅读选择", "未通过 40% / 标准 80%", "Fork", "闪卡", "补强完成", "回到主线", "阶段 2 408选择", "未通过 0% / 标准 80%", "408选择2", "推荐", "总用时 28分", "主阶段 2", "Fork 2次", "总正确率 64%", "结束工作流".
+Constraints: this is a UI design mockup, not a marketing poster. Keep text inside cards, no overlapping elements, no decorative characters, no stock-photo people, no logos, no watermark. Use realistic spacing, compact dashboard-style hierarchy, and make the fork branches visually explicit.
+Avoid: abstract art, fantasy elements, huge hero typography, illegible tiny text, random fake words, purple-dominant palette.

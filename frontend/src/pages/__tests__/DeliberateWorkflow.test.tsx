@@ -70,6 +70,8 @@ const mockConfig: DeliberateWorkflowConfig = {
   primary_filter: 'all',
   sort_order: 'sequential',
   use_fsrs: false,
+  scheduling_mode: 'manual',
+  fsrs_config: null,
   backflow_rule: 'none',
   bank_summary: { id: 'bank-1', name: '408题库', kind: 'choice', item_count: 100, question_count: 100 },
   created_at: '2025-01-01T00:00:00Z',
@@ -103,12 +105,24 @@ function renderPage() {
   );
 }
 
+function mockChoiceBankList() {
+  (listDeliberateBanks as ReturnType<typeof vi.fn>).mockImplementation((kind: string) => {
+    return Promise.resolve(kind === 'choice' ? mockBanks : []);
+  });
+}
+
+async function enterDraftMode() {
+  fireEvent.click(await screen.findByRole('button', { name: '新建工作流' }));
+  expect(await screen.findByRole('heading', { name: '选择类型' })).toBeInTheDocument();
+}
+
 /* ── Tests ─────────────────────────────────────────────────── */
 
 describe('DeliberateWorkflow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockNavigate.mockReset();
+    window.localStorage.removeItem('ark:deliberate-workflow:selected-id');
     (listDeliberateWorkflows as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listDeliberateBanks as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listDeliberateRuns as ReturnType<typeof vi.fn>).mockResolvedValue([]);
@@ -123,9 +137,11 @@ describe('DeliberateWorkflow', () => {
     expect(await screen.findByText('刻意工作流')).toBeInTheDocument();
   });
 
-  it('shows empty state and auto-enters draft mode when no saved configs exist', async () => {
+  it('shows the management empty state when no saved configs exist', async () => {
     renderPage();
-    expect(await screen.findByText('选择类型')).toBeInTheDocument();
+    expect(await screen.findByText('暂无专注工作配置，请新建')).toBeInTheDocument();
+    expect(screen.getByText('题库管理')).toBeInTheDocument();
+    expect(screen.getByText('工作流编排')).toBeInTheDocument();
   });
 
   it('shows config list when configs exist', async () => {
@@ -140,23 +156,23 @@ describe('DeliberateWorkflow', () => {
     renderPage();
     await screen.findAllByText('每日练习');
     fireEvent.click(screen.getByText('新建工作流'));
-    expect(screen.getByText('选择类型')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '选择类型' })).toBeInTheDocument();
   });
 
   it('navigates through the 4-step creation wizard', async () => {
-    (listDeliberateBanks as ReturnType<typeof vi.fn>).mockResolvedValue(mockBanks);
+    (listDeliberateWorkflows as ReturnType<typeof vi.fn>).mockResolvedValue([mockConfig]);
+    mockChoiceBankList();
     renderPage();
-    // When no configs, auto-enters draft mode at step 1
-    await screen.findByText('选择类型');
+    await enterDraftMode();
     // Step 1: choose type → Step 2
     fireEvent.click(screen.getByText('下一步'));
-    await waitFor(() => expect(screen.getByText('题库资产')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: '题库资产' })).toBeInTheDocument());
     // Step 2: bank asset → Step 3 (select existing bank)
     fireEvent.click(screen.getByText('选择已有题库'));
-    const bankSelect = screen.getByRole('combobox');
+    const bankSelect = screen.getByLabelText('题库');
     fireEvent.change(bankSelect, { target: { value: 'bank-1' } });
     fireEvent.click(screen.getAllByText('下一步')[0]);
-    await waitFor(() => expect(screen.getByText('工作参数')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: '工作参数' })).toBeInTheDocument());
     // Step 3: fill name
     const nameInput = screen.getByPlaceholderText(/408 每日 20 题/);
     fireEvent.change(nameInput, { target: { value: '测试配置' } });
@@ -164,34 +180,35 @@ describe('DeliberateWorkflow', () => {
   });
 
   it('selects type and advances to next step', async () => {
-    (listDeliberateBanks as ReturnType<typeof vi.fn>).mockResolvedValue(mockBanks);
+    (listDeliberateWorkflows as ReturnType<typeof vi.fn>).mockResolvedValue([mockConfig]);
+    mockChoiceBankList();
     renderPage();
-    await screen.findByText('选择类型');
+    await enterDraftMode();
     fireEvent.click(screen.getByText('下一步'));
-    expect(await screen.findByText('题库资产')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '题库资产' })).toBeInTheDocument();
   });
 
   it('saves config and enters run/review page', async () => {
-    (listDeliberateBanks as ReturnType<typeof vi.fn>).mockResolvedValue(mockBanks);
+    mockChoiceBankList();
     const createdConfig = { ...mockConfig, id: 'cfg-new' };
     (createDeliberateWorkflow as ReturnType<typeof vi.fn>).mockResolvedValue(createdConfig);
     (listDeliberateWorkflows as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([createdConfig]);
+      .mockResolvedValueOnce([mockConfig])
+      .mockResolvedValueOnce([mockConfig, createdConfig]);
 
     renderPage();
-    await screen.findByText('选择类型');
+    await enterDraftMode();
 
     // Step 1 → 2
     fireEvent.click(screen.getByText('下一步'));
-    await screen.findByText('题库资产');
+    await screen.findByRole('heading', { name: '题库资产' });
 
     // Step 2: select bank → 3
     fireEvent.click(screen.getByText('选择已有题库'));
-    const bankSelect = screen.getByRole('combobox');
+    const bankSelect = screen.getByLabelText('题库');
     fireEvent.change(bankSelect, { target: { value: 'bank-1' } });
     fireEvent.click(screen.getAllByText('下一步')[0]);
-    await screen.findByText('工作参数');
+    await screen.findByRole('heading', { name: '工作参数' });
 
     // Step 3: fill name & save
     fireEvent.change(screen.getByPlaceholderText(/408 每日 20 题/), { target: { value: '新配置' } });
@@ -206,8 +223,8 @@ describe('DeliberateWorkflow', () => {
     (startDeliberateWorkflow as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
     renderPage();
-    await screen.findByText('开始专注');
-    fireEvent.click(screen.getByText('开始专注'));
+    const startButtons = await screen.findAllByRole('button', { name: '开始' });
+    fireEvent.click(startButtons[0]);
 
     await waitFor(() => expect(startDeliberateWorkflow).toHaveBeenCalledWith('cfg-1'));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));

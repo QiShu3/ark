@@ -49,14 +49,13 @@ function renderTemplate(overrides: Partial<React.ComponentProps<typeof ChoiceQue
 }
 
 describe('ChoiceQuestionFocusTemplate', () => {
-  it('renders material, question, options, and metadata', () => {
+  it('renders material, question, and options without outer chrome', () => {
     renderTemplate();
 
     expect(screen.queryByText('ERC REVIEW')).not.toBeInTheDocument();
     expect(screen.queryByText('2025 年 Text 2 · Test Article')).not.toBeInTheDocument();
-    expect(screen.getByText('错题复习')).toBeInTheDocument();
+    expect(screen.queryByText('错题复习')).not.toBeInTheDocument();
     expect(screen.getByLabelText('阅读原文')).toBeInTheDocument();
-    expect(screen.getByText('Reading Passage')).toBeInTheDocument();
     expect(screen.getByText('Context paragraph.')).toBeInTheDocument();
     expect(screen.getByText('Question 26?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'AA1' })).toBeInTheDocument();

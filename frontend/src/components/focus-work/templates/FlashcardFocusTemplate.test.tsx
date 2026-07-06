@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -42,6 +43,27 @@ describe('FlashcardFocusTemplate', () => {
         target_count: 10,
         no_available_content: false,
       });
+    });
+  });
+
+  it('shows next review label briefly after a successful rating submit with nextDueAt', async () => {
+    const tenDaysLater = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+    const item = {
+      id: 'word-1',
+      front: 'apple',
+      back: '苹果',
+      meta: [{ label: '新卡', tone: 'blue' as const }],
+    };
+    const onSubmitRating = vi.fn(async () => ({ nextDueAt: tenDaysLater }));
+    const onLoadNext = vi.fn(async () => null);
+
+    renderTemplate({ item, onSubmitRating, onLoadNext });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /记住了/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/下次复习.*10 天后/)).toBeInTheDocument();
     });
   });
 });

@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "page-settlement",
+      "title": "工作流结算页",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1783132100000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settlement.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "学习工作流结算页"
+  }
+}

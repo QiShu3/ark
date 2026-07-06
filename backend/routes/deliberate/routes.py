@@ -35,6 +35,7 @@ from .schemas import (
     DeliberateWorkflowConfigPatch,
     DeliberateWorkflowRunOut,
     DeliberateWorkflowRunSummary,
+    FsrsConfig,
 )
 from .service import import_deliberate_bank, validate_config_shape
 
@@ -145,6 +146,14 @@ async def create_deliberate_workflow(
     if completion.get("mode") == "question_count" and "question_count" not in completion:
         completion["question_count"] = payload.target_count
 
+    # 将 fsrs_config 统一为 dict(便于 repository 序列化为 JSONB)
+    fsrs_config_data: dict[str, Any] | None = None
+    if payload.fsrs_config is not None:
+        if isinstance(payload.fsrs_config, FsrsConfig):
+            fsrs_config_data = payload.fsrs_config.model_dump(exclude_none=True)
+        else:
+            fsrs_config_data = payload.fsrs_config
+
     pool = _pool(request)
     async with pool.acquire() as conn:
         row = await repository.create_config(
@@ -163,6 +172,8 @@ async def create_deliberate_workflow(
             sort_order=payload.sort_order,
             use_fsrs=payload.use_fsrs,
             backflow_rule=payload.backflow_rule,
+            scheduling_mode=payload.scheduling_mode,
+            fsrs_config=fsrs_config_data,
         )
         return await _config_out(conn, row, user_id=int(user.id))
 

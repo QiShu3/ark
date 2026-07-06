@@ -1,0 +1,64 @@
+[
+  {
+    "title": "同义替换识别专项",
+    "passage": "同义替换识别专项训练：找出与原文意思最接近的改写。",
+    "examination": "同义替换识别",
+    "questions": [
+      {
+        "question_text": "原文：The new policy will bring about significant changes in the education system.\n\n哪个选项与原句中 \"bring about\" 的意思最接近？",
+        "options": {
+          "A": "take away",
+          "B": "lead to",
+          "C": "put up with",
+          "D": "look forward to"
+        },
+        "correct_answer": "B",
+        "analysis": "bring about 意为\"引起、导致\"，与 lead to 同义。take away 是\"带走\"，put up with 是\"忍受\"，look forward to 是\"期待\"。"
+      },
+      {
+        "question_text": "原文：Scientists have found a novel approach to treating the disease.\n\n\"novel approach\" 最接近哪个表达？",
+        "options": {
+          "A": "traditional method",
+          "B": "new way",
+          "C": "difficult problem",
+          "D": "scientific theory"
+        },
+        "correct_answer": "B",
+        "analysis": "novel 作形容词意为\"新颖的\"，approach 意为\"方法\"，novel approach = new way。"
+      },
+      {
+        "question_text": "原文：The phenomenon is attributed to several interrelated factors.\n\n\"is attributed to\" 可以替换为：",
+        "options": {
+          "A": "is contributed by",
+          "B": "is caused by",
+          "C": "is compared to",
+          "D": "is connected to"
+        },
+        "correct_answer": "B",
+        "analysis": "be attributed to 意为\"归因于\"，与 be caused by（由...引起）意思最接近。"
+      },
+      {
+        "question_text": "原文：The company's profits declined substantially last year.\n\n\"substantially\" 的同义替换是：",
+        "options": {
+          "A": "slightly",
+          "B": "significantly",
+          "C": "steadily",
+          "D": "suddenly"
+        },
+        "correct_answer": "B",
+        "analysis": "substantially 意为\"大幅度地、显著地\"，与 significantly 同义。slightly 是\"轻微地\"，steadily 是\"稳定地\"，suddenly 是\"突然地\"。"
+      },
+      {
+        "question_text": "原文：The findings underscore the importance of early intervention.\n\n\"underscore\" 最接近的意思是：",
+        "options": {
+          "A": "undermine",
+          "B": "emphasize",
+          "C": "understand",
+          "D": "undertake"
+        },
+        "correct_answer": "B",
+        "analysis": "underscore 本义是\"在下面划线\"，引申为\"强调\"，与 emphasize 同义。undermine 是\"削弱\"，understand 是\"理解\"，undertake 是\"承担\"。"
+      }
+    ]
+  }
+]

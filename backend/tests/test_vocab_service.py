@@ -1169,3 +1169,188 @@ async def test_submit_review_uses_actual_member_deck_id_for_grouped_deck(monkeyp
     assert seen_progress_deck_ids == ["deck-2", "deck-2"]
     assert seen_log_deck_ids == ["deck-2"]
     assert seen_mistake_deck_ids == ["deck-2"]
+
+
+# ---- study_ledger.record_answer FSRS 路径 ----
+
+
+class _FakeConn:
+    """最小化的 asyncpg.Connection 替身,记录 execute 调用并按 SQL 关键字返回 fetchrow 结果。"""
+
+    def __init__(self, fetchrow_map: dict[str, dict | None] | None = None) -> None:
+        self._fetchrow_map = fetchrow_map or {}
+        self.execute_calls: list[tuple[str, tuple]] = []
+        self.fetchrow_calls: list[tuple[str, tuple]] = []
+
+    async def fetchrow(self, sql: str, *args: object) -> dict | None:
+        self.fetchrow_calls.append((sql, args))
+        for keyword, result in self._fetchrow_map.items():
+            if keyword in sql:
+                return result
+        return None
+
+    async def execute(self, sql: str, *args: object) -> str:
+        self.execute_calls.append((sql, args))
+        return "OK"
+
+
+@pytest.mark.asyncio
+async def test_record_answer_fsrs_first_review_good_writes_card_json_and_due_at() -> None:
+    """FSRS 模式下新词首次评分:fsrs_card_json 从 NULL 变为有值,next_review_at 被设置。"""
+    from lib.study_ledger import record_answer
+
+    conn = _FakeConn()
+    triggered, state = await record_answer(
+        conn,
+        kind="flash_card",
+        user_id=1,
+        bank_id="deck-1",
+        question_pk="word-1",
+        is_correct=True,
+        rating="good",
+        scheduling_mode="fsrs",
+        fsrs_config={"desired_retention": 0.9, "max_interval_days": 365},
+    )
+
+    insert_calls = [c for c in conn.execute_calls if "INSERT INTO vocab_user_word_progress" in c[0]]
+    assert len(insert_calls) == 1
+    sql, args = insert_calls[0]
+    # args 顺序: user_id, bank_id, question_pk, mastery, correct, wrong, lapse, rating, now, next_review, interval, fsrs_card_json
+    fsrs_card_json = args[11]
+    assert isinstance(fsrs_card_json, str)
+    assert '"state"' in fsrs_card_json
+    next_review_at = args[9]
+    assert next_review_at is not None
+    # good 评分:should_repeat_today=False,无回流
+    assert state["should_repeat_today"] is False
+    assert triggered is None
+
+
+@pytest.mark.asyncio
+async def test_record_answer_fsrs_again_returns_should_repeat_today_true() -> None:
+    """FSRS 模式下 again 评分:should_repeat_today=True,triggered_action='requeue'。"""
+    from lib.study_ledger import record_answer
+
+    conn = _FakeConn()
+    triggered, state = await record_answer(
+        conn,
+        kind="flash_card",
+        user_id=1,
+        bank_id="deck-1",
+        question_pk="word-1",
+        is_correct=False,
+        rating="again",
+        scheduling_mode="fsrs",
+        fsrs_config={"desired_retention": 0.9, "max_interval_days": 365},
+    )
+
+    assert state["should_repeat_today"] is True
+    assert triggered == "requeue"
+    # fsrs_card_json 仍然被写入
+    insert_calls = [c for c in conn.execute_calls if "INSERT INTO vocab_user_word_progress" in c[0]]
+    assert len(insert_calls) == 1
+    assert isinstance(insert_calls[0][1][11], str)
+
+
+@pytest.mark.asyncio
+async def test_record_answer_fsrs_existing_card_uses_stored_card_json() -> None:
+    """已有 fsrs_card_json 的卡:反序列化后调 review_card,UPDATE 写入新状态。"""
+    from lib.study_ledger import record_answer
+
+    existing_card = {
+        "card_id": 12345,
+        "state": 1,
+        "step": 0,
+        "stability": 0.5,
+        "difficulty": 5.0,
+        "due": "2026-07-05T00:00:00+00:00",
+        "last_review": "2026-07-04T23:00:00+00:00",
+    }
+    existing_row = {
+        "id": 1,
+        "user_id": 1,
+        "word_id": "word-1",
+        "mastery_score": 1,
+        "correct_count": 0,
+        "wrong_count": 1,
+        "lapse_count": 1,
+        "interval_days": 0,
+        "next_review_at": datetime(2026, 7, 5, tzinfo=UTC),
+        "last_review_at": datetime(2026, 7, 4, tzinfo=UTC),
+        "last_result": "again",
+        "fsrs_card_json": existing_card,
+    }
+    conn = _FakeConn(fetchrow_map={"FROM vocab_user_word_progress": existing_row})
+
+    triggered, state = await record_answer(
+        conn,
+        kind="flash_card",
+        user_id=1,
+        bank_id="deck-1",
+        question_pk="word-1",
+        is_correct=True,
+        rating="good",
+        scheduling_mode="fsrs",
+        fsrs_config={"desired_retention": 0.9, "max_interval_days": 365},
+    )
+
+    update_calls = [c for c in conn.execute_calls if "UPDATE vocab_user_word_progress" in c[0]]
+    assert len(update_calls) == 1
+    sql, args = update_calls[0]
+    # UPDATE 参数: correct, wrong, lapse, mastery, rating, now, next_review, interval, fsrs_card_json, user_id, word_id
+    new_card_json = args[8]
+    assert isinstance(new_card_json, str)
+    assert '"state"' in new_card_json
+    # 新卡的 step 应该推进(从 0 → 1)
+    assert '"step": 1' in new_card_json or '"step":1' in new_card_json
+    assert state["should_repeat_today"] is False
+    assert triggered is None
+
+
+@pytest.mark.asyncio
+async def test_record_answer_use_fsrs_legacy_maps_to_fsrs_mode() -> None:
+    """旧调用方传 use_fsrs=True 而 scheduling_mode 缺省时,内部映射为 fsrs 模式。"""
+    from lib.study_ledger import record_answer
+
+    conn = _FakeConn()
+    triggered, state = await record_answer(
+        conn,
+        kind="flash_card",
+        user_id=1,
+        bank_id="deck-1",
+        question_pk="word-1",
+        is_correct=False,
+        rating="again",
+        use_fsrs=True,
+    )
+
+    assert state["should_repeat_today"] is True
+    assert triggered == "requeue"
+    insert_calls = [c for c in conn.execute_calls if "INSERT INTO vocab_user_word_progress" in c[0]]
+    assert len(insert_calls) == 1
+    assert isinstance(insert_calls[0][1][11], str)
+
+
+@pytest.mark.asyncio
+async def test_record_answer_manual_mode_keeps_fixed_interval_logic() -> None:
+    """manual 模式:走原有固定间隔逻辑,不写 fsrs_card_json。"""
+    from lib.study_ledger import record_answer
+
+    conn = _FakeConn()
+    triggered, state = await record_answer(
+        conn,
+        kind="flash_card",
+        user_id=1,
+        bank_id="deck-1",
+        question_pk="word-1",
+        is_correct=True,
+        rating="good",
+        scheduling_mode="manual",
+    )
+
+    insert_calls = [c for c in conn.execute_calls if "INSERT INTO vocab_user_word_progress" in c[0]]
+    assert len(insert_calls) == 1
+    sql, args = insert_calls[0]
+    # manual INSERT 不含 fsrs_card_json 列
+    assert "fsrs_card_json" not in sql
+    assert state["should_repeat_today"] is False

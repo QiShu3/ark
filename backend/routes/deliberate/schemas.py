@@ -14,6 +14,13 @@ DeliberateSnapshotType = Literal["choice_set", "flash_card_deck", "input_set"]
 PrimaryFilter = Literal["all", "unstarted", "mistake", "last_wrong", "due_review"]
 SortOrder = Literal["sequential", "due", "mistake_first", "random"]
 BackflowRule = Literal["none", "wrong_to_end", "wrong_retry"]
+SchedulingMode = Literal["manual", "fsrs"]
+
+
+class FsrsConfig(BaseModel):
+    desired_retention: float = Field(default=0.9, ge=0.7, le=0.98)
+    max_interval_days: int = Field(default=365, ge=1, le=36500)
+    learning_steps: list[int] | None = None  # 预留,本期不暴露 UI
 
 
 class _NormalizedDeliberateBase(BaseModel):
@@ -83,6 +90,8 @@ class DeliberateWorkflowConfigOut(_NormalizedDeliberateBase):
     sort_order: SortOrder = "sequential"
     use_fsrs: bool = False
     backflow_rule: BackflowRule = "none"
+    scheduling_mode: SchedulingMode = "manual"
+    fsrs_config: FsrsConfig | None = None
     bank_summary: DeliberateBankSummary | None = None
     latest_run: DeliberateWorkflowRunSummary | None = None
     created_at: str
@@ -104,6 +113,8 @@ class DeliberateWorkflowConfigCreate(_NormalizedDeliberateBase):
     sort_order: SortOrder = "sequential"
     use_fsrs: bool = False
     backflow_rule: BackflowRule = "none"
+    scheduling_mode: SchedulingMode = "manual"
+    fsrs_config: FsrsConfig | dict[str, Any] | None = None
 
 
 class DeliberateWorkflowConfigPatch(_NormalizedDeliberateBase):
@@ -121,6 +132,8 @@ class DeliberateWorkflowConfigPatch(_NormalizedDeliberateBase):
     sort_order: SortOrder | None = None
     use_fsrs: bool | None = None
     backflow_rule: BackflowRule | None = None
+    scheduling_mode: SchedulingMode | None = None
+    fsrs_config: FsrsConfig | dict[str, Any] | None = None
 
 
 class DeliberateBankUploadOut(_NormalizedDeliberateBase):

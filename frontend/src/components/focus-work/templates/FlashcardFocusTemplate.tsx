@@ -1,12 +1,12 @@
 import React from 'react';
-import { BarChart3, CheckCircle2, Frown, Meh, Rocket, Trophy } from 'lucide-react';
+import { BarChart3, CheckCircle2, Clock, Frown, Meh, Rocket, Trophy } from 'lucide-react';
 
 import type {
   FlashcardFocusTemplateProps,
   FlashcardItem,
   FlashcardRating,
 } from './flashcardTypes';
-import { buildProgressSnapshot, metaClass } from '../focusWorkUtils';
+import { buildProgressSnapshot, formatDueLabel, metaClass } from '../focusWorkUtils';
 
 const RATING_ACTIONS: Array<{
   label: string;
@@ -75,6 +75,7 @@ export default function FlashcardFocusTemplate({
   const [revealed, setRevealed] = React.useState(false);
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [nextReviewLabel, setNextReviewLabel] = React.useState<string | null>(null);
   const completedRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -82,6 +83,12 @@ export default function FlashcardFocusTemplate({
     setRevealed(false);
     setLocalError(null);
   }, [item?.id, item]);
+
+  React.useEffect(() => {
+    if (nextReviewLabel === null) return;
+    const timer = setTimeout(() => setNextReviewLabel(null), 3000);
+    return () => clearTimeout(timer);
+  }, [nextReviewLabel]);
 
   React.useEffect(() => {
     if (completedRef.current || disabled) return;
@@ -144,6 +151,10 @@ export default function FlashcardFocusTemplate({
     try {
       const result = await onSubmitRating(currentItem, rating);
       setLocalError(null);
+      const dueLabel = formatDueLabel(result.nextDueAt);
+      if (dueLabel) {
+        setNextReviewLabel(`下次复习:${dueLabel}`);
+      }
       if (!result.shouldRepeat) {
         setRevealed(false);
         const nextItem = await onLoadNext();
@@ -172,10 +183,20 @@ export default function FlashcardFocusTemplate({
                 <span key={meta.label} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${metaClass(meta.tone)}`}>
                   <BarChart3 className="h-3.5 w-3.5" />
                   {meta.label}
+                  {meta.dueLabel ? <span className="opacity-70">· {meta.dueLabel}</span> : null}
                 </span>
               ))}
             </div>
             <div className="shrink-0 text-sm text-[var(--focus-work-text-muted)]">{progressLabel}</div>
+          </div>
+        ) : null}
+
+        {nextReviewLabel ? (
+          <div className="mb-3 flex shrink-0 justify-center">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] px-3 py-1 text-xs font-medium text-[var(--focus-work-emerald-text)]">
+              <Clock className="h-3 w-3" />
+              {nextReviewLabel}
+            </span>
           </div>
         ) : null}
 

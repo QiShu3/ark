@@ -18,7 +18,7 @@ function formatSummaryDuration(secondsLike: unknown): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  return `${minutes}分钟`;
 }
 
 type ActionPanelProps = {
@@ -70,13 +70,431 @@ function ActionPanel({
   );
 }
 
+/* ===================== 结算面板组件 ===================== */
+
+type RunCompletionPanelProps = {
+  heading: string;
+  subtitle?: string;
+  durationSeconds: number;
+  summary: Record<string, unknown>;
+  focusWorkType?: string;
+  masteryCheck?: Record<string, unknown> | null;
+  forkChildren?: { config_id: string; label: string; is_recommended: boolean }[];
+  onForkWithChild?: (childConfigId: string) => void;
+  primaryLabel: string;
+  primaryDisabled: boolean;
+  onPrimary: () => void;
+  secondaryLabel: string;
+  secondaryDisabled: boolean;
+  onSecondary: () => void;
+  busy?: boolean;
+};
+
+function ClockDecor({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 120 120" fill="none" className={className}>
+      {/* 外层光晕 */}
+      <circle cx="60" cy="60" r="58" className="completion-decor-clock-glow" />
+      {/* 表盘外圈 */}
+      <circle cx="60" cy="60" r="52" className="completion-decor-clock-face" />
+      {/* 内圈 */}
+      <circle cx="60" cy="60" r="48" className="completion-decor-clock-inner" />
+      {/* 小时刻度 - 12个 */}
+      {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((angle) => {
+        const rad = (angle * Math.PI) / 180;
+        const x1 = 60 + 44 * Math.sin(rad);
+        const y1 = 60 - 44 * Math.cos(rad);
+        const x2 = 60 + 48 * Math.sin(rad);
+        const y2 = 60 - 48 * Math.cos(rad);
+        return (
+          <line
+            key={angle}
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            className={angle % 90 === 0 ? 'completion-decor-clock-mark-major' : 'completion-decor-clock-mark'}
+          />
+        );
+      })}
+      {/* 时针 - 指向10点方向 */}
+      <line x1="60" y1="62" x2="60" y2="30" className="completion-decor-clock-hand completion-decor-clock-hand-hour" />
+      {/* 分针 - 指向2点方向 */}
+      <line x1="60" y1="62" x2="78" y2="48" className="completion-decor-clock-hand" />
+      {/* 中心点 */}
+      <circle cx="60" cy="60" r="4" className="completion-decor-clock-center" />
+    </svg>
+  );
+}
+
+function SparkleIcon({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <path d="M12 3l1.9 5.8L20 10.7l-4.9 4 1.4 6.3L12 17.9 7.5 21l1.4-6.3-4.9-4 6.1-1.9L12 3z" />
+    </svg>
+  );
+}
+
+function RadiateIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function XIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function TargetIcon({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function BookIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  );
+}
+
+function getSummaryStats(summary: Record<string, unknown>, focusWorkType?: string) {
+  const reviewedCount = (summary.reviewed_count as number) ?? (summary.answered_count as number) ?? 0;
+  const correctCount = (summary.correct_count as number) ?? 0;
+  const memorizedCount = (summary.memorized_count as number) ?? correctCount;
+  const newCount = (summary.new_count as number) ?? 0;
+  const correctRate = (summary.correct_rate as number) ?? (summary.accuracy as number) ?? 0;
+  const durationSeconds = (summary.duration_seconds as number) ?? 0;
+
+  const type = normalizeFocusWorkType(focusWorkType);
+
+  if (type === 'flash_card') {
+    return [
+      { label: '已复习', value: String(reviewedCount), accent: false },
+      { label: '已掌握', value: String(memorizedCount), accent: true },
+      { label: '新学', value: String(newCount), accent: false },
+      { label: '正确率', value: correctRate ? `${Math.round(correctRate * 100)}%` : '0%', accent: false },
+    ];
+  }
+
+  return [
+    { label: '已答题', value: String(reviewedCount), accent: false },
+    { label: '正确', value: String(correctCount), accent: true },
+    { label: '正确率', value: correctRate ? `${Math.round(correctRate * 100)}%` : '0%', accent: false },
+    { label: '用时', value: formatSummaryDuration(durationSeconds), accent: false },
+  ];
+}
+
+type RecommendPreset = {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  tint: 'blue' | 'violet' | 'green';
+  isRecommended?: boolean;
+  configId?: string;
+};
+
+const DEFAULT_RECOMMEND_PRESETS: RecommendPreset[] = [
+  {
+    icon: <BookIcon className="w-6 h-6" />,
+    title: '不会单词',
+    desc: '加强词汇积累，提升阅读理解能力',
+    tint: 'blue',
+    isRecommended: true,
+  },
+  {
+    icon: <PencilIcon className="w-6 h-6" />,
+    title: '长难句',
+    desc: '突破长难句理解，掌握句子结构',
+    tint: 'violet',
+    isRecommended: true,
+  },
+  {
+    icon: <TargetIcon className="w-6 h-6" />,
+    title: '针对训练',
+    desc: '针对薄弱题型，精准提升正确率',
+    tint: 'green',
+    isRecommended: true,
+  },
+];
+
+function RecommendCard({
+  icon,
+  title,
+  desc,
+  isRecommended,
+  tint,
+  onClick,
+  disabled,
+}: {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  isRecommended?: boolean;
+  tint: 'blue' | 'violet' | 'green';
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`completion-recommend-card tint-${tint}`}
+    >
+      <div className="completion-recommend-icon-row">
+        <div className={`completion-recommend-icon ${tint}`}>
+          {icon}
+        </div>
+      </div>
+      <div className="completion-recommend-title-row">
+        <div className="completion-recommend-title">{title}</div>
+        {isRecommended && (
+          <span className={`completion-recommend-badge ${tint}`}>
+            推荐
+          </span>
+        )}
+      </div>
+      <div className="completion-recommend-desc-text">{desc}</div>
+      <div className={`completion-recommend-action ${tint}`}>
+        去练习
+        <span className="completion-recommend-action-arrow">›</span>
+      </div>
+    </button>
+  );
+}
+
+function RunCompletionPanel({
+  heading,
+  subtitle,
+  durationSeconds,
+  summary,
+  focusWorkType,
+  masteryCheck,
+  forkChildren,
+  onForkWithChild,
+  primaryLabel,
+  primaryDisabled,
+  onPrimary,
+  secondaryLabel,
+  secondaryDisabled,
+  onSecondary,
+  busy = false,
+}: RunCompletionPanelProps) {
+  const hasMasteryCheck = masteryCheck && masteryCheck.enabled === true;
+  const passed = hasMasteryCheck && masteryCheck?.passed === true;
+  const accuracy = hasMasteryCheck ? ((masteryCheck?.accuracy as number) ?? 0) : 0;
+  const threshold = hasMasteryCheck ? ((masteryCheck?.threshold as number) ?? 0) : 0;
+  const stats = getSummaryStats(summary, focusWorkType);
+  const hasChildren = forkChildren && forkChildren.length > 0;
+  const showRecommend = hasMasteryCheck && !passed;
+
+  // 构建推荐列表：优先用 forkChildren，不足 3 个用预设补
+  const recommendList: RecommendPreset[] = showRecommend
+    ? (() => {
+        if (hasChildren) {
+          return forkChildren!.slice(0, 3).map((child, index) => {
+            const preset = DEFAULT_RECOMMEND_PRESETS[index] ?? DEFAULT_RECOMMEND_PRESETS[2];
+            return {
+              ...preset,
+              title: child.label || child.config_id,
+              isRecommended: child.is_recommended ?? preset.isRecommended,
+              configId: child.config_id,
+            };
+          });
+        }
+        return DEFAULT_RECOMMEND_PRESETS;
+      })()
+    : [];
+
+  const handleRecommendClick = (index: number) => {
+    const item = recommendList[index];
+    if (item?.configId && onForkWithChild) {
+      onForkWithChild(item.configId);
+    }
+  };
+
+  return (
+    <div className="ark-focus-work-completion completion-panel h-full flex flex-col">
+
+      <div className="completion-panel-content w-full flex flex-col h-full">
+        {/* 标题区 */}
+        <div className="completion-heading-row flex-[1] min-h-0">
+          <img src="/icons/completion-check.png" alt="" className="completion-heading-icon-img" />
+          <h2 className="completion-heading">{heading}</h2>
+        </div>
+
+        {/* 检验结果卡片 */}
+        <div className="completion-card flex-[4] min-h-0">
+          <div className="completion-section-title">
+            <TargetIcon className="w-[18px] h-[18px]" />
+            检验结果
+          </div>
+
+          <div className="completion-result-grid">
+            {/* 左侧状态卡片 */}
+            {hasMasteryCheck ? (
+              <div className={`completion-status-card ${passed ? 'pass' : 'fail'}`}>
+                <div className="completion-status-header">
+                  <div className="completion-status-left">
+                    <div className="completion-status-icon">
+                      {passed ? <CheckIcon className="w-5 h-5" /> : <XIcon className="w-5 h-5" />}
+                    </div>
+                    <div className="completion-status-text">
+                      <div className="completion-status-label">
+                        {passed ? '通过' : '未通过'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="completion-status-right">
+                    <div className="completion-status-rate-label">正确率</div>
+                    <div className="completion-status-rate-value">
+                      {Math.round(accuracy * 100)}%
+                    </div>
+                  </div>
+                </div>
+                <div className="completion-progress-bar">
+                  <div
+                    className="completion-progress-fill"
+                    style={{ width: `${Math.min(Math.round(accuracy * 100), 100)}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="completion-status-card pass">
+                <div className="completion-status-header">
+                  <div className="completion-status-left">
+                    <div className="completion-status-icon">
+                      <CheckIcon className="w-5 h-5" />
+                    </div>
+                    <div className="completion-status-text">
+                      <div className="completion-status-label">本轮完成</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 右侧数据指标 */}
+            <div className="completion-stats-grid">
+              {stats.map((stat, i) => (
+                <div key={i} className="completion-stat-item">
+                  <div className={`completion-stat-value ${stat.accent ? 'accent' : ''}`}>
+                    {stat.value}
+                  </div>
+                  <div className="completion-stat-label">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 推荐练习 */}
+        <div className={`completion-recommend-section flex-[6] min-h-0 ${!showRecommend ? 'completion-recommend-section-empty' : ''}`}>
+          {showRecommend && (
+            <>
+              <div className="completion-section-title">
+                <TargetIcon className="w-[18px] h-[18px]" />
+                推荐继续练习
+              </div>
+              <div className="completion-recommend-grid">
+                {recommendList.map((item, index) => (
+                  <RecommendCard
+                    key={item.configId ?? `preset-${index}`}
+                    icon={item.icon}
+                    title={item.title}
+                    desc={item.desc}
+                    isRecommended={item.isRecommended}
+                    tint={item.tint}
+                    onClick={() => handleRecommendClick(index)}
+                    disabled={busy || !item.configId}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 底部按钮 */}
+        <div className="completion-buttons flex-[1] min-h-0">
+          <button
+            type="button"
+            disabled={secondaryDisabled}
+            onClick={onSecondary}
+            className="completion-btn completion-btn-secondary"
+          >
+            <RefreshIcon className="w-[18px] h-[18px]" />
+            {secondaryLabel}
+          </button>
+          <button
+            type="button"
+            disabled={primaryDisabled}
+            onClick={onPrimary}
+            className="completion-btn completion-btn-primary"
+          >
+            {primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== 旧的 RunSummaryCard（保留用于其他场景） ===================== */
+
 function RunSummaryCard({ summary, focusWorkType, masteryCheckFromProgress }: { summary: Record<string, unknown>; focusWorkType?: string; masteryCheckFromProgress?: Record<string, unknown> | null }) {
   if (!summary || Object.keys(summary).length === 0) return null;
 
   const masteryCheck = masteryCheckFromProgress ?? summary.mastery_check as Record<string, unknown> | undefined;
   const hasMasteryCheck = masteryCheck && masteryCheck.enabled === true;
 
-  // 字段兼容：统一不同接口返回的字段名
   const reviewedCount = (summary.reviewed_count as number) ?? (summary.answered_count as number) ?? 0;
   const correctCount = (summary.correct_count as number) ?? 0;
   const memorizedCount = (summary.memorized_count as number) ?? correctCount;
@@ -221,85 +639,58 @@ export default function FocusWorkbenchPanel({
   const focusWorkType = activeRun?.config_snapshot?.focus_work_type as string | undefined;
   const masteryCheck = (progressSnapshot?.mastery_check ?? runSummary?.mastery_check) as Record<string, unknown> | undefined;
   const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
+  const configSnapshot = activeRun?.config_snapshot as Record<string, unknown> | undefined;
+  const subtitle =
+    ((configSnapshot?.bank_name as string) || (configSnapshot?.config_name as string)) ||
+    activeDefinition?.subtitle ||
+    '';
 
   const hasChildren = forkChildren && forkChildren.length > 0;
   const isChildRun = Boolean(activeRun?.source_run_id);
+  const durationSeconds = (runSummary?.duration_seconds as number) ?? 0;
 
+  // ===== 结算阶段 =====
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
     if (isChildRun) {
       return (
-        <ActionPanel
-          label="Forked Round Complete"
+        <RunCompletionPanel
           heading="本轮专注工作已完成"
-          description="当前为 fork 的子阶段，请选择回到原专注工作继续。"
+          subtitle={subtitle}
+          durationSeconds={durationSeconds}
+          summary={runSummary ?? {}}
+          focusWorkType={focusWorkType}
+          masteryCheck={masteryCheck ?? null}
+          forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
+          onForkWithChild={onForkWithChild}
           primaryLabel="回到原专注工作"
           primaryDisabled={busy || !activeRun}
           onPrimary={() => onReturnToParent?.()}
           secondaryLabel="再来一轮"
           secondaryDisabled={busy || !activeRun}
           onSecondary={onCreateExtraRun}
-        >
-          {hasMasteryCheckFailed && hasChildren && (
-            <div className="mb-3 space-y-2">
-              <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到下一个子专注：</div>
-              {forkChildren.map((child) => (
-                <button
-                  key={child.config_id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onForkWithChild?.(child.config_id)}
-                  className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
-                >
-                  <div className="font-medium">{child.label || child.config_id}</div>
-                  {child.is_recommended && (
-                    <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          {runSummary && Object.keys(runSummary).length > 0 && (
-            <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
-          )}
-        </ActionPanel>
+          busy={busy}
+        />
       );
     }
 
     return (
-      <ActionPanel
-        label="Round Complete"
+      <RunCompletionPanel
         heading="本轮专注工作已完成"
-        description={hasMasteryCheckFailed ? "检验未通过。你可以选择fork到其他专注工作进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
-        primaryLabel="完成任务并结束阶段"
+        subtitle={subtitle}
+        durationSeconds={durationSeconds}
+        summary={runSummary ?? {}}
+        focusWorkType={focusWorkType}
+        masteryCheck={masteryCheck ?? null}
+        forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
+        onForkWithChild={onForkWithChild}
+        primaryLabel="进入下一阶段"
         primaryDisabled={busy || !activeRun}
         onPrimary={onCompleteTaskAndEndPhase}
         secondaryLabel="再来一轮"
         secondaryDisabled={busy || !activeRun}
         onSecondary={onCreateExtraRun}
-      >
-        {hasMasteryCheckFailed && hasChildren && (
-          <div className="mb-3 space-y-2">
-            <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到：</div>
-            {forkChildren.map((child) => (
-              <button
-                key={child.config_id}
-                type="button"
-                disabled={busy}
-                onClick={() => onForkWithChild?.(child.config_id)}
-                className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
-              >
-                <div className="font-medium">{child.label || child.config_id}</div>
-                {child.is_recommended && (
-                  <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        {runSummary && Object.keys(runSummary).length > 0 && (
-          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
-        )}
-      </ActionPanel>
+        busy={busy}
+      />
     );
   }
 
@@ -319,101 +710,68 @@ export default function FocusWorkbenchPanel({
 
     if (isChildRun) {
       return (
-        <ActionPanel
-          label="Forked Round Complete"
+        <RunCompletionPanel
           heading="本轮专注已完成"
-          description="当前为 fork 的子阶段，请选择回到原专注工作继续。"
+          subtitle={subtitle}
+          durationSeconds={durationSeconds}
+          summary={runSummary ?? {}}
+          focusWorkType={focusWorkType}
+          masteryCheck={masteryCheck ?? null}
+          forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
+          onForkWithChild={onForkWithChild}
           primaryLabel="回到原专注工作"
           primaryDisabled={busy || !activeRun}
           onPrimary={() => onReturnToParent?.()}
           secondaryLabel="再来一轮"
           secondaryDisabled={busy || !activeRun}
           onSecondary={onCreateExtraRun}
-        >
-          {hasMasteryCheckFailed && hasChildren && (
-            <div className="mb-3 space-y-2">
-              <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到下一个子专注：</div>
-              {forkChildren.map((child) => (
-                <button
-                  key={child.config_id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onForkWithChild?.(child.config_id)}
-                  className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
-                >
-                  <div className="font-medium">{child.label || child.config_id}</div>
-                  {child.is_recommended && (
-                    <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-          {runSummary && Object.keys(runSummary).length > 0 && (
-            <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
-          )}
-        </ActionPanel>
+          busy={busy}
+        />
       );
     }
 
     return (
-      <ActionPanel
-        label="Round Complete"
+      <RunCompletionPanel
         heading="本轮专注已完成"
-        description={hasMasteryCheckFailed ? "检验未通过。你可以选择fork到其他专注工作进行针对性练习，或直接完成任务。" : "本轮计入当前任务。确认后会记录任务完成并结束当前阶段。"}
+        subtitle={subtitle}
+        durationSeconds={durationSeconds}
+        summary={runSummary ?? {}}
+        focusWorkType={focusWorkType}
+        masteryCheck={masteryCheck ?? null}
+        forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
+        onForkWithChild={onForkWithChild}
         primaryLabel="结束阶段"
         primaryDisabled={busy || !activeRun}
         onPrimary={onEndPhase}
         secondaryLabel="再来一轮"
         secondaryDisabled={busy || !activeRun}
         onSecondary={onCreateExtraRun}
-      >
-        {hasMasteryCheckFailed && hasChildren && (
-          <div className="mb-3 space-y-2">
-            <div className="text-xs text-[var(--focus-work-text-muted)]">选择fork到：</div>
-            {forkChildren.map((child) => (
-              <button
-                key={child.config_id}
-                type="button"
-                disabled={busy}
-                onClick={() => onForkWithChild?.(child.config_id)}
-                className="w-full rounded-lg border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-soft)] px-4 py-3 text-left text-sm text-[var(--focus-work-text)] transition hover:border-[var(--focus-work-border)] hover:bg-[var(--focus-work-surface-soft)] disabled:opacity-60"
-              >
-                <div className="font-medium">{child.label || child.config_id}</div>
-                {child.is_recommended && (
-                  <div className="mt-1 text-xs text-[var(--focus-work-text-muted)]">推荐</div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        {runSummary && Object.keys(runSummary).length > 0 && (
-          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
-        )}
-      </ActionPanel>
+        busy={busy}
+      />
     );
   }
 
   if (phaseRuntimeState === 'task_already_completed') {
     return (
-      <ActionPanel
-        label="Task Complete"
+      <RunCompletionPanel
         heading="当前任务今日已完成"
-        description="可以结束当前阶段，也可以再进行一轮额外专注。额外轮次会保存内容进度，但不计入任务完成。"
+        subtitle={subtitle}
+        durationSeconds={durationSeconds}
+        summary={runSummary ?? {}}
+        focusWorkType={focusWorkType}
+        masteryCheck={masteryCheck ?? null}
         primaryLabel="结束阶段"
         primaryDisabled={busy}
         onPrimary={onEndPhase}
         secondaryLabel="再来一轮"
         secondaryDisabled={true}
         onSecondary={onCreateExtraRun}
-      >
-        {runSummary && Object.keys(runSummary).length > 0 && (
-          <RunSummaryCard summary={runSummary} focusWorkType={focusWorkType} masteryCheckFromProgress={masteryCheck} />
-        )}
-      </ActionPanel>
+        busy={busy}
+      />
     );
   }
 
+  // ===== 其他阶段 =====
   if (phaseRuntimeState === 'phase_time_expired_prompt') {
     return (
       <ActionPanel

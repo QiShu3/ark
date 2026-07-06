@@ -7,6 +7,14 @@ export type PrimaryFilter = 'all' | 'unstarted' | 'mistake' | 'last_wrong' | 'du
 export type SortOrder = 'sequential' | 'due' | 'mistake_first' | 'random';
 export type BackflowRule = 'none' | 'wrong_to_end' | 'wrong_retry';
 
+export type SchedulingMode = 'manual' | 'fsrs';
+
+export interface FsrsConfig {
+  desired_retention: number;
+  max_interval_days: number;
+  learning_steps?: number[] | null;
+}
+
 export type DeliberateBankSummary = {
   id: string;
   name: string;
@@ -56,6 +64,8 @@ export type DeliberateWorkflowConfig = {
   primary_filter: PrimaryFilter;
   sort_order: SortOrder;
   use_fsrs: boolean;
+  scheduling_mode: SchedulingMode;
+  fsrs_config: FsrsConfig | null;
   backflow_rule: BackflowRule;
   bank_summary?: DeliberateBankSummary | null;
   latest_run?: DeliberateWorkflowRun | null;
@@ -83,6 +93,8 @@ export type DeliberateWorkflowPayload = {
   primary_filter?: PrimaryFilter;
   sort_order?: SortOrder;
   use_fsrs?: boolean;
+  scheduling_mode?: SchedulingMode;
+  fsrs_config?: FsrsConfig;
   backflow_rule?: BackflowRule;
 };
 
@@ -100,6 +112,8 @@ export type DeliberateWorkflowPatch = {
   primary_filter?: PrimaryFilter;
   sort_order?: SortOrder;
   use_fsrs?: boolean;
+  scheduling_mode?: SchedulingMode;
+  fsrs_config?: FsrsConfig;
   backflow_rule?: BackflowRule;
 };
 

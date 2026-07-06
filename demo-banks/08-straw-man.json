@@ -1,0 +1,64 @@
+[
+  {
+    "title": "偷换概念专项练习",
+    "passage": "偷换概念专项训练：识别选项中偷换概念的陷阱。",
+    "examination": "偷换概念专项",
+    "questions": [
+      {
+        "question_text": "原文：The number of students increased by 20% last year.\n错误选项：The number of teachers increased by 20% last year.\n\n这里偷换了什么概念？",
+        "options": {
+          "A": "偷换了数字（20%）",
+          "B": "偷换了主体（students vs teachers）",
+          "C": "偷换了时间（last year）",
+          "D": "偷换了方向（increased vs decreased）"
+        },
+        "correct_answer": "B",
+        "analysis": "原文说的是 students（学生数量），选项换成了 teachers（教师数量），偷换了主体概念。"
+      },
+      {
+        "question_text": "原文：The city's public transportation system has improved significantly.\n错误选项：The city's private car ownership has increased significantly.\n\n这个选项偷换了什么？",
+        "options": {
+          "A": "偷换了程度（significantly）",
+          "B": "偷换了主体（public transportation vs private car ownership）",
+          "C": "偷换了地点（city）",
+          "D": "偷换了方向（improved vs increased）"
+        },
+        "correct_answer": "B",
+        "analysis": "原文讨论的是公共交通系统，选项换成了私家车拥有量，偷换了讨论对象。"
+      },
+      {
+        "question_text": "原文：The study shows that regular exercise can reduce the risk of heart disease by 30%.\n错误选项：Research proves that exercise cures heart disease completely.\n\n这里偷换了哪些概念？（选择最准确的描述）",
+        "options": {
+          "A": "只偷换了程度（reduce risk vs cures completely）",
+          "B": "只偷换了动词（shows vs proves）",
+          "C": "偷换了程度和动作的性质（降低风险 vs 治愈）",
+          "D": "没有偷换概念"
+        },
+        "correct_answer": "C",
+        "analysis": "原文是 reduce the risk（降低风险），选项是 cures completely（完全治愈），偷换了动作的性质和程度。shows vs proves 也是偷换，但更核心的是降低风险不等于治愈。"
+      },
+      {
+        "question_text": "原文：Most people prefer online shopping because of its convenience.\n错误选项：All people shop online because it is cheaper.\n\n下列哪项不是偷换概念的地方？",
+        "options": {
+          "A": "Most vs All（范围偷换）",
+          "B": "prefer vs shop（动作偷换）",
+          "C": "convenience vs cheaper（原因偷换）",
+          "D": "people vs shoppers（主体偷换）"
+        },
+        "correct_answer": "D",
+        "analysis": "people vs shoppers 本质上都是指人，不是偷换。其他三项都是明显的偷换：范围（大多数 vs 所有）、动作（偏好 vs 实际购物）、原因（便利 vs 便宜）。"
+      },
+      {
+        "question_text": "识别偷换概念的关键方法是：",
+        "options": {
+          "A": "只看选项的语法是否正确",
+          "B": "仔细对比选项中的名词、动词、形容词、范围词等与原文是否一致",
+          "C": "看选项是否包含原文中的关键词",
+          "D": "判断选项的长度是否适中"
+        },
+        "correct_answer": "B",
+        "analysis": "识别偷换概念需要逐项对比：主体是否一致、动作是否一致、程度/范围是否一致、因果关系是否一致等，不能只看有没有关键词。"
+      }
+    ]
+  }
+]

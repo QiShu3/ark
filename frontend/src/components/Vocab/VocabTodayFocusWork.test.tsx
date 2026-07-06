@@ -60,6 +60,8 @@ function focusQueueItem(
     word: string;
     review_mode: 'study' | 'review' | 'learning' | 'mistake';
     translation: string;
+    fsrs_card_json: string | null;
+    next_review_at: string | null;
   }> = {},
 ) {
   return {
@@ -74,6 +76,8 @@ function focusQueueItem(
     prompt_type: 'en_to_zh',
     review_mode: overrides.review_mode ?? 'study',
     mastery_score: 0,
+    fsrs_card_json: overrides.fsrs_card_json ?? null,
+    next_review_at: overrides.next_review_at ?? null,
   };
 }
 
@@ -332,6 +336,68 @@ describe('VocabTodayFocusWork', () => {
         target_word_count: 1,
         extra_round: true,
       }));
+    });
+  });
+
+  it('renders FSRS stage meta for a new card in fsrs mode', async () => {
+    fetchVocabFocusQueue.mockResolvedValue([
+      focusQueueItem({ id: 'word-new', word: 'apple', fsrs_card_json: null, next_review_at: null }),
+    ]);
+
+    render(
+      <VocabTodayFocusWork
+        run={focusRun({ scheduling_mode: 'fsrs', target_word_count: 10 })}
+        disabled={false}
+        onContentCompleted={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('apple')).toBeInTheDocument();
+    expect(screen.getByText(/新卡/)).toBeInTheDocument();
+  });
+
+  it('renders FSRS stage meta with due label for a review card in fsrs mode', async () => {
+    const fiveDaysLater = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+    fetchVocabFocusQueue.mockResolvedValue([
+      focusQueueItem({
+        id: 'word-review',
+        word: 'brave',
+        fsrs_card_json: '{"stage":"review"}',
+        next_review_at: fiveDaysLater,
+        review_mode: 'review',
+      }),
+    ]);
+
+    render(
+      <VocabTodayFocusWork
+        run={focusRun({ scheduling_mode: 'fsrs', target_word_count: 10 })}
+        disabled={false}
+        onContentCompleted={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('brave')).toBeInTheDocument();
+    expect(screen.getByText(/复习中/)).toBeInTheDocument();
+    expect(screen.getAllByText(/5 天后/).length).toBeGreaterThan(0);
+  });
+
+  it('shows FSRS empty state and completes when queue is empty in fsrs mode', async () => {
+    fetchVocabFocusQueue.mockResolvedValue([]);
+    const onContentCompleted = vi.fn();
+
+    render(
+      <VocabTodayFocusWork
+        run={focusRun({ scheduling_mode: 'fsrs', target_word_count: 10 })}
+        disabled={false}
+        onContentCompleted={onContentCompleted}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('今日已无待复习')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(onContentCompleted).toHaveBeenCalled();
     });
   });
 });

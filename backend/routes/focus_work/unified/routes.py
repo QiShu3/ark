@@ -42,6 +42,31 @@ def _config_int(snapshot: dict[str, Any], key: str, default: int = 10) -> int:
         return default
 
 
+def _config_dict(snapshot: dict[str, Any], key: str) -> dict[str, Any] | None:
+    val = snapshot.get(key)
+    if val is None:
+        return None
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    if isinstance(val, dict):
+        return dict(val)
+    return None
+
+
+def _resolve_scheduling_mode(snapshot: dict[str, Any]) -> str:
+    """读取 scheduling_mode;NULL 时按 use_fsrs 兜底映射。"""
+    mode = snapshot.get("scheduling_mode")
+    if isinstance(mode, str) and mode in ("manual", "fsrs"):
+        return mode
+    if _config_bool(snapshot, "use_fsrs", False):
+        return "fsrs"
+    return "manual"
+
+
 async def _resolve_unified_config_snapshot(
     conn: Any,
     *,
@@ -68,7 +93,10 @@ async def _resolve_unified_config_snapshot(
 
     config_id = _config_str(resolved, "deliberate_config_id", "") or _config_str(resolved, "config_id", "")
     missing_fields = [
-        key for key in ("kind", "target_count", "primary_filter", "sort_order", "use_fsrs", "backflow_rule")
+        key for key in (
+            "kind", "target_count", "primary_filter", "sort_order",
+            "use_fsrs", "backflow_rule", "scheduling_mode", "fsrs_config",
+        )
         if key not in resolved
     ]
     if config_id and (not bank_id or missing_fields):
@@ -81,6 +109,10 @@ async def _resolve_unified_config_snapshot(
             resolved.setdefault("sort_order", str(config_row.get("sort_order", "sequential")))
             resolved.setdefault("use_fsrs", bool(config_row.get("use_fsrs", False)))
             resolved.setdefault("backflow_rule", str(config_row.get("backflow_rule", "none")))
+            if config_row.get("scheduling_mode") is not None:
+                resolved.setdefault("scheduling_mode", str(config_row["scheduling_mode"]))
+            if config_row.get("fsrs_config") is not None and "fsrs_config" not in resolved:
+                resolved["fsrs_config"] = config_row["fsrs_config"]
             if config_row.get("name"):
                 resolved.setdefault("config_name", str(config_row["name"]))
             if not bank_id and config_row["bank_id"] is not None:
@@ -202,7 +234,9 @@ async def init_question_pool(
         target_count = _config_int(config_snapshot, "target_count", 10)
         primary_filter = _config_str(config_snapshot, "primary_filter", "all")
         sort_order = _config_str(config_snapshot, "sort_order", "sequential")
-        use_fsrs = _config_bool(config_snapshot, "use_fsrs", False)
+        scheduling_mode = _resolve_scheduling_mode(config_snapshot)
+        fsrs_config = _config_dict(config_snapshot, "fsrs_config")
+        use_fsrs = scheduling_mode == "fsrs"
         backflow_rule = _config_str(config_snapshot, "backflow_rule", "none")
 
         if not bank_id:
@@ -216,7 +250,8 @@ async def init_question_pool(
             target_count=target_count,
             primary_filter=primary_filter,
             sort_order=sort_order,
-            use_fsrs=use_fsrs,
+            scheduling_mode=scheduling_mode,
+            fsrs_config=fsrs_config,
         )
 
         def _parse_paragraphs(raw: Any) -> list[str]:
@@ -263,6 +298,7 @@ async def init_question_pool(
             "unified_primary_filter": primary_filter,
             "unified_sort_order": sort_order,
             "unified_use_fsrs": use_fsrs,
+            "unified_scheduling_mode": scheduling_mode,
             "unified_backflow_rule": backflow_rule,
             "run_summary": {
                 "answered_count": 0,
@@ -389,7 +425,9 @@ async def submit_answer(
 
         kind = progress_snapshot.get("unified_kind", _config_str(config_snapshot, "kind", ""))
         bank_id = _config_str(config_snapshot, "bank_id", "")
-        use_fsrs = _config_bool(config_snapshot, "use_fsrs", False)
+        scheduling_mode = _resolve_scheduling_mode(config_snapshot)
+        fsrs_config = _config_dict(config_snapshot, "fsrs_config")
+        use_fsrs = scheduling_mode == "fsrs"
         backflow_rule = _config_str(config_snapshot, "backflow_rule", "none")
 
         if not kind or not bank_id:
@@ -407,6 +445,8 @@ async def submit_answer(
             time_spent_ms=time_spent_ms,
             detail={"user_input": user_input, "backflow_rule": backflow_rule},
             rating=rating,
+            scheduling_mode=scheduling_mode,
+            fsrs_config=fsrs_config,
         )
 
         pool_data = progress_snapshot.get("unified_question_pool", [])
@@ -499,5 +539,6 @@ async def submit_answer(
             "total": len([q for q in pool_data if not q.get("answered") or q.get("backflow_count", 0) > 0]),
             "backflow_action": triggered_action,
             "backflow_info": backflow_info,
+            "should_repeat_today": bool(state.get("should_repeat_today")),
             "warning": progress_snapshot.get("unified_warning"),
         }

@@ -102,6 +102,9 @@ export type VocabReviewItem = VocabWordDetail & {
   prompt_type: 'en_to_zh' | 'zh_to_en';
   review_mode: 'study' | 'review' | 'learning' | 'mistake';
   mastery_score: number;
+  // FSRS 状态(可选,仅 scheduling_mode='fsrs' 时后端返回)
+  next_review_at?: string | null;
+  fsrs_card_json?: string | null;
 };
 
 export type VocabTodaySettingsPayload = {

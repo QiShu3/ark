@@ -214,7 +214,8 @@ describe('PracticeFocusWork', () => {
     });
   });
 
-  it('uses the run target count for the visible question total when completion is missing', async () => {
+  it('uses the run target count for completion when completion config is missing', async () => {
+    const user = userEvent.setup();
     fetchChoiceItems.mockResolvedValue([
       {
         id: 'choice-article-1',
@@ -250,6 +251,15 @@ describe('PracticeFocusWork', () => {
         ],
       },
     ]);
+    submitChoiceAnswer.mockResolvedValue({
+      question_id: 'choice-q1',
+      chosen_option: 'A',
+      correct_option: 'A',
+      is_correct: true,
+      rating: 'good',
+      next_review_at: null,
+    });
+    const onContentCompleted = vi.fn();
 
     render(
       <MemoryRouter>
@@ -263,13 +273,22 @@ describe('PracticeFocusWork', () => {
             },
           }}
           disabled={false}
-          onContentCompleted={vi.fn()}
+          onContentCompleted={onContentCompleted}
         />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('题目 1 / 1')).toBeInTheDocument();
-    expect(screen.queryByText('题目 1 / 2')).not.toBeInTheDocument();
+    expect(await screen.findByText('Choice Question One?')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Option A/ }));
+    await user.click(screen.getByRole('button', { name: /提交答案/ }));
+
+    await waitFor(() => {
+      expect(onContentCompleted).toHaveBeenCalledWith(expect.objectContaining({
+        question_count: 1,
+        run_summary: expect.objectContaining({ total_questions: 1 }),
+      }));
+    });
   });
 
   it('renders single choice stems in the upper material panel', async () => {

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Info, Link, Plus, Trash2, X } from 'lucide-react';
+import { Link, Plus, Trash2, X } from 'lucide-react';
 
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
-import { listDeliberateBanks, type DeliberateWorkflowConfig, type DeliberateBankOption, type DeliberateWorkflowChild, type PrimaryFilter, type SortOrder, type BackflowRule } from '../../lib/deliberate/api';
+import { listDeliberateBanks, type DeliberateWorkflowConfig, type DeliberateBankOption, type DeliberateWorkflowChild, type PrimaryFilter, type SortOrder, type BackflowRule, type SchedulingMode, type FsrsConfig } from '../../lib/deliberate/api';
 import type { Task } from '../taskTypes';
 
 type EditFocusWorkModalProps = {
@@ -21,6 +21,8 @@ type EditFocusWorkModalProps = {
     primary_filter?: PrimaryFilter;
     sort_order?: SortOrder;
     use_fsrs?: boolean;
+    scheduling_mode?: SchedulingMode;
+    fsrs_config?: FsrsConfig;
     backflow_rule?: BackflowRule;
   }) => Promise<void>;
   onClose: () => void;
@@ -65,7 +67,15 @@ export default function EditFocusWorkModal({
   const [targetCount, setTargetCount] = useState(config.target_count);
   const [primaryFilter, setPrimaryFilter] = useState<PrimaryFilter>(config.primary_filter || 'all');
   const [sortOrder, setSortOrder] = useState<SortOrder>(config.sort_order || 'sequential');
-  const [useFsrs, setUseFsrs] = useState(config.use_fsrs || false);
+  const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>(
+    config.scheduling_mode ?? (config.use_fsrs ? 'fsrs' : 'manual')
+  );
+  const [fsrsDesiredRetention, setFsrsDesiredRetention] = useState<number>(
+    Math.round((config.fsrs_config?.desired_retention ?? 0.9) * 100)
+  );
+  const [fsrsMaxIntervalDays, setFsrsMaxIntervalDays] = useState<number>(
+    config.fsrs_config?.max_interval_days ?? 365
+  );
   const [backflowRule, setBackflowRule] = useState<BackflowRule>(config.backflow_rule || 'none');
   const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(
     Boolean(config.pass_criteria?.mode)
@@ -153,18 +163,40 @@ export default function EditFocusWorkModal({
       ? { mode: 'accuracy', threshold: passCriteriaThreshold / 100 }
       : {};
 
-    await onSave({
+    const payload: {
+      name: string;
+      bank_id: string | null;
+      target_count: number;
+      pass_criteria: Record<string, unknown>;
+      children: DeliberateWorkflowChild[];
+      task_id: string | null;
+      scheduling_mode: SchedulingMode;
+      primary_filter?: PrimaryFilter;
+      sort_order?: SortOrder;
+      backflow_rule?: BackflowRule;
+      fsrs_config?: FsrsConfig;
+    } = {
       name: name.trim(),
       bank_id: bankId || null,
       target_count: targetCount,
       pass_criteria: passCriteria,
       children: children.filter(c => c.config_id),
       task_id: taskId || null,
-      primary_filter: primaryFilter,
-      sort_order: sortOrder,
-      use_fsrs: useFsrs,
-      backflow_rule: backflowRule,
-    });
+      scheduling_mode: schedulingMode,
+    };
+
+    if (schedulingMode === 'fsrs') {
+      payload.fsrs_config = {
+        desired_retention: fsrsDesiredRetention / 100,
+        max_interval_days: fsrsMaxIntervalDays,
+      };
+    } else {
+      payload.primary_filter = primaryFilter;
+      payload.sort_order = sortOrder;
+      payload.backflow_rule = backflowRule;
+    }
+
+    await onSave(payload);
   }
 
   return (
@@ -213,99 +245,115 @@ export default function EditFocusWorkModal({
             ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">
-                {config.kind === 'flash_card' ? '目标词数' : '目标题数'}
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={targetCount}
-                onChange={(e) => setTargetCount(Math.max(1, Math.min(500, Number(e.target.value) || 10)))}
-                className={inputClass}
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">排序方式</label>
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                className={inputClass}
-              >
-                {(Object.entries(sortOrderLabels) as [SortOrder, string][]).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">主筛选条件</label>
-            <select
-              value={primaryFilter}
-              onChange={(e) => setPrimaryFilter(e.target.value as PrimaryFilter)}
-              className={inputClass}
-            >
-              {(Object.entries(primaryFilterLabels) as [PrimaryFilter, string][]).map(([value, label]) => {
-                const disabled = value === 'due_review' && !useFsrs;
-                return (
-                  <option key={value} value={value} disabled={disabled}>
-                    {label}{disabled ? '（需启用 FSRS）' : ''}
-                  </option>
-                );
-              })}
-            </select>
-            {primaryFilter === 'due_review' && !useFsrs && (
-              <p className="mt-1 text-xs text-amber-400">"到期复习"需要启用 FSRS</p>
-            )}
-          </div>
-
-          <div className="flex items-start gap-4 rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="edit-use-fsrs"
-                checked={useFsrs}
-                onChange={(e) => {
-                  setUseFsrs(e.target.checked);
-                  if (!e.target.checked && primaryFilter === 'due_review') {
-                    setPrimaryFilter('all');
-                  }
-                }}
-                className="rounded border-ark-border"
-              />
-              <label htmlFor="edit-use-fsrs" className="text-sm font-medium text-ark-text-muted cursor-pointer">
-                启用 FSRS 调度
-              </label>
-            </div>
-            <span className="group relative">
-              <Info className="h-4 w-4 shrink-0 text-ark-text-faint mt-0.5" aria-hidden="true" />
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block whitespace-nowrap rounded bg-ark-surface-strong px-2 py-1 text-xs text-ark-text shadow-lg">
-                FSRS 可自动计算复习时间，开启后方可选「到期复习」筛选条件
-              </span>
-            </span>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">本场回流规则</label>
-            <select
-              value={backflowRule}
-              onChange={(e) => setBackflowRule(e.target.value as BackflowRule)}
-              className={inputClass}
-            >
-              {(Object.entries(backflowRuleLabels) as [BackflowRule, string][]).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+            <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">调度模式</label>
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
+              {(['manual', 'fsrs'] as SchedulingMode[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setSchedulingMode(item)}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                    schedulingMode === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
+                  }`}
+                >
+                  {item === 'manual' ? '手动调度' : 'FSRS 调度'}
+                </button>
               ))}
-            </select>
-            <p className="mt-1 text-xs text-ark-text-faint">
-              {backflowRule === 'none' && '答错不会重新出现'}
-              {backflowRule === 'wrong_to_end' && '答错的题会放到当前题单末尾'}
-              {backflowRule === 'wrong_retry' && '答错后会立即重新出现'}
-            </p>
+            </div>
           </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">
+              {config.kind === 'flash_card' ? '目标词数' : '目标题数'}
+              {schedulingMode === 'fsrs' && <span className="ml-1 text-xs text-ark-text-faint">(本轮上限 & 每日新词上限)</span>}
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={targetCount}
+              onChange={(e) => setTargetCount(Math.max(1, Math.min(500, Number(e.target.value) || 10)))}
+              className={inputClass}
+            />
+          </div>
+
+          {schedulingMode === 'manual' ? (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">排序方式</label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                  className={inputClass}
+                >
+                  {(Object.entries(sortOrderLabels) as [SortOrder, string][]).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">主筛选条件</label>
+                <select
+                  value={primaryFilter}
+                  onChange={(e) => setPrimaryFilter(e.target.value as PrimaryFilter)}
+                  className={inputClass}
+                >
+                  {(Object.entries(primaryFilterLabels) as [PrimaryFilter, string][]).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">本场回流规则</label>
+                <select
+                  value={backflowRule}
+                  onChange={(e) => setBackflowRule(e.target.value as BackflowRule)}
+                  className={inputClass}
+                >
+                  {(Object.entries(backflowRuleLabels) as [BackflowRule, string][]).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-ark-text-faint">
+                  {backflowRule === 'none' && '答错不会重新出现'}
+                  {backflowRule === 'wrong_to_end' && '答错的题会放到当前题单末尾'}
+                  {backflowRule === 'wrong_retry' && '答错后会立即重新出现'}
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3 rounded-lg border border-ark-border bg-ark-surface-subtle p-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">目标保持率 (%)</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={70}
+                    max={98}
+                    step={1}
+                    value={fsrsDesiredRetention}
+                    onChange={(e) => setFsrsDesiredRetention(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-medium text-ark-text w-12 text-right">{fsrsDesiredRetention}%</span>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">最大间隔天数</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={36500}
+                  value={fsrsMaxIntervalDays}
+                  onChange={(e) => setFsrsMaxIntervalDays(Math.max(1, Math.min(36500, Number(e.target.value) || 365)))}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          )}
 
           {config.kind !== 'flash_card' && (
             <div className="space-y-3">

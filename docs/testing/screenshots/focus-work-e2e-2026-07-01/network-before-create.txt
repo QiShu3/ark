@@ -1,0 +1,55 @@
+164. [GET] http://localhost:5173/todo/events/primary => [401] Unauthorized
+165. [GET] http://localhost:5173/api/checkin/status => [401] Unauthorized
+166. [GET] http://localhost:5173/api/admin/deliberate-workflows => [401] Unauthorized
+167. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [401] Unauthorized
+168. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [401] Unauthorized
+169. [GET] http://localhost:5173/todo/tasks?limit=100 => [401] Unauthorized
+170. [GET] http://localhost:5173/todo/focus/workflow/records => [401] Unauthorized
+171. [GET] http://localhost:5173/todo/focus/workflows => [401] Unauthorized
+172. [GET] http://localhost:5173/todo/focus/workflow/current => [401] Unauthorized
+173. [GET] http://localhost:5173/todo/events/primary => [401] Unauthorized
+174. [GET] http://localhost:5173/api/checkin/status => [401] Unauthorized
+175. [GET] http://localhost:5173/api/admin/deliberate-workflows => [401] Unauthorized
+176. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [401] Unauthorized
+177. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [401] Unauthorized
+178. [GET] http://localhost:5173/todo/tasks?limit=100 => [401] Unauthorized
+179. [GET] http://localhost:5173/todo/focus/workflow/records => [401] Unauthorized
+180. [GET] http://localhost:5173/todo/focus/workflows => [401] Unauthorized
+182. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=flash_card => [401] Unauthorized
+183. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=input => [401] Unauthorized
+184. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=flash_card => [401] Unauthorized
+185. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=input => [401] Unauthorized
+186. [POST] http://localhost:5173/auth/login => [200] OK
+187. [GET] http://localhost:5173/auth/me => [200] OK
+188. [GET] http://localhost:5173/todo/events/primary => [200] OK
+189. [GET] http://localhost:5173/auth/me => [200] OK
+190. [GET] http://localhost:5173/todo/focus/workflow/current => [200] OK
+191. [GET] http://localhost:5173/todo/events/primary => [200] OK
+192. [GET] http://localhost:5173/auth/me => [200] OK
+193. [GET] http://localhost:5173/api/checkin/status => [200] OK
+194. [GET] http://localhost:5173/api/admin/deliberate-workflows => [500] Internal Server Error
+195. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [200] OK
+196. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [200] OK
+197. [GET] http://localhost:5173/todo/tasks?limit=100 => [200] OK
+198. [GET] http://localhost:5173/todo/focus/workflow/records => [200] OK
+199. [GET] http://localhost:5173/todo/focus/workflows => [200] OK
+200. [GET] http://localhost:5173/api/admin/deliberate-workflows => [500] Internal Server Error
+201. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [200] OK
+202. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [200] OK
+203. [GET] http://localhost:5173/todo/tasks?limit=100 => [200] OK
+204. [GET] http://localhost:5173/todo/focus/workflow/records => [200] OK
+205. [GET] http://localhost:5173/todo/focus/workflows => [200] OK
+206. [GET] http://localhost:5173/api/checkin/status => [200] OK
+207. [GET] http://localhost:5173/api/checkin/status => [200] OK
+208. [GET] http://localhost:5173/api/choice/snapshots?bank_id=df57a87c-ed78-4b58-9a8f-3800cbb0f240&limit=30 => [200] OK
+209. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=flash_card => [200] OK
+210. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=flash_card => [200] OK
+211. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=input => [200] OK
+212. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=input => [200] OK
+213. [GET] http://localhost:5173/todo/focus/workflow/current => [200] OK
+214. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [200] OK
+215. [GET] http://localhost:5173/api/admin/deliberate-workflows/banks?kind=choice => [200] OK
+216. [GET] http://localhost:5173/api/choice/filters?bank_id=df57a87c-ed78-4b58-9a8f-3800cbb0f240 => [200] OK
+217. [GET] http://localhost:5173/todo/focus/workflow/current => [200] OK
+
+Note: 164 static requests not shown, run with "static" option to see them.

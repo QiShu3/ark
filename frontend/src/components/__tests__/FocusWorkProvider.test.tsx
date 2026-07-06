@@ -106,6 +106,28 @@ function mockCurrentWorkflow(overrides: Record<string, unknown> = {}, runOverrid
     if (path === '/todo/focus/workflow/current') {
       return currentSnapshot;
     }
+    if (path === '/api/deliberate-workflows/child-cfg-1') {
+      return {
+        id: 'child-cfg-1',
+        name: '错题复习',
+        kind: 'choice',
+        focus_work_type: 'choice',
+        bank_id: 'set-1',
+        target_count: 10,
+        scope: {},
+        completion: {},
+        pass_criteria: {},
+        children: [],
+        primary_filter: 'all',
+        sort_order: 'sequential',
+        use_fsrs: false,
+        scheduling_mode: 'manual',
+        fsrs_config: null,
+        backflow_rule: 'none',
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      };
+    }
     if (path === '/todo/focus/workflow/pause') {
       currentSnapshot = {
         ...currentSnapshot,
@@ -321,7 +343,7 @@ describe('FocusWorkProvider', () => {
       </FocusWorkProvider>,
     );
 
-    expect(await screen.findByText('选择fork到：')).toBeInTheDocument();
+    expect(await screen.findByText('推荐继续练习')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /错题复习/ }));
 
     expect(apiJson).toHaveBeenCalledWith('/api/deliberate-workflows/child-cfg-1');

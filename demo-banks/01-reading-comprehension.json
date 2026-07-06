@@ -1,0 +1,64 @@
+[
+  {
+    "title": "Text 1 - The Future of Work",
+    "passage": "The way we work is changing rapidly. Remote work, once a rare perk, has become a standard option for millions of employees worldwide. Companies are discovering that flexible work arrangements not only improve employee satisfaction but also increase productivity.\n\nHowever, this transition is not without challenges. Managers struggle to maintain team cohesion when members are scattered across different locations. Communication gaps can lead to misunderstandings and delayed projects. Additionally, some employees find it difficult to separate work from personal life when their home becomes their office.\n\nTechnology has played a crucial role in enabling this shift. Video conferencing tools, project management software, and cloud-based collaboration platforms have made remote work feasible. Yet technology alone cannot solve all problems. Successful remote work requires intentional effort from both employers and employees to establish clear boundaries and maintain strong working relationships.\n\nThe most forward-thinking companies are adopting hybrid models that combine the best of both worlds. Employees come into the office a few days a week for meetings and team building, while working from home on other days for focused individual tasks. This approach seems to strike a balance that benefits everyone involved.",
+    "examination": "考研英语二阅读",
+    "questions": [
+      {
+        "question_text": "What is the main idea of the passage?",
+        "options": {
+          "A": "Remote work is decreasing in popularity",
+          "B": "The nature of work is evolving with remote and hybrid models",
+          "C": "Technology has made offices obsolete",
+          "D": "Employees prefer working from home exclusively"
+        },
+        "correct_answer": "B",
+        "analysis": "文章首段点明工作方式正在快速变化，末段介绍混合模式，全文围绕工作方式的演变展开。"
+      },
+      {
+        "question_text": "According to the passage, what challenge do managers face with remote work?",
+        "options": {
+          "A": "Higher salary costs",
+          "B": "Maintaining team unity",
+          "C": "Technical difficulties",
+          "D": "Legal compliance issues"
+        },
+        "correct_answer": "B",
+        "analysis": "第二段提到 'Managers struggle to maintain team cohesion'，cohesion 与 unity 同义，意为团队凝聚力。"
+      },
+      {
+        "question_text": "The word \"feasible\" in paragraph 3 is closest in meaning to:",
+        "options": {
+          "A": "expensive",
+          "B": "possible",
+          "C": "difficult",
+          "D": "temporary"
+        },
+        "correct_answer": "B",
+        "analysis": "feasible 意为\"可行的\"，与 possible 意思最接近。"
+      },
+      {
+        "question_text": "What does the author say about hybrid work models?",
+        "options": {
+          "A": "They are less productive than fully remote work",
+          "B": "They combine benefits of office and remote work",
+          "C": "They increase employee stress levels",
+          "D": "They are only suitable for large companies"
+        },
+        "correct_answer": "B",
+        "analysis": "末段指出 hybrid models 'combine the best of both worlds'，即结合了办公室和居家办公的优点。"
+      },
+      {
+        "question_text": "Which of the following best describes the author's attitude toward remote work?",
+        "options": {
+          "A": "Strongly opposed",
+          "B": "Entirely enthusiastic",
+          "C": "Objective and balanced",
+          "D": "Doubtful and skeptical"
+        },
+        "correct_answer": "C",
+        "analysis": "作者既提到了远程工作的好处（提高满意度和生产力），也提到了挑战（团队凝聚力、沟通障碍），态度客观平衡。"
+      }
+    ]
+  }
+]

@@ -1,0 +1,64 @@
+[
+  {
+    "title": "干扰项类型归因专项",
+    "passage": "干扰项类型归因专项训练：判断错误选项属于哪种干扰类型。",
+    "examination": "干扰项类型归因",
+    "questions": [
+      {
+        "question_text": "原文：The study found that 60% of participants improved after the treatment.\n题目：What percentage of participants improved?\n错误选项：About half of the participants showed improvement.\n\n这个错误选项属于哪种干扰类型？",
+        "options": {
+          "A": "偷换概念",
+          "B": "过度推理",
+          "C": "无中生有",
+          "D": "以偏概全"
+        },
+        "correct_answer": "A",
+        "analysis": "原文说的是 60%，选项换成了 half（50%），偷换了数字概念，属于偷换概念。"
+      },
+      {
+        "question_text": "原文：The company reported a decline in sales last quarter.\n题目：What can be inferred from the passage?\n错误选项：The company will likely go bankrupt next year.\n\n这个错误选项属于哪种干扰类型？",
+        "options": {
+          "A": "偷换概念",
+          "B": "过度推理",
+          "C": "无中生有",
+          "D": "正反混淆"
+        },
+        "correct_answer": "B",
+        "analysis": "原文只说销售下降，选项推出公司即将破产，远远超出了原文信息，属于过度推理。"
+      },
+      {
+        "question_text": "原文：The research focused on the effects of sleep on memory.\n题目：What was the research about?\n错误选项：The study examined how diet affects sleep quality.\n\n这个错误选项属于哪种干扰类型？",
+        "options": {
+          "A": "偷换概念",
+          "B": "过度推理",
+          "C": "无中生有",
+          "D": "以偏概全"
+        },
+        "correct_answer": "C",
+        "analysis": "原文根本没有提到 diet（饮食），选项内容完全是编造的，属于无中生有。"
+      },
+      {
+        "question_text": "原文：Some experts believe that renewable energy is the key to solving climate change.\n题目：What do experts think about renewable energy?\n错误选项：All experts agree that renewable energy can solve climate change.\n\n这个错误选项属于哪种干扰类型？",
+        "options": {
+          "A": "以偏概全",
+          "B": "偷换概念",
+          "C": "无中生有",
+          "D": "正反混淆"
+        },
+        "correct_answer": "A",
+        "analysis": "原文是 Some experts（一些专家），选项扩大成了 All experts（所有专家），以偏概全。"
+      },
+      {
+        "question_text": "原文：The new policy had a positive impact on economic growth.\n题目：What was the effect of the new policy?\n错误选项：The policy slowed down economic development.\n\n这个错误选项属于哪种干扰类型？",
+        "options": {
+          "A": "偷换概念",
+          "B": "过度推理",
+          "C": "正反混淆",
+          "D": "无中生有"
+        },
+        "correct_answer": "C",
+        "analysis": "原文说 positive impact（积极影响），选项说 slowed down（减缓），意思完全相反，属于正反混淆。"
+      }
+    ]
+  }
+]

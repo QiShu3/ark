@@ -1,0 +1,64 @@
+[
+  {
+    "title": "定语从句专项练习",
+    "passage": "定语从句专项训练：判断关系词的选择和从句类型。",
+    "examination": "定语从句专项",
+    "questions": [
+      {
+        "question_text": "The book ____ I bought yesterday is very interesting.",
+        "options": {
+          "A": "who",
+          "B": "which",
+          "C": "whom",
+          "D": "whose"
+        },
+        "correct_answer": "B",
+        "analysis": "先行词是 book（物），在从句中作 bought 的宾语，用 which 或 that。"
+      },
+      {
+        "question_text": "This is the scientist ____ achievements are well known throughout the country.",
+        "options": {
+          "A": "who",
+          "B": "which",
+          "C": "whose",
+          "D": "whom"
+        },
+        "correct_answer": "C",
+        "analysis": "先行词 scientist 与 achievements 是所属关系，用 whose 表示\"他的成就\"。"
+      },
+      {
+        "question_text": "The reason ____ he was late was that he missed the bus.",
+        "options": {
+          "A": "which",
+          "B": "why",
+          "C": "when",
+          "D": "where"
+        },
+        "correct_answer": "B",
+        "analysis": "先行词是 reason，从句表示原因，用关系副词 why。"
+      },
+      {
+        "question_text": "Which of the following sentences contains a non-restrictive attributive clause?",
+        "options": {
+          "A": "The man who is standing there is my uncle.",
+          "B": "I know the reason why he was absent.",
+          "C": "My brother, who lives in Beijing, is a doctor.",
+          "D": "This is the best film that I have ever seen."
+        },
+        "correct_answer": "C",
+        "analysis": "非限制性定语从句用逗号隔开，对先行词作补充说明。C 选项中 who lives in Beijing 前后有逗号，是非限制性定语从句。"
+      },
+      {
+        "question_text": "All ____ is needed is a supply of oil.",
+        "options": {
+          "A": "which",
+          "B": "what",
+          "C": "that",
+          "D": "who"
+        },
+        "correct_answer": "C",
+        "analysis": "先行词是 all 这类不定代词时，关系代词只能用 that，不能用 which。"
+      }
+    ]
+  }
+]

@@ -43,7 +43,9 @@ import {
   type DeliberateUploadError,
   type DeliberateWorkflowConfig,
   type DeliberateWorkflowRun,
+  type FsrsConfig,
   type PrimaryFilter,
+  type SchedulingMode,
   type SortOrder,
 } from '../lib/deliberate/api';
 import {
@@ -557,10 +559,11 @@ export default function DeliberateWorkflow() {
     scope: Record<string, unknown>;
     completion: Record<string, unknown>;
     pass_criteria: Record<string, unknown>;
-    primary_filter: PrimaryFilter;
-    sort_order: SortOrder;
-    use_fsrs: boolean;
-    backflow_rule: BackflowRule;
+    scheduling_mode: SchedulingMode;
+    primary_filter?: PrimaryFilter;
+    sort_order?: SortOrder;
+    backflow_rule?: BackflowRule;
+    fsrs_config?: FsrsConfig;
   }) {
     setSaving(true);
     setError(null);

@@ -1,0 +1,229 @@
+- generic [ref=e3]:
+  - navigation [ref=e7]:
+    - generic [ref=e8]:
+      - button "返回首页" [ref=e9]
+      - button "打开主事件：测试事件，倒计时 100d 21h" [ref=e10]:
+        - generic [ref=e11]: 测试事件
+        - generic [ref=e12]: 100d 21h
+      - button "重新进入首次体验引导" [ref=e13]:
+        - img [ref=e14]
+    - generic [ref=e17]:
+      - button "打开导航栏日历" [ref=e18]:
+        - img [ref=e19]
+      - button "切换为夜间模式" [ref=e21]:
+        - img [ref=e22]
+      - button "通知中心" [ref=e24]:
+        - img [ref=e25]
+      - button "打开界面设置" [ref=e28]:
+        - img [ref=e29]
+      - button "打开用户菜单" [ref=e34]:
+        - img "qishuadmin" [ref=e35]
+  - generic [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: Admin
+        - heading "刻意学习流" [level=1] [ref=e43]
+        - paragraph [ref=e44]: 管理题库、专注工作和工作流，通过刻意练习提升学习效果。
+      - link "返回应用中心" [ref=e45] [cursor=pointer]:
+        - /url: "#/apps"
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]: 当前工作流
+        - combobox "当前工作流" [ref=e49]:
+          - option "408" [selected]
+      - button "新建工作流" [ref=e51] [cursor=pointer]:
+        - img [ref=e53]
+        - generic [ref=e54]: 新建工作流
+    - generic [ref=e55]:
+      - generic [ref=e57]:
+        - generic [ref=e58]: 已保存工作流
+        - heading "408" [level=2] [ref=e59]
+        - paragraph [ref=e60]: 选择练习 · 408选择题
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - img [ref=e64]
+            - heading "题库管理" [level=3] [ref=e68]
+          - generic [ref=e69]:
+            - button "选择题" [ref=e70]
+            - button "闪卡" [ref=e71]
+            - button "输入题" [ref=e72]
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - generic [ref=e75]:
+                - generic [ref=e76]: 408选择题
+                - generic [ref=e77]: 631 题
+              - button "删除" [ref=e79] [cursor=pointer]:
+                - img [ref=e81]
+                - generic [ref=e84]: 删除
+            - generic [ref=e85]:
+              - generic [ref=e86]:
+                - generic [ref=e87]: 考研英语二阅读
+                - generic [ref=e88]: 120 题
+              - button "删除" [ref=e90] [cursor=pointer]:
+                - img [ref=e92]
+                - generic [ref=e95]: 删除
+          - button "上传新题库" [ref=e97] [cursor=pointer]:
+            - img [ref=e99]
+            - generic [ref=e102]: 上传新题库
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - img [ref=e106]
+                - heading "存档可视化" [level=4] [ref=e108]
+              - generic [ref=e109]:
+                - generic [ref=e110]: "题库:"
+                - combobox [ref=e111]:
+                  - option "选择题库"
+                  - option "408选择题 (631 题)" [selected]
+                  - option "考研英语二阅读 (120 题)"
+                  - option "考研英语单词 (5528 词)"
+                  - option "2010-2023年考研英语一真题 - 写作 (28 题)"
+                  - option "2012年考研英语一真题 - 写作 (2 题)"
+                  - option "数据结构基础 + 翻译练习 (6 题)"
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - generic [ref=e114]:
+                  - generic [ref=e115]: 正确率
+                  - generic [ref=e116]: 18%
+                  - generic [ref=e117]: 338 次答题
+                - generic [ref=e118]:
+                  - generic [ref=e119]: 掌握
+                  - generic [ref=e120]: "0"
+                  - generic [ref=e121]: 总量 631
+                - generic [ref=e122]:
+                  - generic [ref=e123]: 待复习
+                  - generic [ref=e124]: "78"
+                  - generic [ref=e125]: 当前快照
+                - generic [ref=e126]:
+                  - generic [ref=e127]: 专注
+                  - generic [ref=e128]: "0"
+                  - generic [ref=e129]: 0 分钟
+              - generic [ref=e130]:
+                - generic [ref=e131]:
+                  - heading "正确率趋势" [level=3] [ref=e132]
+                  - generic [ref=e133]: 28 条快照
+                - generic [ref=e134]:
+                  - generic [ref=e135]:
+                    - generic [ref=e136]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e137]:
+                    - generic [ref=e138]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e139]:
+                    - generic [ref=e140]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e141]:
+                    - generic [ref=e142]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e143]:
+                    - generic [ref=e144]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e145]:
+                    - generic [ref=e146]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e147]:
+                    - generic [ref=e148]: 18%
+                    - generic "正确率 18%"
+                  - generic [ref=e149]:
+                    - generic [ref=e150]: 18%
+                    - generic "正确率 18%"
+        - generic [ref=e151]:
+          - generic [ref=e152]:
+            - generic [ref=e153]:
+              - img [ref=e154]
+              - heading "专注工作管理" [level=3] [ref=e158]
+            - button "新建专注工作" [ref=e159] [cursor=pointer]:
+              - img [ref=e161]
+              - generic [ref=e162]: 新建专注工作
+          - generic [ref=e164]:
+            - generic [ref=e165]:
+              - generic [ref=e166]: "408"
+              - generic [ref=e167]: 选择练习 · 408选择题 · 目标 10
+            - generic [ref=e168]:
+              - button "开始" [ref=e169] [cursor=pointer]:
+                - img [ref=e171]
+                - generic [ref=e173]: 开始
+              - button "编辑" [ref=e174] [cursor=pointer]:
+                - generic [ref=e175]: 编辑
+              - button "删除" [ref=e176] [cursor=pointer]:
+                - img [ref=e178]
+                - generic [ref=e181]: 删除
+        - generic [ref=e182]:
+          - generic [ref=e183]:
+            - generic [ref=e184]:
+              - img [ref=e185]
+              - heading "工作流编排" [level=3] [ref=e188]
+            - button "启动组合工作流 (0)" [disabled]:
+              - generic:
+                - img
+              - generic: 启动组合工作流 (0)
+          - generic [ref=e189]:
+            - generic [ref=e190]:
+              - heading "已保存的编排" [level=4] [ref=e191]
+              - generic [ref=e192]:
+                - textbox "编排名称" [ref=e193]
+                - button "保存当前编排" [disabled]:
+                  - generic:
+                    - img
+                  - generic: 保存当前编排
+            - generic [ref=e194]: 暂无已保存的编排，请先保存
+          - generic [ref=e196]:
+            - generic [ref=e197]:
+              - img [ref=e198]
+              - heading "选择专注工作（按顺序执行）" [level=4] [ref=e202]
+            - generic [ref=e204] [cursor=pointer]:
+              - generic [ref=e205]: "1"
+              - generic [ref=e206]:
+                - generic [ref=e207]: "408"
+                - generic [ref=e208]: 选择练习 · 408选择题 · 目标 10
+        - generic [ref=e210]:
+          - generic [ref=e211]:
+            - img [ref=e212]
+            - heading "运行档案" [level=3] [ref=e215]
+          - generic [ref=e216]:
+            - generic [ref=e217]:
+              - heading "单配置运行" [level=4] [ref=e218]
+              - button "已启动 7月1日 21:35 暂无存档 focus run 已记录" [ref=e220]:
+                - generic [ref=e221]:
+                  - generic [ref=e222]: 已启动
+                  - generic [ref=e223]: 7月1日 21:35
+                - generic [ref=e224]:
+                  - generic [ref=e225]: 暂无存档
+                  - generic [ref=e226]: focus run 已记录
+            - generic [ref=e227]:
+              - heading "组合工作流记录" [level=4] [ref=e228]
+              - generic [ref=e229]:
+                - button "刻意学习流：英语阅读选择 → 408选择 已完成 7月1日 17:30 → 7月1日 21:06" [ref=e230]:
+                  - generic [ref=e231]:
+                    - generic [ref=e232]: 刻意学习流：英语阅读选择 → 408选择
+                    - generic [ref=e233]: 已完成
+                  - generic [ref=e234]: 7月1日 17:30 → 7月1日 21:06
+                - button "刻意学习流：英语阅读选择 → 408选择 已完成 7月1日 14:53 → 7月1日 16:16" [ref=e235]:
+                  - generic [ref=e236]:
+                    - generic [ref=e237]: 刻意学习流：英语阅读选择 → 408选择
+                    - generic [ref=e238]: 已完成
+                  - generic [ref=e239]: 7月1日 14:53 → 7月1日 16:16
+                - button "刻意学习流：英语阅读选择 → 408选择 已完成 7月1日 14:36 → 7月1日 14:51" [ref=e240]:
+                  - generic [ref=e241]:
+                    - generic [ref=e242]: 刻意学习流：英语阅读选择 → 408选择
+                    - generic [ref=e243]: 已完成
+                  - generic [ref=e244]: 7月1日 14:36 → 7月1日 14:51
+                - button "刻意学习流：英语阅读选择 → 408选择 已完成 7月1日 14:31 → 7月1日 14:32" [ref=e245]:
+                  - generic [ref=e246]:
+                    - generic [ref=e247]: 刻意学习流：英语阅读选择 → 408选择
+                    - generic [ref=e248]: 已完成
+                  - generic [ref=e249]: 7月1日 14:31 → 7月1日 14:32
+                - button "刻意学习流：英语阅读选择 → 408选择 已完成 7月1日 14:08 → 7月1日 14:09" [ref=e250]:
+                  - generic [ref=e251]:
+                    - generic [ref=e252]: 刻意学习流：英语阅读选择 → 408选择
+                    - generic [ref=e253]: 已完成
+                  - generic [ref=e254]: 7月1日 14:08 → 7月1日 14:09
+                - button "刻意学习流：英语阅读选择 → 408选择 已完成 6月30日 17:35 → 6月30日 17:35" [ref=e255]:
+                  - generic [ref=e256]:
+                    - generic [ref=e257]: 刻意学习流：英语阅读选择 → 408选择
+                    - generic [ref=e258]: 已完成
+                  - generic [ref=e259]: 6月30日 17:35 → 6月30日 17:35
+  - contentinfo [ref=e260]:
+    - link "粤ICP备2026047635号" [ref=e261] [cursor=pointer]:
+      - /url: https://beian.miit.gov.cn/

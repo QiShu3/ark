@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作流结算页</title>
+    <style id="theme-vars">
+:root {
+  --color-primary: #3B82F6;
+  --color-primary-light: #DBEAFE;
+  --color-primary-dark: #2563EB;
+  --color-primary-50: #EFF6FF;
+  --color-primary-100: #DBEAFE;
+  --color-primary-200: #BFDBFE;
+  --color-primary-500: #3B82F6;
+  --color-primary-600: #2563EB;
+  --color-primary-700: #1D4ED8;
+
+  --color-success: #22C55E;
+  --color-success-light: #DCFCE7;
+  --color-success-50: #F0FDF4;
+  --color-success-500: #22C55E;
+  --color-success-600: #16A34A;
+  --color-success-700: #15803D;
+
+  --color-neutral-50: #F5F7FA;
+  --color-neutral-100: #EEF1F6;
+  --color-neutral-200: #E2E6ED;
+  --color-neutral-300: #CDD3DC;
+  --color-neutral-400: #9BA4B4;
+  --color-neutral-500: #6B7688;
+  --color-neutral-600: #4A5568;
+  --color-neutral-700: #2D3748;
+  --color-neutral-800: #1A202C;
+  --color-neutral-900: #111827;
+
+  --color-background: #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-muted: #F5F7FA;
+  --color-text-primary: #111827;
+  --color-text-secondary: #4A5568;
+  --color-text-tertiary: #9BA4B4;
+  --color-text-inverse: #FFFFFF;
+  --color-border: #E2E6ED;
+  --color-border-light: #F0F2F5;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-primary-light: var(--color-primary-light);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-primary-50: var(--color-primary-50);
+  --color-primary-100: var(--color-primary-100);
+  --color-primary-200: var(--color-primary-200);
+  --color-primary-500: var(--color-primary-500);
+  --color-primary-600: var(--color-primary-600);
+  --color-primary-700: var(--color-primary-700);
+  --color-success: var(--color-success);
+  --color-success-light: var(--color-success-light);
+  --color-success-50: var(--color-success-50);
+  --color-success-500: var(--color-success-500);
+  --color-success-600: var(--color-success-600);
+  --color-success-700: var(--color-success-700);
+  --color-neutral-50: var(--color-neutral-50);
+  --color-neutral-100: var(--color-neutral-100);
+  --color-neutral-200: var(--color-neutral-200);
+  --color-neutral-300: var(--color-neutral-300);
+  --color-neutral-400: var(--color-neutral-400);
+  --color-neutral-500: var(--color-neutral-500);
+  --color-neutral-600: var(--color-neutral-600);
+  --color-neutral-700: var(--color-neutral-700);
+  --color-neutral-800: var(--color-neutral-800);
+  --color-neutral-900: var(--color-neutral-900);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-border: var(--color-border);
+  --color-border-light: var(--color-border-light);
+}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+    @layer base {
+      body { background: var(--color-background); color: var(--color-text-primary); }
+      td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+      th { @apply whitespace-nowrap; }
+    }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased flex items-center justify-center">
+    <main class="mx-auto w-full rounded-2xl overflow-hidden" style="max-width: 560px; background: var(--color-surface); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+
+      <!-- ── Top Bar: Status + Title ── -->
+      <div class="flex items-center justify-between px-5 py-3.5" style="border-bottom: 1px solid var(--color-border-light);">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium" style="border: 1.5px solid var(--color-success-500); color: var(--color-success-600); background: var(--color-success-50);">
+            <i data-lucide="check-circle" class="h-3 w-3"></i>
+            完成
+          </span>
+          <span class="text-[11px]" style="color: var(--color-text-tertiary);">结果：完成</span>
+        </div>
+        <span class="text-[11px]" style="color: var(--color-text-tertiary);">总用时 0m</span>
+      </div>
+
+      <!-- ── Title ── -->
+      <div class="px-5 pt-4 pb-3">
+        <h1 class="text-sm font-bold leading-snug" style="color: var(--color-text-primary);">刻意学习流：英语二阅读 → 408</h1>
+      </div>
+
+      <!-- ── Body: Two Columns ── -->
+      <div class="flex px-5 gap-4 pb-4">
+
+        <!-- Left: Learning Path Timeline -->
+        <div class="shrink-0" style="width: 160px;">
+          <h2 class="text-[11px] font-semibold mb-3" style="color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">学习路径</h2>
+
+          <!-- Step A -->
+          <div class="flex gap-2.5">
+            <div class="flex flex-col items-center">
+              <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style="background: var(--color-primary-500);">A</div>
+              <div class="w-px flex-1 my-1" style="background: var(--color-neutral-200);"></div>
+            </div>
+            <div class="pb-3">
+              <p class="text-xs font-medium" style="color: var(--color-text-primary);">英语二阅读</p>
+              <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium mt-0.5" style="background: var(--color-primary-50); color: var(--color-primary-600);">完成</span>
+            </div>
+          </div>
+
+          <!-- Step B -->
+          <div class="flex gap-2.5">
+            <div class="flex flex-col items-center">
+              <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style="background: var(--color-primary-500);">B</div>
+            </div>
+            <div>
+              <p class="text-xs font-medium" style="color: var(--color-text-primary);">408</p>
+              <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium mt-0.5" style="background: var(--color-primary-50); color: var(--color-primary-600);">完成</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Metrics + Summary -->
+        <div class="flex-1 min-w-0">
+          <h2 class="text-[11px] font-semibold mb-3" style="color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">数据汇总</h2>
+
+          <!-- Quick Stats -->
+          <div class="grid grid-cols-3 gap-2 mb-3">
+            <div class="rounded-lg p-2.5 text-center" style="background: var(--color-neutral-50);">
+              <div class="text-base font-bold" style="color: var(--color-primary-600);">2</div>
+              <div class="text-[10px]" style="color: var(--color-text-tertiary);">主任务</div>
+            </div>
+            <div class="rounded-lg p-2.5 text-center" style="background: var(--color-neutral-50);">
+              <div class="text-base font-bold" style="color: var(--color-text-primary);">0</div>
+              <div class="text-[10px]" style="color: var(--color-text-tertiary);">可扩展学习</div>
+            </div>
+            <div class="rounded-lg p-2.5 text-center" style="background: var(--color-neutral-50);">
+              <div class="text-base font-bold" style="color: var(--color-text-primary);">0</div>
+              <div class="text-[10px]" style="color: var(--color-text-tertiary);">再尝试</div>
+            </div>
+          </div>
+
+          <!-- Detail Metrics -->
+          <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px]" style="color: var(--color-text-tertiary);">总答题</span>
+              <span class="text-xs font-semibold" style="color: var(--color-text-primary);">0</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-[11px]" style="color: var(--color-text-tertiary);">总正确</span>
+              <span class="text-xs font-semibold" style="color: var(--color-text-primary);">0</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-[11px]" style="color: var(--color-text-tertiary);">最好一次</span>
+              <span class="text-xs" style="color: var(--color-text-tertiary);">—</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-[11px]" style="color: var(--color-text-tertiary);">一次达标</span>
+              <span class="text-xs font-semibold" style="color: var(--color-text-primary);">0段</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Bottom: CTA ── -->
+      <div class="px-5 py-3.5 flex items-center gap-2.5" style="border-top: 1px solid var(--color-border-light);">
+        <button class="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-medium transition-all" style="background: var(--color-primary-500); color: white;" data-dom-id="btn-end-workflow">
+          <i data-lucide="check" class="h-3.5 w-3.5"></i>
+          结束工作流
+        </button>
+      </div>
+
+    </main>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

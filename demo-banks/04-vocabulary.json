@@ -1,0 +1,64 @@
+[
+  {
+    "title": "核心词汇辨析专项",
+    "passage": "核心词汇辨析专项训练：选择最合适的词填入句子中。",
+    "examination": "核心词汇辨析",
+    "questions": [
+      {
+        "question_text": "The scientist made a ____ discovery that changed the course of medicine.",
+        "options": {
+          "A": "groundbreaking",
+          "B": "grounded",
+          "C": "groundless",
+          "D": "groundwork"
+        },
+        "correct_answer": "A",
+        "analysis": "groundbreaking 意为\"开创性的、突破性的\"，修饰 discovery 表示突破性发现。grounded 意为\"有根据的\"，groundless 意为\"无根据的\"，groundwork 是名词\"基础\"。"
+      },
+      {
+        "question_text": "She has a ____ ability to understand complex mathematical concepts quickly.",
+        "options": {
+          "A": "nature",
+          "B": "natural",
+          "C": "naturally",
+          "D": "naturalize"
+        },
+        "correct_answer": "B",
+        "analysis": "需要形容词修饰名词 ability，natural ability 表示\"天生的能力\"。nature 是名词，naturally 是副词，naturalize 是动词。"
+      },
+      {
+        "question_text": "The company decided to ____ its operations to Southeast Asia.",
+        "options": {
+          "A": "expand",
+          "B": "expend",
+          "C": "extend",
+          "D": "extent"
+        },
+        "correct_answer": "A",
+        "analysis": "expand 意为\"扩张、扩大\"，expand operations 表示扩大业务范围。expend 是\"花费\"，extend 是\"延伸（时间或空间）\"，extent 是名词\"程度\"。"
+      },
+      {
+        "question_text": "His argument was so ____ that even his critics had to agree.",
+        "options": {
+          "A": "compelling",
+          "B": "competing",
+          "C": "compiling",
+          "D": "complaining"
+        },
+        "correct_answer": "A",
+        "analysis": "compelling 意为\"有说服力的、令人信服的\"，修饰 argument 表示有说服力的论点。competing 是\"竞争的\"，compiling 是\"编译的\"，complaining 是\"抱怨的\"。"
+      },
+      {
+        "question_text": "The two words are similar in meaning but have subtle ____ in usage.",
+        "options": {
+          "A": "distinctions",
+          "B": "extinctions",
+          "C": "instincts",
+          "D": "distractions"
+        },
+        "correct_answer": "A",
+        "analysis": "distinction 意为\"区别、差别\"，subtle distinctions 表示细微的差别。extinction 是\"灭绝\"，instinct 是\"本能\"，distraction 是\"分心\"。"
+      }
+    ]
+  }
+]

@@ -1,0 +1,206 @@
+{
+  "main": {
+    "id": "f5c0b9164402e132",
+    "type": "split",
+    "children": [
+      {
+        "id": "d59779909a378728",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "2ff8e7e06e1fc219",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "【学习工作赛道】—— 「Ark」重塑每个学习者的学习方法.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "【学习工作赛道】—— 「Ark」重塑每个学习者的学习方法"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "251ec11d1760f331",
+    "type": "split",
+    "children": [
+      {
+        "id": "67c025ed1d46d7cb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5c564c62dde0d082",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "文件列表"
+            }
+          },
+          {
+            "id": "2f29ecfbb7e9fab4",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "搜索"
+            }
+          },
+          {
+            "id": "7c2ae4a89e5b892a",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "书签"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "right": {
+    "id": "f23113a25e013419",
+    "type": "split",
+    "children": [
+      {
+        "id": "11d6d11ac1102ebb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0c6352d2adffb22a",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "【学习工作赛道】——.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "【学习工作赛道】—— 的反向链接列表"
+            }
+          },
+          {
+            "id": "20471b71197cec30",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "【学习工作赛道】——.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "【学习工作赛道】—— 的出链列表"
+            }
+          },
+          {
+            "id": "7be650cc91dcf81d",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "标签"
+            }
+          },
+          {
+            "id": "201cf5fa2710242c",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "添加笔记属性"
+            }
+          },
+          {
+            "id": "14c2d5fe2e8d16e5",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "【学习工作赛道】——.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "【学习工作赛道】—— 的大纲"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:打开快速切换": false,
+      "graph:查看关系图谱": false,
+      "canvas:新建白板": false,
+      "daily-notes:打开/创建今天的日记": false,
+      "templates:插入模板": false,
+      "command-palette:打开命令面板": false,
+      "bases:新建数据库": false
+    }
+  },
+  "active": "2ff8e7e06e1fc219",
+  "lastOpenFiles": [
+    "模板.md",
+    "【学习工作赛道】—— 「Ark」重塑每个学习者的学习方法.md",
+    "Pasted image 20260704164738.png",
+    "Pasted image 20260704164725.png",
+    "Pasted image 20260704164622.png",
+    "Pasted image 20260704164614.png",
+    "Pasted image 20260706102152.png",
+    "Pasted image 20260706101845.png",
+    "Pasted image 20260705234236.png",
+    "Pasted image 20260705234207.png",
+    "Pasted image 20260705234152.png",
+    "Pasted image 20260705234052.png",
+    "README.md",
+    "04-参赛行动计划.md",
+    "03-TRAE实践记录.md",
+    "02-Demo作品帖.md"
+  ]
+}
