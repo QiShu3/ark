@@ -2962,18 +2962,31 @@ async def _validate_event_workflow_phase_task_bindings(
 async def list_focus_workflow_presets(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
+    app_id: str | None = Query(None),
 ) -> list[FocusWorkflowPresetOut]:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            f"""
-            SELECT {WORKFLOW_PRESET_SELECT}
-            FROM focus_workflow_presets
-            WHERE user_id = $1
-            ORDER BY is_default DESC, (event_id IS NOT NULL) ASC, updated_at DESC
-            """,
-            int(user.id),
-        )
+        if app_id is not None:
+            rows = await conn.fetch(
+                f"""
+                SELECT {WORKFLOW_PRESET_SELECT}
+                FROM focus_workflow_presets
+                WHERE user_id = $1 AND app_id = $2
+                ORDER BY is_default DESC, (event_id IS NOT NULL) ASC, updated_at DESC
+                """,
+                int(user.id),
+                app_id,
+            )
+        else:
+            rows = await conn.fetch(
+                f"""
+                SELECT {WORKFLOW_PRESET_SELECT}
+                FROM focus_workflow_presets
+                WHERE user_id = $1 AND app_id IS NULL
+                ORDER BY is_default DESC, (event_id IS NOT NULL) ASC, updated_at DESC
+                """,
+                int(user.id),
+            )
     return [_row_to_focus_workflow_preset(row) for row in rows]
 
 
@@ -3545,20 +3558,35 @@ async def start_focus_workflow_app_work(
 async def list_workflow_records(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
+    app_id: str | None = Query(None),
 ) -> list[WorkflowRecordOut]:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT wr.id, wr.workflow_id, fw.workflow_name, wr.nodes, wr.status,
-                   wr.started_at, wr.completed_at, wr.created_at
-            FROM workflow_records wr
-            LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
-            WHERE wr.user_id = $1
-            ORDER BY wr.created_at DESC
-            """,
-            int(user.id),
-        )
+        if app_id is not None:
+            rows = await conn.fetch(
+                """
+                SELECT wr.id, wr.workflow_id, fw.workflow_name, wr.nodes, wr.status,
+                       wr.started_at, wr.completed_at, wr.created_at
+                FROM workflow_records wr
+                LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
+                WHERE wr.user_id = $1 AND wr.app_id = $2
+                ORDER BY wr.created_at DESC
+                """,
+                int(user.id),
+                app_id,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT wr.id, wr.workflow_id, fw.workflow_name, wr.nodes, wr.status,
+                       wr.started_at, wr.completed_at, wr.created_at
+                FROM workflow_records wr
+                LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
+                WHERE wr.user_id = $1 AND wr.app_id IS NULL
+                ORDER BY wr.created_at DESC
+                """,
+                int(user.id),
+            )
         return [
             WorkflowRecordOut(
                 id=row["id"],

@@ -1101,6 +1101,20 @@ async def init_todo(app: Any) -> None:
             "CREATE INDEX IF NOT EXISTS idx_workflow_records_user_started ON workflow_records(user_id, started_at DESC);"
         )
 
+        # Add app_id columns for sub-app support
+        await conn.execute(
+            "ALTER TABLE focus_workflow_presets ADD COLUMN IF NOT EXISTS app_id TEXT;"
+        )
+        await conn.execute(
+            "ALTER TABLE workflow_records ADD COLUMN IF NOT EXISTS app_id TEXT;"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_focus_workflow_presets_app_user ON focus_workflow_presets(app_id, user_id);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflow_records_app_user ON workflow_records(app_id, user_id);"
+        )
+
         # Test focus work configs (admin-only)
         await conn.execute(
             """

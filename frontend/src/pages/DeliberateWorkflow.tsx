@@ -24,7 +24,6 @@ import {
   isDeliberateWorkflowPreset,
   type WorkflowPreset,
 } from '../components/workflowPresetForm';
-import { fetchSetSnapshots } from '../lib/choice/api';
 import type { InputSetSnapshot, SetSnapshot } from '../lib/choice/types';
 import { apiJson } from '../lib/api';
 import {
@@ -307,7 +306,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
 
   useEffect(() => {
     void loadBanks(kind);
-  }, [kind, loadBanks]);
+  }, [kind, loadBanks, appId, selectedSubAppId]);
 
   useEffect(() => {
     if (banks.length > 0 && !snapshotBankId) {
@@ -332,7 +331,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
       setAllBanks(results);
     };
     void loadAllBanks();
-  }, []);
+  }, [appId, selectedSubAppId]);
 
   useEffect(() => {
     if (!selectedConfig) {
@@ -342,23 +341,20 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     listDeliberateRuns(selectedConfig.id)
       .then(setRuns)
       .catch(() => setRuns([]));
-  }, [selectedConfig]);
+  }, [selectedConfig, appId, selectedSubAppId]);
 
   useEffect(() => {
     if (!snapshotBankId) {
       setSnapshots([]);
       return;
     }
-    if (snapshotBankKind === 'input') {
-      apiJson<SetSnapshot[]>(`/api/input/snapshots?bank_id=${snapshotBankId}&limit=30`)
-        .then(setSnapshots)
-        .catch(() => setSnapshots([]));
-    } else {
-      fetchSetSnapshots(snapshotBankId, { limit: 30 })
-        .then(setSnapshots)
-        .catch(() => setSnapshots([]));
-    }
-  }, [snapshotBankId, snapshotBankKind]);
+    const effectiveAppId = appId ?? selectedSubAppId;
+    const base = snapshotBankKind === 'input' ? '/api/input/snapshots' : '/api/choice/snapshots';
+    const qs = `bank_id=${snapshotBankId}&limit=30${effectiveAppId ? `&app_id=${encodeURIComponent(effectiveAppId)}` : ''}`;
+    apiJson<SetSnapshot[]>(`${base}?${qs}`)
+      .then(setSnapshots)
+      .catch(() => setSnapshots([]));
+  }, [snapshotBankId, snapshotBankKind, appId, selectedSubAppId]);
 
   useEffect(() => {
     setTasksLoading(true);
@@ -370,17 +366,18 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
 
   useEffect(() => {
     setLoadingRecords(true);
-    fetchWorkflowRecords()
+    fetchWorkflowRecords(appId ?? selectedSubAppId)
       .then(setWorkflowRecords)
       .catch(() => setWorkflowRecords([]))
       .finally(() => setLoadingRecords(false));
-  }, []);
+  }, [appId, selectedSubAppId]);
 
   useEffect(() => {
-    apiJson<WorkflowPreset[]>('/todo/focus/workflows')
+    const qs = (appId ?? selectedSubAppId) ? `?app_id=${encodeURIComponent(appId ?? selectedSubAppId!)}` : '';
+    apiJson<WorkflowPreset[]>(`/todo/focus/workflows${qs}`)
       .then(setWorkflowPresets)
       .catch(() => setWorkflowPresets([]));
-  }, []);
+  }, [appId, selectedSubAppId]);
 
   const deliberatePresets = useMemo(() => {
     return workflowPresets.filter(isDeliberateWorkflowPreset);

@@ -51,8 +51,9 @@ export interface WorkflowRecord {
   created_at: string;
 }
 
-export function fetchWorkflowRecords(): Promise<WorkflowRecord[]> {
-  return apiJson<WorkflowRecord[]>('/todo/focus/workflow/records');
+export function fetchWorkflowRecords(appId?: string | null): Promise<WorkflowRecord[]> {
+  const qs = appId ? `?app_id=${encodeURIComponent(appId)}` : '';
+  return apiJson<WorkflowRecord[]>(`/todo/focus/workflow/records${qs}`);
 }
 
 export function fetchWorkflowRecord(recordId: string): Promise<WorkflowRecord> {
