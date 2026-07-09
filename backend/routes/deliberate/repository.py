@@ -190,6 +190,19 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_deliberate_runs_focus_run ON deliberate_workflow_runs(focus_run_id);"
         )
+        # Add app_id column for sub-app support
+        await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS app_id TEXT;"
+        )
+        await conn.execute(
+            "ALTER TABLE deliberate_workflow_runs ADD COLUMN IF NOT EXISTS app_id TEXT;"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_deliberate_configs_app_user ON deliberate_workflow_configs(app_id, user_id);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_deliberate_runs_app_user ON deliberate_workflow_runs(app_id, user_id);"
+        )
 
 
 def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = None, latest_run: Any = None) -> dict[str, Any]:
@@ -206,6 +219,7 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
         "name": row["name"],
         "kind": normalize_deliberate_kind(row["kind"]),
         "focus_work_type": normalize_focus_work_type(row["focus_work_type"]),
+        "app_id": row.get("app_id"),
         "bank_id": row["bank_id"],
         "task_id": str(row["task_id"]) if row.get("task_id") else None,
         "target_count": int(row["target_count"]),
@@ -233,6 +247,7 @@ def run_to_summary(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
         "workflow_id": str(row["workflow_id"]) if row["workflow_id"] is not None else None,
         "focus_run_id": str(row["focus_run_id"]) if row["focus_run_id"] is not None else None,
         "focus_work_type": normalize_focus_work_type(row["focus_work_type"]),
+        "app_id": row.get("app_id"),
         "bank_id": row["bank_id"],
         "snapshot_id": str(row["snapshot_id"]) if row["snapshot_id"] is not None else None,
         "snapshot_type": normalize_snapshot_type(row["snapshot_type"]) or None,
@@ -250,16 +265,31 @@ def run_to_dict(row: asyncpg.Record | dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-async def list_configs(conn: asyncpg.Connection, *, user_id: int) -> list[asyncpg.Record]:
+async def list_configs(conn: asyncpg.Connection, *, user_id: int, app_id: str | None = None) -> list[asyncpg.Record]:
+    if app_id is not None:
+        return await conn.fetch(
+            """
+            SELECT id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
+                   scope_json, completion_json, pass_criteria_json, children_json,
+                   primary_filter, sort_order, use_fsrs, backflow_rule,
+                   scheduling_mode, fsrs_config_json,
+                   created_at, updated_at
+            FROM deliberate_workflow_configs
+            WHERE user_id = $1 AND app_id = $2
+            ORDER BY updated_at DESC, created_at DESC
+            """,
+            user_id,
+            app_id,
+        )
     return await conn.fetch(
         """
-        SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
+        SELECT id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
                scope_json, completion_json, pass_criteria_json, children_json,
                primary_filter, sort_order, use_fsrs, backflow_rule,
                scheduling_mode, fsrs_config_json,
                created_at, updated_at
         FROM deliberate_workflow_configs
-        WHERE user_id = $1
+        WHERE user_id = $1 AND app_id IS NULL
         ORDER BY updated_at DESC, created_at DESC
         """,
         user_id,
@@ -269,7 +299,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int) -> list[asyncp
 async def get_config(conn: asyncpg.Connection, *, user_id: int, config_id: str) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
-        SELECT id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
+        SELECT id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
                scope_json, completion_json, pass_criteria_json, children_json,
                primary_filter, sort_order, use_fsrs, backflow_rule,
                scheduling_mode, fsrs_config_json,
@@ -289,6 +319,7 @@ async def create_config(
     name: str,
     kind: str,
     focus_work_type: str,
+    app_id: str | None = None,
     bank_id: str | None,
     task_id: str | None,
     target_count: int,
@@ -311,14 +342,14 @@ async def create_config(
     return await conn.fetchrow(
         """
         INSERT INTO deliberate_workflow_configs(
-            user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
+            user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
             scope_json, completion_json, pass_criteria_json, children_json,
             primary_filter, sort_order, use_fsrs, backflow_rule,
             scheduling_mode, fsrs_config_json
         )
-        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb,
-                $12, $13, $14, $15, $16, $17::jsonb)
-        RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
+        VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb,
+                $13, $14, $15, $16, $17, $18::jsonb)
+        RETURNING id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
                   scope_json, completion_json, pass_criteria_json, children_json,
                   primary_filter, sort_order, use_fsrs, backflow_rule,
                   scheduling_mode, fsrs_config_json,
@@ -328,6 +359,7 @@ async def create_config(
         name,
         kind,
         focus_work_type,
+        app_id,
         bank_id,
         task_id,
         target_count,

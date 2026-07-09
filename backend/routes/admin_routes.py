@@ -526,6 +526,149 @@ async def create_app(
     return {"status": "ok", "id": id, "question_count": question_count}
 
 
+# ---- Deliberate Workflow Sub-App CRUD ----
+
+class DeliberateSubAppCreate(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    icon: str = "workflow"
+    bank_ids: list[str] = []
+
+
+class DeliberateSubAppUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    icon: str | None = None
+    bank_ids: list[str] | None = None
+
+
+@router.get("/deliberate-sub-apps")
+async def list_deliberate_sub_apps(
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+):
+    """List all deliberate-workflow type sub-apps."""
+    from lib.app_registry import get_all
+    apps = [d for d in get_all() if d.type == "deliberate-workflow"]
+    return [
+        {
+            "id": a.id,
+            "name": a.name,
+            "description": a.description,
+            "icon": a.icon,
+            "route": a.route,
+            "type": a.type,
+            "bank_ids": a.bank_ids,
+        }
+        for a in apps
+    ]
+
+
+@router.post("/deliberate-sub-apps")
+async def create_deliberate_sub_app(
+    payload: DeliberateSubAppCreate,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+):
+    """Create a new deliberate-workflow sub-app."""
+    if not payload.id.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(status_code=400, detail="应用 ID 只能包含字母、数字、连字符和下划线")
+
+    from lib.app_registry import AppDeclaration, get_by_id, register
+    if get_by_id(payload.id):
+        raise HTTPException(status_code=409, detail=f"应用 ID '{payload.id}' 已存在")
+
+    decl = AppDeclaration(
+        id=payload.id,
+        name=payload.name,
+        description=payload.description,
+        icon=payload.icon,
+        route=f"/{payload.id}",
+        admin_only=False,
+        type="deliberate-workflow",
+        bank_ids=payload.bank_ids,
+        focus_works=[],
+        sections=[],
+    )
+    register(decl)
+    return {
+        "id": decl.id,
+        "name": decl.name,
+        "description": decl.description,
+        "icon": decl.icon,
+        "route": decl.route,
+        "type": decl.type,
+        "bank_ids": decl.bank_ids,
+    }
+
+
+@router.patch("/deliberate-sub-apps/{app_id}")
+async def update_deliberate_sub_app(
+    app_id: str,
+    payload: DeliberateSubAppUpdate,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+):
+    """Update a deliberate-workflow sub-app."""
+    from lib.app_registry import get_by_id, register
+    existing = get_by_id(app_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="子应用不存在")
+    if existing.type != "deliberate-workflow":
+        raise HTTPException(status_code=400, detail="该应用不是刻意工作流类型")
+
+    if payload.name is not None:
+        existing.name = payload.name
+    if payload.description is not None:
+        existing.description = payload.description
+    if payload.icon is not None:
+        existing.icon = payload.icon
+    if payload.bank_ids is not None:
+        existing.bank_ids = payload.bank_ids
+
+    register(existing)
+    return {
+        "id": existing.id,
+        "name": existing.name,
+        "description": existing.description,
+        "icon": existing.icon,
+        "route": existing.route,
+        "type": existing.type,
+        "bank_ids": existing.bank_ids,
+    }
+
+
+@router.delete("/deliberate-sub-apps/{app_id}")
+async def delete_deliberate_sub_app(
+    app_id: str,
+    request: Request,
+    _admin: Annotated[_AuthUser, Depends(_require_admin)],
+):
+    """Delete a deliberate-workflow sub-app and all its data."""
+    from lib.app_registry import get_by_id, _registry, _persist
+    existing = get_by_id(app_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="子应用不存在")
+    if existing.type != "deliberate-workflow":
+        raise HTTPException(status_code=400, detail="该应用不是刻意工作流类型")
+
+    # Delete all configs and runs for this sub-app
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM deliberate_workflow_runs WHERE app_id = $1",
+            app_id,
+        )
+        await conn.execute(
+            "DELETE FROM deliberate_workflow_configs WHERE app_id = $1",
+            app_id,
+        )
+
+    # Remove from registry
+    _registry.pop(app_id, None)
+    _persist()
+
+    return {"detail": f"子应用 '{app_id}' 已删除"}
+
+
 async def _import_question_bank(conn: Any, *, app_id: str, questions: list[dict]) -> None:
     """Import questions from a parsed JSON array into the app's question table."""
     py_id = app_id.replace("-", "_")

@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, ScrollText, type LucideIcon } from 'lucide-react';
+import { BarChart3, BookOpen, ScrollText, Workflow, type LucideIcon } from 'lucide-react';
 
 export type ContentBankType = 'word_deck' | 'article_set';
 export type TemplateSection = 'hero' | 'asset' | 'arrangements' | 'feedback' | 'modals';
@@ -29,6 +29,8 @@ export interface AppDeclaration {
   icon: string;
   route: string;
   adminOnly?: boolean;
+  type?: 'template' | 'deliberate-workflow';
+  bankIds?: string[];
   focusWorks: FocusWorkDeclaration[];
   sections: TemplateSection[];
 }
@@ -37,6 +39,7 @@ const ICONS: Record<string, LucideIcon> = {
   'book-open': BookOpen,
   'scroll-text': ScrollText,
   'bar-chart': BarChart3,
+  'workflow': Workflow,
 };
 
 export function getAppIcon(iconName: string): LucideIcon {
@@ -62,6 +65,8 @@ function mapFromApi(raw: Record<string, unknown>): AppDeclaration {
     icon: raw.icon as string,
     route: raw.route as string,
     adminOnly: raw.admin_only as boolean | undefined,
+    type: (raw.type as string as AppDeclaration['type']) ?? 'template',
+    bankIds: (raw.bank_ids as string[] | undefined) ?? [],
     sections: (raw.sections as TemplateSection[] | undefined) ?? ['hero', 'asset', 'arrangements'],
     focusWorks: ((raw.focus_works || []) as Record<string, unknown>[]).map((fw) => ({
       type: fw.type as string,

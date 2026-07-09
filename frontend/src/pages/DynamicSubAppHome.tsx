@@ -4,6 +4,7 @@ import SubAppHomeTemplate from '../components/SubAppHomeTemplate';
 import { useAuthStore } from '../lib/auth';
 import { loadAppRegistry, type AppDeclaration } from '../lib/appRegistry';
 import { useSubAppHomePage } from '../hooks/useSubAppHomePage';
+import DeliberateWorkflow from './DeliberateWorkflow';
 
 function SubAppHomePage({ app }: { app: AppDeclaration }) {
   const page = useSubAppHomePage(app);
@@ -29,5 +30,10 @@ export default function DynamicSubAppHome() {
   }, [appId, isAdmin]);
 
   if (!app) return null;
+
+  if (app.type === 'deliberate-workflow') {
+    return <DeliberateWorkflow appId={app.id} />;
+  }
+
   return <SubAppHomePage app={app} />;
 }

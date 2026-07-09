@@ -131,8 +131,9 @@ export type DeliberateUploadError = {
   errors: string[];
 };
 
-export function listDeliberateWorkflows() {
-  return apiJson<DeliberateWorkflowConfig[]>('/api/deliberate-workflows');
+export function listDeliberateWorkflows(appId?: string | null) {
+  const qs = appId ? `?app_id=${encodeURIComponent(appId)}` : '';
+  return apiJson<DeliberateWorkflowConfig[]>(`/api/deliberate-workflows${qs}`);
 }
 
 export function listDeliberateBanks(kind: DeliberateKind) {
@@ -270,4 +271,51 @@ export async function uploadDeliberateBank(params: {
     throw uploadError;
   }
   return res.json() as Promise<DeliberateBankUploadResult>;
+}
+
+// ---- Sub-App API ----
+
+export type DeliberateSubApp = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  route: string;
+  type: 'deliberate-workflow';
+  bank_ids: string[];
+};
+
+export function listDeliberateSubApps() {
+  return apiJson<DeliberateSubApp[]>('/api/admin/deliberate-sub-apps');
+}
+
+export function createDeliberateSubApp(payload: {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  bank_ids?: string[];
+}) {
+  return apiJson<DeliberateSubApp>('/api/admin/deliberate-sub-apps', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchDeliberateSubApp(
+  appId: string,
+  payload: { name?: string; description?: string; icon?: string; bank_ids?: string[] },
+) {
+  return apiJson<DeliberateSubApp>(`/api/admin/deliberate-sub-apps/${encodeURIComponent(appId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteDeliberateSubApp(appId: string) {
+  return apiJson<{ detail: string }>(`/api/admin/deliberate-sub-apps/${encodeURIComponent(appId)}`, {
+    method: 'DELETE',
+  });
 }

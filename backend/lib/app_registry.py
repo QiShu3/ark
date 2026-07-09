@@ -38,6 +38,8 @@ class AppDeclaration:
     icon: str
     route: str
     admin_only: bool = False
+    type: str = "template"  # "template" | "deliberate-workflow"
+    bank_ids: list[str] = field(default_factory=list)  # for deliberate-workflow type
     focus_works: list[FocusWorkDeclaration] = field(default_factory=list)
     sections: list[str] = field(default_factory=lambda: ["hero", "asset", "arrangements"])
 
@@ -135,6 +137,8 @@ def _load_persisted() -> dict[str, AppDeclaration]:
                 icon=item["icon"],
                 route=item["route"],
                 admin_only=item.get("admin_only", False),
+                type=item.get("type", "template"),
+                bank_ids=item.get("bank_ids", []),
                 focus_works=fws,
                 sections=item.get("sections", ["hero", "asset", "arrangements"]),
             )
@@ -158,6 +162,8 @@ def _persist() -> None:
                 "icon": decl.icon,
                 "route": decl.route,
                 "admin_only": decl.admin_only,
+                "type": decl.type,
+                "bank_ids": decl.bank_ids,
                 "sections": decl.sections,
                 "focus_works": [
                     {

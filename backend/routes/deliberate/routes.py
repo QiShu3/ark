@@ -126,10 +126,11 @@ async def _config_out(conn: asyncpg.Connection, row: Any, *, user_id: int) -> De
 async def list_deliberate_workflows(
     request: Request,
     user: Annotated[_AuthUser, Depends(get_current_user)],
+    app_id: str | None = Query(None),
 ) -> list[DeliberateWorkflowConfigOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
-        rows = await repository.list_configs(conn, user_id=int(user.id))
+        rows = await repository.list_configs(conn, user_id=int(user.id), app_id=app_id)
         return [await _config_out(conn, row, user_id=int(user.id)) for row in rows]
 
 
@@ -162,6 +163,7 @@ async def create_deliberate_workflow(
             name=payload.name.strip(),
             kind=payload.kind,
             focus_work_type=payload.focus_work_type,
+            app_id=payload.app_id,
             bank_id=payload.bank_id,
             task_id=payload.task_id,
             target_count=payload.target_count,

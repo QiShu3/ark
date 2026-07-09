@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Archive, BarChart3, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Database, FileUp, Play, Plus, Save, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Archive, BarChart3, ChevronDown, ChevronRight, ChevronUp, Database, Play, Plus, Settings2, Trash2, Upload, Workflow, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import AppModalFrame from '../components/AppModalFrame';
 import BankDetailModal from '../components/deliberate/BankDetailModal';
-import BankPreview from '../components/deliberate/BankPreview';
 import Button from '../components/Button';
 import CreateFocusWorkModal from '../components/deliberate/CreateFocusWorkModal';
+import CreateSubAppModal from '../components/deliberate/CreateSubAppModal';
 import DeliberateWorkflowEditorModal from '../components/deliberate/DeliberateWorkflowEditorModal';
 import DeliberateWorkflowPreviewModal from '../components/deliberate/DeliberateWorkflowPreviewModal';
 import EditFocusWorkModal from '../components/deliberate/EditFocusWorkModal';
+import EditSubAppModal from '../components/deliberate/EditSubAppModal';
+import SubAppSelector from '../components/deliberate/SubAppSelector';
 import UploadBankModal from '../components/deliberate/UploadBankModal';
 import SubAppPageHeader from '../components/SubAppPageHeader';
 import SubAppPageShell from '../components/SubAppPageShell';
@@ -22,8 +24,8 @@ import {
   isDeliberateWorkflowPreset,
   type WorkflowPreset,
 } from '../components/workflowPresetForm';
-import { fetchChoiceFilters, fetchSetSnapshots } from '../lib/choice/api';
-import type { ChoiceFilters, InputSetSnapshot, SetSnapshot } from '../lib/choice/types';
+import { fetchSetSnapshots } from '../lib/choice/api';
+import type { InputSetSnapshot, SetSnapshot } from '../lib/choice/types';
 import { apiJson } from '../lib/api';
 import {
   createDeliberateWorkflow,
@@ -40,7 +42,6 @@ import {
   type DeliberateBankOption,
   type DeliberateFocusWorkType,
   type DeliberateKind,
-  type DeliberateUploadError,
   type DeliberateWorkflowConfig,
   type DeliberateWorkflowRun,
   type FsrsConfig,
@@ -49,21 +50,20 @@ import {
   type SortOrder,
 } from '../lib/deliberate/api';
 import {
+  createDeliberateSubApp,
+  deleteDeliberateSubApp,
+  listDeliberateSubApps,
+  patchDeliberateSubApp,
+  type DeliberateSubApp,
+} from '../lib/deliberate/api';
+import {
   fetchWorkflowRecords,
   fetchWorkflowRecordSettlement,
   startMultiDeliberateWorkflow,
   type WorkflowRecord,
 } from '../lib/focusWorkflow';
-import { normalizeFocusWorkType } from '../components/focus-work/focusWorkTypes';
-
-type CompletionMode = 'question_count' | 'exhaust_scope';
-type StepId = 1 | 2 | 3 | 4;
-type AssetMode = 'existing' | 'upload';
 
 const SELECTED_WORKFLOW_STORAGE_KEY = 'ark:deliberate-workflow:selected-id';
-
-const inputClass =
-  'w-full rounded-lg border border-ark-border bg-ark-input px-3 py-2 text-sm text-ark-text placeholder:text-ark-text-faint focus:outline-none focus:ring-2 focus:ring-[var(--ark-focus-ring)]';
 
 const statusLabel: Record<string, string> = {
   started: '已启动',
@@ -101,7 +101,7 @@ function isInputSnapshot(snapshot: SetSnapshot): snapshot is InputSetSnapshot {
   return 'answered_count' in snapshot && 'correct_count' in snapshot;
 }
 
-function SnapshotPanel({ snapshots, kind }: { snapshots: SetSnapshot[]; kind?: string }) {
+function SnapshotPanel({ snapshots }: { snapshots: SetSnapshot[] }) {
   const latest = snapshots[0] ?? null;
   const trend = [...snapshots].reverse().slice(-8);
   const maxAccuracy = Math.max(100, ...trend.map((item) => latestAccuracy(item)));
@@ -177,7 +177,7 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
   );
 }
 
-export default function DeliberateWorkflow() {
+export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
   const navigate = useNavigate();
   const [configs, setConfigs] = useState<DeliberateWorkflowConfig[]>([]);
   const [showAllConfigs, setShowAllConfigs] = useState(false);
@@ -187,18 +187,14 @@ export default function DeliberateWorkflow() {
   const [snapshots, setSnapshots] = useState<SetSnapshot[]>([]);
   const [banks, setBanks] = useState<DeliberateBankOption[]>([]);
   const [showAllBanks, setShowAllBanks] = useState(false);
-  const [filters, setFilters] = useState<ChoiceFilters | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeStep, setActiveStep] = useState<StepId>(1);
-  const [assetMode, setAssetMode] = useState<AssetMode>('upload');
-  const [draftMode, setDraftMode] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [modalRunId, setModalRunId] = useState<string | null>(null);
+  const [, setTasksLoading] = useState(false);
+  const [, setModalRunId] = useState<string | null>(null);
   const [modalRun, setModalRun] = useState<DeliberateWorkflowRun | null>(null);
   const [loadingModalRun, setLoadingModalRun] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
@@ -213,7 +209,7 @@ export default function DeliberateWorkflow() {
   const [workflowRecords, setWorkflowRecords] = useState<WorkflowRecord[]>([]);
   const [showAllRecords, setShowAllRecords] = useState(false);
   const [loadingRecords, setLoadingRecords] = useState(false);
-  const [startingMulti, setStartingMulti] = useState(false);
+  const [, setStartingMulti] = useState(false);
   const [snapshotBankId, setSnapshotBankId] = useState<string>('');
   const [snapshotBankKind, setSnapshotBankKind] = useState<DeliberateKind>('choice');
   const [allBanks, setAllBanks] = useState<{ id: string; name: string; count: number; kind: DeliberateKind }[]>([]);
@@ -222,50 +218,16 @@ export default function DeliberateWorkflow() {
   const [settlementData, setSettlementData] = useState<WorkflowSettlement | null>(null);
   const [loadingSettlement, setLoadingSettlement] = useState(false);
 
+  // Sub-app state
+  const [subApps, setSubApps] = useState<DeliberateSubApp[]>([]);
+  const [selectedSubAppId, setSelectedSubAppId] = useState<string | null>(null);
+  const [showCreateSubAppModal, setShowCreateSubAppModal] = useState(false);
+  const [showEditSubAppModal, setShowEditSubAppModal] = useState(false);
+  const [editingSubApp, setEditingSubApp] = useState<DeliberateSubApp | null>(null);
+
   const [kind, setKind] = useState<DeliberateKind>('choice');
-  const [name, setName] = useState('');
-  const [bankId, setBankId] = useState('');
-  const [targetCount, setTargetCount] = useState(10);
-  const [year, setYear] = useState<number | ''>('');
-  const [subject, setSubject] = useState('');
-  const [tag, setTag] = useState('');
-  const [primaryFilter, setPrimaryFilter] = useState<PrimaryFilter>('all');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('sequential');
-  const [useFsrs, setUseFsrs] = useState(false);
-  const [backflowRule, setBackflowRule] = useState<BackflowRule>('none');
-  const [completionMode, setCompletionMode] = useState<CompletionMode>('question_count');
-  const [passCriteriaEnabled, setPassCriteriaEnabled] = useState(false);
-  const [passCriteriaThreshold, setPassCriteriaThreshold] = useState(80);
 
-  const focusWorkType: DeliberateFocusWorkType = kind === 'flash_card' ? 'flash_card' : kind;
   const selectedConfig = configs.find((item) => item.id === selectedId) ?? configs[0] ?? null;
-  const selectedBank = banks.find((item) => item.id === bankId) ?? null;
-  const bankCountLabel = kind === 'flash_card' ? '词' : '题';
-  const kindLabel = kind === 'flash_card' ? '闪卡' : kind === 'input' ? '输入题' : '选择题';
-  const canSave = Boolean(name.trim() && bankId);
-  const canUseBank = Boolean(bankId);
-  const hasSavedConfig = configs.length > 0;
-
-  const resetDraft = useCallback(() => {
-    setDraftMode(true);
-    setActiveStep(1);
-    setAssetMode('upload');
-    setKind('choice');
-    setName('');
-    setBankId('');
-    setTargetCount(10);
-    setYear('');
-    setSubject('');
-    setTag('');
-    setPrimaryFilter('all');
-    setSortOrder('sequential');
-    setUseFsrs(false);
-    setBackflowRule('none');
-    setCompletionMode('question_count');
-    setPassCriteriaEnabled(false);
-    setPassCriteriaThreshold(80);
-    setError(null);
-  }, []);
 
   const persistSelectedId = useCallback((id: string) => {
     try {
@@ -279,11 +241,11 @@ export default function DeliberateWorkflow() {
     }
   }, []);
 
-  const loadConfigs = useCallback(async (preferredId?: string) => {
+  const loadConfigs = useCallback(async (preferredId?: string, appId?: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listDeliberateWorkflows();
+      const data = await listDeliberateWorkflows(appId);
       setConfigs(data);
       setShowAllConfigs(false);
       setSelectedId((current) => {
@@ -291,7 +253,7 @@ export default function DeliberateWorkflow() {
         try {
           stored = window.localStorage.getItem(SELECTED_WORKFLOW_STORAGE_KEY) || '';
         } catch {
-          stored = '';
+          // localStorage may be unavailable
         }
         const candidate = preferredId || current || stored;
         const nextId = data.some((item) => item.id === candidate) ? candidate : data[0]?.id || '';
@@ -310,7 +272,6 @@ export default function DeliberateWorkflow() {
       const data = await listDeliberateBanks(bankKind);
       setBanks(data);
       setShowAllBanks(false);
-      setBankId((current) => current && data.some((item) => item.id === current) ? current : '');
     } catch (err) {
       setBanks([]);
       setError(err instanceof Error ? err.message : '加载题库失败');
@@ -321,16 +282,28 @@ export default function DeliberateWorkflow() {
     void loadConfigs();
   }, [loadConfigs]);
 
+  // Load sub-apps
+  useEffect(() => {
+    listDeliberateSubApps()
+      .then(setSubApps)
+      .catch(() => setSubApps([]));
+  }, []);
+
+  // Reload configs when sub-app selection changes (only in global mode)
+  useEffect(() => {
+    if (appId) {
+      void loadConfigs(undefined, appId);
+    } else {
+      void loadConfigs(undefined, selectedSubAppId);
+    }
+  }, [selectedSubAppId, appId, loadConfigs]);
+
   useEffect(() => {
     if (loading) return;
     if (configs.length === 0) {
       setSelectedId('');
-      return;
     }
-    if (!draftMode) {
-      setActiveStep(4);
-    }
-  }, [configs.length, draftMode, loading]);
+  }, [configs.length, loading]);
 
   useEffect(() => {
     void loadBanks(kind);
@@ -352,22 +325,14 @@ export default function DeliberateWorkflow() {
           for (const bank of data) {
             results.push({ id: bank.id, name: bank.name, count: bank.count, kind: k });
           }
-        } catch {}
+        } catch {
+          // ignore bank load errors for this kind
+        }
       }
       setAllBanks(results);
     };
     void loadAllBanks();
   }, []);
-
-  useEffect(() => {
-    if (kind !== 'choice' || !bankId) {
-      setFilters(null);
-      return;
-    }
-    fetchChoiceFilters(bankId)
-      .then((data) => setFilters(data))
-      .catch(() => setFilters(null));
-  }, [kind, bankId]);
 
   useEffect(() => {
     if (!selectedConfig) {
@@ -421,34 +386,6 @@ export default function DeliberateWorkflow() {
     return workflowPresets.filter(isDeliberateWorkflowPreset);
   }, [workflowPresets]);
 
-  const scope = useMemo(() => {
-    if (kind === 'flash_card') return {};
-    return {
-      bank_id: bankId,
-      years: year !== '' ? [year] : undefined,
-      subjects: subject ? [subject] : undefined,
-      tags: tag ? [tag] : undefined,
-    };
-  }, [bankId, kind, subject, tag, year]);
-
-  const completion = useMemo(() => {
-    if (kind === 'flash_card') {
-      return { mode: 'word_count', word_count: targetCount };
-    }
-    if (completionMode === 'exhaust_scope') {
-      return { mode: 'exhaust_scope' };
-    }
-    return { mode: 'question_count', question_count: targetCount };
-  }, [completionMode, kind, targetCount]);
-
-  const passCriteria = useMemo(() => {
-    if (!passCriteriaEnabled) return {};
-    return {
-      mode: 'accuracy',
-      threshold: passCriteriaThreshold / 100,
-    };
-  }, [passCriteriaEnabled, passCriteriaThreshold]);
-
   async function handleUploadBank(data: {
     kind: DeliberateKind;
     name: string;
@@ -467,50 +404,8 @@ export default function DeliberateWorkflow() {
       await loadBanks(data.kind);
       setSnapshotBankId(result.bank_id);
       setSnapshotBankKind(data.kind);
-    } catch (err) {
-      throw err;
     } finally {
       setUploading(false);
-    }
-  }
-
-  async function handleSave() {
-    if (!name.trim()) {
-      setError('请输入配置名称');
-      return;
-    }
-    if (!bankId) {
-      setError('请选择或上传题库');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const effectivePrimaryFilter = useFsrs ? primaryFilter : (primaryFilter === 'due_review' ? 'all' : primaryFilter);
-      const created = await createDeliberateWorkflow({
-        name: name.trim(),
-        kind,
-        focus_work_type: focusWorkType,
-        bank_id: bankId,
-        target_count: targetCount,
-        scope,
-        completion,
-        pass_criteria: passCriteria,
-        primary_filter: effectivePrimaryFilter,
-        sort_order: sortOrder,
-        use_fsrs: useFsrs,
-        backflow_rule: backflowRule,
-      });
-      setName('');
-      await loadConfigs(created.id);
-      setSelectedId(created.id);
-      persistSelectedId(created.id);
-      setDraftMode(false);
-      setActiveStep(4);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存配置失败');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -604,16 +499,66 @@ export default function DeliberateWorkflow() {
     }
   }
 
-  function handleWorkflowSelect(id: string) {
-    if (id === '__draft__') {
-      resetDraft();
-      return;
-    }
-    setSelectedId(id);
-    persistSelectedId(id);
-    setDraftMode(false);
-    setActiveStep(4);
+  // Sub-app handlers
+  async function handleCreateSubApp(data: {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    bank_ids: string[];
+  }) {
+    setSaving(true);
     setError(null);
+    try {
+      const created = await createDeliberateSubApp(data);
+      setSubApps((prev) => [...prev, created]);
+      setSelectedSubAppId(created.id);
+      setShowCreateSubAppModal(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建子应用失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleEditSubApp(patch: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    bank_ids?: string[];
+  }) {
+    if (!editingSubApp) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await patchDeliberateSubApp(editingSubApp.id, patch);
+      setSubApps((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setShowEditSubAppModal(false);
+      setEditingSubApp(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteSubApp() {
+    if (!editingSubApp) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteDeliberateSubApp(editingSubApp.id);
+      setSubApps((prev) => prev.filter((a) => a.id !== editingSubApp.id));
+      if (selectedSubAppId === editingSubApp.id) {
+        setSelectedSubAppId(null);
+      }
+      setShowEditSubAppModal(false);
+      setEditingSubApp(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除子应用失败');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const handleRunClick = useCallback(async (runId: string) => {
@@ -733,37 +678,6 @@ export default function DeliberateWorkflow() {
     });
   }, []);
 
-  const steps: { id: StepId; title: string; summary: string; locked: boolean; icon: ReactNode }[] = [
-    {
-      id: 1,
-      title: '选择类型',
-      summary: kindLabel,
-      locked: false,
-      icon: <Workflow className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      id: 2,
-      title: '题库资产',
-      summary: selectedBank ? selectedBank.name : '未选择',
-      locked: false,
-      icon: <Database className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      id: 3,
-      title: '工作参数',
-      summary: canUseBank ? `${focusTypeLabel(focusWorkType)} · 目标 ${targetCount}` : '等待题库',
-      locked: !canUseBank,
-      icon: <Settings2 className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      id: 4,
-      title: '运行复盘',
-      summary: draftMode ? '保存后进入' : hasSavedConfig ? `${configs.length} 个配置` : '等待保存',
-      locked: draftMode || !hasSavedConfig,
-      icon: <Archive className="h-4 w-4" aria-hidden="true" />,
-    },
-  ];
-  const activeStepMeta = steps.find((step) => step.id === activeStep) ?? steps[0];
   const savedWorkflowContent = loading ? (
     <div className="rounded-lg border border-dashed border-ark-border bg-ark-surface-subtle p-8 text-center text-sm text-ark-text-muted">
       正在加载刻意工作流
@@ -896,7 +810,7 @@ export default function DeliberateWorkflow() {
             </div>
           </div>
           {snapshotBankId ? (
-            <SnapshotPanel snapshots={snapshots} kind={snapshotBankKind} />
+            <SnapshotPanel snapshots={snapshots} />
           ) : (
             <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
               请选择题库查看存档可视化
@@ -1230,345 +1144,22 @@ export default function DeliberateWorkflow() {
           </div>
         ) : null}
 
-        {configs.length > 0 ? (
-          <section className="grid gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle p-4 md:grid-cols-[minmax(0,1fr)_auto]">
-            <Field label={draftMode ? '当前状态' : '当前工作流'}>
-              <select
-                value={draftMode ? '__draft__' : selectedConfig?.id ?? ''}
-                onChange={(event) => handleWorkflowSelect(event.target.value)}
-                className={inputClass}
-              >
-                {draftMode ? <option value="__draft__">正在新建工作流</option> : null}
-                {configs.map((config) => (
-                  <option key={config.id} value={config.id}>{config.name}</option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex items-end">
-              <Button
-                variant={draftMode ? 'secondary' : 'primary'}
-                leftIcon={<Plus className="h-4 w-4" />}
-                onClick={resetDraft}
-              >
-                {draftMode ? '重新开始' : '新建工作流'}
-              </Button>
-            </div>
-          </section>
-        ) : null}
-
-        {draftMode ? (
-          <nav aria-label="刻意工作流步骤" className="grid gap-2 md:grid-cols-4">
-            {steps.map((step) => (
-              <button
-                key={step.id}
-                type="button"
-                disabled={step.locked}
-                onClick={() => setActiveStep(step.id)}
-                className={`flex min-h-20 items-center gap-3 rounded-lg border px-4 py-3 text-left transition ${
-                  activeStep === step.id
-                    ? 'border-ark-accent bg-ark-surface text-ark-text'
-                    : 'border-ark-border bg-ark-surface-subtle text-ark-text-muted hover:text-ark-text'
-                } disabled:cursor-not-allowed disabled:opacity-50`}
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ark-border bg-ark-surface">
-                  {step.icon}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{step.id}. {step.title}</span>
-                  <span className="mt-0.5 block truncate text-xs text-ark-text-faint">{step.summary}</span>
-                </span>
-              </button>
-            ))}
-          </nav>
-        ) : null}
+        {/* Sub-app selector - only in global mode */}
+        {!appId && (
+          <SubAppSelector
+            subApps={subApps}
+            selectedAppId={selectedSubAppId}
+            onSelect={setSelectedSubAppId}
+            onCreate={() => setShowCreateSubAppModal(true)}
+            onEdit={(app) => {
+              setEditingSubApp(app);
+              setShowEditSubAppModal(true);
+            }}
+          />
+        )}
 
         <section className="rounded-lg border border-ark-border bg-ark-surface p-5">
-          <div className="mb-5 flex flex-col gap-3 border-b border-ark-border pb-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-xs font-medium text-ark-text-faint">
-                {draftMode ? `步骤 ${activeStepMeta.id} / 4` : '已保存工作流'}
-              </div>
-              <h2 className="mt-1 text-xl font-semibold text-ark-text">
-                {draftMode ? activeStepMeta.title : selectedConfig?.name ?? '刻意工作流'}
-              </h2>
-              <p className="mt-1 text-sm text-ark-text-muted">
-                {draftMode ? activeStepMeta.summary : selectedConfig ? `${focusTypeLabel(selectedConfig.focus_work_type)} · ${selectedConfig.bank_summary?.name ?? '未绑定题库'}` : '选择或新建一个工作流'}
-              </p>
-            </div>
-            {draftMode && selectedBank ? (
-              <SelectionSummary
-                icon={<Database className="h-4 w-4" aria-hidden="true" />}
-                title={selectedBank.name}
-                detail={`${kindLabel}题库 · ${selectedBank.count} ${bankCountLabel}`}
-              />
-            ) : null}
-          </div>
-
-          {!draftMode ? savedWorkflowContent : null}
-
-          {draftMode && activeStep === 1 ? (
-            <div className="space-y-5">
-              <div className="grid grid-cols-3 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-                {(['choice', 'flash_card', 'input'] as DeliberateKind[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setKind(item)}
-                    className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                      kind === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
-                    }`}
-                  >
-                    {item === 'choice' ? '选择题' : item === 'flash_card' ? '闪卡' : '输入题'}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex justify-end">
-                <Button variant="primary" onClick={() => setActiveStep(2)}>下一步</Button>
-              </div>
-            </div>
-          ) : null}
-
-          {draftMode && activeStep === 2 ? (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-ark-border bg-ark-surface-subtle p-1">
-                {(['upload', 'existing'] as AssetMode[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setAssetMode(item)}
-                    className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                      assetMode === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
-                    }`}
-                  >
-                    {item === 'existing' ? '选择已有题库' : '上传新题库'}
-                  </button>
-                ))}
-              </div>
-
-              {assetMode === 'existing' ? (
-                <div className="space-y-4">
-                  <Field label="题库">
-                    <select value={bankId} onChange={(event) => setBankId(event.target.value)} className={inputClass}>
-                      <option value="">{banks.length === 0 ? '暂无题库' : '请选择题库'}</option>
-                      {banks.map((bank) => (
-                        <option key={bank.id} value={bank.id}>
-                          {bank.name} ({bank.count} {bankCountLabel})
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <SelectionSummary
-                    icon={<Database className="h-4 w-4" aria-hidden="true" />}
-                    title={selectedBank?.name ?? '未选择题库'}
-                    detail={selectedBank ? `${selectedBank.count} ${bankCountLabel}` : '可以上传新题库，或选择一份已有题库资产'}
-                  />
-                  {selectedBank && (
-                    <BankPreview
-                      bankId={selectedBank.id}
-                      bankKind={kind}
-                      bankName={selectedBank.name}
-                      totalCount={selectedBank.count}
-                    />
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-center">
-                    <Button
-                      variant="secondary"
-                      leftIcon={<Upload className="h-4 w-4" />}
-                      onClick={() => setShowUploadModal(true)}
-                    >
-                      上传新题库
-                    </Button>
-                  </div>
-                  {bankId && selectedBank && (
-                    <BankPreview
-                      bankId={bankId}
-                      bankKind={kind}
-                      bankName={selectedBank.name}
-                      totalCount={selectedBank.count}
-                    />
-                  )}
-                </div>
-              )}
-
-              <div className="flex justify-between gap-3">
-                <Button variant="ghost" onClick={() => setActiveStep(1)}>上一步</Button>
-                <Button variant="primary" disabled={!canUseBank} onClick={() => setActiveStep(3)}>下一步</Button>
-              </div>
-            </div>
-          ) : null}
-
-          {draftMode && activeStep === 3 ? (
-            <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="配置名称">
-                  <input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    className={inputClass}
-                    placeholder="例如：408 每日 20 题"
-                  />
-                </Field>
-                <Field label={kind === 'flash_card' ? '目标词数' : '目标题数'}>
-                  <input
-                    type="number"
-                    min={1}
-                    max={500}
-                    value={targetCount}
-                    onChange={(event) => setTargetCount(Math.max(1, Math.min(500, Number(event.target.value) || 10)))}
-                    className={inputClass}
-                  />
-                </Field>
-                {kind === 'choice' ? (
-                  <Field label="完成条件">
-                    <select
-                      value={completionMode}
-                      onChange={(event) => setCompletionMode(event.target.value as CompletionMode)}
-                      className={inputClass}
-                    >
-                      <option value="question_count">做 N 道题</option>
-                      <option value="exhaust_scope">做完整个范围</option>
-                    </select>
-                  </Field>
-                ) : null}
-
-                <Field label="排序方式">
-                  <select
-                    value={sortOrder}
-                    onChange={(event) => setSortOrder(event.target.value as SortOrder)}
-                    className={inputClass}
-                  >
-                    <option value="sequential">按序号</option>
-                    <option value="due">按到期时间</option>
-                    <option value="mistake_first">按错误优先</option>
-                    <option value="random">随机</option>
-                  </select>
-                </Field>
-
-                <Field label="本场回流规则">
-                  <select
-                    value={backflowRule}
-                    onChange={(event) => setBackflowRule(event.target.value as BackflowRule)}
-                    className={inputClass}
-                  >
-                    <option value="none">不回流</option>
-                    <option value="wrong_to_end">答错放队尾</option>
-                    <option value="wrong_retry">答错立即再来一次</option>
-                  </select>
-                </Field>
-              </div>
-
-              {kind !== 'flash_card' ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={passCriteriaEnabled}
-                        onChange={(e) => setPassCriteriaEnabled(e.target.checked)}
-                        className="rounded border-ark-border"
-                      />
-                      <span className="text-sm font-medium text-ark-text-muted">启用通过标准</span>
-                    </label>
-                  </div>
-                  {passCriteriaEnabled ? (
-                    <Field label="正确率阈值 (%)">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="range"
-                          min={50}
-                          max={100}
-                          step={5}
-                          value={passCriteriaThreshold}
-                          onChange={(e) => setPassCriteriaThreshold(Number(e.target.value))}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium text-ark-text w-12 text-right">{passCriteriaThreshold}%</span>
-                      </div>
-                    </Field>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="主筛选条件">
-                  <select
-                    value={primaryFilter}
-                    onChange={(event) => setPrimaryFilter(event.target.value as PrimaryFilter)}
-                    className={inputClass}
-                  >
-                    <option value="all">全部题目</option>
-                    <option value="unstarted">没做过</option>
-                    <option value="mistake">做错过</option>
-                    <option value="last_wrong">上次做错</option>
-                    <option value="due_review" disabled={!useFsrs}>到期复习{!useFsrs ? '（需启用 FSRS）' : ''}</option>
-                  </select>
-                </Field>
-
-                <div className="flex items-center gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useFsrs}
-                      onChange={(e) => {
-                        setUseFsrs(e.target.checked);
-                        if (!e.target.checked && primaryFilter === 'due_review') {
-                          setPrimaryFilter('all');
-                        }
-                      }}
-                      className="rounded border-ark-border"
-                    />
-                    <span className="text-sm font-medium text-ark-text-muted">启用 FSRS</span>
-                  </label>
-                </div>
-              </div>
-
-              {kind === 'choice' ? (
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="年份">
-                    <select value={year} onChange={(event) => setYear(event.target.value ? Number(event.target.value) : '')} className={inputClass}>
-                      <option value="">全部年份</option>
-                      {filters?.years.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="科目">
-                    <select value={subject} onChange={(event) => setSubject(event.target.value)} className={inputClass}>
-                      <option value="">全部科目</option>
-                      {filters?.subjects.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="标签">
-                    <select value={tag} onChange={(event) => setTag(event.target.value)} className={inputClass}>
-                      <option value="">全部标签</option>
-                      {filters?.tags.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </Field>
-                  <div className="rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3 text-sm text-ark-text-muted">
-                    范围内约 {filters?.total_questions ?? 0} 题
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex justify-between gap-3">
-                <Button variant="ghost" onClick={() => setActiveStep(2)}>上一步</Button>
-                <Button
-                  variant="primary"
-                  loading={saving}
-                  loadingText="保存中"
-                  disabled={!canSave}
-                  leftIcon={<Save className="h-4 w-4" />}
-                  onClick={() => void handleSave()}
-                >
-                  保存配置
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
-          {draftMode && activeStep === 4 ? savedWorkflowContent : null}
+          {savedWorkflowContent}
         </section>
       </div>
 
@@ -1630,6 +1221,37 @@ export default function DeliberateWorkflow() {
         />
       )}
 
+      {/* 新建子应用弹窗 */}
+      {showCreateSubAppModal && (
+        <CreateSubAppModal
+          saving={saving}
+          onSave={handleCreateSubApp}
+          onUploadBank={() => {
+            setShowCreateSubAppModal(false);
+            setShowUploadModal(true);
+          }}
+          onClose={() => setShowCreateSubAppModal(false)}
+        />
+      )}
+
+      {/* 编辑子应用弹窗 */}
+      {showEditSubAppModal && editingSubApp && (
+        <EditSubAppModal
+          subApp={editingSubApp}
+          saving={saving}
+          onSave={handleEditSubApp}
+          onDelete={handleDeleteSubApp}
+          onUploadBank={() => {
+            setShowEditSubAppModal(false);
+            setShowUploadModal(true);
+          }}
+          onClose={() => {
+            setShowEditSubAppModal(false);
+            setEditingSubApp(null);
+          }}
+        />
+      )}
+
       {/* 题库详情弹窗 */}
       {(() => {
         const bank = allBanks.find((b) => b.id === previewBankId);
@@ -1658,37 +1280,6 @@ export default function DeliberateWorkflow() {
         />
       )}
     </SubAppPageShell>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-ark-text-muted">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function SelectionSummary({
-  icon,
-  title,
-  detail,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ark-border bg-ark-surface text-ark-accent">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-ark-text">{title}</span>
-        <span className="mt-0.5 block truncate text-xs text-ark-text-muted">{detail}</span>
-      </span>
-    </div>
   );
 }
 
