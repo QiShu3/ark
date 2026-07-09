@@ -226,7 +226,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
 
-  const selectedSubApp = subApps.find((a) => a.id === selectedSubAppId) ?? null;
+  const selectedSubApp = subApps.find((a) => a.id === (appId ?? selectedSubAppId)) ?? null;
   const effectiveBankIds = selectedSubApp?.bank_ids ?? null;
   const filteredBanks = effectiveBankIds
     ? banks.filter((b) => effectiveBankIds.includes(b.id))
@@ -1130,9 +1130,9 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     <SubAppPageShell maxWidth="6xl">
       <div className="space-y-6">
         <SubAppPageHeader
-          title="刻意学习流"
-          description="管理题库、专注工作和工作流，通过刻意练习提升学习效果。"
-          breadcrumb="Admin"
+          title={selectedSubApp?.name ?? '刻意学习流'}
+          description={selectedSubApp?.description || '管理题库、专注工作和工作流，通过刻意练习提升学习效果。'}
+          breadcrumb={selectedSubApp ? undefined : 'Admin'}
           backTo="/apps"
           backLabel="返回应用中心"
         />
