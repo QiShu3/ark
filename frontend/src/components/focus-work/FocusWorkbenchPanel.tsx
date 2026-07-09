@@ -93,7 +93,7 @@ type RunCompletionPanelProps = {
 function CircularProgress({
   value,
   size = 140,
-  strokeWidth = 14,
+  strokeWidth = 12,
   passed,
 }: {
   value: number;
@@ -104,26 +104,101 @@ function CircularProgress({
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (value / 100) * circumference;
-  const color = passed ? 'var(--completion-pass-progress)' : 'var(--completion-fail-progress)';
-  const bgColor = passed ? 'var(--completion-pass-bg)' : 'var(--completion-fail-bg)';
+  const gradientId = `progress-gradient-${passed ? 'pass' : 'fail'}`;
+  const glowId = `progress-glow-${passed ? 'pass' : 'fail'}`;
+
+  // Calculate end point of the progress arc for the highlight dot
+  const endAngle = ((value / 100) * 360 - 90) * (Math.PI / 180);
+  const endX = size / 2 + radius * Math.cos(endAngle);
+  const endY = size / 2 + radius * Math.sin(endAngle);
+
+  // Add padding for glow effect
+  const padding = 12;
+  const svgSize = size + padding * 2;
 
   return (
-    <div className="completion-circular-progress" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill={bgColor}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
+    <div className="completion-circular-progress" style={{ width: svgSize, height: svgSize }}>
+      <svg width={svgSize} height={svgSize} style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            {passed ? (
+              <>
+                <stop offset="0%" stopColor="#6ee7b7" />
+                <stop offset="100%" stopColor="#059669" />
+              </>
+            ) : (
+              <>
+                <stop offset="0%" stopColor="#fdba74" />
+                <stop offset="100%" stopColor="#dc2626" />
+              </>
+            )}
+          </linearGradient>
+          <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id={`dot-glow-${passed ? 'pass' : 'fail'}`} x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <g transform={`translate(${padding}, ${padding})`}>
+          {/* Outer glow shadow */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={passed ? 'rgba(5, 150, 105, 0.4)' : 'rgba(220, 38, 38, 0.4)'}
+            strokeWidth={strokeWidth + 8}
+            filter={`url(#${glowId})`}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            opacity="0.5"
+          />
+          {/* Background ring */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="transparent"
+            stroke={passed ? 'rgba(110, 231, 183, 0.2)' : 'rgba(253, 186, 116, 0.2)'}
+            strokeWidth={strokeWidth}
+          />
+          {/* Progress ring */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="transparent"
+            stroke={`url(#${gradientId})`}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+          {/* Highlight dot at the end */}
+          {value > 0 && value < 100 && (
+            <circle
+              cx={endX}
+              cy={endY}
+              r={strokeWidth / 2 + 2}
+              fill="white"
+              filter={`url(#dot-glow-${passed ? 'pass' : 'fail'})`}
+            />
+          )}
+        </g>
       </svg>
-      <div className="completion-circular-label">
+      <div className="completion-circular-label" style={{ width: size, height: size, left: padding, top: padding }}>
         <div className={`completion-circular-status ${passed ? 'pass' : 'fail'}`}>
           {passed ? '通过' : '未通过'}
         </div>
@@ -323,21 +398,21 @@ type RecommendPreset = {
 
 const DEFAULT_RECOMMEND_PRESETS: RecommendPreset[] = [
   {
-    icon: <img src="/icons/book.png" alt="" className="w-12 h-12 object-contain" />,
+    icon: <img src="/icons/book.png" alt="" className="w-20 h-20 object-contain" style={{ filter: 'drop-shadow(0px 10px 15px rgba(0, 0, 0, 0.15))' }} />,
     title: '不会单词',
     desc: '加强词汇积累，提升阅读理解能力',
     tint: 'blue',
     isRecommended: true,
   },
   {
-    icon: <img src="/icons/pencil.png" alt="" className="w-12 h-12 object-contain" />,
+    icon: <img src="/icons/pencil.png" alt="" className="w-20 h-20 object-contain" style={{ filter: 'drop-shadow(0px 10px 15px rgba(0, 0, 0, 0.15))' }} />,
     title: '长难句',
     desc: '突破长难句理解，掌握句子结构',
     tint: 'violet',
     isRecommended: true,
   },
   {
-    icon: <img src="/icons/target.png" alt="" className="w-12 h-12 object-contain" />,
+    icon: <img src="/icons/target.png" alt="" className="w-20 h-20 object-contain" style={{ filter: 'drop-shadow(0px 10px 15px rgba(0, 0, 0, 0.15))' }} />,
     title: '针对训练',
     desc: '针对薄弱题型，精准提升正确率',
     tint: 'green',
@@ -445,12 +520,13 @@ function RunCompletionPanel({
     <div className="ark-focus-work-completion completion-panel h-full flex flex-col">
 
       <div className="completion-panel-content w-full flex flex-col h-full">
-        {/* 标题区 */}
-        <div className="completion-heading-row flex-[1] min-h-0">
-          <img src="/icons/completion-check.png" alt="" className="completion-heading-icon-img" />
-          <div className="completion-heading-content">
-            <h2 className="completion-heading">{heading}</h2>
-            {subtitle && <p className="completion-subtitle">{subtitle}</p>}
+        {/* 标题区背景 */}
+        <div className="completion-header-bg">
+          <div className="completion-heading-row">
+            <div className="completion-heading-content">
+              <h2 className="completion-heading">{heading}</h2>
+              {subtitle && <p className="completion-subtitle">{subtitle}</p>}
+            </div>
           </div>
         </div>
 
@@ -480,16 +556,22 @@ function RunCompletionPanel({
             <div className="completion-stats-grid">
               {stats.map((stat, i) => (
                 <div key={i} className="completion-stat-item">
-                  <div className="completion-stat-icon">
+                  <div className={`completion-stat-icon ${
+                    i === 0 ? 'clipboard' :
+                    i === 1 ? 'check-circle' :
+                    i === 2 ? 'percent' : 'clock'
+                  }`}>
                     {i === 0 && <ClipboardIcon className="w-5 h-5" />}
                     {i === 1 && <CheckCircleIcon className="w-5 h-5" />}
                     {i === 2 && <PercentIcon className="w-5 h-5" />}
                     {i === 3 && <ClockIcon className="w-5 h-5" />}
                   </div>
-                  <div className={`completion-stat-value ${stat.accent ? 'accent' : ''}`}>
-                    {stat.value}
+                  <div className="completion-stat-content">
+                    <div className={`completion-stat-value ${stat.accent ? 'accent' : ''}`}>
+                      {stat.value}
+                    </div>
+                    <div className="completion-stat-label">{stat.label}</div>
                   </div>
-                  <div className="completion-stat-label">{stat.label}</div>
                 </div>
               ))}
             </div>
