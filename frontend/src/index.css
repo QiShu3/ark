@@ -1834,6 +1834,20 @@
   margin: 0;
 }
 
+.completion-heading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.completion-subtitle {
+  font-size: 0.9rem;
+  color: var(--completion-section-subtitle);
+  margin: 0;
+  text-align: center;
+}
+
 .completion-meta-row {
   display: flex;
   align-items: center;
@@ -2129,8 +2143,8 @@
 
 .completion-stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
   align-content: stretch;
   min-height: 0;
   overflow: hidden;
@@ -2141,7 +2155,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   text-align: center;
   padding: 14px 8px;
   border-radius: 14px;
@@ -2149,6 +2163,19 @@
   border: 1px solid var(--completion-stat-card-border);
   min-height: 0;
   overflow: hidden;
+}
+
+.completion-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--completion-stat-card-bg);
+  border: 1px solid var(--completion-stat-card-border);
+  color: var(--completion-stat-label);
+  margin-bottom: 4px;
 }
 
 .completion-stat-value {
@@ -2166,6 +2193,48 @@
 .completion-stat-label {
   font-size: 0.72rem;
   color: var(--completion-stat-label);
+}
+
+/* 圆形进度环 */
+
+.completion-circular-progress {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.completion-circular-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.completion-circular-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.completion-circular-status.pass {
+  color: var(--completion-pass-text);
+}
+
+.completion-circular-status.fail {
+  color: var(--completion-fail-text);
+}
+
+.completion-circular-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--completion-stat-value);
+}
+
+.completion-status-card-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ===== 推荐练习 ===== */
@@ -2484,7 +2553,7 @@
   }
 
   .completion-stats-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .completion-buttons {

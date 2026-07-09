@@ -90,6 +90,86 @@ type RunCompletionPanelProps = {
   busy?: boolean;
 };
 
+function CircularProgress({
+  value,
+  size = 140,
+  strokeWidth = 14,
+  passed,
+}: {
+  value: number;
+  size?: number;
+  strokeWidth?: number;
+  passed: boolean;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (value / 100) * circumference;
+  const color = passed ? 'var(--completion-pass-progress)' : 'var(--completion-fail-progress)';
+  const bgColor = passed ? 'var(--completion-pass-bg)' : 'var(--completion-fail-bg)';
+
+  return (
+    <div className="completion-circular-progress" style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill={bgColor}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <div className="completion-circular-label">
+        <div className={`completion-circular-status ${passed ? 'pass' : 'fail'}`}>
+          {passed ? '通过' : '未通过'}
+        </div>
+        <div className="completion-circular-value">{value}%</div>
+      </div>
+    </div>
+  );
+}
+
+function ClipboardIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  );
+}
+
+function PercentIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="19" y1="5" x2="5" y2="19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
 function ClockDecor({ className = '' }: { className?: string }) {
   return (
     <svg viewBox="0 0 120 120" fill="none" className={className}>
@@ -243,21 +323,21 @@ type RecommendPreset = {
 
 const DEFAULT_RECOMMEND_PRESETS: RecommendPreset[] = [
   {
-    icon: <BookIcon className="w-6 h-6" />,
+    icon: <img src="/icons/book.png" alt="" className="w-12 h-12 object-contain" />,
     title: '不会单词',
     desc: '加强词汇积累，提升阅读理解能力',
     tint: 'blue',
     isRecommended: true,
   },
   {
-    icon: <PencilIcon className="w-6 h-6" />,
+    icon: <img src="/icons/pencil.png" alt="" className="w-12 h-12 object-contain" />,
     title: '长难句',
     desc: '突破长难句理解，掌握句子结构',
     tint: 'violet',
     isRecommended: true,
   },
   {
-    icon: <TargetIcon className="w-6 h-6" />,
+    icon: <img src="/icons/target.png" alt="" className="w-12 h-12 object-contain" />,
     title: '针对训练',
     desc: '针对薄弱题型，精准提升正确率',
     tint: 'green',
@@ -368,7 +448,10 @@ function RunCompletionPanel({
         {/* 标题区 */}
         <div className="completion-heading-row flex-[1] min-h-0">
           <img src="/icons/completion-check.png" alt="" className="completion-heading-icon-img" />
-          <h2 className="completion-heading">{heading}</h2>
+          <div className="completion-heading-content">
+            <h2 className="completion-heading">{heading}</h2>
+            {subtitle && <p className="completion-subtitle">{subtitle}</p>}
+          </div>
         </div>
 
         {/* 检验结果卡片 */}
@@ -379,53 +462,30 @@ function RunCompletionPanel({
           </div>
 
           <div className="completion-result-grid">
-            {/* 左侧状态卡片 */}
+            {/* 左侧状态卡片 - 圆形进度环 */}
             {hasMasteryCheck ? (
-              <div className={`completion-status-card ${passed ? 'pass' : 'fail'}`}>
-                <div className="completion-status-header">
-                  <div className="completion-status-left">
-                    <div className="completion-status-icon">
-                      {passed ? <CheckIcon className="w-5 h-5" /> : <XIcon className="w-5 h-5" />}
-                    </div>
-                    <div className="completion-status-text">
-                      <div className="completion-status-label">
-                        {passed ? '通过' : '未通过'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="completion-status-right">
-                    <div className="completion-status-rate-label">正确率</div>
-                    <div className="completion-status-rate-value">
-                      {Math.round(accuracy * 100)}%
-                    </div>
-                  </div>
-                </div>
-                <div className="completion-progress-bar">
-                  <div
-                    className="completion-progress-fill"
-                    style={{ width: `${Math.min(Math.round(accuracy * 100), 100)}%` }}
-                  />
-                </div>
+              <div className="completion-status-card-wrapper">
+                <CircularProgress
+                  value={Math.round(accuracy * 100)}
+                  passed={passed}
+                />
               </div>
             ) : (
-              <div className="completion-status-card pass">
-                <div className="completion-status-header">
-                  <div className="completion-status-left">
-                    <div className="completion-status-icon">
-                      <CheckIcon className="w-5 h-5" />
-                    </div>
-                    <div className="completion-status-text">
-                      <div className="completion-status-label">本轮完成</div>
-                    </div>
-                  </div>
-                </div>
+              <div className="completion-status-card-wrapper">
+                <CircularProgress value={100} passed={true} />
               </div>
             )}
 
-            {/* 右侧数据指标 */}
+            {/* 右侧数据指标 - 2x2 网格 */}
             <div className="completion-stats-grid">
               {stats.map((stat, i) => (
                 <div key={i} className="completion-stat-item">
+                  <div className="completion-stat-icon">
+                    {i === 0 && <ClipboardIcon className="w-5 h-5" />}
+                    {i === 1 && <CheckCircleIcon className="w-5 h-5" />}
+                    {i === 2 && <PercentIcon className="w-5 h-5" />}
+                    {i === 3 && <ClockIcon className="w-5 h-5" />}
+                  </div>
                   <div className={`completion-stat-value ${stat.accent ? 'accent' : ''}`}>
                     {stat.value}
                   </div>
@@ -640,22 +700,20 @@ export default function FocusWorkbenchPanel({
   const masteryCheck = (progressSnapshot?.mastery_check ?? runSummary?.mastery_check) as Record<string, unknown> | undefined;
   const hasMasteryCheckFailed = masteryCheck && masteryCheck.enabled === true && masteryCheck.passed === false;
   const configSnapshot = activeRun?.config_snapshot as Record<string, unknown> | undefined;
-  const subtitle =
-    ((configSnapshot?.bank_name as string) || (configSnapshot?.config_name as string)) ||
-    activeDefinition?.subtitle ||
-    '';
 
   const hasChildren = forkChildren && forkChildren.length > 0;
   const isChildRun = Boolean(activeRun?.source_run_id);
   const durationSeconds = (runSummary?.duration_seconds as number) ?? 0;
+  const durationMinutes = Math.ceil(durationSeconds / 60);
+  const completionSubtitle = `🎉 棒极了！你刚刚完成了 ${durationMinutes} 分钟的专注`;
 
   // ===== 结算阶段 =====
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
     if (isChildRun) {
       return (
         <RunCompletionPanel
-          heading="本轮专注工作已完成"
-          subtitle={subtitle}
+          heading="本轮专注已完成"
+          subtitle={completionSubtitle}
           durationSeconds={durationSeconds}
           summary={runSummary ?? {}}
           focusWorkType={focusWorkType}
@@ -673,10 +731,10 @@ export default function FocusWorkbenchPanel({
       );
     }
 
-    return (
-      <RunCompletionPanel
-        heading="本轮专注工作已完成"
-        subtitle={subtitle}
+      return (
+        <RunCompletionPanel
+          heading="本轮专注已完成"
+        subtitle={completionSubtitle}
         durationSeconds={durationSeconds}
         summary={runSummary ?? {}}
         focusWorkType={focusWorkType}
@@ -712,7 +770,7 @@ export default function FocusWorkbenchPanel({
       return (
         <RunCompletionPanel
           heading="本轮专注已完成"
-          subtitle={subtitle}
+          subtitle={completionSubtitle}
           durationSeconds={durationSeconds}
           summary={runSummary ?? {}}
           focusWorkType={focusWorkType}
@@ -733,7 +791,7 @@ export default function FocusWorkbenchPanel({
     return (
       <RunCompletionPanel
         heading="本轮专注已完成"
-        subtitle={subtitle}
+        subtitle={completionSubtitle}
         durationSeconds={durationSeconds}
         summary={runSummary ?? {}}
         focusWorkType={focusWorkType}
@@ -755,7 +813,7 @@ export default function FocusWorkbenchPanel({
     return (
       <RunCompletionPanel
         heading="当前任务今日已完成"
-        subtitle={subtitle}
+        subtitle={completionSubtitle}
         durationSeconds={durationSeconds}
         summary={runSummary ?? {}}
         focusWorkType={focusWorkType}
