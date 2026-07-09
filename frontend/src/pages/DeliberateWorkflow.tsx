@@ -226,6 +226,15 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
 
   const [kind, setKind] = useState<DeliberateKind>('choice');
 
+  const selectedSubApp = subApps.find((a) => a.id === selectedSubAppId) ?? null;
+  const effectiveBankIds = selectedSubApp?.bank_ids ?? null;
+  const filteredBanks = effectiveBankIds
+    ? banks.filter((b) => effectiveBankIds.includes(b.id))
+    : banks;
+  const filteredAllBanks = effectiveBankIds
+    ? allBanks.filter((b) => effectiveBankIds.includes(b.id))
+    : allBanks;
+
   const selectedConfig = configs.find((item) => item.id === selectedId) ?? configs[0] ?? null;
 
   const persistSelectedId = useCallback((id: string) => {
@@ -702,13 +711,13 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
 
         {/* 题库列表 */}
         <div className="space-y-2">
-          {banks.length === 0 ? (
+          {filteredBanks.length === 0 ? (
             <div className="rounded-lg border border-dashed border-ark-border p-6 text-center text-sm text-ark-text-muted">
               暂无题库，请上传新题库
             </div>
           ) : (
             <>
-              {(showAllBanks ? banks : banks.slice(0, 3)).map((bank) => (
+              {(showAllBanks ? filteredBanks : filteredBanks.slice(0, 3)).map((bank) => (
                 <div
                   key={bank.id}
                   className="flex items-center justify-between rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3"
@@ -737,7 +746,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                   </div>
                 </div>
               ))}
-              {banks.length > 3 && (
+              {filteredBanks.length > 3 && (
                 <button
                   type="button"
                   onClick={() => setShowAllBanks(!showAllBanks)}
@@ -749,7 +758,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                     </>
                   ) : (
                     <>
-                      展开全部（{banks.length} 个题库）<ChevronDown className="h-3.5 w-3.5" />
+                      展开全部（{filteredBanks.length} 个题库）<ChevronDown className="h-3.5 w-3.5" />
                     </>
                   )}
                 </button>
@@ -791,7 +800,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                 className="rounded-md border border-ark-border bg-ark-input px-2 py-1 text-xs text-ark-text focus:outline-none focus:ring-1 focus:ring-[var(--ark-focus-ring)]"
               >
                 <option value="">选择题库</option>
-                {allBanks.map((bank) => (
+                {filteredAllBanks.map((bank) => (
                   <option key={bank.id} value={bank.id}>
                     {bank.name} ({bank.count} {bank.kind === 'flash_card' ? '词' : '题'})
                   </option>
