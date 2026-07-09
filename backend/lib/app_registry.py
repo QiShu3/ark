@@ -88,11 +88,22 @@ ERC_APP = AppDeclaration(
     ],
 )
 
+DELIBERATE_WORKFLOW_APP = AppDeclaration(
+    id="deliberate-workflow",
+    name="刻意工作流",
+    description="题库、专注与存档复盘",
+    icon="workflow",
+    route="/deliberate-workflow",
+    admin_only=True,
+    type="deliberate-workflow",
+)
+
 _REGISTRY_FILE = _os.path.join(_os.path.dirname(__file__), "app_registry.json")
 
 _registry: dict[str, AppDeclaration] = {
     "flash": VOCAB_APP,
     "erc": ERC_APP,
+    "deliberate-workflow": DELIBERATE_WORKFLOW_APP,
 }
 
 
@@ -149,7 +160,7 @@ def _load_persisted() -> dict[str, AppDeclaration]:
 
 def _persist() -> None:
     """Save dynamically registered apps to JSON file."""
-    dynamic = {k: v for k, v in _registry.items() if k not in ("flash", "erc")}
+    dynamic = {k: v for k, v in _registry.items() if k not in ("flash", "erc", "deliberate-workflow")}
     if not dynamic:
         return
     items = []
