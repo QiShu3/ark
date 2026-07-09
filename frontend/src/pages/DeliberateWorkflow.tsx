@@ -277,10 +277,6 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     }
   }, []);
 
-  useEffect(() => {
-    void loadConfigs();
-  }, [loadConfigs]);
-
   // Load sub-apps
   useEffect(() => {
     listDeliberateSubApps()
@@ -288,14 +284,11 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
       .catch(() => setSubApps([]));
   }, []);
 
-  // Reload configs when sub-app selection changes (only in global mode)
+  // Load configs: handles both initial load and sub-app switching
   useEffect(() => {
-    if (appId) {
-      void loadConfigs(undefined, appId);
-    } else {
-      void loadConfigs(undefined, selectedSubAppId);
-    }
-  }, [selectedSubAppId, appId, loadConfigs]);
+    void loadConfigs(undefined, appId ?? selectedSubAppId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appId, selectedSubAppId]);
 
   useEffect(() => {
     if (loading) return;
