@@ -3,6 +3,7 @@
 ## 分支分片索引
 
 - [feature/deliberate-workflow-persist](./feature-deliberate-workflow-persist.md) — 刻意工作流编排持久化
+- [feat/deliberate-sub-app](./feat-deliberate-sub-app.md) — 刻意工作流子应用系统
 
 ## 提交记录
 
