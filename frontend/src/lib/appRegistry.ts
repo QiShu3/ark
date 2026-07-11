@@ -1,4 +1,5 @@
 import { BarChart3, BookOpen, ScrollText, Workflow, type LucideIcon } from 'lucide-react';
+import { useAuthStore } from './auth';
 
 export type ContentBankType = 'word_deck' | 'article_set';
 export type TemplateSection = 'hero' | 'asset' | 'arrangements' | 'feedback' | 'modals';
@@ -29,6 +30,7 @@ export interface AppDeclaration {
   icon: string;
   route: string;
   adminOnly?: boolean;
+  guestOnly?: boolean;
   type?: 'template' | 'deliberate-workflow';
   bankIds?: string[];
   focusWorks: FocusWorkDeclaration[];
@@ -65,6 +67,7 @@ function mapFromApi(raw: Record<string, unknown>): AppDeclaration {
     icon: raw.icon as string,
     route: raw.route as string,
     adminOnly: raw.admin_only as boolean | undefined,
+    guestOnly: raw.guest_only as boolean | undefined,
     type: (raw.type as string as AppDeclaration['type']) ?? 'template',
     bankIds: (raw.bank_ids as string[] | undefined) ?? [],
     sections: (raw.sections as TemplateSection[] | undefined) ?? ['hero', 'asset', 'arrangements'],
@@ -89,10 +92,17 @@ function mapFromApi(raw: Record<string, unknown>): AppDeclaration {
 
 let _loadedApps: AppDeclaration[] | null = null;
 
+export function clearAppRegistryCache(): void {
+  _loadedApps = null;
+}
+
 export async function loadAppRegistry(): Promise<AppDeclaration[]> {
   if (_loadedApps) return _loadedApps;
   try {
-    const resp = await fetch('/api/app-registry');
+    const token = useAuthStore.getState().token;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch('/api/app-registry', { headers });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const rawList: Record<string, unknown>[] = await resp.json();
     const apps = rawList

@@ -776,6 +776,53 @@ async def guest_login(request: Request) -> TokenResponse:
     return TokenResponse(access_token=token, expires_in=ttl)
 
 
+class GuestEventSetupRequest(BaseModel):
+    event_type: str = Field(min_length=1, max_length=50)
+    major: str = Field(min_length=1, max_length=50)
+
+
+class GuestEventSetupResponse(BaseModel):
+    event_id: str
+    event_name: str
+
+
+@router.post("/guest/setup-event", response_model=GuestEventSetupResponse)
+async def guest_setup_event(
+    request: Request,
+    user: Annotated[_AuthUser, Depends(get_current_user)],
+    payload: GuestEventSetupRequest,
+) -> GuestEventSetupResponse:
+    """游客引导：创建主事件。目前仅支持 event_type='kaoyan' + major='22408'。"""
+    if not user.is_guest:
+        raise HTTPException(status_code=403, detail="仅游客可使用此接口")
+    if payload.event_type != "kaoyan":
+        raise HTTPException(status_code=400, detail="暂仅支持考研")
+    if payload.major != "22408":
+        raise HTTPException(status_code=400, detail="暂仅支持22408")
+
+    from datetime import date as _date
+
+    pool = _pool_from_request(request)
+    async with pool.acquire() as conn:
+        # 清除已有主事件
+        await conn.execute(
+            "UPDATE events SET is_primary = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_primary = TRUE",
+            int(user.id),
+        )
+        row = await conn.fetchrow(
+            """
+            INSERT INTO events (user_id, name, start_date, due_at, is_primary)
+            VALUES ($1, $2, $3, $4, TRUE)
+            RETURNING id::text
+            """,
+            int(user.id),
+            "22408考研",
+            _date.today(),
+            datetime(2026, 12, 20, 0, 0, 0),
+        )
+    return GuestEventSetupResponse(event_id=str(row["id"]), event_name="22408考研")
+
+
 @router.post("/verify-email", response_model=OkResponse)
 async def verify_email(request: Request, payload: VerifyEmailRequest) -> OkResponse:
     pool = _pool_from_request(request)

@@ -18,6 +18,7 @@ import SubAppPageShell from '../components/SubAppPageShell';
 import WorkflowSettlementModal from '../components/focus-work/WorkflowSettlementModal';
 import type { WorkflowSettlement } from '../components/focus-work/focusWorkTypes';
 import type { Task } from '../components/taskTypes';
+import { useAuthStore } from '../lib/auth';
 import {
   getDeliberateWorkflowConfigIds,
   getDeliberateWorkflowConfigNames,
@@ -216,6 +217,8 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
   const [settlementRecord, setSettlementRecord] = useState<WorkflowRecord | null>(null);
   const [settlementData, setSettlementData] = useState<WorkflowSettlement | null>(null);
   const [loadingSettlement, setLoadingSettlement] = useState(false);
+
+  const isGuest = useAuthStore((s) => s.user?.is_guest ?? false);
 
   // Sub-app state
   const [subApps, setSubApps] = useState<DeliberateSubApp[]>([]);
@@ -768,15 +771,17 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
         </div>
 
         {/* 上传新题库按钮 */}
-        <div className="flex justify-end">
-          <Button
-            variant="secondary"
-            leftIcon={<Upload className="h-4 w-4" />}
-            onClick={() => setShowUploadModal(true)}
-          >
-            上传新题库
-          </Button>
-        </div>
+        {!isGuest && (
+          <div className="flex justify-end">
+            <Button
+              variant="secondary"
+              leftIcon={<Upload className="h-4 w-4" />}
+              onClick={() => setShowUploadModal(true)}
+            >
+              上传新题库
+            </Button>
+          </div>
+        )}
 
         {/* 存档可视化 */}
         <div className="space-y-3">

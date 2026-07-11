@@ -7,11 +7,19 @@ import { appList, getAppIcon, loadAppRegistry, type AppDeclaration } from '../li
 export default function AppCenter() {
   const navigate = useNavigate();
   const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
+  const isGuest = useAuthStore((s) => s.user?.is_guest ?? false);
   const [apps, setApps] = useState<AppDeclaration[]>(appList);
 
   useEffect(() => {
-    loadAppRegistry().then((all) => setApps(all.filter((a) => !a.adminOnly || isAdmin)));
-  }, [isAdmin]);
+    loadAppRegistry().then((all) =>
+      setApps(all.filter((a) => {
+        if (a.adminOnly && !isAdmin) return false;
+        if (a.guestOnly && !isGuest) return false;
+        if (!a.guestOnly && isGuest) return false;
+        return true;
+      })),
+    );
+  }, [isAdmin, isGuest]);
 
   return (
     <main aria-label="应用中心" className="ark-page relative z-10 h-full w-full overflow-y-auto px-8 pt-32">

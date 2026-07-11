@@ -203,6 +203,10 @@ async def init_tables(pool: asyncpg.Pool) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_deliberate_runs_app_user ON deliberate_workflow_runs(app_id, user_id);"
         )
+        # 游客专属题库标记
+        await conn.execute("ALTER TABLE vocab_decks ADD COLUMN IF NOT EXISTS is_guest_only BOOLEAN DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE choice_sets ADD COLUMN IF NOT EXISTS is_guest_only BOOLEAN DEFAULT FALSE;")
+        await conn.execute("ALTER TABLE input_sets ADD COLUMN IF NOT EXISTS is_guest_only BOOLEAN DEFAULT FALSE;")
 
 
 def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = None, latest_run: Any = None) -> dict[str, Any]:

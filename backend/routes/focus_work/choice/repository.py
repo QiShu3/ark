@@ -343,12 +343,13 @@ async def replace_article_words(conn: asyncpg.Connection, *, seed: ERCArticleWor
         )
 
 
-async def list_set_rows(conn: asyncpg.Connection) -> list[asyncpg.Record]:
+async def list_set_rows(conn: asyncpg.Connection, *, is_guest: bool = False) -> list[asyncpg.Record]:
+    guest_filter = "AND is_guest_only = TRUE" if is_guest else "AND is_guest_only = FALSE"
     return await conn.fetch(
-        """
+        f"""
         SELECT id::text AS id, key, name, description, exam, article_count, question_count
         FROM choice_sets
-        WHERE is_published = TRUE
+        WHERE is_published = TRUE {guest_filter}
         ORDER BY key ASC
         """
     )

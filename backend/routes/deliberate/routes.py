@@ -273,8 +273,9 @@ async def list_deliberate_banks(
     pool = _pool(request)
     async with pool.acquire() as conn:
         kind = normalize_deliberate_kind(kind)
+        is_guest = bool(user.is_guest)
         if kind == FLASH_CARD_KIND:
-            rows = await list_vocab_decks(conn)
+            rows = await list_vocab_decks(conn, is_guest=is_guest)
             return [
                 DeliberateBankOptionOut(
                     id=row["id"],
@@ -287,7 +288,7 @@ async def list_deliberate_banks(
                 for row in rows
             ]
         if kind == CHOICE_KIND:
-            rows = await list_choice_set_rows(conn)
+            rows = await list_choice_set_rows(conn, is_guest=is_guest)
             return [
                 DeliberateBankOptionOut(
                     id=row["id"],
@@ -300,7 +301,7 @@ async def list_deliberate_banks(
                 for row in rows
             ]
         if kind == INPUT_KIND:
-            rows = await list_input_sets(conn)
+            rows = await list_input_sets(conn, is_guest=is_guest)
             return [
                 DeliberateBankOptionOut(
                     id=row["id"],

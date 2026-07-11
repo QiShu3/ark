@@ -7,11 +7,13 @@ import asyncpg
 
 # ---- input_sets ----
 
-async def list_input_sets(conn: asyncpg.Connection) -> list[asyncpg.Record]:
+async def list_input_sets(conn: asyncpg.Connection, *, is_guest: bool = False) -> list[asyncpg.Record]:
+    guest_filter = "WHERE is_guest_only = TRUE" if is_guest else "WHERE is_guest_only = FALSE"
     return await conn.fetch(
-        """
+        f"""
         SELECT id::text AS id, name, question_count, exam
         FROM input_sets
+        {guest_filter}
         ORDER BY created_at DESC
         """
     )

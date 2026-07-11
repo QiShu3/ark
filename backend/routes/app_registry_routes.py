@@ -1,9 +1,25 @@
 """Public API for app registry — consumed by frontend."""
-from fastapi import APIRouter
+from typing import Annotated
 
-from lib.app_registry import AppDeclaration, get_all
+from fastapi import APIRouter, Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from lib.app_registry import AppDeclaration, get_all_for_user
+from routes.auth_routes import _AuthUser, _pool_from_request, _user_from_token
 
 router = APIRouter(prefix="/api", tags=["app-registry"])
+_bearer = HTTPBearer(auto_error=False)
+
+
+async def _optional_user(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> _AuthUser | None:
+    """从 Bearer token 解析当前用户；未登录返回 None。"""
+    if creds is None or not creds.credentials:
+        return None
+    pool = _pool_from_request(request)
+    return await _user_from_token(pool, creds.credentials)
 
 
 def _decl_to_dict(decl: AppDeclaration) -> dict:
@@ -13,6 +29,7 @@ def _decl_to_dict(decl: AppDeclaration) -> dict:
         "description": decl.description,
         "icon": decl.icon,
         "admin_only": decl.admin_only,
+        "guest_only": decl.guest_only,
         "route": decl.route,
         "type": decl.type,
         "bank_ids": decl.bank_ids,
@@ -43,5 +60,10 @@ def _decl_to_dict(decl: AppDeclaration) -> dict:
 
 
 @router.get("/app-registry")
-async def get_app_registry():
-    return [_decl_to_dict(d) for d in get_all()]
+async def get_app_registry(
+    user: Annotated[_AuthUser | None, Depends(_optional_user)],
+):
+    is_guest = bool(user and user.is_guest)
+    is_admin = bool(user and user.is_admin)
+    apps = get_all_for_user(is_guest=is_guest, is_admin=is_admin)
+    return [_decl_to_dict(d) for d in apps]

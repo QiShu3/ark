@@ -332,8 +332,17 @@ async def sync_vocab_deck_word_counts(conn: asyncpg.Connection) -> None:
     )
 
 
-async def list_vocab_decks(conn: asyncpg.Connection, *, published_only: bool = False) -> list[asyncpg.Record]:
-    where = "WHERE d.is_published = true" if published_only else ""
+async def list_vocab_decks(
+    conn: asyncpg.Connection, *, published_only: bool = False, is_guest: bool = False,
+) -> list[asyncpg.Record]:
+    conditions: list[str] = []
+    if published_only:
+        conditions.append("d.is_published = true")
+    if is_guest:
+        conditions.append("d.is_guest_only = true")
+    else:
+        conditions.append("d.is_guest_only = false")
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     return await conn.fetch(
         f"""
         SELECT

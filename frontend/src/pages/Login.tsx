@@ -16,6 +16,7 @@ import {
 import { useAuthStore, User } from '../lib/auth';
 import { apiJson } from '../lib/api';
 import { useCustomizationStore } from '../lib/customization';
+import { clearAppRegistryCache } from '../lib/appRegistry';
 
 type LoginResponse = {
   access_token: string;
@@ -313,6 +314,7 @@ export default function Login() {
     try {
       const data = await apiJson<LoginResponse>('/auth/guest', { method: 'POST' });
       setSession(data.access_token, data.expires_in);
+      clearAppRegistryCache();
       await syncUserSettings();
       navigate(from, { replace: true });
     } catch (err) {

@@ -38,6 +38,7 @@ class AppDeclaration:
     icon: str
     route: str
     admin_only: bool = False
+    guest_only: bool = False
     type: str = "template"  # "template" | "deliberate-workflow"
     bank_ids: list[str] = field(default_factory=list)  # for deliberate-workflow type
     focus_works: list[FocusWorkDeclaration] = field(default_factory=list)
@@ -98,6 +99,59 @@ DELIBERATE_WORKFLOW_APP = AppDeclaration(
     type="deliberate-workflow",
 )
 
+# --- 游客专属子应用 (bank_ids 由 seed_guest_banks.py 脚本填充) ---
+
+GUEST_ENGLISH_APP = AppDeclaration(
+    id="guest-english",
+    name="英语二",
+    description="考研英语二词汇与阅读训练",
+    icon="book-open",
+    route="/guest-english",
+    guest_only=True,
+    type="deliberate-workflow",
+    bank_ids=[],  # 填入 seed 脚本输出的 vocab_deck ID
+)
+
+GUEST_MATH_APP = AppDeclaration(
+    id="guest-math",
+    name="数学二",
+    description="考研数学二选择题专项训练",
+    icon="bar-chart",
+    route="/guest-math",
+    guest_only=True,
+    type="deliberate-workflow",
+    bank_ids=[],  # 填入 seed 脚本输出的 choice_set ID
+)
+
+GUEST_POLITICS_APP = AppDeclaration(
+    id="guest-politics",
+    name="政治",
+    description="考研政治选择题专项训练",
+    icon="scroll-text",
+    route="/guest-politics",
+    guest_only=True,
+    type="deliberate-workflow",
+    bank_ids=[],  # 填入 seed 脚本输出的 choice_set ID
+)
+
+GUEST_408_APP = AppDeclaration(
+    id="guest-408",
+    name="408",
+    description="408计算机学科专业基础综合训练",
+    icon="workflow",
+    route="/guest-408",
+    guest_only=True,
+    type="deliberate-workflow",
+    bank_ids=[],  # 填入 seed 脚本输出的 input_set ID
+)
+
+GUEST_APPS: list[AppDeclaration] = [
+    GUEST_ENGLISH_APP,
+    GUEST_MATH_APP,
+    GUEST_POLITICS_APP,
+    GUEST_408_APP,
+]
+
 _REGISTRY_FILE = _os.path.join(_os.path.dirname(__file__), "app_registry.json")
 
 _registry: dict[str, AppDeclaration] = {
@@ -105,6 +159,12 @@ _registry: dict[str, AppDeclaration] = {
     "erc": ERC_APP,
     "deliberate-workflow": DELIBERATE_WORKFLOW_APP,
 }
+# 注册游客子应用
+for _ga in GUEST_APPS:
+    _registry[_ga.id] = _ga
+
+
+_HARDCODED_IDS = {"flash", "erc", "deliberate-workflow", *(a.id for a in GUEST_APPS)}
 
 
 def _load_persisted() -> dict[str, AppDeclaration]:
@@ -148,6 +208,7 @@ def _load_persisted() -> dict[str, AppDeclaration]:
                 icon=item["icon"],
                 route=item["route"],
                 admin_only=item.get("admin_only", False),
+                guest_only=item.get("guest_only", False),
                 type=item.get("type", "template"),
                 bank_ids=item.get("bank_ids", []),
                 focus_works=fws,
@@ -159,8 +220,8 @@ def _load_persisted() -> dict[str, AppDeclaration]:
 
 
 def _persist() -> None:
-    """Save dynamically registered apps to JSON file."""
-    dynamic = {k: v for k, v in _registry.items() if k not in ("flash", "erc", "deliberate-workflow")}
+    """Save dynamically registered apps to JSON file (excluding hardcoded apps)."""
+    dynamic = {k: v for k, v in _registry.items() if k not in _HARDCODED_IDS}
     if not dynamic:
         return
     items = []
@@ -173,6 +234,7 @@ def _persist() -> None:
                 "icon": decl.icon,
                 "route": decl.route,
                 "admin_only": decl.admin_only,
+                "guest_only": decl.guest_only,
                 "type": decl.type,
                 "bank_ids": decl.bank_ids,
                 "sections": decl.sections,
@@ -210,6 +272,16 @@ _registry.update(_load_persisted())
 def get_all() -> list[AppDeclaration]:
     """Return all registered apps."""
     return list(_registry.values())
+
+
+def get_all_for_user(*, is_guest: bool = False, is_admin: bool = False) -> list[AppDeclaration]:
+    """Return apps filtered by user type."""
+    apps = list(_registry.values())
+    if is_admin:
+        return apps
+    if is_guest:
+        return [a for a in apps if a.guest_only]
+    return [a for a in apps if not a.admin_only and not a.guest_only]
 
 
 def get_by_id(app_id: str) -> AppDeclaration | None:
