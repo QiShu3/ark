@@ -792,7 +792,7 @@ async def guest_setup_event(
     user: Annotated[_AuthUser, Depends(get_current_user)],
     payload: GuestEventSetupRequest,
 ) -> GuestEventSetupResponse:
-    """游客引导：创建主事件。目前仅支持 event_type='kaoyan' + major='22408'。"""
+    """游客引导：创建主事件 + 专注工作配置 + 工作流预设。目前仅支持 event_type='kaoyan' + major='22408'。"""
     if not user.is_guest:
         raise HTTPException(status_code=403, detail="仅游客可使用此接口")
     if payload.event_type != "kaoyan":
@@ -802,25 +802,82 @@ async def guest_setup_event(
 
     from datetime import date as _date
 
+    from lib.app_registry import GUEST_408_APP, GUEST_ENGLISH_APP, GUEST_MATH_APP, GUEST_POLITICS_APP
+
     pool = _pool_from_request(request)
+    uid = int(user.id)
+
+    # 题库映射：子应用 → (bank_id, kind)
+    guest_apps = [
+        (GUEST_ENGLISH_APP.id, GUEST_ENGLISH_APP.bank_ids[0] if GUEST_ENGLISH_APP.bank_ids else None, "flash_card"),
+        (GUEST_MATH_APP.id, GUEST_MATH_APP.bank_ids[0] if GUEST_MATH_APP.bank_ids else None, "choice"),
+        (GUEST_POLITICS_APP.id, GUEST_POLITICS_APP.bank_ids[0] if GUEST_POLITICS_APP.bank_ids else None, "choice"),
+        (GUEST_408_APP.id, GUEST_408_APP.bank_ids[0] if GUEST_408_APP.bank_ids else None, "input"),
+    ]
+
     async with pool.acquire() as conn:
-        # 清除已有主事件
-        await conn.execute(
-            "UPDATE events SET is_primary = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_primary = TRUE",
-            int(user.id),
-        )
-        row = await conn.fetchrow(
-            """
-            INSERT INTO events (user_id, name, start_date, due_at, is_primary)
-            VALUES ($1, $2, $3, $4, TRUE)
-            RETURNING id::text
-            """,
-            int(user.id),
-            "22408考研",
-            _date.today(),
-            datetime(2026, 12, 20, 0, 0, 0),
-        )
-    return GuestEventSetupResponse(event_id=str(row["id"]), event_name="22408考研")
+        async with conn.transaction():
+            # 1. 创建主事件
+            await conn.execute(
+                "UPDATE events SET is_primary = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_primary = TRUE",
+                uid,
+            )
+            event_row = await conn.fetchrow(
+                """
+                INSERT INTO events (user_id, name, start_date, due_at, is_primary)
+                VALUES ($1, $2, $3, $4, TRUE)
+                RETURNING id
+                """,
+                uid, "22408考研", _date.today(), datetime(2026, 12, 20, 0, 0, 0),
+            )
+            event_id = event_row["id"]
+
+            # 2. 为每个子应用创建专注工作配置
+            config_ids: list[str] = []
+            config_names: list[str] = []
+            for app_id, bank_id, kind in guest_apps:
+                if not bank_id:
+                    continue
+                name = {"guest-english": "英语二核心词汇", "guest-math": "数学二选择题", "guest-politics": "政治选择题", "guest-408": "408综合训练"}[app_id]
+                cfg_row = await conn.fetchrow(
+                    """
+                    INSERT INTO deliberate_workflow_configs(
+                        user_id, name, kind, focus_work_type, app_id, bank_id, target_count,
+                        scope_json, completion_json, pass_criteria_json, children_json,
+                        primary_filter, sort_order, use_fsrs, backflow_rule,
+                        scheduling_mode, fsrs_config_json
+                    )
+                    VALUES ($1, $2, $3, $3, $4, $5, 10,
+                            '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '[]'::jsonb,
+                            'all', 'sequential', false, 'none', 'manual', '{}'::jsonb)
+                    RETURNING id::text
+                    """,
+                    uid, name, kind, app_id, bank_id,
+                )
+                config_ids.append(str(cfg_row["id"]))
+                config_names.append(name)
+
+            # 3. 创建工作流预设（含 deliberate_group 阶段）
+            if config_ids:
+                phases = [
+                    {
+                        "phase_type": "deliberate_group",
+                        "duration": 0,
+                        "config_ids": config_ids,
+                        "config_names": config_names,
+                    },
+                    {"phase_type": "break", "duration": 300},
+                ]
+                await conn.execute(
+                    """
+                    INSERT INTO focus_workflow_presets(user_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
+                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, TRUE)
+                    """,
+                    uid, "22408考研工作流", "workflow", 1500, 300,
+                    json.dumps(phases, ensure_ascii=False), "countdown",
+                )
+
+    return GuestEventSetupResponse(event_id=str(event_id), event_name="22408考研")
 
 
 @router.post("/verify-email", response_model=OkResponse)
