@@ -6,6 +6,7 @@ import { apiJson } from '../lib/api';
 import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../lib/focusWorkflow';
 import { useEventArrangements } from '../hooks/useEventArrangements';
 import { usePrimaryEvent } from '../hooks/usePrimaryEvent';
+import { useAuthStore } from '../lib/auth';
 import type { Appointment, Task } from './taskTypes';
 import CalendarWidget from './CalendarWidget';
 import AchievementModal from './AchievementModal';
@@ -168,6 +169,7 @@ function renderDashboardAppointmentRow(appointment: Appointment, index: number, 
 
 export default function HomeRightDashboard() {
   const navigate = useNavigate();
+  const isGuest = useAuthStore((s) => s.user?.is_guest ?? false);
   const [workflow, setWorkflow] = useState<FocusWorkflow | null>(null);
   const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
   const { primaryEvent } = usePrimaryEvent();
@@ -332,7 +334,7 @@ export default function HomeRightDashboard() {
         const presets = filterDeliberateWorkflowPresets(allPresets);
         const preset = presets.find((item) => item.is_default) ?? presets[0];
         if (!preset) {
-          navigate('/deliberate-workflow');
+          navigate(isGuest ? '/guest-english' : '/deliberate-workflow');
           return;
         }
         setWorkflowStartPresets(presets);
