@@ -19,10 +19,12 @@ from pydantic import BaseModel, Field
 
 from lib.captcha_service import (
     generate_captcha,
-    needs_captcha as _needs_captcha,
     record_login_failure,
     reset_login_failures,
     verify_captcha,
+)
+from lib.captcha_service import (
+    needs_captcha as _needs_captcha,
 )
 
 _UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
@@ -101,6 +103,7 @@ class UserPublic(BaseModel):
     email_verified_at: datetime | None = None
     is_active: bool
     is_admin: bool
+    is_guest: bool = False
     created_at: datetime
     avatar_url: str | None = None
     custom_background_url: str | None = None
@@ -119,7 +122,8 @@ class _AuthUser:
     email_verified_at: datetime | None
     is_active: bool
     is_admin: bool
-    created_at: datetime
+    is_guest: bool = False
+    created_at: datetime = None  # type: ignore[assignment]
     avatar_url: str | None = None
     custom_background_url: str | None = None
     custom_character_url: str | None = None
@@ -429,6 +433,7 @@ async def init_auth(app: Any) -> None:
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS background_opacity REAL DEFAULT 0.6;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS show_character BOOLEAN DEFAULT TRUE;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS character_scale REAL DEFAULT 1.0;")
+        await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE;")
         # 迁移：用户上传记录表（用于追踪文件归属和限额管理）
         await conn.execute(
             """
@@ -469,6 +474,7 @@ def _user_public_from_row(row: asyncpg.Record) -> UserPublic:
         email_verified_at=row.get("email_verified_at"),
         is_active=bool(row["is_active"]),
         is_admin=bool(row["is_admin"]),
+        is_guest=bool(row["is_guest"]) if "is_guest" in row.keys() else False,
         created_at=row["created_at"],
         avatar_url=row["avatar_url"],
         custom_background_url=row["custom_background_url"],
@@ -489,6 +495,7 @@ def _user_public_from_auth_user(user: _AuthUser) -> UserPublic:
         email_verified_at=user.email_verified_at,
         is_active=user.is_active,
         is_admin=user.is_admin,
+        is_guest=user.is_guest,
         created_at=user.created_at,
         avatar_url=user.avatar_url,
         custom_background_url=user.custom_background_url,
@@ -505,7 +512,8 @@ async def _get_user_by_username(pool: asyncpg.Pool, username: str) -> asyncpg.Re
     async with pool.acquire() as conn:
         return await conn.fetchrow(
             """
-            SELECT id, username, email, email_verified_at, password_hash, password_salt, is_active, is_admin, created_at,
+            SELECT id, username, email, email_verified_at, password_hash, password_salt, is_active, is_admin,
+                   is_guest, created_at,
                    avatar_url, custom_background_url, custom_character_url,
                    background_blur, background_opacity, show_character, character_scale
             FROM auth_users
@@ -519,7 +527,8 @@ async def _get_user_by_email(pool: asyncpg.Pool, email: str) -> asyncpg.Record |
     async with pool.acquire() as conn:
         return await conn.fetchrow(
             """
-            SELECT id, username, email, email_verified_at, password_hash, password_salt, is_active, is_admin, created_at,
+            SELECT id, username, email, email_verified_at, password_hash, password_salt, is_active, is_admin,
+                   is_guest, created_at,
                    avatar_url, custom_background_url, custom_character_url,
                    background_blur, background_opacity, show_character, character_scale
             FROM auth_users
@@ -584,7 +593,8 @@ async def _user_from_token(pool: asyncpg.Pool, token: str) -> _AuthUser | None:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT u.id, u.username, u.email, u.email_verified_at, u.is_active, u.is_admin, u.created_at,
+            SELECT u.id, u.username, u.email, u.email_verified_at, u.is_active, u.is_admin, u.is_guest,
+                   u.created_at,
                    u.avatar_url, u.custom_background_url, u.custom_character_url,
                    u.background_blur, u.background_opacity, u.show_character, u.character_scale
             FROM auth_access_tokens t
@@ -604,6 +614,7 @@ async def _user_from_token(pool: asyncpg.Pool, token: str) -> _AuthUser | None:
         email_verified_at=row.get("email_verified_at"),
         is_active=bool(row["is_active"]),
         is_admin=bool(row["is_admin"]),
+        is_guest=bool(row["is_guest"]) if "is_guest" in row.keys() else False,
         created_at=row["created_at"],
         avatar_url=row["avatar_url"],
         custom_background_url=row["custom_background_url"],
@@ -727,6 +738,40 @@ async def login(request: Request, payload: LoginRequest) -> TokenResponse:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
 
     reset_login_failures(ip)
+    token, ttl = await _issue_token(pool, int(row["id"]))
+    return TokenResponse(access_token=token, expires_in=ttl)
+
+
+@router.post("/guest", response_model=TokenResponse)
+async def guest_login(request: Request) -> TokenResponse:
+    """游客登录：自动创建临时游客用户并签发访问令牌。"""
+    pool = _pool_from_request(request)
+
+    # 生成唯一的游客用户名
+    for _ in range(10):
+        suffix = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
+        username = f"guest_{suffix}"
+        async with pool.acquire() as conn:
+            existing = await conn.fetchval("SELECT id FROM auth_users WHERE username = $1", username)
+        if existing is None:
+            break
+    else:
+        raise HTTPException(status_code=500, detail="无法生成唯一用户名，请稍后重试")
+
+    # 创建游客用户（无密码、无邮箱）
+    dummy_hash, dummy_salt = _hash_password(secrets.token_urlsafe(32))
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO auth_users (username, password_hash, password_salt, is_guest)
+            VALUES ($1, $2, $3, TRUE)
+            RETURNING id
+            """,
+            username,
+            dummy_hash,
+            dummy_salt,
+        )
+
     token, ttl = await _issue_token(pool, int(row["id"]))
     return TokenResponse(access_token=token, expires_in=ttl)
 

@@ -305,6 +305,23 @@ export default function Login() {
     setMode(newMode);
   };
 
+  const guestLogin = async () => {
+    if (isSubmitting) return;
+    setError(null);
+    setNotice(null);
+    setIsSubmitting(true);
+    try {
+      const data = await apiJson<LoginResponse>('/auth/guest', { method: 'POST' });
+      setSession(data.access_token, data.expires_in);
+      await syncUserSettings();
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '游客登录失败');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden font-sans">
       {/* Full-screen background image */}
@@ -633,6 +650,25 @@ export default function Login() {
                       {isSubmitting ? '登录中...' : '登录'}
                     </button>
                   )}
+
+                  {/* Guest login */}
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200/60" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="px-2 text-slate-400" style={{ background: 'rgba(255, 255, 255, 0.78)' }}>或</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={guestLogin}
+                    disabled={isSubmitting}
+                    className="w-full h-10 rounded-xl text-slate-600 text-sm font-medium disabled:opacity-50 transition-all hover:bg-slate-100 active:scale-[0.98] flex items-center justify-center gap-2 border border-slate-200"
+                  >
+                    <UserIcon className="w-4 h-4" />
+                    游客体验
+                  </button>
                 </form>
               </div>
 

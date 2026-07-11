@@ -8,6 +8,7 @@ export type User = {
   email_verified_at?: string | null;
   is_active: boolean;
   is_admin: boolean;
+  is_guest?: boolean;
   created_at: string;
 };
 
