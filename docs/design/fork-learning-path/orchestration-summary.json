@@ -1,0 +1,96 @@
+{
+  "project": {
+    "name": "学习路径 Fork 树状图",
+    "path": "/Users/qishu/Project/ark/docs/design/fork-learning-path",
+    "operation": "create",
+    "deviceType": "desktop",
+    "language": "zh-CN",
+    "dashboardMode": false,
+    "replicationMode": null,
+    "sourceUrl": null,
+    "visualSpecExcerpt": null,
+    "styleDefinitionBrief": "游戏化学习应用，蓝白清新学院风，fork 树状图展示分支与回归循环",
+    "designRead": "component UI / students / playful-game / medium density / avoid neon glow",
+    "designDials": {
+      "layoutVariance": 3,
+      "motionIntensity": 2,
+      "visualDensity": 3
+    },
+    "styleContinuityAnchors": {
+      "colorSystem": {
+        "primaryColorRole": "primary blue #4F7DF7 for main path and key interactions",
+        "brandHuePolicy": "single primary hue with purple fork accent and amber return accent for path differentiation",
+        "stateColors": "success green, warning amber, error red"
+      },
+      "shapeSystem": "rounded cards (10-14px radius), pill badges, organic curved SVG connectors",
+      "typographySystem": "Inter + PingFang SC, clean hierarchy, medium weight contrast",
+      "spacingSystem": "4px base, generous card padding (16-24px), comfortable node spacing",
+      "componentLanguage": "rounded cards with subtle border, pill badges, inline SVG tree connectors",
+      "surfaceAndDepth": "white cards on light gray bg, subtle border-led surfaces, no deep shadows on static elements",
+      "imageryAndIconography": "minimal icons inline, game-style badges and checkpoint markers",
+      "interactionTone": "subtle hover feedback on nodes"
+    },
+    "specsConstraints": null,
+    "sharedProjectShellContract": null,
+    "generationTree": null
+  },
+  "designSource": {
+    "operatingMode": "free-explore",
+    "libraryIdentity": null,
+    "libraryPath": null,
+    "cssFilePath": "/Users/qishu/Project/ark/docs/design/fork-learning-path/colors_and_type.css",
+    "brandPrefix": "",
+    "themeMode": "light",
+    "designDecisionSummary": "蓝白清新学院风游戏化学习应用，单页组件聚焦 Fork 树状图可视化",
+    "componentContractKind": null,
+    "forbiddenInventedComponents": [],
+    "allowedComponents": [],
+    "styleConstraints": {
+      "radiusMax": 18,
+      "spacingBase": 4,
+      "fontSizeBody": 14,
+      "fontSizeMin": 11,
+      "controlHeightDefault": 32,
+      "controlHeightLarge": 38
+    },
+    "productContext": {
+      "kitType": null,
+      "productType": "gamified learning app"
+    },
+    "actualTokenNameReference": [],
+    "brandPrefix": ""
+  },
+  "pages": [
+    {
+      "nodeId": "page-fork-path",
+      "slug": "fork-path",
+      "title": "学习路径 Fork 树状图",
+      "htmlSrc": "pages/fork-path.html",
+      "pageIndex": 1,
+      "stateGroupId": null,
+      "stateRole": null,
+      "baseStatePageId": null,
+      "sharedShellContract": [],
+      "mutableRegions": [],
+      "derivedFromHtmlSrc": null,
+      "derivationType": "original",
+      "sourcePageId": null,
+      "sourceHtmlSrc": null,
+      "pageType": "showcase",
+      "businessScenario": "学习路径 Fork 机制可视化",
+      "visualNorthStar": "A game-style fork tree diagram that makes the learning path's branching-and-returning loop immediately intuitive, with organic curved connectors and badge-styled nodes",
+      "compositionPattern": "centered single-focus component with supporting context",
+      "continuityAnchors": ["blue-white palette", "rounded card nodes", "curved SVG connectors"],
+      "libraryRestraintMode": false,
+      "uiKitPath": null,
+      "componentPlan": [],
+      "imagePlan": [],
+      "chartsRequired": false,
+      "miniProgramStyle": false,
+      "qualityRisks": []
+    }
+  ],
+  "assets": [],
+  "wiringPlan": [],
+  "hiddenInteractionPlan": []
+}

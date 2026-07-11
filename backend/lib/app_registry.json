@@ -1,0 +1,39 @@
+[
+  {
+    "id": "考研英语",
+    "name": "考研英语",
+    "description": "",
+    "icon": "workflow",
+    "route": "/考研英语",
+    "admin_only": false,
+    "type": "deliberate-workflow",
+    "bank_ids": [
+      "4e7a6f16-0d3d-456d-8c08-93fa95fc7b31",
+      "1048f105-63b6-4034-968e-72a4c6ea6660",
+      "ec66b895-4103-47af-9f0e-1ba950f49704",
+      "331d8965-e5b6-414a-be84-1f93742e4841",
+      "a325d091-f7d1-4783-ab5a-ee6c0c52a434",
+      "57ea0585-ec21-4fe0-86ef-3b59946f5e63",
+      "3f765f24-feab-4060-a840-6f727b6564a3",
+      "255b4662-e46d-401c-8f17-9f806fbe0fe7",
+      "c46bb634-6943-44e6-9e59-a32898be0d5b",
+      "93acd5e3-4074-4f7a-8710-990be78ab5ff"
+    ],
+    "sections": [],
+    "focus_works": []
+  },
+  {
+    "id": "考研408",
+    "name": "考研408",
+    "description": "",
+    "icon": "workflow",
+    "route": "/考研408",
+    "admin_only": false,
+    "type": "deliberate-workflow",
+    "bank_ids": [
+      "df57a87c-ed78-4b58-9a8f-3800cbb0f240"
+    ],
+    "sections": [],
+    "focus_works": []
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "page-fork-path",
+      "title": "学习路径 Fork 树状图",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1751817600000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/fork-path.html",
+        "interactions": []
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "学习路径 Fork 树状图"
+  }
+}

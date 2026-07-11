@@ -16,6 +16,7 @@ import VocabToday from './pages/Vocab/Today';
 import VocabWordDetail from './pages/Vocab/WordDetail';
 import DynamicSubAppHome from './pages/DynamicSubAppHome';
 import NotFound from './pages/NotFound';
+import TestHomeDesign from './pages/TestHomeDesign';
 import RequireAdmin from './routes/RequireAdmin';
 import RequireAuth from './routes/RequireAuth';
 import './index.css';
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/test" element={<TestHomeDesign />} />
         <Route element={<RequireAuth />}>
           <Route path="/" element={<App />} />
           <Route element={<RequireAdmin />}>

@@ -81,4 +81,5 @@ docs/compose/
 docs/examples/
 docs/obsidian-vault/
 focus-work-demo.html
+image_gen_cli/.env
 output/

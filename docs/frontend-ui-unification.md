@@ -49,6 +49,12 @@ This document is the long-running record for frontend UI unification work. Its j
 - Standard cards should share radius, border, background, title typography, and spacing decisions through `HomeCard` and `HomeSectionHeader`.
 - Shortcut cards should remain action-oriented but reuse the same home card foundation.
 
+## Experimental Desktop Home
+
+- `/#/test` is an isolated desktop-only layout prototype in `frontend/src/pages/TestHomeDesign.tsx`.
+- It explores a compact application shell, one dominant focus stage, denser task rows, and a secondary assistant panel.
+- Treat it as a review surface rather than a shared component source. Promote approved patterns into shared primitives before reusing them elsewhere.
+
 ## Work Record
 
 | Date | Scope | Completed | Follow-up |

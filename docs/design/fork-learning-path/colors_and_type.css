@@ -1,0 +1,77 @@
+:root {
+  /* === Brand Color System === */
+  --color-primary: #4F7DF7;
+  --color-primary-light: #7B9EFF;
+  --color-primary-lighter: #E8EEFF;
+  --color-primary-dark: #3A5FCC;
+  --color-primary-bg: #F0F4FF;
+
+  /* === State Colors === */
+  --state-success: #34C77B;
+  --state-success-bg: #E8FAF0;
+  --state-warning: #F5A623;
+  --state-warning-bg: #FFF8EB;
+  --state-error: #F25C5C;
+  --state-error-bg: #FFF0F0;
+  --state-info: #4F7DF7;
+
+  /* === Neutral Colors === */
+  --color-bg: #F7F8FC;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-sunken: #EEF0F5;
+  --color-text-primary: #1D2137;
+  --color-text-secondary: #6B7394;
+  --color-text-tertiary: #9AA0B9;
+  --color-border: #E3E6F0;
+  --color-border-light: #F0F1F5;
+
+  /* === Surface & Depth === */
+  --surface-card: #FFFFFF;
+  --surface-card-border: #E8EBF4;
+  --surface-card-shadow: rgba(79, 125, 247, 0.04);
+  --surface-float-shadow: rgba(30, 41, 59, 0.12);
+
+  /* === Fork Path Colors === */
+  --path-main: #4F7DF7;
+  --path-fork: #9B7FE6;
+  --path-return: #F5A623;
+  --path-success: #34C77B;
+  --path-node-bg: #FFFFFF;
+  --path-node-active: #F0F4FF;
+
+  /* === Typography === */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* === Spacing === */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* === Radius === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+}

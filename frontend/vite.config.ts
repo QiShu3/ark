@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: 'hidden',
     },
     server: {
+      host: '0.0.0.0',
       proxy: {
         '/api': {
           target: proxyTarget,

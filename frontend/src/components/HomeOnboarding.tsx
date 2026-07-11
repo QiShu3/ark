@@ -283,6 +283,8 @@ export default function HomeOnboarding() {
     };
   }, [anchorRect]);
 
+  if (import.meta.env.VITE_DISABLE_FIRST_GUIDE === 'true') return null;
+
   if (phase === 'idle') return null;
 
   if (phase === 'intro') {

@@ -229,6 +229,52 @@
   color: var(--ark-text);
 }
 
+.ark-test-page {
+  background:
+    color-mix(in srgb, var(--ark-page-bg) 76%, var(--ark-surface-strong));
+}
+
+.ark-test-icon-button {
+  position: relative;
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: var(--ark-text-muted);
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.ark-test-icon-button:hover {
+  color: var(--ark-text);
+  background: var(--ark-surface-subtle);
+}
+
+.ark-test-focus-stage {
+  color: var(--ark-surface-strong);
+  background: var(--ark-text);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--ark-text) 16%, transparent);
+}
+
+.ark-test-focus-character {
+  filter: saturate(0.82) contrast(0.96);
+  mask-image: linear-gradient(90deg, transparent 0%, var(--ark-text) 24%, var(--ark-text) 100%);
+}
+
+.ark-test-progress-ring {
+  background: conic-gradient(
+    var(--ark-accent) var(--ark-test-progress),
+    var(--ark-surface-subtle) 0
+  );
+}
+
+:root[data-theme="dark"] .ark-test-focus-stage {
+  color: var(--ark-text);
+  background: var(--ark-surface-strong);
+  border: 1px solid var(--ark-border);
+}
+
 .ark-panel-card {
   border: 1px solid var(--ark-glass-border-soft);
   background: var(--ark-glass-surface-soft);
@@ -2629,4 +2675,3 @@
     width: 100%;
   }
 }
-
