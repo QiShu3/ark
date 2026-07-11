@@ -7,6 +7,22 @@
 
 ## 提交记录
 
+### 2026-07-11 · `72355e0` · feat: 新增游客登录功能
+
+**用户需求**："我想设置一个游客登录，你有什么想法吗？" — 体验试用场景，游客可使用大部分功能，数据仅 localStorage，暂不清理。
+
+**完成工作**：
+- 后端 `auth_users` 表新增 `is_guest BOOLEAN DEFAULT FALSE` 列
+- `UserPublic` 和 `_AuthUser` 新增 `is_guest` 字段，所有用户查询 SQL 同步更新
+- 新增 `POST /auth/guest` 端点：自动生成 `guest_{随机字符}` 用户名，创建游客用户（无密码、无邮箱），签发 token
+- 前端 `User` 类型新增 `is_guest` 字段
+- 登录页添加"游客体验"按钮，调用 `/auth/guest` 完成游客登录
+
+**验证情况**：
+- `frontend`: `pnpm check`，passed
+- `backend`: `uv run ruff check`，passed
+- `backend`: `uv run pytest`，275 passed
+
 ### 2026-07-09 · `f9deb34` · feat(frontend): enhance focus work completion panel UI
 
 **用户需求**：优化专注工作完成面板 UI，匹配新原型设计
