@@ -109,7 +109,7 @@ GUEST_ENGLISH_APP = AppDeclaration(
     route="/guest-english",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=[],  # 填入 seed 脚本输出的 vocab_deck ID
+    bank_ids=["65d3df31-99c9-4047-aa1b-d52c073ce169"],
 )
 
 GUEST_MATH_APP = AppDeclaration(
@@ -120,7 +120,7 @@ GUEST_MATH_APP = AppDeclaration(
     route="/guest-math",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=[],  # 填入 seed 脚本输出的 choice_set ID
+    bank_ids=["be2310b9-9746-4510-9acc-04253b4df844"],
 )
 
 GUEST_POLITICS_APP = AppDeclaration(
@@ -131,7 +131,7 @@ GUEST_POLITICS_APP = AppDeclaration(
     route="/guest-politics",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=[],  # 填入 seed 脚本输出的 choice_set ID
+    bank_ids=["82dde323-fbaa-4257-9b0a-874cd2c6072b"],
 )
 
 GUEST_408_APP = AppDeclaration(
@@ -142,7 +142,7 @@ GUEST_408_APP = AppDeclaration(
     route="/guest-408",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=[],  # 填入 seed 脚本输出的 input_set ID
+    bank_ids=["36bbb590-8387-4d30-ac55-f1733126dcd1"],
 )
 
 GUEST_APPS: list[AppDeclaration] = [
