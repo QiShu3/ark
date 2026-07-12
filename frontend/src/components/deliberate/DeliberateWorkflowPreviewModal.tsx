@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
 import { listDeliberateWorkflows, type DeliberateWorkflowConfig } from '../../lib/deliberate/api';
+import type { AppDeclaration } from '../../lib/appRegistry';
 import {
   getDeliberateWorkflowConfigIds,
   getDeliberateWorkflowConfigNames,
@@ -13,6 +14,7 @@ type Props = {
   open: boolean;
   preset: WorkflowPreset | null;
   presets?: WorkflowPreset[];
+  subApps?: AppDeclaration[];
   onClose: () => void;
   onStart: (configIds: string[]) => void;
   onEdit: () => void;
@@ -21,9 +23,9 @@ type Props = {
 
 type Step = 'event' | 'preset' | 'preview';
 
-type EventGroup = {
-  eventId: string | null;
-  eventName: string;
+type SubAppGroup = {
+  appId: string | null;
+  appName: string;
   presets: WorkflowPreset[];
 };
 
@@ -57,38 +59,52 @@ function getPresetSummary(preset: WorkflowPreset): { taskCount: number; estimate
   return { taskCount, estimatedMinutes };
 }
 
-/** 按 event 分组 presets */
-function groupPresetsByEvent(presets: WorkflowPreset[]): EventGroup[] {
-  const groups = new Map<string, EventGroup>();
-
-  for (const preset of presets) {
-    const eventId = preset.event_id ?? null;
-    const key = eventId ?? '__no_event__';
-
-    if (!groups.has(key)) {
-      groups.set(key, {
-        eventId,
-        eventName: preset.event_name ?? '未分类',
-        presets: [],
-      });
+/** 按子应用分组；未传入子应用时保留原有的事件分组行为。 */
+function groupPresetsBySubApp(presets: WorkflowPreset[], subApps?: AppDeclaration[]): SubAppGroup[] {
+  if (!subApps) {
+    const groups = new Map<string, SubAppGroup>();
+    for (const preset of presets) {
+      const appId = preset.event_id ?? null;
+      const key = appId ?? '__no_event__';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          appId,
+          appName: preset.event_name ?? '未分类',
+          presets: [],
+        });
+      }
+      groups.get(key)!.presets.push(preset);
     }
-    groups.get(key)!.presets.push(preset);
+    return Array.from(groups.values());
   }
 
-  return Array.from(groups.values());
+  const presetsByAppId = new Map<string, WorkflowPreset[]>();
+  for (const preset of presets) {
+    if (!preset.app_id) continue;
+    const appPresets = presetsByAppId.get(preset.app_id) ?? [];
+    appPresets.push(preset);
+    presetsByAppId.set(preset.app_id, appPresets);
+  }
+
+  return subApps.map((app) => ({
+    appId: app.id,
+    appName: app.name,
+    presets: presetsByAppId.get(app.id) ?? [],
+  }));
 }
 
 export default function DeliberateWorkflowPreviewModal({
   open,
   preset,
   presets,
+  subApps,
   onClose,
   onStart,
   onEdit,
   onPresetChange,
 }: Props) {
   const [step, setStep] = useState<Step>('event');
-  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [activeAppId, setActiveAppId] = useState<string | null>(null);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [configsMap, setConfigsMap] = useState<Record<string, DeliberateWorkflowConfig>>({});
@@ -102,21 +118,25 @@ export default function DeliberateWorkflowPreviewModal({
     [presets],
   );
 
-  const eventGroups = useMemo(() => groupPresetsByEvent(availablePresets), [availablePresets]);
-  const hasMultipleEvents = eventGroups.length > 1;
+  const subAppGroups = useMemo(
+    () => groupPresetsBySubApp(availablePresets, subApps),
+    [availablePresets, subApps],
+  );
+  const hasSubAppSelection = (subApps?.length ?? 0) > 0;
+  const hasMultipleSubApps = subAppGroups.length > 1;
 
-  const activeEventGroup = useMemo(
-    () => eventGroups.find((g) => g.eventId === activeEventId) ?? eventGroups[0] ?? null,
-    [activeEventId, eventGroups],
+  const activeSubAppGroup = useMemo(
+    () => subAppGroups.find((g) => g.appId === activeAppId) ?? subAppGroups[0] ?? null,
+    [activeAppId, subAppGroups],
   );
 
   const activePreset = useMemo(() => {
-    if (hasMultiplePresets) {
-      const presetsInEvent = activeEventGroup?.presets ?? availablePresets;
-      return presetsInEvent.find((p) => p.id === activePresetId) ?? presetsInEvent[0] ?? null;
+    if (hasSubAppSelection || hasMultiplePresets) {
+      const presetsInApp = activeSubAppGroup?.presets ?? availablePresets;
+      return presetsInApp.find((p) => p.id === activePresetId) ?? presetsInApp[0] ?? null;
     }
     return preset;
-  }, [activePresetId, activeEventGroup, availablePresets, hasMultiplePresets, preset]);
+  }, [activePresetId, activeSubAppGroup, availablePresets, hasMultiplePresets, hasSubAppSelection, preset]);
 
   const configIds = useMemo(() => getDeliberateWorkflowConfigIds(activePreset), [activePreset]);
   const configNames = useMemo(() => getDeliberateWorkflowConfigNames(activePreset), [activePreset]);
@@ -149,19 +169,21 @@ export default function DeliberateWorkflowPreviewModal({
 
   // 弹窗打开时重置状态
   const resetState = useCallback(() => {
-    setActiveEventId(null);
+    setActiveAppId(null);
     setActivePresetId(null);
     setExpandedIndex(null);
     setConfigsMap({});
 
-    if (!hasMultiplePresets) {
+    if (hasSubAppSelection) {
+      setStep('event');
+    } else if (!hasMultiplePresets) {
       setStep('preview');
-    } else if (hasMultipleEvents) {
+    } else if (hasMultipleSubApps) {
       setStep('event');
     } else {
       setStep('preset');
     }
-  }, [hasMultiplePresets, hasMultipleEvents]);
+  }, [hasMultiplePresets, hasMultipleSubApps, hasSubAppSelection]);
 
   useEffect(() => {
     if (open && !prevOpenRef.current) {
@@ -181,7 +203,7 @@ export default function DeliberateWorkflowPreviewModal({
     setLoadingConfigs(true);
 
     try {
-      const allConfigs = await listDeliberateWorkflows();
+      const allConfigs = await listDeliberateWorkflows(activePreset?.app_id);
       const map: Record<string, DeliberateWorkflowConfig> = {};
       for (const cfg of allConfigs) {
         if (ids.includes(cfg.id)) {
@@ -195,7 +217,7 @@ export default function DeliberateWorkflowPreviewModal({
       loadingRef.current = false;
       setLoadingConfigs(false);
     }
-  }, [configsMap]);
+  }, [activePreset?.app_id, configsMap]);
 
   useEffect(() => {
     if (step !== 'preview' || !activePreset) return;
@@ -204,8 +226,17 @@ export default function DeliberateWorkflowPreviewModal({
     void loadConfigs(ids);
   }, [step, activePreset, loadConfigs]);
 
-  function handleSelectEvent(eventId: string | null) {
-    setActiveEventId(eventId);
+  function handleSelectSubApp(appId: string | null) {
+    setActiveAppId(appId);
+    const group = subAppGroups.find((item) => item.appId === appId);
+    const [onlyPreset] = group?.presets ?? [];
+    if (onlyPreset && group?.presets.length === 1) {
+      setActivePresetId(onlyPreset.id);
+      setExpandedIndex(null);
+      setStep('preview');
+      onPresetChange?.(onlyPreset.id);
+      return;
+    }
     setActivePresetId(null);
     setStep('preset');
   }
@@ -218,7 +249,7 @@ export default function DeliberateWorkflowPreviewModal({
   }
 
   function handleBackToEvent() {
-    if (hasMultipleEvents) {
+    if (hasSubAppSelection) {
       setStep('event');
     } else {
       onClose();
@@ -228,7 +259,7 @@ export default function DeliberateWorkflowPreviewModal({
   function handleBackToPreset() {
     if (hasMultiplePresets) {
       setStep('preset');
-    } else if (hasMultipleEvents) {
+    } else if (hasSubAppSelection) {
       setStep('event');
     }
   }
@@ -278,12 +309,12 @@ export default function DeliberateWorkflowPreviewModal({
         <div className="max-h-[60vh] overflow-y-auto p-4">
           {step === 'event' ? (
             <EventStep
-              groups={eventGroups}
-              onSelect={handleSelectEvent}
+              groups={subAppGroups}
+              onSelect={handleSelectSubApp}
             />
           ) : step === 'preset' ? (
             <PresetStep
-              presets={activeEventGroup?.presets ?? availablePresets}
+              presets={activeSubAppGroup?.presets ?? availablePresets}
               onSelect={handleSelectPreset}
               onEdit={onEdit}
             />
@@ -314,7 +345,7 @@ export default function DeliberateWorkflowPreviewModal({
             </>
           ) : step === 'preset' ? (
             <>
-              {hasMultipleEvents ? (
+              {hasSubAppSelection ? (
                 <Button variant="secondary" onClick={handleBackToEvent}>
                   返回选择
                 </Button>
@@ -327,7 +358,7 @@ export default function DeliberateWorkflowPreviewModal({
             </>
           ) : (
             <>
-              {hasMultiplePresets || hasMultipleEvents ? (
+              {hasMultiplePresets || hasSubAppSelection ? (
                 <Button variant="secondary" onClick={handleBackToPreset}>
                   返回选择
                 </Button>
@@ -339,6 +370,7 @@ export default function DeliberateWorkflowPreviewModal({
                 leftIcon={<Play className="h-4 w-4" />}
                 disabled={!canStart}
                 onClick={handleStart}
+                data-onboarding-anchor="workflow-start-button"
               >
                 启动工作流
               </Button>
@@ -355,8 +387,8 @@ function EventStep({
   groups,
   onSelect,
 }: {
-  groups: EventGroup[];
-  onSelect: (eventId: string | null) => void;
+  groups: SubAppGroup[];
+  onSelect: (appId: string | null) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -364,16 +396,17 @@ function EventStep({
         const presetCount = group.presets.length;
         return (
           <button
-            key={group.eventId ?? '__no_event__'}
+            key={group.appId ?? '__no_app__'}
             type="button"
-            onClick={() => onSelect(group.eventId)}
+            onClick={() => onSelect(group.appId)}
+            data-onboarding-anchor={group.appName === '408' ? 'workflow-sub-app' : undefined}
             className="flex w-full items-center gap-4 rounded-lg border border-ark-border bg-ark-surface-subtle px-4 py-3.5 text-left transition hover:bg-ark-surface-strong hover:border-ark-accent/30"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ark-accent/10">
               <FolderOpen className="h-5 w-5 text-ark-accent" />
             </div>
             <div className="min-w-0 flex-1">
-              <span className="truncate text-sm font-semibold text-ark-text">{group.eventName}</span>
+              <span className="truncate text-sm font-semibold text-ark-text">{group.appName}</span>
               <div className="mt-1 text-xs text-ark-text-muted">
                 {presetCount} 个工作流
               </div>

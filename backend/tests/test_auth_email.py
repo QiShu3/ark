@@ -168,14 +168,9 @@ def test_guest_event_setup_is_idempotent(monkeypatch) -> None:
     assert second.status_code == 200
     assert second.json()["event_id"] == first.json()["event_id"]
     assert len(conn.events) == 1
-    assert len(conn.configs) == 4
-    assert len(conn.presets) == 4
-    assert first.json()["app_ids"] == [
-        "guest-english-42",
-        "guest-math-42",
-        "guest-politics-42",
-        "guest-408-42",
-    ]
+    assert len(conn.configs) == 1
+    assert len(conn.presets) == 1
+    assert first.json()["app_ids"] == ["guest-408-42"]
     event_id = first.json()["event_id"]
     assert {str(app["event_id"]) for app in conn.sub_apps} == {event_id}
     assert {str(config["event_id"]) for config in conn.configs} == {event_id}

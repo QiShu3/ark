@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
+import { loadAppRegistry, type AppDeclaration } from '../lib/appRegistry';
+import { getPrimaryEvent } from '../lib/events/api';
 import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../lib/focusWorkflow';
+import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import { useEventArrangements } from '../hooks/useEventArrangements';
 import { usePrimaryEvent } from '../hooks/usePrimaryEvent';
 import { useAuthStore } from '../lib/auth';
@@ -180,6 +183,7 @@ export default function HomeRightDashboard() {
   const [achievementOpen, setAchievementOpen] = useState(false);
   const [workflowStartOpen, setWorkflowStartOpen] = useState(false);
   const [workflowStartPresets, setWorkflowStartPresets] = useState<WorkflowPreset[]>([]);
+  const [workflowStartSubApps, setWorkflowStartSubApps] = useState<AppDeclaration[] | undefined>(undefined);
   const [selectedWorkflowStartId, setSelectedWorkflowStartId] = useState<string | null>(null);
   const achievementButtonRef = useRef<HTMLButtonElement | null>(null);
   const taskListRef = useRef<HTMLDivElement | null>(null);
@@ -330,6 +334,32 @@ export default function HomeRightDashboard() {
         return;
       }
       if (!workflow || workflow.state === 'normal') {
+        const currentEvent = await getPrimaryEvent().catch(() => null);
+        if (currentEvent) {
+          const eventApps = (await loadAppRegistry()).filter((app) => app.eventId === currentEvent.id);
+          if (eventApps.length > 0) {
+            const presetResults = await Promise.allSettled(
+              eventApps.map(async (app) => {
+                const presets = await apiJson<WorkflowPreset[]>(
+                  `/todo/focus/workflows?app_id=${encodeURIComponent(app.id)}`,
+                );
+                return presets.map((preset) => ({ ...preset, app_id: app.id }));
+              }),
+            );
+            const presets = presetResults.flatMap((result) => (
+              result.status === 'fulfilled' ? result.value : []
+            ));
+            const startablePresets = filterDeliberateWorkflowPresets(presets);
+            const preset = startablePresets.find((item) => item.is_default) ?? startablePresets[0] ?? null;
+
+            setWorkflowStartSubApps(eventApps);
+            setWorkflowStartPresets(startablePresets);
+            setSelectedWorkflowStartId(preset?.id ?? null);
+            setWorkflowStartOpen(true);
+            return;
+          }
+        }
+
         const allPresets = await apiJson<WorkflowPreset[]>('/todo/focus/workflows');
         const presets = filterDeliberateWorkflowPresets(allPresets);
         const preset = presets.find((item) => item.is_default) ?? presets[0];
@@ -337,6 +367,7 @@ export default function HomeRightDashboard() {
           navigate(isGuest ? '/guest-english' : '/deliberate-workflow');
           return;
         }
+        setWorkflowStartSubApps(undefined);
         setWorkflowStartPresets(presets);
         setSelectedWorkflowStartId(preset.id);
         setWorkflowStartOpen(true);
@@ -363,6 +394,7 @@ export default function HomeRightDashboard() {
     try {
       await startMultiDeliberateWorkflow(configIds);
       setWorkflowStartOpen(false);
+      dispatchOnboardingEvent(ONBOARDING_EVENTS.workflowStarted);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
       await loadDashboard();
     } catch (error) {
@@ -472,6 +504,7 @@ export default function HomeRightDashboard() {
 
           <button
             type="button"
+            data-onboarding-anchor={isGuest ? 'guest-learning-entry' : undefined}
             onClick={handlePrimaryAction}
             disabled={isSubmittingAction}
             className="ark-home-primary-button absolute bottom-6 right-6 z-20 flex h-[58px] min-w-[240px] items-center justify-center gap-3 rounded-[24px] px-7 text-xl font-semibold transition hover:scale-[1.01] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
@@ -670,6 +703,7 @@ export default function HomeRightDashboard() {
         open={workflowStartOpen}
         preset={selectedWorkflowStartPreset}
         presets={workflowStartPresets}
+        subApps={workflowStartSubApps}
         onClose={() => {
           if (!isSubmittingAction) setWorkflowStartOpen(false);
         }}

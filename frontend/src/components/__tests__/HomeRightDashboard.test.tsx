@@ -7,6 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomeRightDashboard from '../HomeRightDashboard';
 import { apiJson } from '../../lib/api';
 import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../../lib/focusWorkflow';
+import { getPrimaryEvent } from '../../lib/events/api';
+import { loadAppRegistry } from '../../lib/appRegistry';
+import { useAuthStore } from '../../lib/auth';
+import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../../lib/onboardingEvents';
 import type { WorkflowPreset } from '../workflowPresetForm';
 
 vi.mock('../CalendarWidget', () => ({
@@ -18,7 +22,14 @@ vi.mock('../AchievementModal', () => ({
 }));
 
 vi.mock('../deliberate/DeliberateWorkflowPreviewModal', () => ({
-  default: ({ open, preset, onClose, onStart }: { open: boolean; preset: WorkflowPreset | null; onClose: () => void; onStart: (configIds: string[]) => void }) => {
+  default: ({ open, preset, presets, subApps, onClose, onStart }: {
+    open: boolean;
+    preset: WorkflowPreset | null;
+    presets?: WorkflowPreset[];
+    subApps?: { id: string; name: string }[];
+    onClose: () => void;
+    onStart: (configIds: string[]) => void;
+  }) => {
     if (!open || !preset) return null;
     const groupPhase = preset.phases.find((ph) => ph.phase_type === 'deliberate_group');
     const configIds = groupPhase?.config_ids ?? [];
@@ -26,6 +37,8 @@ vi.mock('../deliberate/DeliberateWorkflowPreviewModal', () => ({
     return (
       <div role="dialog" aria-label="编排预览">
         <div>{preset.name}</div>
+        <div>{subApps?.map((app) => app.name).join('、')}</div>
+        <div>{presets?.length ?? 0} 个工作流</div>
         <div>{configNames.length} 个专注工作</div>
         {configNames.map((name: string, i: number) => (
           <div key={i}>{name}</div>
@@ -47,9 +60,25 @@ vi.mock('../../lib/focusWorkflow', () => ({
   startMultiDeliberateWorkflow: vi.fn(),
 }));
 
+vi.mock('../../lib/events/api', () => ({
+  getPrimaryEvent: vi.fn(),
+}));
+
+vi.mock('../../lib/appRegistry', () => ({
+  loadAppRegistry: vi.fn(),
+}));
+
+vi.mock('../../lib/onboardingEvents', () => ({
+  ONBOARDING_EVENTS: { workflowStarted: 'ark:first-guide-workflow-started' },
+  dispatchOnboardingEvent: vi.fn(),
+}));
+
 const mockApiJson = vi.mocked(apiJson);
 const mockStartMulti = vi.mocked(startMultiDeliberateWorkflow);
 const mockFetchWorkflow = vi.mocked(fetchCurrentFocusWorkflow);
+const mockGetPrimaryEvent = vi.mocked(getPrimaryEvent);
+const mockLoadAppRegistry = vi.mocked(loadAppRegistry);
+const mockDispatchOnboardingEvent = vi.mocked(dispatchOnboardingEvent);
 
 function buildWorkflowPreset(overrides: Partial<WorkflowPreset> = {}): WorkflowPreset {
   return {
@@ -101,14 +130,20 @@ function renderDashboard() {
 describe('HomeRightDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAuthStore.getState().clear();
     mockApiJson.mockImplementation((path: string) => defaultApiResponse(path));
     mockStartMulti.mockResolvedValue(undefined as never);
+    mockDispatchOnboardingEvent.mockClear();
+    mockGetPrimaryEvent.mockRejectedValue(new Error('主事件不存在'));
+    mockLoadAppRegistry.mockResolvedValue([]);
   });
 
   it('renders the unified home dashboard sections and shortcuts', async () => {
     renderDashboard();
 
-    expect(await screen.findByRole('button', { name: '开始学习' })).toBeInTheDocument();
+    const startLearning = await screen.findByRole('button', { name: '开始学习' });
+    expect(startLearning).toBeInTheDocument();
+    expect(startLearning).not.toHaveAttribute('data-onboarding-anchor');
     expect(screen.getByText('当前工作流：默认番茄')).toBeInTheDocument();
     expect(screen.getByText('今日进度')).toBeInTheDocument();
     expect(screen.getByText('任务')).toBeInTheDocument();
@@ -148,6 +183,7 @@ describe('HomeRightDashboard', () => {
     await waitFor(() => {
       expect(mockStartMulti).toHaveBeenCalledWith(['cfg-a', 'cfg-b']);
     });
+    expect(mockDispatchOnboardingEvent).toHaveBeenCalledWith(ONBOARDING_EVENTS.workflowStarted);
   });
 
   it('skips legacy workflow presets when opening the deliberate workflow preview', async () => {
@@ -182,6 +218,49 @@ describe('HomeRightDashboard', () => {
     expect(await screen.findByRole('dialog', { name: '编排预览' })).toBeInTheDocument();
     expect(screen.getByText('英语编排')).toBeInTheDocument();
     expect(screen.queryByText('旧番茄')).not.toBeInTheDocument();
+  });
+
+  it('loads workflows from the current event sub-apps before opening the preview', async () => {
+    const user = userEvent.setup();
+    const english = buildWorkflowPreset({ id: 'english-preset', name: '英语二工作流', app_id: 'english-app' });
+    const math = buildWorkflowPreset({ id: 'math-preset', name: '数学二工作流', app_id: 'math-app' });
+    mockGetPrimaryEvent.mockResolvedValue({ id: 'event-1' } as never);
+    mockLoadAppRegistry.mockResolvedValue([
+      { id: 'english-app', name: '英语二', eventId: 'event-1' },
+      { id: 'math-app', name: '数学二', eventId: 'event-1' },
+      { id: 'other-app', name: '其他事件', eventId: 'event-2' },
+    ] as never);
+    mockApiJson.mockImplementation((path: string) => {
+      if (path === '/todo/focus/workflows?app_id=english-app') return Promise.resolve([english]);
+      if (path === '/todo/focus/workflows?app_id=math-app') return Promise.resolve([math]);
+      return defaultApiResponse(path);
+    });
+
+    renderDashboard();
+    await user.click(await screen.findByRole('button', { name: '开始学习' }));
+
+    expect(await screen.findByRole('dialog', { name: '编排预览' })).toHaveTextContent('英语二、数学二');
+    expect(screen.getByText('2 个工作流')).toBeInTheDocument();
+    expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows?app_id=english-app');
+    expect(mockApiJson).toHaveBeenCalledWith('/todo/focus/workflows?app_id=math-app');
+    expect(mockApiJson).not.toHaveBeenCalledWith('/todo/focus/workflows?app_id=other-app');
+  });
+
+  it('keeps the visible learning entry available as the onboarding target for guests', async () => {
+    useAuthStore.getState().setUser({
+      id: 1,
+      username: 'guest',
+      email: null,
+      is_active: true,
+      is_admin: false,
+      is_guest: true,
+      created_at: '2026-07-12T00:00:00Z',
+    });
+    renderDashboard();
+
+    const startLearning = await screen.findByRole('button', { name: '开始学习' });
+    expect(startLearning).toHaveAttribute('data-onboarding-anchor', 'guest-learning-entry');
+    expect(startLearning.closest('[aria-hidden="true"]')).toBeNull();
   });
 
   it('renders the active workflow name and its phases chain when a workflow is active', async () => {

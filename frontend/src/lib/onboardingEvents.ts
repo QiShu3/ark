@@ -1,5 +1,7 @@
 export const FIRST_GUIDE_STORAGE_KEY = 'ark-first-guide-v1';
 export const FIRST_GUIDE_RESTART_EVENT = 'ark:first-guide-restart';
+export const GUEST_ONBOARDING_STORAGE_KEY = 'ark-guest-onboarding-v1';
+export const GUEST_ONBOARDING_RESTART_EVENT = 'ark:guest-onboarding-restart';
 
 export const FIRST_GUIDE_EVENTS = {
   primaryEventOpened: 'ark:first-guide-primary-event-opened',
@@ -35,6 +37,11 @@ export const dispatchOnboardingEvent = dispatchFirstGuideEvent;
 export function restartFirstGuide(): void {
   window.localStorage.removeItem(FIRST_GUIDE_STORAGE_KEY);
   window.dispatchEvent(new CustomEvent(FIRST_GUIDE_RESTART_EVENT));
+}
+
+export function restartGuestOnboarding(userId: number): void {
+  window.localStorage.removeItem(`${GUEST_ONBOARDING_STORAGE_KEY}:${userId}`);
+  window.dispatchEvent(new CustomEvent(GUEST_ONBOARDING_RESTART_EVENT));
 }
 
 export const restartHomeOnboarding = restartFirstGuide;

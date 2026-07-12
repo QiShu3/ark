@@ -44,6 +44,21 @@ describe('Login page', () => {
     );
   });
 
+  it('explains the temporary guest account and record recovery limits', () => {
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    );
+
+    const guestLogin = screen.getByRole('button', { name: '游客体验' });
+    expect(guestLogin).toHaveAttribute('aria-describedby', 'guest-login-note');
+    expect(screen.getByText('将创建临时游客账号；退出或更换设备后无法恢复学习记录。注册账号可长期保存数据。')).toHaveAttribute(
+      'id',
+      'guest-login-note',
+    );
+  });
+
   it('registers with email and verifies with a code without logging in', async () => {
     const user = userEvent.setup();
     mockApiJson.mockImplementation(async (path: string) => {
@@ -63,11 +78,11 @@ describe('Login page', () => {
     );
 
     await user.click(screen.getByRole('button', { name: '注册' }));
-    await user.type(screen.getByLabelText('用户名'), 'tester');
-    await user.type(screen.getByLabelText('邮箱'), 'tester@example.com');
-    await user.type(screen.getByLabelText('密码'), 'password123');
+    await user.type(screen.getByLabelText('用户名', { selector: '#register-username' }), 'tester');
+    await user.type(screen.getByLabelText('邮箱', { selector: '#register-email' }), 'tester@example.com');
+    await user.type(screen.getByLabelText('密码', { selector: '#register-password' }), 'password123');
     await user.type(screen.getByLabelText('确认密码'), 'password123');
-    await user.type(screen.getByLabelText('验证码'), 'ABCD');
+    await user.type(screen.getByLabelText('验证码', { selector: '#register-captcha' }), 'ABCD');
     await user.click(screen.getByRole('button', { name: '注册并发送验证码' }));
 
     await waitFor(() => {
@@ -117,8 +132,8 @@ describe('Login page', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('用户名'), 'tester');
-    await user.type(screen.getByLabelText('密码'), 'password123');
+    await user.type(screen.getByLabelText('用户名', { selector: '#login-username' }), 'tester');
+    await user.type(screen.getByLabelText('密码', { selector: '#login-password' }), 'password123');
     await user.click(screen.getByTestId('auth-submit-btn'));
     await user.click(await screen.findByRole('button', { name: '重发验证码' }));
 

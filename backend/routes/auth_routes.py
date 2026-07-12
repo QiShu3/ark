@@ -850,20 +850,36 @@ async def guest_setup_event(
     pool = _pool_from_request(request)
     uid = int(user.id)
 
-    # Template keys are stable; app IDs are per-user instances.  This lets the
-    # same mechanism power future user-created sub-apps without cross-user data.
+    # The guest entry deliberately exposes one complete 408 learning path.
+    # App IDs remain per-user instances so no guest can access another's setup.
     guest_templates = [
-        ("guest-english", "英语二", "考研英语二词汇与阅读训练", "book-open", "65d3df31-99c9-4047-aa1b-d52c073ce169", "flash_card", "英语二工作流", "英语二核心词汇"),
-        ("guest-math", "数学二", "考研数学二选择题专项训练", "bar-chart", "be2310b9-9746-4510-9acc-04253b4df844", "choice", "数学二工作流", "数学二选择题"),
-        ("guest-politics", "政治", "考研政治选择题专项训练", "scroll-text", "82dde323-fbaa-4257-9b0a-874cd2c6072b", "choice", "政治工作流", "政治选择题"),
         ("guest-408", "408", "408计算机学科专业基础综合训练", "workflow", "36bbb590-8387-4d30-ac55-f1733126dcd1", "input", "408工作流", "408综合训练"),
     ]
+    retired_template_keys = ["guest-english", "guest-math", "guest-politics"]
 
     async with pool.acquire() as conn:
         async with conn.transaction():
             # The onboarding modal can be retried after a refresh. Serialize setup
             # per guest and converge on one event/config/preset per guest app.
             await conn.execute("SELECT pg_advisory_xact_lock($1)", uid)
+            retired_app_ids = [f"{template_key}-{uid}" for template_key in retired_template_keys]
+            # Existing guests may have used the previous four-subject setup.
+            # Remove its generated records when they restart the 408 experience.
+            await conn.execute(
+                "DELETE FROM focus_workflow_presets WHERE user_id = $1 AND app_id = ANY($2::TEXT[])",
+                uid,
+                retired_app_ids,
+            )
+            await conn.execute(
+                "DELETE FROM deliberate_workflow_configs WHERE user_id = $1 AND app_id = ANY($2::TEXT[])",
+                uid,
+                retired_app_ids,
+            )
+            await conn.execute(
+                "DELETE FROM deliberate_sub_apps WHERE owner_user_id = $1 AND template_key = ANY($2::TEXT[])",
+                uid,
+                retired_template_keys,
+            )
             existing_event = await conn.fetchrow(
                 """
                 SELECT id

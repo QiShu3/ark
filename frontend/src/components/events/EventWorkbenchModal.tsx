@@ -1182,6 +1182,7 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
             variant="secondary"
             onClick={onClose}
             aria-label="关闭安排"
+            data-onboarding-anchor="event-workbench-close"
             leftIcon={<X size={14} />}
           >
             关闭

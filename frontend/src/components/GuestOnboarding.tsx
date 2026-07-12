@@ -1,49 +1,24 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, GraduationCap, BookOpen, PenTool, Music, Loader2 } from 'lucide-react';
+import { GraduationCap, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../lib/auth';
 import { apiJson } from '../lib/api';
 import { clearAppRegistryCache } from '../lib/appRegistry';
-import { ONBOARDING_EVENTS } from '../lib/onboardingEvents';
+import { GUEST_ONBOARDING_RESTART_EVENT, GUEST_ONBOARDING_STORAGE_KEY, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 
-const STORAGE_KEY = 'ark-guest-onboarding-v1';
+const STORAGE_KEY = GUEST_ONBOARDING_STORAGE_KEY;
 
-type GuestPhase = 'idle' | 'event-type' | 'major' | 'creating' | 'guide-event' | 'guide-event-wait' | 'guide-start' | 'done';
-
-// --- Event type options ---
-
-type EventTypeOption = {
-  id: string;
-  label: string;
-  description: string;
-  icon: typeof GraduationCap;
-  available: boolean;
-};
-
-const EVENT_TYPES: EventTypeOption[] = [
-  { id: 'kaoyan', label: '考研', description: '全国硕士研究生统一招生考试', icon: GraduationCap, available: true },
-  { id: 'kaogong', label: '考公', description: '公务员考试', icon: BookOpen, available: false },
-  { id: 'lunwen', label: '写论文', description: '学术论文写作', icon: PenTool, available: false },
-  { id: 'yinyue', label: '学音乐', description: '音乐学习与练习', icon: Music, available: false },
-];
-
-// --- Major options (for kaoyan) ---
-
-type MajorOption = {
-  id: string;
-  label: string;
-  available: boolean;
-};
-
-const MAJORS: MajorOption[] = [
-  { id: '22408', label: '408计算机学科专业基础', available: true },
-  { id: 'law', label: '法学', available: false },
-  { id: 'biology', label: '生物学', available: false },
-  { id: 'chemistry', label: '化学', available: false },
-  { id: 'medicine', label: '医学', available: false },
-  { id: 'finance', label: '金融学', available: false },
-  { id: 'education', label: '教育学', available: false },
-];
+type GuestPhase =
+  | 'idle'
+  | 'experience'
+  | 'creating'
+  | 'guide-event'
+  | 'guide-event-close'
+  | 'guide-start'
+  | 'guide-learning-select'
+  | 'guide-workflow-start'
+  | 'learning-open'
+  | 'done';
 
 // --- Guided tour steps ---
 
@@ -64,11 +39,32 @@ const GUIDE_STEPS: GuideStep[] = [
     placement: 'right',
   },
   {
-    id: 'start-learning',
-    anchor: 'workflow-start-button',
-    title: '开始学习',
-    body: '准备好后，点击这里开始你的学习工作流。',
+    id: 'close-event-workbench',
+    anchor: 'event-workbench-close',
+    title: '先关闭事件工作台',
+    body: '事件已经准备好了。关闭工作台回到首页，继续启动第一轮学习。',
     placement: 'left',
+  },
+  {
+    id: 'start-learning',
+    anchor: 'guest-learning-entry',
+    title: '开始学习',
+    body: '准备好后，点击这里选择并启动你的 408 学习工作流。',
+    placement: 'left',
+  },
+  {
+    id: 'select-learning-app',
+    anchor: 'workflow-sub-app',
+    title: '选择学习应用',
+    body: '先选择 408 学习应用，再查看本次学习的任务安排。',
+    placement: 'left',
+  },
+  {
+    id: 'start-workflow',
+    anchor: 'workflow-start-button',
+    title: '启动第一轮学习',
+    body: '确认任务后，点击这里启动工作流，进入第一道练习。',
+    placement: 'top',
   },
 ];
 
@@ -82,19 +78,35 @@ function useAnchorRect(anchor: string | null, visible: boolean): DOMRect | null 
       setRect(null);
       return;
     }
-    const el = document.querySelector<HTMLElement>(`[data-onboarding-anchor="${anchor}"]`);
-    if (!el) {
-      setRect(null);
-      return;
-    }
-    setRect(el.getBoundingClientRect());
+    let observedElement: HTMLElement | null = null;
     const observer = new ResizeObserver(() => {
-      setRect(el.getBoundingClientRect());
+      if (observedElement) setRect(observedElement.getBoundingClientRect());
     });
-    observer.observe(el);
-    window.addEventListener('scroll', () => setRect(el.getBoundingClientRect()), { passive: true });
-    window.addEventListener('resize', () => setRect(el.getBoundingClientRect()), { passive: true });
-    return () => observer.disconnect();
+    const updateRect = () => {
+      const element = document.querySelector<HTMLElement>(`[data-onboarding-anchor="${anchor}"]`);
+      if (!element) {
+        setRect(null);
+        return;
+      }
+      if (element !== observedElement) {
+        observer.disconnect();
+        observedElement = element;
+        observer.observe(element);
+      }
+      setRect(element.getBoundingClientRect());
+    };
+    const mutationObserver = new MutationObserver(updateRect);
+
+    updateRect();
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('scroll', updateRect, { passive: true });
+    window.addEventListener('resize', updateRect, { passive: true });
+    return () => {
+      observer.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener('scroll', updateRect);
+      window.removeEventListener('resize', updateRect);
+    };
   }, [anchor, visible]);
 
   return rect;
@@ -105,11 +117,15 @@ function useAnchorRect(anchor: string | null, visible: boolean): DOMRect | null 
 function GuideHighlight({
   step,
   visible,
-  onAction,
+  onTargetAction,
+  onBubbleAction,
+  onSkip,
 }: {
   step: GuideStep;
   visible: boolean;
-  onAction: () => void;
+  onTargetAction: () => void;
+  onBubbleAction?: () => void;
+  onSkip: () => void;
 }) {
   const rect = useAnchorRect(step.anchor, visible);
 
@@ -117,10 +133,10 @@ function GuideHighlight({
     if (!visible || !rect) return;
     const el = document.querySelector<HTMLElement>(`[data-onboarding-anchor="${step.anchor}"]`);
     if (!el) return;
-    const handler = () => onAction();
+    const handler = () => onTargetAction();
     el.addEventListener('click', handler);
     return () => el.removeEventListener('click', handler);
-  }, [visible, rect, step.anchor, onAction]);
+  }, [visible, rect, step.anchor, onTargetAction]);
 
   if (!visible || !rect) return null;
 
@@ -200,13 +216,24 @@ function GuideHighlight({
       >
         <div className="text-sm font-bold text-ark-text mb-1">{step.title}</div>
         <div className="text-xs text-ark-text-muted leading-relaxed mb-3">{step.body}</div>
+        {onBubbleAction ? (
+          <button
+            type="button"
+            onClick={onBubbleAction}
+            className="w-full h-9 rounded-lg text-xs font-medium text-white transition-all"
+            style={{ background: '#3b82f6' }}
+          >
+            去看看
+          </button>
+        ) : (
+          <div className="text-xs font-medium text-[var(--ark-accent)]">请点击高亮按钮继续</div>
+        )}
         <button
           type="button"
-          onClick={onAction}
-          className="w-full h-9 rounded-lg text-xs font-medium text-white transition-all"
-          style={{ background: '#3b82f6' }}
+          onClick={onSkip}
+          className="mt-3 w-full text-center text-xs text-ark-text-muted transition-colors hover:text-ark-text"
         >
-          {step.id === 'event-button' ? '去看看' : '知道了'}
+          跳过引导
         </button>
       </div>
     </>,
@@ -217,30 +244,35 @@ function GuideHighlight({
 // --- Main component ---
 
 export default function GuestOnboarding() {
-  const isGuest = useAuthStore((s) => s.user?.is_guest ?? false);
+  const user = useAuthStore((s) => s.user);
+  const isGuest = user?.is_guest ?? false;
+  const storageKey = `${STORAGE_KEY}:${user?.id ?? 'guest'}`;
   const [phase, setPhase] = useState<GuestPhase>('idle');
-  const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
-  const [selectedMajor, setSelectedMajor] = useState<string | null>(null);
-  const [guideStep, setGuideStep] = useState(0);
 
   // Check if already completed
   useEffect(() => {
     if (!isGuest) return;
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) === 'done') {
+      if (window.localStorage.getItem(storageKey) === 'done') {
         setPhase('done');
         return;
       }
     } catch { /* ignore */ }
-    setPhase('event-type');
+    setPhase('experience');
+  }, [isGuest, storageKey]);
+
+  useEffect(() => {
+    if (!isGuest) return;
+    const handler = () => setPhase('experience');
+    window.addEventListener(GUEST_ONBOARDING_RESTART_EVENT, handler);
+    return () => window.removeEventListener(GUEST_ONBOARDING_RESTART_EVENT, handler);
   }, [isGuest]);
 
   // Listen for event overview closed (guide step transition)
   useEffect(() => {
-    if (phase !== 'guide-event-wait') return;
+    if (phase !== 'guide-event-close') return;
     const handler = () => {
       setPhase('guide-start');
-      setGuideStep(1);
     };
     window.addEventListener(ONBOARDING_EVENTS.eventOverviewClosed, handler);
     return () => window.removeEventListener(ONBOARDING_EVENTS.eventOverviewClosed, handler);
@@ -250,24 +282,30 @@ export default function GuestOnboarding() {
   // the same as the bubble CTA so the guide does not cover the event overview.
   useEffect(() => {
     if (phase !== 'guide-event') return;
-    const handler = () => setPhase('guide-event-wait');
+    const handler = () => setPhase('guide-event-close');
     window.addEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
     return () => window.removeEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
   }, [phase]);
 
-  const handleEventTypeSelect = useCallback((typeId: string) => {
-    setSelectedEventType(typeId);
-    setPhase('major');
-  }, []);
+  useEffect(() => {
+    if (phase !== 'guide-workflow-start' && phase !== 'learning-open') return;
+    const handler = () => {
+      try {
+        window.localStorage.setItem(storageKey, 'done');
+      } catch { /* ignore */ }
+      setPhase('done');
+    };
+    window.addEventListener(ONBOARDING_EVENTS.workflowStarted, handler);
+    return () => window.removeEventListener(ONBOARDING_EVENTS.workflowStarted, handler);
+  }, [phase, storageKey]);
 
-  const handleMajorSelect = useCallback(async (majorId: string) => {
-    setSelectedMajor(majorId);
+  const handleExperienceStart = useCallback(async () => {
     setPhase('creating');
     try {
       await apiJson('/auth/guest/setup-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: selectedEventType, major: majorId }),
+        body: JSON.stringify({ event_type: 'kaoyan', major: '22408' }),
       });
       // Refresh app registry so new sub-apps appear
       clearAppRegistryCache();
@@ -277,110 +315,63 @@ export default function GuestOnboarding() {
       // Still proceed to guide
       setPhase('guide-event');
     }
-  }, [selectedEventType]);
+  }, []);
 
-  const handleGuideAction = useCallback(() => {
-    if (phase === 'guide-event') {
-      // User clicked "去看看" — highlight the event button, they should click it
-      setPhase('guide-event-wait');
-    }
-  }, [phase]);
+  const handleGuideEventAction = useCallback(() => {
+    setPhase('guide-event-close');
+  }, []);
 
-  const handleGuideStartAction = useCallback(() => {
-    // User acknowledged "开始学习" step
+  const handleLearningEntryClick = useCallback(() => {
+    setPhase('guide-learning-select');
+  }, []);
+
+  const handleLearningAppClick = useCallback(() => {
+    setPhase('guide-workflow-start');
+  }, []);
+
+  const handleWorkflowStartClick = useCallback(() => {
+    setPhase('learning-open');
+  }, []);
+
+  const handleSkip = useCallback(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, 'done');
+      window.localStorage.setItem(storageKey, 'done');
     } catch { /* ignore */ }
     setPhase('done');
-  }, []);
+  }, [storageKey]);
 
   if (!isGuest || phase === 'idle' || phase === 'done') return null;
 
   return (
     <>
-      {/* Event Type Selection Modal */}
-      {phase === 'event-type' && (
+      {/* Guest experience selection modal */}
+      {phase === 'experience' && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
           <div className="w-full max-w-lg rounded-3xl border border-ark-border bg-ark-surface p-8 mx-4 shadow-2xl">
-            <h2 className="text-2xl font-bold text-ark-text text-center mb-2">选择你的目标</h2>
-            <p className="text-sm text-ark-text-muted text-center mb-8">选择一个事件类型开始你的学习之旅</p>
+            <h2 className="text-2xl font-bold text-ark-text text-center mb-2">开始 408 考研体验</h2>
+            <p className="text-sm text-ark-text-muted text-center mb-8">游客体验目前提供计算机 408 学习路径</p>
 
-            <div className="grid grid-cols-2 gap-4">
-              {EVENT_TYPES.map((opt) => {
-                const Icon = opt.icon;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={!opt.available}
-                    onClick={() => opt.available && handleEventTypeSelect(opt.id)}
-                    className={`relative flex flex-col items-center gap-3 rounded-2xl border p-6 transition-all ${
-                      opt.available
-                        ? 'border-ark-border bg-ark-surface-subtle hover:border-[var(--ark-accent)] hover:bg-[var(--ark-accent-soft)] cursor-pointer'
-                        : 'border-ark-border bg-ark-surface-subtle opacity-40 cursor-not-allowed'
-                    }`}
-                  >
-                    {!opt.available && (
-                      <Lock className="absolute top-3 right-3 h-4 w-4 text-ark-text-faint" />
-                    )}
-                    <Icon className={`h-8 w-8 ${opt.available ? 'text-[var(--ark-accent)]' : 'text-ark-text-faint'}`} />
-                    <span className="text-base font-semibold text-ark-text">{opt.label}</span>
-                    <span className="text-xs text-ark-text-muted text-center">{opt.description}</span>
-                    {!opt.available && (
-                      <span className="text-[10px] text-ark-text-faint">即将开放</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Major Selection Modal */}
-      {phase === 'major' && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="w-full max-w-lg rounded-3xl border border-ark-border bg-ark-surface p-8 mx-4 shadow-2xl">
             <button
               type="button"
-              onClick={() => { setPhase('event-type'); setSelectedEventType(null); }}
-              className="text-sm text-ark-text-muted hover:text-ark-text mb-4 flex items-center gap-1 transition-colors"
+              onClick={handleExperienceStart}
+              className="flex w-full items-center gap-4 rounded-2xl border border-ark-border bg-ark-surface-subtle p-5 text-left transition-all hover:border-[var(--ark-accent)] hover:bg-[var(--ark-accent-soft)]"
             >
-              ← 返回
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--ark-accent-soft)]">
+                <GraduationCap className="h-6 w-6 text-[var(--ark-accent)]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-base font-semibold text-ark-text">408 计算机学科专业基础</div>
+                <div className="mt-1 text-xs leading-relaxed text-ark-text-muted">创建 408 考研事件和配套学习应用</div>
+              </div>
+              <span className="shrink-0 text-sm font-medium text-[var(--ark-accent)]">开始体验</span>
             </button>
-            <h2 className="text-2xl font-bold text-ark-text text-center mb-2">选择目标专业</h2>
-            <p className="text-sm text-ark-text-muted text-center mb-8">选择你要报考的专业方向</p>
-
-            <div className="space-y-3">
-              {MAJORS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={!opt.available}
-                  onClick={() => opt.available && handleMajorSelect(opt.id)}
-                  className={`relative flex items-center gap-4 w-full rounded-xl border p-4 transition-all text-left ${
-                    opt.available
-                      ? 'border-ark-border bg-ark-surface-subtle hover:border-[var(--ark-accent)] hover:bg-[var(--ark-accent-soft)] cursor-pointer'
-                      : 'border-ark-border bg-ark-surface-subtle opacity-40 cursor-not-allowed'
-                  }`}
-                >
-                  {!opt.available && (
-                    <Lock className="absolute top-3 right-3 h-4 w-4 text-ark-text-faint" />
-                  )}
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                    opt.available ? 'bg-[var(--ark-accent-soft)]' : 'bg-ark-surface-subtle'
-                  }`}>
-                    <GraduationCap className={`h-5 w-5 ${opt.available ? 'text-[var(--ark-accent)]' : 'text-ark-text-faint'}`} />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-sm font-semibold text-ark-text">{opt.label}</span>
-                  </div>
-                  {!opt.available && (
-                    <span className="text-[10px] text-ark-text-faint">即将开放</span>
-                  )}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="mt-4 w-full text-center text-sm text-ark-text-muted transition-colors hover:text-ark-text"
+            >
+              跳过引导
+            </button>
           </div>
         </div>
       )}
@@ -400,16 +391,45 @@ export default function GuestOnboarding() {
         <GuideHighlight
           step={GUIDE_STEPS[0]}
           visible={true}
-          onAction={handleGuideAction}
+          onTargetAction={handleGuideEventAction}
+          onSkip={handleSkip}
+        />
+      )}
+
+      {phase === 'guide-event-close' && (
+        <GuideHighlight
+          step={GUIDE_STEPS[1]}
+          visible={true}
+          onTargetAction={() => undefined}
+          onSkip={handleSkip}
         />
       )}
 
       {/* Guided tour: highlight start learning */}
       {phase === 'guide-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[1]}
+          step={GUIDE_STEPS[2]}
           visible={true}
-          onAction={handleGuideStartAction}
+          onTargetAction={handleLearningEntryClick}
+          onSkip={handleSkip}
+        />
+      )}
+
+      {phase === 'guide-learning-select' && (
+        <GuideHighlight
+          step={GUIDE_STEPS[3]}
+          visible={true}
+          onTargetAction={handleLearningAppClick}
+          onSkip={handleSkip}
+        />
+      )}
+
+      {phase === 'guide-workflow-start' && (
+        <GuideHighlight
+          step={GUIDE_STEPS[4]}
+          visible={true}
+          onTargetAction={handleWorkflowStartClick}
+          onSkip={handleSkip}
         />
       )}
     </>

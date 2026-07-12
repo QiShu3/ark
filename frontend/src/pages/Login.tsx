@@ -666,11 +666,15 @@ export default function Login() {
                     type="button"
                     onClick={guestLogin}
                     disabled={isSubmitting}
+                    aria-describedby="guest-login-note"
                     className="w-full h-10 rounded-xl text-slate-600 text-sm font-medium disabled:opacity-50 transition-all hover:bg-slate-100 active:scale-[0.98] flex items-center justify-center gap-2 border border-slate-200"
                   >
                     <UserIcon className="w-4 h-4" />
                     游客体验
                   </button>
+                  <p id="guest-login-note" className="mt-2 text-center text-xs leading-5 text-ark-text-muted">
+                    将创建临时游客账号；退出或更换设备后无法恢复学习记录。注册账号可长期保存数据。
+                  </p>
                 </form>
               </div>
 

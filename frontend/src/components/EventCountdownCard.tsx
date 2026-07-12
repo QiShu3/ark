@@ -1562,6 +1562,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     setShowModal(false);
     setError(null);
     setWorkbenchEvent(event);
+    dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
   }
 
   function handleEventClick(): void {
@@ -2073,7 +2074,10 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       {workbenchEvent ? (
         <EventWorkbenchModal
           event={workbenchEvent}
-          onClose={() => setWorkbenchEvent(null)}
+          onClose={() => {
+            setWorkbenchEvent(null);
+            dispatchOnboardingEvent(ONBOARDING_EVENTS.eventOverviewClosed);
+          }}
           onChanged={refreshAll}
           onBack={() => {
             setWorkbenchEvent(null);

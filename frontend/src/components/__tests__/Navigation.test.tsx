@@ -7,7 +7,12 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import Navigation from '../Navigation';
 import { apiJson, checkIn, getCheckInStatus } from '../../lib/api';
 import { useAuthStore, type User } from '../../lib/auth';
-import { HOME_ONBOARDING_RESTART_EVENT, HOME_ONBOARDING_STORAGE_KEY } from '../../lib/onboardingEvents';
+import {
+  GUEST_ONBOARDING_RESTART_EVENT,
+  GUEST_ONBOARDING_STORAGE_KEY,
+  HOME_ONBOARDING_RESTART_EVENT,
+  HOME_ONBOARDING_STORAGE_KEY,
+} from '../../lib/onboardingEvents';
 
 vi.mock('canvas-confetti', () => ({
   default: vi.fn(),
@@ -199,6 +204,26 @@ describe('Navigation', () => {
       expect(screen.getByTestId('current-path')).toHaveTextContent('/');
     } finally {
       window.removeEventListener(HOME_ONBOARDING_RESTART_EVENT, restartListener);
+    }
+  });
+
+  it('restarts the current guest account onboarding', async () => {
+    const user = userEvent.setup();
+    const restartListener = vi.fn();
+    mockApiJson.mockResolvedValue(null);
+    window.localStorage.setItem(`${GUEST_ONBOARDING_STORAGE_KEY}:1`, 'done');
+    window.addEventListener(GUEST_ONBOARDING_RESTART_EVENT, restartListener);
+
+    try {
+      renderNavigation('/apps', { is_guest: true });
+
+      await user.click(screen.getByLabelText('重新进入游客体验引导'));
+
+      expect(window.localStorage.getItem(`${GUEST_ONBOARDING_STORAGE_KEY}:1`)).toBeNull();
+      expect(restartListener).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('current-path')).toHaveTextContent('/');
+    } finally {
+      window.removeEventListener(GUEST_ONBOARDING_RESTART_EVENT, restartListener);
     }
   });
 

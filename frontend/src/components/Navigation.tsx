@@ -7,7 +7,7 @@ import confetti from 'canvas-confetti';
 import { Bell, BookOpen, CalendarDays, LayoutDashboard, LogOut, Monitor, Moon, Palette, Settings, Sun } from 'lucide-react';
 import WorkflowNavProgress from './WorkflowNavProgress';
 import type { WorkflowSnapshot } from './workflowProgress';
-import { restartFirstGuide } from '../lib/onboardingEvents';
+import { restartFirstGuide, restartGuestOnboarding } from '../lib/onboardingEvents';
 import SettingsModal from './SettingsModal';
 import { useCustomizationStore } from '../lib/customization';
 import { useTheme } from '../hooks/useTheme';
@@ -151,7 +151,11 @@ const Navigation: React.FC = () => {
 
   function handleRestartOnboarding() {
     if (focusNavigationLocked) return;
-    restartFirstGuide();
+    if (user?.is_guest) {
+      restartGuestOnboarding(user.id);
+    } else {
+      restartFirstGuide();
+    }
     navigate('/');
   }
 
@@ -185,8 +189,8 @@ const Navigation: React.FC = () => {
         <EventCountdownCard variant="nav" />
         <button
           type="button"
-          aria-label="重新进入首次体验引导"
-          title="重新进入首次体验引导"
+          aria-label={user?.is_guest ? '重新进入游客体验引导' : '重新进入首次体验引导'}
+          title={user?.is_guest ? '重新进入游客体验引导' : '重新进入首次体验引导'}
           disabled={focusNavigationLocked}
           className="ark-focus-ring flex h-[54px] w-[54px] items-center justify-center rounded-full border ark-border bg-[var(--ark-surface-subtle)] text-[var(--ark-text-muted)] transition-colors hover:bg-[var(--ark-accent-soft)] hover:text-[var(--ark-text)] disabled:cursor-not-allowed disabled:opacity-50"
           onClick={handleRestartOnboarding}
