@@ -434,6 +434,50 @@ async def init_auth(app: Any) -> None:
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS show_character BOOLEAN DEFAULT TRUE;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS character_scale REAL DEFAULT 1.0;")
         await conn.execute("ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE;")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS deliberate_sub_apps (
+              id TEXT PRIMARY KEY,
+              slug TEXT UNIQUE NOT NULL,
+              name TEXT NOT NULL,
+              description TEXT NOT NULL DEFAULT '',
+              icon TEXT NOT NULL DEFAULT 'workflow',
+              bank_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+              event_id UUID NULL,
+              owner_user_id BIGINT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+              created_by_user_id BIGINT NULL REFERENCES auth_users(id) ON DELETE SET NULL,
+              visibility TEXT NOT NULL DEFAULT 'private',
+              template_key TEXT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_deliberate_sub_apps_visibility
+                CHECK (visibility IN ('system', 'public', 'private'))
+            );
+            """
+        )
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_deliberate_sub_apps_owner ON deliberate_sub_apps(owner_user_id);")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_deliberate_sub_apps_visibility ON deliberate_sub_apps(visibility);")
+        await conn.execute("ALTER TABLE deliberate_sub_apps ADD COLUMN IF NOT EXISTS event_id UUID NULL;")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_deliberate_sub_apps_event ON deliberate_sub_apps(event_id);")
+        # Preserve existing administrator-created JSON registrations as public
+        # definitions while deployments move to the persistent registry.
+        from lib.app_registry import get_all
+
+        for declaration in get_all():
+            if declaration.id == "deliberate-workflow" or declaration.type != "deliberate-workflow" or declaration.guest_only:
+                continue
+            await conn.execute(
+                """
+                INSERT INTO deliberate_sub_apps(id, slug, name, description, icon, bank_ids, visibility)
+                VALUES ($1, $1, $2, $3, $4, $5::TEXT[], 'public')
+                ON CONFLICT (id) DO NOTHING
+                """,
+                declaration.id,
+                declaration.name,
+                declaration.description,
+                declaration.icon,
+                declaration.bank_ids,
+            )
         # 迁移：用户上传记录表（用于追踪文件归属和限额管理）
         await conn.execute(
             """
@@ -784,6 +828,7 @@ class GuestEventSetupRequest(BaseModel):
 class GuestEventSetupResponse(BaseModel):
     event_id: str
     event_name: str
+    app_ids: list[str] = Field(default_factory=list)
 
 
 @router.post("/guest/setup-event", response_model=GuestEventSetupResponse)
@@ -802,82 +847,181 @@ async def guest_setup_event(
 
     from datetime import date as _date
 
-    from lib.app_registry import GUEST_408_APP, GUEST_ENGLISH_APP, GUEST_MATH_APP, GUEST_POLITICS_APP
-
     pool = _pool_from_request(request)
     uid = int(user.id)
 
-    # 题库映射：子应用 → (bank_id, kind)
-    guest_apps = [
-        (GUEST_ENGLISH_APP.id, GUEST_ENGLISH_APP.bank_ids[0] if GUEST_ENGLISH_APP.bank_ids else None, "flash_card"),
-        (GUEST_MATH_APP.id, GUEST_MATH_APP.bank_ids[0] if GUEST_MATH_APP.bank_ids else None, "choice"),
-        (GUEST_POLITICS_APP.id, GUEST_POLITICS_APP.bank_ids[0] if GUEST_POLITICS_APP.bank_ids else None, "choice"),
-        (GUEST_408_APP.id, GUEST_408_APP.bank_ids[0] if GUEST_408_APP.bank_ids else None, "input"),
+    # Template keys are stable; app IDs are per-user instances.  This lets the
+    # same mechanism power future user-created sub-apps without cross-user data.
+    guest_templates = [
+        ("guest-english", "英语二", "考研英语二词汇与阅读训练", "book-open", "65d3df31-99c9-4047-aa1b-d52c073ce169", "flash_card", "英语二工作流", "英语二核心词汇"),
+        ("guest-math", "数学二", "考研数学二选择题专项训练", "bar-chart", "be2310b9-9746-4510-9acc-04253b4df844", "choice", "数学二工作流", "数学二选择题"),
+        ("guest-politics", "政治", "考研政治选择题专项训练", "scroll-text", "82dde323-fbaa-4257-9b0a-874cd2c6072b", "choice", "政治工作流", "政治选择题"),
+        ("guest-408", "408", "408计算机学科专业基础综合训练", "workflow", "36bbb590-8387-4d30-ac55-f1733126dcd1", "input", "408工作流", "408综合训练"),
     ]
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # 1. 创建主事件
-            await conn.execute(
-                "UPDATE events SET is_primary = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_primary = TRUE",
-                uid,
-            )
-            event_row = await conn.fetchrow(
+            # The onboarding modal can be retried after a refresh. Serialize setup
+            # per guest and converge on one event/config/preset per guest app.
+            await conn.execute("SELECT pg_advisory_xact_lock($1)", uid)
+            existing_event = await conn.fetchrow(
                 """
-                INSERT INTO events (user_id, name, start_date, due_at, is_primary)
-                VALUES ($1, $2, $3, $4, TRUE)
-                RETURNING id
+                SELECT id
+                FROM events
+                WHERE user_id = $1 AND name = $2
+                ORDER BY created_at ASC
+                LIMIT 1
                 """,
-                uid, "22408考研", _date.today(), datetime(2026, 12, 20, 0, 0, 0),
+                uid,
+                "22408考研",
             )
-            event_id = event_row["id"]
+            if existing_event is None:
+                await conn.execute(
+                    "UPDATE events SET is_primary = FALSE, updated_at = NOW() WHERE user_id = $1 AND is_primary = TRUE",
+                    uid,
+                )
+                event_row = await conn.fetchrow(
+                    """
+                    INSERT INTO events (user_id, name, start_date, due_at, is_primary)
+                    VALUES ($1, $2, $3, $4, TRUE)
+                    RETURNING id
+                    """,
+                    uid, "22408考研", _date.today(), datetime(2026, 12, 20, 0, 0, 0),
+                )
+                event_id = event_row["id"]
+            else:
+                event_id = existing_event["id"]
+                await conn.execute(
+                    "DELETE FROM events WHERE user_id = $1 AND name = $2 AND id <> $3",
+                    uid,
+                    "22408考研",
+                    event_id,
+                )
+                await conn.execute(
+                    "UPDATE events SET is_primary = TRUE, updated_at = NOW() WHERE id = $1",
+                    event_id,
+                )
 
-            # 2. 为每个子应用创建专注工作配置
-            config_ids: list[str] = []
-            config_names: list[str] = []
-            for app_id, bank_id, kind in guest_apps:
-                if not bank_id:
-                    continue
-                name = {"guest-english": "英语二核心词汇", "guest-math": "数学二选择题", "guest-politics": "政治选择题", "guest-408": "408综合训练"}[app_id]
+            # 2. 为每个模板确保一个只属于此游客的子应用实例。
+            guest_apps: list[tuple[str, str, str, str, str]] = []
+            for template_key, name, description, icon, bank_id, kind, workflow_name, config_name in guest_templates:
+                app_id = f"{template_key}-{uid}"
+                await conn.execute(
+                    """
+                    INSERT INTO deliberate_sub_apps(
+                        id, slug, name, description, icon, bank_ids,
+                        owner_user_id, created_by_user_id, visibility, template_key, event_id
+                    )
+                    VALUES ($1, $1, $2, $3, $4, ARRAY[$5]::TEXT[], $6, $6, 'private', $7, $8::uuid)
+                    ON CONFLICT (id) DO UPDATE
+                    SET name = EXCLUDED.name, description = EXCLUDED.description,
+                        icon = EXCLUDED.icon, bank_ids = EXCLUDED.bank_ids,
+                        event_id = EXCLUDED.event_id,
+                        updated_at = NOW()
+                    """,
+                    app_id, name, description, icon, bank_id, uid, template_key, event_id,
+                )
+                guest_apps.append((app_id, bank_id, kind, workflow_name, config_name))
+
+            # 3. 为每个游客子应用创建专注工作配置和对应的工作流预设。
+            for app_id, bank_id, kind, workflow_name, config_name in guest_apps:
                 cfg_row = await conn.fetchrow(
                     """
-                    INSERT INTO deliberate_workflow_configs(
-                        user_id, name, kind, focus_work_type, app_id, bank_id, target_count,
-                        scope_json, completion_json, pass_criteria_json, children_json,
-                        primary_filter, sort_order, use_fsrs, backflow_rule,
-                        scheduling_mode, fsrs_config_json
-                    )
-                    VALUES ($1, $2, $3, $3, $4, $5, 10,
-                            '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '[]'::jsonb,
-                            'all', 'sequential', false, 'none', 'manual', '{}'::jsonb)
-                    RETURNING id::text
+                    SELECT id::text
+                    FROM deliberate_workflow_configs
+                    WHERE user_id = $1 AND app_id = $2
+                    ORDER BY created_at ASC
+                    LIMIT 1
                     """,
-                    uid, name, kind, app_id, bank_id,
+                    uid,
+                    app_id,
                 )
-                config_ids.append(str(cfg_row["id"]))
-                config_names.append(name)
-
-            # 3. 创建工作流预设（含 deliberate_group 阶段）
-            if config_ids:
+                if cfg_row is None:
+                    cfg_row = await conn.fetchrow(
+                        """
+                        INSERT INTO deliberate_workflow_configs(
+                            user_id, name, kind, focus_work_type, app_id, event_id, bank_id, target_count,
+                            scope_json, completion_json, pass_criteria_json, children_json,
+                            primary_filter, sort_order, use_fsrs, backflow_rule,
+                            scheduling_mode, fsrs_config_json
+                        )
+                        VALUES ($1, $2, $3, $3, $4, $5::uuid, $6, 10,
+                                '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '[]'::jsonb,
+                                'all', 'sequential', false, 'none', 'manual', '{}'::jsonb)
+                        RETURNING id::text
+                        """,
+                        uid, config_name, kind, app_id, event_id, bank_id,
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        DELETE FROM deliberate_workflow_configs
+                        WHERE user_id = $1 AND app_id = $2 AND id <> $3::uuid
+                        """,
+                        uid,
+                        app_id,
+                        cfg_row["id"],
+                    )
+                    await conn.execute(
+                        "UPDATE deliberate_workflow_configs SET event_id = $3::uuid, updated_at = NOW() WHERE user_id = $1 AND app_id = $2",
+                        uid,
+                        app_id,
+                        event_id,
+                    )
                 phases = [
                     {
                         "phase_type": "deliberate_group",
-                        "duration": 0,
-                        "config_ids": config_ids,
-                        "config_names": config_names,
+                        "duration": 60,
+                        "config_ids": [str(cfg_row["id"])],
+                        "config_names": [config_name],
                     },
                     {"phase_type": "break", "duration": 300},
                 ]
-                await conn.execute(
+                preset_row = await conn.fetchrow(
                     """
-                    INSERT INTO focus_workflow_presets(user_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
-                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, TRUE)
+                    SELECT id
+                    FROM focus_workflow_presets
+                    WHERE user_id = $1 AND app_id = $2
+                    ORDER BY created_at ASC
+                    LIMIT 1
                     """,
-                    uid, "22408考研工作流", "workflow", 1500, 300,
-                    json.dumps(phases, ensure_ascii=False), "countdown",
+                    uid,
+                    app_id,
                 )
+                if preset_row is None:
+                    await conn.execute(
+                        """
+                        INSERT INTO focus_workflow_presets(
+                            user_id, app_id, event_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default
+                        )
+                        VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8::jsonb, $9, FALSE)
+                        """,
+                        uid, app_id, event_id, workflow_name, "workflow", 1500, 300,
+                        json.dumps(phases, ensure_ascii=False), "countdown",
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM focus_workflow_presets WHERE user_id = $1 AND app_id = $2 AND id <> $3",
+                        uid,
+                        app_id,
+                        preset_row["id"],
+                    )
+                    await conn.execute(
+                        """
+                        UPDATE focus_workflow_presets
+                        SET event_id = $1::uuid, name = $2, icon = $3, focus_duration = $4, break_duration = $5,
+                            phases = $6::jsonb, default_focus_timer_mode = $7, is_default = FALSE, updated_at = NOW()
+                        WHERE id = $8
+                        """,
+                        event_id, workflow_name, "workflow", 1500, 300,
+                        json.dumps(phases, ensure_ascii=False), "countdown", preset_row["id"],
+                    )
 
-    return GuestEventSetupResponse(event_id=str(event_id), event_name="22408考研")
+    return GuestEventSetupResponse(
+        event_id=str(event_id),
+        event_name="22408考研",
+        app_ids=[app_id for app_id, _, _, _, _ in guest_apps],
+    )
 
 
 @router.post("/verify-email", response_model=OkResponse)

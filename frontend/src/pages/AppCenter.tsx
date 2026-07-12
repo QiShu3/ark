@@ -15,7 +15,6 @@ export default function AppCenter() {
       setApps(all.filter((a) => {
         if (a.adminOnly && !isAdmin) return false;
         if (a.guestOnly && !isGuest) return false;
-        if (!a.guestOnly && isGuest) return false;
         return true;
       })),
     );

@@ -21,6 +21,7 @@ export interface WorkflowPreset {
   user_id: number;
   event_id?: string | null;
   event_name?: string | null;
+  app_id?: string | null;
   name: string;
   icon?: string | null;
   focus_duration: number;

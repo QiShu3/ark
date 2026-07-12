@@ -2920,7 +2920,7 @@ async def list_focus_logs(
 
 
 WORKFLOW_PRESET_SELECT = """
-id, user_id, event_id, (SELECT name FROM events WHERE id = event_id) AS event_name, name, icon, focus_duration, break_duration,
+id, user_id, event_id, app_id, (SELECT name FROM events WHERE id = event_id) AS event_name, name, icon, focus_duration, break_duration,
 default_focus_timer_mode, phases, is_default, created_at, updated_at
 """
 
@@ -3015,11 +3015,14 @@ async def create_focus_workflow_preset(
             phases = await _validate_phase_task_bindings(conn, int(user.id), phases)
             row = await conn.fetchrow(
                 f"""
-                INSERT INTO focus_workflow_presets(user_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default)
-                VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+                INSERT INTO focus_workflow_presets(
+                    user_id, app_id, name, icon, focus_duration, break_duration, phases, default_focus_timer_mode, is_default
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
                 RETURNING {WORKFLOW_PRESET_SELECT}
                 """,
                 int(user.id),
+                body.app_id,
                 body.name.strip(),
                 body.icon,
                 int(body.focus_duration),
@@ -3760,7 +3763,7 @@ async def _record_completed_focus_work_node(conn: Any, user_id: int, run: Any) -
 async def start_multi_deliberate_workflow(
     request: Request,
     body: DeliberateWorkflowMultiStartRequest,
-    user: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
@@ -5662,7 +5665,7 @@ async def start_test_focus_work(
 async def start_deliberate_workflow(
     request: Request,
     body: DeliberateWorkflowStartRequest,
-    user: Annotated[_AuthUser, Depends(_require_admin)],
+    user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> FocusWorkflowOut:
     """启动刻意工作流（正计时模式）。"""
     pool = _pool_from_request(request)

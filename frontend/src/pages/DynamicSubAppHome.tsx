@@ -21,7 +21,7 @@ export default function DynamicSubAppHome() {
     (async () => {
       if (!appId) return;
       const apps = await loadAppRegistry();
-      const found = apps.find((a) => a.id === appId);
+      const found = apps.find((a) => a.id === appId || a.route === `/${appId}`);
       if (cancelled) return;
       if (!found || (found.adminOnly && !isAdmin)) { setApp(null); return; }
       setApp(found);
@@ -32,7 +32,14 @@ export default function DynamicSubAppHome() {
   if (!app) return null;
 
   if (app.type === 'deliberate-workflow') {
-    return <DeliberateWorkflow appId={app.id} />;
+    return (
+      <DeliberateWorkflow
+        appId={app.id}
+        appName={app.name}
+        appDescription={app.description}
+        bankIds={app.bankIds}
+      />
+    );
   }
 
   return <SubAppHomePage app={app} />;

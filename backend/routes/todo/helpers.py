@@ -10,6 +10,7 @@ import asyncpg
 from fastapi import HTTPException, status
 
 from lib.focus_work_types import CHOICE_KIND, FLASH_CARD_KIND, INPUT_KIND, normalize_focus_work_type
+
 from .schemas import (
     AchievementItemOut,
     AchievementSectionOut,
@@ -2000,6 +2001,7 @@ def _row_to_focus_workflow_preset(row: asyncpg.Record) -> FocusWorkflowPresetOut
         user_id=int(row["user_id"]),
         event_id=row.get("event_id") if hasattr(row, "get") else row["event_id"] if "event_id" in row else None,
         event_name=row.get("event_name") if hasattr(row, "get") else row["event_name"] if "event_name" in row else None,
+        app_id=row.get("app_id") if hasattr(row, "get") else row["app_id"] if "app_id" in row else None,
         name=str(row["name"]),
         icon=row.get("icon") if hasattr(row, "get") else row["icon"] if "icon" in row else None,
         focus_duration=int(row["focus_duration"]),

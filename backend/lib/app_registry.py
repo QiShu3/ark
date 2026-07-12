@@ -91,11 +91,10 @@ ERC_APP = AppDeclaration(
 
 DELIBERATE_WORKFLOW_APP = AppDeclaration(
     id="deliberate-workflow",
-    name="刻意工作流",
-    description="题库、专注与存档复盘",
+    name="我的学习空间",
+    description="创建子应用，管理题库、专注与学习编排",
     icon="workflow",
     route="/deliberate-workflow",
-    admin_only=True,
     type="deliberate-workflow",
 )
 
@@ -276,11 +275,16 @@ def get_all() -> list[AppDeclaration]:
 
 def get_all_for_user(*, is_guest: bool = False, is_admin: bool = False) -> list[AppDeclaration]:
     """Return apps filtered by user type."""
-    apps = list(_registry.values())
+    # Deliberate sub-apps have moved to the DB-backed ownership registry.
+    # Keep only the global management shell here; old dynamic declarations are
+    # imported during startup and must not produce duplicate app entries.
+    apps = [app for app in _registry.values() if app.type != "deliberate-workflow" or app.id == "deliberate-workflow"]
     if is_admin:
         return apps
     if is_guest:
-        return [a for a in apps if a.guest_only]
+        # Guest study apps are private DB-backed instances.  The old hardcoded
+        # declarations remain only as migration templates and are not exposed.
+        return []
     return [a for a in apps if not a.admin_only and not a.guest_only]
 
 
@@ -293,4 +297,3 @@ def register(app: AppDeclaration) -> None:
     """Register a new app declaration and persist."""
     _registry[app.id] = app
     _persist()
-

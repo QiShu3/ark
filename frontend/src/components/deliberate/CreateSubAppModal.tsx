@@ -7,6 +7,8 @@ import {
   listDeliberateBanks,
   type DeliberateKind,
 } from '../../lib/deliberate/api';
+import { listEvents } from '../../lib/events/api';
+import type { EventItem } from '../../lib/events/types';
 
 type CreateSubAppModalProps = {
   saving: boolean;
@@ -16,7 +18,9 @@ type CreateSubAppModalProps = {
     description: string;
     icon: string;
     bank_ids: string[];
+    event_id?: string | null;
   }) => Promise<void>;
+  allowEventLink: boolean;
   onUploadBank: (kind: DeliberateKind) => void;
   onClose: () => void;
 };
@@ -35,6 +39,7 @@ export default function CreateSubAppModal({
   saving,
   onSave,
   onUploadBank,
+  allowEventLink,
   onClose,
 }: CreateSubAppModalProps) {
   const [name, setName] = useState('');
@@ -43,6 +48,8 @@ export default function CreateSubAppModal({
   const [bankIds, setBankIds] = useState<string[]>([]);
   const [allBanks, setAllBanks] = useState<{ id: string; name: string; count: number; kind: DeliberateKind }[]>([]);
   const [loadingBanks, setLoadingBanks] = useState(false);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventId, setEventId] = useState<string>('');
 
   useEffect(() => {
     let ignore = false;
@@ -68,6 +75,11 @@ export default function CreateSubAppModal({
     return () => { ignore = true; };
   }, []);
 
+  useEffect(() => {
+    if (!allowEventLink) return;
+    listEvents().then(setEvents).catch(() => setEvents([]));
+  }, [allowEventLink]);
+
   const kindLabel = (k: DeliberateKind) => (k === 'flash_card' ? '闪卡' : k === 'input' ? '输入题' : '选择题');
   const countLabel = (k: DeliberateKind) => (k === 'flash_card' ? '词' : '题');
 
@@ -89,6 +101,7 @@ export default function CreateSubAppModal({
       description: description.trim(),
       icon,
       bank_ids: bankIds,
+      event_id: eventId || null,
     });
   }
 
@@ -126,6 +139,16 @@ export default function CreateSubAppModal({
               placeholder="可选描述"
             />
           </div>
+
+          {allowEventLink ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">所属事件</label>
+              <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={inputClass}>
+                <option value="">未归属事件</option>
+                {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+              </select>
+            </div>
+          ) : null}
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">图标</label>

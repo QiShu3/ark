@@ -130,6 +130,13 @@ async def list_deliberate_workflows(
 ) -> list[DeliberateWorkflowConfigOut]:
     pool = _pool(request)
     async with pool.acquire() as conn:
+        if app_id is not None:
+            from lib.sub_apps import get_accessible
+
+            if await get_accessible(
+                conn, app_id=app_id, user_id=int(user.id), is_admin=user.is_admin, is_guest=user.is_guest
+            ) is None:
+                raise HTTPException(status_code=404, detail="子应用不存在或无权访问")
         rows = await repository.list_configs(conn, user_id=int(user.id), app_id=app_id)
         return [await _config_out(conn, row, user_id=int(user.id)) for row in rows]
 
@@ -157,6 +164,20 @@ async def create_deliberate_workflow(
 
     pool = _pool(request)
     async with pool.acquire() as conn:
+        app_event_id: str | None = None
+        if payload.app_id is not None:
+            from lib.sub_apps import get_accessible
+
+            sub_app = await get_accessible(
+                conn, app_id=payload.app_id, user_id=int(user.id), is_admin=user.is_admin, is_guest=user.is_guest
+            )
+            if sub_app is None:
+                raise HTTPException(status_code=404, detail="子应用不存在或无权访问")
+            app_event_id = sub_app["event_id"]
+        elif payload.event_id is not None:
+            event = await conn.fetchrow("SELECT id FROM events WHERE id = $1::uuid AND user_id = $2", payload.event_id, int(user.id))
+            if event is None:
+                raise HTTPException(status_code=404, detail="事件不存在或无权关联")
         row = await repository.create_config(
             conn,
             user_id=int(user.id),
@@ -164,6 +185,7 @@ async def create_deliberate_workflow(
             kind=payload.kind,
             focus_work_type=payload.focus_work_type,
             app_id=payload.app_id,
+            event_id=app_event_id if payload.app_id is not None else payload.event_id,
             bank_id=payload.bank_id,
             task_id=payload.task_id,
             target_count=payload.target_count,

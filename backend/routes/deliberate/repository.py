@@ -195,10 +195,16 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS app_id TEXT;"
         )
         await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS event_id UUID NULL REFERENCES events(id) ON DELETE SET NULL;"
+        )
+        await conn.execute(
             "ALTER TABLE deliberate_workflow_runs ADD COLUMN IF NOT EXISTS app_id TEXT;"
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_deliberate_configs_app_user ON deliberate_workflow_configs(app_id, user_id);"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_deliberate_configs_event_user ON deliberate_workflow_configs(event_id, user_id);"
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_deliberate_runs_app_user ON deliberate_workflow_runs(app_id, user_id);"
@@ -224,6 +230,7 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
         "kind": normalize_deliberate_kind(row["kind"]),
         "focus_work_type": normalize_focus_work_type(row["focus_work_type"]),
         "app_id": row.get("app_id"),
+        "event_id": str(row["event_id"]) if row.get("event_id") else None,
         "bank_id": row["bank_id"],
         "task_id": str(row["task_id"]) if row.get("task_id") else None,
         "target_count": int(row["target_count"]),
@@ -273,7 +280,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int, app_id: str | 
     if app_id is not None:
         return await conn.fetch(
             """
-            SELECT id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
+            SELECT id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                    scope_json, completion_json, pass_criteria_json, children_json,
                    primary_filter, sort_order, use_fsrs, backflow_rule,
                    scheduling_mode, fsrs_config_json,
@@ -287,7 +294,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int, app_id: str | 
         )
     return await conn.fetch(
         """
-        SELECT id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
+        SELECT id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                scope_json, completion_json, pass_criteria_json, children_json,
                primary_filter, sort_order, use_fsrs, backflow_rule,
                scheduling_mode, fsrs_config_json,
@@ -303,7 +310,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int, app_id: str | 
 async def get_config(conn: asyncpg.Connection, *, user_id: int, config_id: str) -> asyncpg.Record | None:
     return await conn.fetchrow(
         """
-        SELECT id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
+        SELECT id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                scope_json, completion_json, pass_criteria_json, children_json,
                primary_filter, sort_order, use_fsrs, backflow_rule,
                scheduling_mode, fsrs_config_json,
@@ -324,6 +331,7 @@ async def create_config(
     kind: str,
     focus_work_type: str,
     app_id: str | None = None,
+    event_id: str | None = None,
     bank_id: str | None,
     task_id: str | None,
     target_count: int,
@@ -346,14 +354,14 @@ async def create_config(
     return await conn.fetchrow(
         """
         INSERT INTO deliberate_workflow_configs(
-            user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
+            user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
             scope_json, completion_json, pass_criteria_json, children_json,
             primary_filter, sort_order, use_fsrs, backflow_rule,
             scheduling_mode, fsrs_config_json
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb,
-                $13, $14, $15, $16, $17, $18::jsonb)
-        RETURNING id, user_id, name, kind, focus_work_type, app_id, bank_id, task_id, target_count,
+        VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::uuid, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb,
+                $14, $15, $16, $17, $18, $19::jsonb)
+        RETURNING id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                   scope_json, completion_json, pass_criteria_json, children_json,
                   primary_filter, sort_order, use_fsrs, backflow_rule,
                   scheduling_mode, fsrs_config_json,
@@ -364,6 +372,7 @@ async def create_config(
         kind,
         focus_work_type,
         app_id,
+        event_id,
         bank_id,
         task_id,
         target_count,

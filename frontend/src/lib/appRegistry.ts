@@ -33,6 +33,7 @@ export interface AppDeclaration {
   guestOnly?: boolean;
   type?: 'template' | 'deliberate-workflow';
   bankIds?: string[];
+  eventId?: string | null;
   focusWorks: FocusWorkDeclaration[];
   sections: TemplateSection[];
 }
@@ -70,6 +71,7 @@ function mapFromApi(raw: Record<string, unknown>): AppDeclaration {
     guestOnly: raw.guest_only as boolean | undefined,
     type: (raw.type as string as AppDeclaration['type']) ?? 'template',
     bankIds: (raw.bank_ids as string[] | undefined) ?? [],
+    eventId: raw.event_id as string | null | undefined,
     sections: (raw.sections as TemplateSection[] | undefined) ?? ['hero', 'asset', 'arrangements'],
     focusWorks: ((raw.focus_works || []) as Record<string, unknown>[]).map((fw) => ({
       type: fw.type as string,

@@ -4046,6 +4046,7 @@ def _preset_row(
     preset_id=None,
     user_id: int = 7,
     event_id=None,
+    app_id: str | None = None,
     name: str = "深度工作流",
     phases: list[dict[str, Any]] | None = None,
     is_default: bool = False,
@@ -4055,6 +4056,7 @@ def _preset_row(
         "id": preset_id or uuid4(),
         "user_id": user_id,
         "event_id": event_id,
+        "app_id": app_id,
         "name": name,
         "focus_duration": 1500,
         "break_duration": 300,
@@ -4087,6 +4089,10 @@ class _WorkflowPresetConn:
                 for row in self.rows
                 if int(row["user_id"]) == user_id and (row.get("event_id") is None or "event_id IS NULL" not in sql)
             ]
+            if "app_id = $2" in sql:
+                items = [row for row in items if row.get("app_id") == args[1]]
+            elif "app_id IS NULL" in sql:
+                items = [row for row in items if row.get("app_id") is None]
             if "event_id IS NULL" in sql:
                 items = [row for row in items if row.get("event_id") is None]
             return sorted(items, key=lambda row: (not bool(row["is_default"]), -row["updated_at"].timestamp()))
@@ -4162,6 +4168,7 @@ class _WorkflowPresetConn:
             return self.active_workflow
         if "INSERT INTO focus_workflow_presets" in sql:
             now = datetime.now(UTC)
+            app_id = None
             if re.search(r"INSERT INTO focus_workflow_presets\(\s*user_id,\s*event_id", sql):
                 user_id = int(args[0])
                 event_id = args[1]
@@ -4175,18 +4182,20 @@ class _WorkflowPresetConn:
             else:
                 user_id = int(args[0])
                 event_id = None
-                name = str(args[1])
-                icon = str(args[2]) if args[2] is not None else None
-                focus_duration = int(args[3])
-                break_duration = int(args[4])
-                phases_arg = args[5]
-                timer_mode = str(args[6])
-                is_default = bool(args[7])
+                app_id = args[1]
+                name = str(args[2])
+                icon = str(args[3]) if args[3] is not None else None
+                focus_duration = int(args[4])
+                break_duration = int(args[5])
+                phases_arg = args[6]
+                timer_mode = str(args[7])
+                is_default = bool(args[8])
             phases = json.loads(phases_arg) if isinstance(phases_arg, str) else phases_arg
             row = {
                 "id": uuid4(),
                 "user_id": user_id,
                 "event_id": event_id,
+                "app_id": app_id,
                 "name": name,
                 "icon": icon,
                 "focus_duration": focus_duration,
@@ -4427,6 +4436,7 @@ def test_create_and_list_focus_workflow_presets(monkeypatch) -> None:
         "/todo/focus/workflows",
         json={
             "name": "默认番茄",
+            "app_id": "guest-english",
             "focus_duration": 1500,
             "break_duration": 300,
             "default_focus_timer_mode": "countup",
@@ -4439,11 +4449,12 @@ def test_create_and_list_focus_workflow_presets(monkeypatch) -> None:
     )
     assert create_resp.status_code == 200
     assert create_resp.json()["is_default"] is True
+    assert create_resp.json()["app_id"] == "guest-english"
     assert create_resp.json()["default_focus_timer_mode"] == "countup"
     assert create_resp.json()["phases"][0]["timer_mode"] == "countup"
     assert create_resp.json()["phases"][0]["task_id"] == str(task_id)
 
-    list_resp = client.get("/todo/focus/workflows")
+    list_resp = client.get("/todo/focus/workflows?app_id=guest-english")
     assert list_resp.status_code == 200
     items = list_resp.json()
     assert len(items) == 1

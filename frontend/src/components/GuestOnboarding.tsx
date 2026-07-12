@@ -246,6 +246,15 @@ export default function GuestOnboarding() {
     return () => window.removeEventListener(ONBOARDING_EVENTS.eventOverviewClosed, handler);
   }, [phase]);
 
+  // The highlighted event card itself is the primary action. Treat opening it
+  // the same as the bubble CTA so the guide does not cover the event overview.
+  useEffect(() => {
+    if (phase !== 'guide-event') return;
+    const handler = () => setPhase('guide-event-wait');
+    window.addEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
+    return () => window.removeEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
+  }, [phase]);
+
   const handleEventTypeSelect = useCallback((typeId: string) => {
     setSelectedEventType(typeId);
     setPhase('major');
@@ -387,7 +396,7 @@ export default function GuestOnboarding() {
       )}
 
       {/* Guided tour: highlight event button */}
-      {(phase === 'guide-event' || phase === 'guide-event-wait') && (
+      {phase === 'guide-event' && (
         <GuideHighlight
           step={GUIDE_STEPS[0]}
           visible={true}

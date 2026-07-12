@@ -125,6 +125,24 @@ describe('DeliberateWorkflow', () => {
     expect(await screen.findByText('刻意学习流')).toBeInTheDocument();
   });
 
+  it('uses the routed sub-app metadata instead of the admin sub-app API', async () => {
+    render(
+      <MemoryRouter>
+        <DeliberateWorkflow
+          appId="guest-english"
+          appName="英语二"
+          appDescription="考研英语二词汇与阅读训练"
+          bankIds={['bank-english']}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('英语二')).toBeInTheDocument();
+    expect(screen.getByText('考研英语二词汇与阅读训练')).toBeInTheDocument();
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(listDeliberateSubApps).not.toHaveBeenCalled();
+  });
+
   it('shows the management empty state when no saved configs exist', async () => {
     renderPage();
     expect(await screen.findByText('暂无专注工作配置，请新建')).toBeInTheDocument();

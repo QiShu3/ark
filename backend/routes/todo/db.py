@@ -246,6 +246,16 @@ async def init_todo(app: Any) -> None:
         await conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_events_primary_per_user ON events(user_id) WHERE is_primary = TRUE;"
         )
+        # App ownership is initialized before events, so attach this foreign key
+        # here once the events table is guaranteed to exist.
+        await conn.execute("ALTER TABLE deliberate_sub_apps DROP CONSTRAINT IF EXISTS fk_deliberate_sub_apps_event_id;")
+        await conn.execute(
+            """
+            ALTER TABLE deliberate_sub_apps
+            ADD CONSTRAINT fk_deliberate_sub_apps_event_id
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL;
+            """
+        )
 
         await conn.execute(
             """
@@ -1113,6 +1123,30 @@ async def init_todo(app: Any) -> None:
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_workflow_records_app_user ON workflow_records(app_id, user_id);"
+        )
+        # Early guest presets used a zero-duration deliberate group, which cannot
+        # be read by the workflow response schema. Normalize existing rows.
+        await conn.execute(
+            """
+            UPDATE focus_workflow_presets
+            SET phases = (
+                SELECT jsonb_agg(
+                    CASE
+                        WHEN phase->>'phase_type' = 'deliberate_group'
+                             AND COALESCE((phase->>'duration')::integer, 0) < 60
+                        THEN jsonb_set(phase, '{duration}', '60'::jsonb)
+                        ELSE phase
+                    END
+                )
+                FROM jsonb_array_elements(phases) AS phase
+            ), updated_at = NOW()
+            WHERE EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(phases) AS phase
+                WHERE phase->>'phase_type' = 'deliberate_group'
+                  AND COALESCE((phase->>'duration')::integer, 0) < 60
+            );
+            """
         )
 
         # Test focus work configs (admin-only)

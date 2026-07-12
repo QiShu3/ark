@@ -54,6 +54,8 @@ export type DeliberateWorkflowConfig = {
   name: string;
   kind: DeliberateKind;
   focus_work_type: DeliberateFocusWorkType;
+  app_id?: string | null;
+  event_id?: string | null;
   bank_id?: string | null;
   task_id?: string | null;
   target_count: number;
@@ -83,6 +85,8 @@ export type DeliberateWorkflowPayload = {
   name: string;
   kind: DeliberateKind;
   focus_work_type: DeliberateFocusWorkType;
+  app_id?: string | null;
+  event_id?: string | null;
   bank_id?: string | null;
   task_id?: string | null;
   target_count: number;
@@ -283,6 +287,7 @@ export type DeliberateSubApp = {
   route: string;
   type: 'deliberate-workflow';
   bank_ids: string[];
+  event_id?: string | null;
 };
 
 export function listDeliberateSubApps() {
@@ -316,6 +321,43 @@ export function patchDeliberateSubApp(
 
 export function deleteDeliberateSubApp(appId: string) {
   return apiJson<{ detail: string }>(`/api/admin/deliberate-sub-apps/${encodeURIComponent(appId)}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Current-user sub-app APIs. Admin endpoints remain for public/system apps. */
+export function listOwnedDeliberateSubApps() {
+  return apiJson<DeliberateSubApp[]>('/api/sub-apps');
+}
+
+export function createOwnedDeliberateSubApp(payload: {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  bank_ids?: string[];
+  event_id?: string | null;
+}) {
+  return apiJson<DeliberateSubApp>('/api/sub-apps', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function patchOwnedDeliberateSubApp(
+  appId: string,
+  payload: { name?: string; description?: string; icon?: string; bank_ids?: string[]; event_id?: string | null },
+) {
+  return apiJson<DeliberateSubApp>(`/api/sub-apps/${encodeURIComponent(appId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteOwnedDeliberateSubApp(appId: string) {
+  return apiJson<{ detail: string }>(`/api/sub-apps/${encodeURIComponent(appId)}`, {
     method: 'DELETE',
   });
 }

@@ -125,6 +125,27 @@ async def update_event_row(conn: Any, *, user_id: int, event_id: UUID, patch: di
 
 
 async def delete_event_row(conn: Any, *, user_id: int, event_id: UUID) -> str:
+    # Keep study assets and history when an event is removed; they become
+    # unassigned rather than being silently destroyed with the event.
+    await conn.execute(
+        "UPDATE deliberate_sub_apps SET event_id = NULL, updated_at = NOW() WHERE owner_user_id = $1 AND event_id = $2",
+        user_id,
+        event_id,
+    )
+    await conn.execute(
+        "UPDATE deliberate_workflow_configs SET event_id = NULL, updated_at = NOW() WHERE user_id = $1 AND event_id = $2",
+        user_id,
+        event_id,
+    )
+    await conn.execute(
+        """
+        UPDATE focus_workflow_presets
+        SET event_id = NULL, updated_at = NOW()
+        WHERE user_id = $1 AND event_id = $2 AND app_id IS NOT NULL
+        """,
+        user_id,
+        event_id,
+    )
     await conn.execute(
         """
         UPDATE tasks
@@ -152,7 +173,7 @@ async def delete_event_row(conn: Any, *, user_id: int, event_id: UUID) -> str:
         event_id,
     )
     await conn.execute(
-        "DELETE FROM focus_workflow_presets WHERE user_id = $1 AND event_id = $2",
+        "DELETE FROM focus_workflow_presets WHERE user_id = $1 AND event_id = $2 AND app_id IS NULL",
         user_id,
         event_id,
     )
@@ -185,7 +206,7 @@ async def get_event_delete_preview_row(conn: Any, *, user_id: int, event_id: UUI
           (
             SELECT COUNT(*)
             FROM focus_workflow_presets
-            WHERE user_id = $1 AND event_id = $2
+            WHERE user_id = $1 AND event_id = $2 AND app_id IS NULL
           ) AS workflows_count,
           (
             SELECT COUNT(*)

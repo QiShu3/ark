@@ -51,9 +51,13 @@ import {
 } from '../lib/deliberate/api';
 import {
   createDeliberateSubApp,
+  createOwnedDeliberateSubApp,
   deleteDeliberateSubApp,
+  deleteOwnedDeliberateSubApp,
   listDeliberateSubApps,
+  listOwnedDeliberateSubApps,
   patchDeliberateSubApp,
+  patchOwnedDeliberateSubApp,
   type DeliberateSubApp,
 } from '../lib/deliberate/api';
 import {
@@ -177,7 +181,17 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
   );
 }
 
-export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
+export default function DeliberateWorkflow({
+  appId,
+  appName,
+  appDescription,
+  bankIds,
+}: {
+  appId?: string;
+  appName?: string;
+  appDescription?: string;
+  bankIds?: string[];
+} = {}) {
   const navigate = useNavigate();
   const [configs, setConfigs] = useState<DeliberateWorkflowConfig[]>([]);
   const [showAllConfigs, setShowAllConfigs] = useState(false);
@@ -219,6 +233,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
   const [loadingSettlement, setLoadingSettlement] = useState(false);
 
   const isGuest = useAuthStore((s) => s.user?.is_guest ?? false);
+  const isAdmin = useAuthStore((s) => s.user?.is_admin ?? false);
 
   // Sub-app state
   const [subApps, setSubApps] = useState<DeliberateSubApp[]>([]);
@@ -230,7 +245,9 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
   const [kind, setKind] = useState<DeliberateKind>('choice');
 
   const selectedSubApp = subApps.find((a) => a.id === (appId ?? selectedSubAppId)) ?? null;
-  const effectiveBankIds = selectedSubApp?.bank_ids ?? null;
+  const pageTitle = appName ?? selectedSubApp?.name ?? '刻意学习流';
+  const pageDescription = appDescription ?? selectedSubApp?.description ?? '管理题库、专注工作和工作流，通过刻意练习提升学习效果。';
+  const effectiveBankIds = bankIds ?? selectedSubApp?.bank_ids ?? null;
   const filteredBanks = effectiveBankIds
     ? banks.filter((b) => effectiveBankIds.includes(b.id))
     : banks;
@@ -291,10 +308,11 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
 
   // Load sub-apps
   useEffect(() => {
-    listDeliberateSubApps()
+    if (appId) return;
+    (isAdmin ? listDeliberateSubApps() : listOwnedDeliberateSubApps())
       .then(setSubApps)
       .catch(() => setSubApps([]));
-  }, []);
+  }, [appId, isAdmin]);
 
   // Load configs: handles both initial load and sub-app switching
   useEffect(() => {
@@ -465,7 +483,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     setSaving(true);
     setError(null);
     try {
-      await createDeliberateWorkflow(data);
+      await createDeliberateWorkflow({ ...data, app_id: appId ?? selectedSubAppId });
       await loadConfigs();
       setShowCreateModal(false);
     } catch (err) {
@@ -508,11 +526,12 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     description: string;
     icon: string;
     bank_ids: string[];
+    event_id?: string | null;
   }) {
     setSaving(true);
     setError(null);
     try {
-      const created = await createDeliberateSubApp(data);
+      const created = await (isAdmin ? createDeliberateSubApp(data) : createOwnedDeliberateSubApp(data));
       setSubApps((prev) => [...prev, created]);
       setSelectedSubAppId(created.id);
       setShowCreateSubAppModal(false);
@@ -528,12 +547,15 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     description?: string;
     icon?: string;
     bank_ids?: string[];
+    event_id?: string | null;
   }) {
     if (!editingSubApp) return;
     setSaving(true);
     setError(null);
     try {
-      const updated = await patchDeliberateSubApp(editingSubApp.id, patch);
+      const updated = await (isAdmin
+        ? patchDeliberateSubApp(editingSubApp.id, patch)
+        : patchOwnedDeliberateSubApp(editingSubApp.id, patch));
       setSubApps((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
       setShowEditSubAppModal(false);
       setEditingSubApp(null);
@@ -549,7 +571,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     setSaving(true);
     setError(null);
     try {
-      await deleteDeliberateSubApp(editingSubApp.id);
+      await (isAdmin ? deleteDeliberateSubApp(editingSubApp.id) : deleteOwnedDeliberateSubApp(editingSubApp.id));
       setSubApps((prev) => prev.filter((a) => a.id !== editingSubApp.id));
       if (selectedSubAppId === editingSubApp.id) {
         setSelectedSubAppId(null);
@@ -738,14 +760,16 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                     </div>
                   </button>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<Trash2 className="h-4 w-4" />}
-                      onClick={() => void handleDeleteBank(bank.id, bank.name)}
-                    >
-                      删除
-                    </Button>
+                    {!isGuest && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Trash2 className="h-4 w-4" />}
+                        onClick={() => void handleDeleteBank(bank.id, bank.name)}
+                      >
+                        删除
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -830,13 +854,15 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
             <Workflow className="h-5 w-5 text-ark-accent" aria-hidden="true" />
             <h3 className="text-lg font-semibold text-ark-text">专注工作管理</h3>
           </div>
-          <Button
-            variant="primary"
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setShowCreateModal(true)}
-          >
-            新建专注工作
-          </Button>
+          {!isGuest && (
+            <Button
+              variant="primary"
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => setShowCreateModal(true)}
+            >
+              新建专注工作
+            </Button>
+          )}
         </div>
 
         {/* 专注工作列表 */}
@@ -873,21 +899,25 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                     >
                       开始
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingConfig(config)}
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<Trash2 className="h-3 w-3" />}
-                      onClick={() => void handleDelete(config)}
-                    >
-                      删除
-                    </Button>
+                    {!isGuest && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingConfig(config)}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Trash2 className="h-3 w-3" />}
+                          onClick={() => void handleDelete(config)}
+                        >
+                          删除
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -920,13 +950,15 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
             <Settings2 className="h-5 w-5 text-ark-accent" aria-hidden="true" />
             <h3 className="text-lg font-semibold text-ark-text">工作流编排</h3>
           </div>
-          <Button
-            variant="primary"
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={handleOpenNewPresetModal}
-          >
-            新建编排
-          </Button>
+          {!isGuest && (
+            <Button
+              variant="primary"
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={handleOpenNewPresetModal}
+            >
+              新建编排
+            </Button>
+          )}
         </div>
 
         {/* 已保存编排列表 */}
@@ -937,16 +969,18 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                 还没有编排
               </p>
               <p className="mb-4 text-xs text-ark-text-faint">
-                创建编排来组合多个专注工作，按顺序执行
+                {isGuest ? '初始化完成后会自动提供学习编排。' : '创建编排来组合多个专注工作，按顺序执行'}
               </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Plus className="h-3.5 w-3.5" />}
-                onClick={handleOpenNewPresetModal}
-              >
-                创建第一个编排
-              </Button>
+              {!isGuest && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Plus className="h-3.5 w-3.5" />}
+                  onClick={handleOpenNewPresetModal}
+                >
+                  创建第一个编排
+                </Button>
+              )}
             </div>
           ) : (
             deliberatePresets.map((preset) => {
@@ -980,21 +1014,25 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
                     >
                       启动
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenEditPresetModal(preset)}
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={<Trash2 className="h-3 w-3" />}
-                      onClick={() => void handleDeletePreset(preset.id)}
-                    >
-                      删除
-                    </Button>
+                    {!isGuest && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenEditPresetModal(preset)}
+                        >
+                          编辑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Trash2 className="h-3 w-3" />}
+                          onClick={() => void handleDeletePreset(preset.id)}
+                        >
+                          删除
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -1135,9 +1173,9 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
     <SubAppPageShell maxWidth="6xl">
       <div className="space-y-6">
         <SubAppPageHeader
-          title={selectedSubApp?.name ?? '刻意学习流'}
-          description={selectedSubApp?.description || '管理题库、专注工作和工作流，通过刻意练习提升学习效果。'}
-          breadcrumb={selectedSubApp ? undefined : 'Admin'}
+          title={pageTitle}
+          description={pageDescription}
+          breadcrumb={appId || selectedSubApp ? undefined : isAdmin ? 'Admin' : undefined}
           backTo="/apps"
           backLabel="返回应用中心"
         />
@@ -1229,6 +1267,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
       {showCreateSubAppModal && (
         <CreateSubAppModal
           saving={saving}
+          allowEventLink={!isAdmin}
           onSave={handleCreateSubApp}
           onUploadBank={() => {
             setShowCreateSubAppModal(false);
@@ -1243,6 +1282,7 @@ export default function DeliberateWorkflow({ appId }: { appId?: string } = {}) {
         <EditSubAppModal
           subApp={editingSubApp}
           saving={saving}
+          allowEventLink={!isAdmin}
           onSave={handleEditSubApp}
           onDelete={handleDeleteSubApp}
           onUploadBank={() => {

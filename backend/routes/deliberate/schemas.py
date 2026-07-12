@@ -80,6 +80,7 @@ class DeliberateWorkflowConfigOut(_NormalizedDeliberateBase):
     kind: DeliberateKind
     focus_work_type: DeliberateFocusWorkType
     app_id: str | None = None
+    event_id: str | None = None
     bank_id: str | None = None
     task_id: str | None = None
     target_count: int = Field(default=10, ge=1, le=500)
@@ -104,6 +105,7 @@ class DeliberateWorkflowConfigCreate(_NormalizedDeliberateBase):
     kind: DeliberateKind
     focus_work_type: DeliberateFocusWorkType
     app_id: str | None = None
+    event_id: str | None = None
     bank_id: str | None = None
     task_id: str | None = None
     target_count: int = Field(default=10, ge=1, le=500)

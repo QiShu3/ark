@@ -645,6 +645,7 @@ class FocusWorkflowOut(_NormalizedFocusWorkTypeBase, _NormalizedAppTaskTypeBase)
 class FocusWorkflowPresetCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     icon: str | None = Field(default=None, max_length=50)
+    app_id: str | None = Field(default=None, max_length=100)
     phases: list[FocusWorkflowPhase] | None = None
     focus_duration: int = Field(default=1500, ge=60, le=24 * 60 * 60)
     break_duration: int = Field(default=300, ge=60, le=24 * 60 * 60)
@@ -667,6 +668,7 @@ class FocusWorkflowPresetOut(BaseModel):
     user_id: int
     event_id: UUID | None = None
     event_name: str | None = None
+    app_id: str | None = None
     name: str
     icon: str | None = None
     focus_duration: int
