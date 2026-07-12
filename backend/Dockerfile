@@ -4,15 +4,18 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple
 
-# 从官方镜像复制 uv 可执行文件
-COPY --from=ghcr.io/astral-sh/uv:0.7.3 /uv /uvx /bin/
+# Keep the production build independent from a separate GHCR build-stage image.
+RUN pip install --no-cache-dir --index-url https://mirrors.cloud.tencent.com/pypi/simple uv==0.7.3
 
 # 复制依赖文件
 COPY pyproject.toml uv.lock ./
 
-# 使用 uv 同步依赖
-RUN uv sync --frozen --no-dev
+# Export the locked production dependency set, then install it from the
+# configured mirror instead of downloading package artifacts from uv.lock URLs.
+RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt \
+    && pip install --no-cache-dir --index-url https://mirrors.cloud.tencent.com/pypi/simple -r requirements.txt
 
 # 复制应用代码
 COPY . .

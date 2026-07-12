@@ -27,23 +27,14 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     volumes:
       - backend_uploads:/app/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
 
-  frontend:
-    build:
-      context: ../frontend
-    restart: unless-stopped
-    volumes:
-      - ${TLS_CERT_PATH}:/etc/nginx/ssl/strangetalking.xin_bundle.crt:ro
-      - ${TLS_KEY_PATH}:/etc/nginx/ssl/strangetalking.xin.key:ro
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - backend
-
 volumes:
   postgres_data:
+    name: ark_postgres_data_20260712
   backend_uploads:
+    name: ark_backend_uploads_20260712

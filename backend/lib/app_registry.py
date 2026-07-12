@@ -108,7 +108,7 @@ GUEST_ENGLISH_APP = AppDeclaration(
     route="/guest-english",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=["65d3df31-99c9-4047-aa1b-d52c073ce169"],
+    bank_ids=["b6ba1d20-491d-44ce-a661-2a83361a9fa9"],
 )
 
 GUEST_MATH_APP = AppDeclaration(
@@ -119,7 +119,7 @@ GUEST_MATH_APP = AppDeclaration(
     route="/guest-math",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=["be2310b9-9746-4510-9acc-04253b4df844"],
+    bank_ids=["7374112b-11b5-4d8c-a6ee-adc1694a961f"],
 )
 
 GUEST_POLITICS_APP = AppDeclaration(
@@ -130,7 +130,7 @@ GUEST_POLITICS_APP = AppDeclaration(
     route="/guest-politics",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=["82dde323-fbaa-4257-9b0a-874cd2c6072b"],
+    bank_ids=["41560b99-eedf-426e-87dc-d938340fea87"],
 )
 
 GUEST_408_APP = AppDeclaration(
@@ -141,7 +141,7 @@ GUEST_408_APP = AppDeclaration(
     route="/guest-408",
     guest_only=True,
     type="deliberate-workflow",
-    bank_ids=["36bbb590-8387-4d30-ac55-f1733126dcd1"],
+    bank_ids=["d3c6dfe7-ddca-4bbf-9d7c-d8ec76364e78"],
 )
 
 GUEST_APPS: list[AppDeclaration] = [

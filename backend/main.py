@@ -34,9 +34,9 @@ async def _lifespan(app: FastAPI):
     await init_todo(app)
     await init_flash(app)
     await init_choice(app)
+    await init_input(app)
     await init_content_bank(app)
     await init_deliberate(app)
-    await init_input(app)
     try:
         yield
     finally:

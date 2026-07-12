@@ -1,6 +1,6 @@
 # Ark Production Deployment
 
-This deployment exposes only the frontend Nginx container on ports 80 and 443. PostgreSQL and FastAPI stay on the Compose network and are not reachable from the public internet.
+This deployment runs PostgreSQL and FastAPI with Docker Compose. The server's system Nginx exposes the frontend static files on ports 80 and 443, terminates TLS, and proxies dynamic requests to FastAPI on `127.0.0.1:8000`. PostgreSQL remains on the Compose network and is not reachable from the public internet.
 
 ## First Deployment
 
@@ -13,9 +13,11 @@ cp deploy/.env.example deploy/.env
 chmod 600 deploy/.env
 ```
 
-Edit `deploy/.env` to set a strong PostgreSQL password, existing certificate paths, and any enabled email or model-provider credentials. Do not commit this file.
+Edit `deploy/.env` to set a strong PostgreSQL password and any enabled email or model-provider credentials. Do not commit this file.
 
-Confirm the certificate files are present and readable by Docker, then build and start the complete stack:
+Build the frontend locally, then sync `frontend/dist/` to `/var/www/ark/` on the server. Install the Nginx site configuration from `deploy/ark.nginx.conf`, validate it with `sudo nginx -t`, and reload Nginx.
+
+Start the database and backend stack:
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/compose.yml up -d --build
