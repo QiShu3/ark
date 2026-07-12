@@ -13,6 +13,7 @@ type GuestPhase =
   | 'experience'
   | 'creating'
   | 'guide-event'
+  | 'guide-event-overview'
   | 'guide-event-close'
   | 'guide-start'
   | 'guide-learning-select'
@@ -27,7 +28,7 @@ type GuideStep = {
   anchor: string;
   title: string;
   body: string;
-  placement: 'top' | 'bottom' | 'left' | 'right';
+  placement: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left';
 };
 
 const GUIDE_STEPS: GuideStep[] = [
@@ -39,10 +40,17 @@ const GUIDE_STEPS: GuideStep[] = [
     placement: 'right',
   },
   {
+    id: 'event-workbench-overview',
+    anchor: 'event-workbench-overview',
+    title: '这里是你的考研事件',
+    body: '事件把截止时间、学习任务和学习应用放在一起。接下来会从首页启动第一轮 408 综合检测。',
+    placement: 'bottom',
+  },
+  {
     id: 'close-event-workbench',
     anchor: 'event-workbench-close',
-    title: '先关闭事件工作台',
-    body: '事件已经准备好了。关闭工作台回到首页，继续启动第一轮学习。',
+    title: '回到首页开始学习',
+    body: '事件信息已经准备好了。关闭工作台，回到首页启动第一轮 408 综合检测。',
     placement: 'left',
   },
   {
@@ -64,7 +72,7 @@ const GUIDE_STEPS: GuideStep[] = [
     anchor: 'workflow-start-button',
     title: '启动第一轮学习',
     body: '确认任务后，点击这里启动工作流，进入第一道练习。',
-    placement: 'top',
+    placement: 'bottom-left',
   },
 ];
 
@@ -119,12 +127,14 @@ function GuideHighlight({
   visible,
   onTargetAction,
   onBubbleAction,
+  bubbleActionLabel = '去看看',
   onSkip,
 }: {
   step: GuideStep;
   visible: boolean;
   onTargetAction: () => void;
   onBubbleAction?: () => void;
+  bubbleActionLabel?: string;
   onSkip: () => void;
 }) {
   const rect = useAnchorRect(step.anchor, visible);
@@ -150,22 +160,50 @@ function GuideHighlight({
   let bubbleTop: number;
   let bubbleLeft: number;
   const bubbleWidth = 280;
-  switch (step.placement) {
+  const bubbleHeight = 220;
+  const gap = 12;
+  const positions = {
+    bottom: { top: top + height + gap, left: left + width / 2 - bubbleWidth / 2 },
+    'bottom-left': { top: top + height + gap, left: left + width - bubbleWidth },
+    top: { top: top - gap - bubbleHeight, left: left + width / 2 - bubbleWidth / 2 },
+    right: { top: top + height / 2 - bubbleHeight / 2, left: left + width + gap },
+    left: { top: top + height / 2 - bubbleHeight / 2, left: left - bubbleWidth - gap },
+  };
+  const fallbackPlacements: Record<GuideStep['placement'], GuideStep['placement'][]> = {
+    bottom: ['top', 'right', 'left'],
+    top: ['bottom', 'right', 'left'],
+    right: ['left', 'bottom', 'top'],
+    left: ['right', 'bottom', 'top'],
+    'bottom-left': ['left', 'right', 'top'],
+  };
+  const placement = [step.placement, ...fallbackPlacements[step.placement]].find((candidate) => {
+    const position = positions[candidate];
+    return position.top >= 16
+      && position.left >= 16
+      && position.top + bubbleHeight <= window.innerHeight - 16
+      && position.left + bubbleWidth <= window.innerWidth - 16;
+  }) ?? step.placement;
+
+  switch (placement) {
     case 'bottom':
-      bubbleTop = top + height + 12;
+      bubbleTop = top + height + gap;
       bubbleLeft = left + width / 2 - bubbleWidth / 2;
       break;
+    case 'bottom-left':
+      bubbleTop = top + height + gap;
+      bubbleLeft = left + width - bubbleWidth;
+      break;
     case 'top':
-      bubbleTop = top - 12 - 100;
+      bubbleTop = top - gap - bubbleHeight;
       bubbleLeft = left + width / 2 - bubbleWidth / 2;
       break;
     case 'right':
-      bubbleTop = top + height / 2 - 50;
-      bubbleLeft = left + width + 12;
+      bubbleTop = top + height / 2 - bubbleHeight / 2;
+      bubbleLeft = left + width + gap;
       break;
     case 'left':
-      bubbleTop = top + height / 2 - 50;
-      bubbleLeft = left - bubbleWidth - 12;
+      bubbleTop = top + height / 2 - bubbleHeight / 2;
+      bubbleLeft = left - bubbleWidth - gap;
       break;
   }
 
@@ -206,13 +244,13 @@ function GuideHighlight({
       <div
         style={{
           position: 'fixed',
-          top: bubbleTop,
+          top: Math.max(16, Math.min(bubbleTop, window.innerHeight - bubbleHeight - 16)),
           left: Math.max(16, Math.min(bubbleLeft, window.innerWidth - bubbleWidth - 16)),
           width: bubbleWidth,
           zIndex: 10000,
           pointerEvents: 'auto',
         }}
-        className="rounded-2xl border border-ark-border bg-ark-surface p-5 shadow-2xl"
+        className="max-h-[calc(100vh-32px)] overflow-y-auto rounded-2xl border border-ark-border bg-ark-surface p-5 shadow-2xl"
       >
         <div className="text-sm font-bold text-ark-text mb-1">{step.title}</div>
         <div className="text-xs text-ark-text-muted leading-relaxed mb-3">{step.body}</div>
@@ -223,7 +261,7 @@ function GuideHighlight({
             className="w-full h-9 rounded-lg text-xs font-medium text-white transition-all"
             style={{ background: '#3b82f6' }}
           >
-            去看看
+            {bubbleActionLabel}
           </button>
         ) : (
           <div className="text-xs font-medium text-[var(--ark-accent)]">请点击高亮按钮继续</div>
@@ -282,7 +320,7 @@ export default function GuestOnboarding() {
   // the same as the bubble CTA so the guide does not cover the event overview.
   useEffect(() => {
     if (phase !== 'guide-event') return;
-    const handler = () => setPhase('guide-event-close');
+    const handler = () => setPhase('guide-event-overview');
     window.addEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
     return () => window.removeEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
   }, [phase]);
@@ -318,6 +356,10 @@ export default function GuestOnboarding() {
   }, []);
 
   const handleGuideEventAction = useCallback(() => {
+    setPhase('guide-event-overview');
+  }, []);
+
+  const handleEventOverviewContinue = useCallback(() => {
     setPhase('guide-event-close');
   }, []);
 
@@ -398,9 +440,20 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-event-close' && (
         <GuideHighlight
+          step={GUIDE_STEPS[2]}
+          visible={true}
+          onTargetAction={() => undefined}
+          onSkip={handleSkip}
+        />
+      )}
+
+      {phase === 'guide-event-overview' && (
+        <GuideHighlight
           step={GUIDE_STEPS[1]}
           visible={true}
           onTargetAction={() => undefined}
+          onBubbleAction={handleEventOverviewContinue}
+          bubbleActionLabel="继续"
           onSkip={handleSkip}
         />
       )}
@@ -408,7 +461,7 @@ export default function GuestOnboarding() {
       {/* Guided tour: highlight start learning */}
       {phase === 'guide-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[2]}
+          step={GUIDE_STEPS[3]}
           visible={true}
           onTargetAction={handleLearningEntryClick}
           onSkip={handleSkip}
@@ -417,7 +470,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-learning-select' && (
         <GuideHighlight
-          step={GUIDE_STEPS[3]}
+          step={GUIDE_STEPS[4]}
           visible={true}
           onTargetAction={handleLearningAppClick}
           onSkip={handleSkip}
@@ -426,7 +479,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-workflow-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[4]}
+          step={GUIDE_STEPS[5]}
           visible={true}
           onTargetAction={handleWorkflowStartClick}
           onSkip={handleSkip}

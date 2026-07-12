@@ -1,10 +1,12 @@
 import React from 'react';
 
 import { apiJson } from '../../lib/api';
+import { useAuthStore } from '../../lib/auth';
 import { fetchCurrentFocusWorkflow, forkFocusWorkRun, returnToParentFocusWork, confirmWorkflowSettlement } from '../../lib/focusWorkflow';
 import AppModalFrame from '../AppModalFrame';
 import FocusWorkModalShell from './FocusWorkModalShell';
 import FocusWorkbenchPanel from './FocusWorkbenchPanel';
+import Guest408DemoOnboarding from './Guest408DemoOnboarding';
 import WorkflowSettlementModal from './WorkflowSettlementModal';
 import { getFocusWorkDefinition } from './focusWorkRegistry';
 import {
@@ -42,12 +44,14 @@ function isFocusWorkType(value: unknown): value is FocusWorkType {
 }
 
 export default function FocusWorkProvider({ children }: FocusWorkProviderProps) {
+  const isGuest = useAuthStore((state) => state.user?.is_guest === true);
   const [snapshot, setSnapshot] = React.useState<FocusWorkSnapshot | null>(null);
   const [pendingStart, setPendingStart] = React.useState<PendingStart | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [showAbandonConfirm, setShowAbandonConfirm] = React.useState(false);
   const [headerRight, setHeaderRight] = React.useState<React.ReactNode>(null);
   const creatingRunRef = React.useRef(false);
+  const autoRunAttemptRef = React.useRef<string | null>(null);
 
   const activeRun = snapshot?.active_run ?? null;
   const activeFocusWorkType = activeRun?.focus_work_type ?? snapshot?.active_focus_work_type ?? null;
@@ -166,6 +170,35 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     } finally {
       setBusy(false);
     }
+  }
+
+  async function completeGuest408Demo(run: FocusWorkRunSummary) {
+    const config = run.config_snapshot as Record<string, unknown> | undefined;
+    const progress = run.progress_snapshot as Record<string, unknown> | undefined;
+    const name = String(config?.deliberate_name ?? '');
+    const isCombinedCheck = name === '408 综合检测';
+    const answeredCount = isCombinedCheck ? 10 : 3;
+    const rotationOffset = Number(progress?.unified_rotation_offset ?? 0);
+    const shouldPassCombinedCheck = isCombinedCheck && (
+      config?.guest_demo_next_combined_should_pass === true || rotationOffset > 0
+    );
+    const correctCount = isCombinedCheck ? (shouldPassCombinedCheck ? 8 : 6) : 2;
+    const accuracy = correctCount / answeredCount;
+
+    await completeRunContent({
+      article_count: 1,
+      target_article_count: answeredCount,
+      correct_count: correctCount,
+      question_count: answeredCount,
+      run_summary: {
+        total_questions: answeredCount,
+        answered_count: answeredCount,
+        correct_count: correctCount,
+        accuracy,
+        duration_seconds: 3,
+        question_details: [],
+      },
+    });
   }
 
   async function completeTaskAndEndPhase() {
@@ -364,13 +397,18 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     if (!snapshot || busy || creatingRunRef.current) return;
     if (snapshot.state !== 'focus' || !activeDefinition) return;
     if (snapshot.pending_task_selection || snapshot.is_paused) return;
-    if (activeRun || derivedPhaseRuntimeState) return;
-      const hasTaskId = snapshot.task_id || snapshot.runtime_task_id;
-      const currentPhase = snapshot.phases?.[snapshot.current_phase_index ?? 0];
-      const isDeliberate = currentPhase && 'deliberate_config_id' in currentPhase;
-      // 所有专注工作都创建计数轮次，去掉"额外阶段"概念
-      const mode: 'counted' | 'extra' = 'counted';
-      void createRun(mode);
+    if (activeRun || derivedPhaseRuntimeState) {
+      autoRunAttemptRef.current = null;
+      return;
+    }
+    const currentPhase = snapshot.phases?.[snapshot.current_phase_index ?? 0];
+    const phaseConfigId = currentPhase && 'deliberate_config_id' in currentPhase
+      ? String(currentPhase.deliberate_config_id ?? '')
+      : '';
+    const attemptKey = `${snapshot.current_phase_index ?? 0}:${snapshot.active_focus_work_type ?? ''}:${phaseConfigId}`;
+    if (autoRunAttemptRef.current === attemptKey) return;
+    autoRunAttemptRef.current = attemptKey;
+    void createRun('counted');
   }, [
     activeDefinition,
     activeRun,
@@ -378,6 +416,9 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
     derivedPhaseRuntimeState,
     snapshot?.is_paused,
     snapshot?.pending_task_selection,
+    snapshot?.current_phase_index,
+    snapshot?.active_focus_work_type,
+    snapshot?.phases,
     snapshot?.runtime_task_id,
     snapshot?.state,
     snapshot?.task_id,
@@ -450,6 +491,23 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
               onForkWithChild={activeRun ? (childId) => void forkToChild(activeRun, childId) : undefined}
               forkChildren={activeRun?.config_snapshot?.children as { config_id: string; label: string; is_recommended: boolean }[] | undefined}
               onReturnToParent={activeRun ? () => returnToParent(activeRun.id) : undefined}
+              guestDemoAction={isGuest && activeRun?.focus_work_type === 'choice' && (
+                (activeRun.config_snapshot as Record<string, unknown> | undefined)?.deliberate_name === '408 综合检测'
+                || ['数据结构巩固', '计算机组成原理巩固', '操作系统巩固', '计算机网络巩固'].includes(
+                  String((activeRun.config_snapshot as Record<string, unknown> | undefined)?.deliberate_name ?? ''),
+                )
+              ) ? {
+                label: (activeRun.config_snapshot as Record<string, unknown> | undefined)?.deliberate_name === '408 综合检测'
+                  ? '一键完成综合检测'
+                  : '一键完成专项检测',
+                onClick: () => void completeGuest408Demo(activeRun),
+              } : null}
+              isGuest408Demo={isGuest && activeRun?.focus_work_type === 'choice' && (
+                (activeRun.config_snapshot as Record<string, unknown> | undefined)?.deliberate_name === '408 综合检测'
+                || ['数据结构巩固', '计算机组成原理巩固', '操作系统巩固', '计算机网络巩固'].includes(
+                  String((activeRun.config_snapshot as Record<string, unknown> | undefined)?.deliberate_name ?? ''),
+                )
+              )}
               onContentCompleted={(progressSnapshot) => void completeRunContent(progressSnapshot)}
               />
           </FocusWorkHeaderRightContext.Provider>
@@ -499,8 +557,11 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
           settlement={snapshot.workflow_settlement}
           busy={busy}
           onConfirm={() => void confirmSettlement()}
+          onboardingAnchor={isGuest && snapshot.workflow_settlement.workflow_name.includes('408') ? 'guest-408-finish-workflow' : undefined}
+          onboardingContentAnchor={isGuest && snapshot.workflow_settlement.workflow_name.includes('408') ? 'guest-408-settlement-overview' : undefined}
         />
       ) : null}
+      {isGuest ? <Guest408DemoOnboarding snapshot={snapshot} /> : null}
     </>
   );
 }

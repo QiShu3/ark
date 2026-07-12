@@ -2,6 +2,20 @@
 
 ## 提交记录
 
+### 2026-07-12 · `fda6dbb` · feat(guest): guide 408 fork experience in context
+
+**用户需求**："找到时间 和 回到首页之间缺少过渡"、"将 体验流程提示 也扩展为高亮引导吧"，以及"太生硬了，我觉得应该先高亮主题内容，再高亮要按的按钮"。
+
+**完成工作**：
+- 在游客事件工作台中补充事件内容介绍，再引导关闭并回到首页启动学习。
+- 新增游客 408 Fork 体验引导：首轮检测、未通过结果、专项 Fork、专项通过回流、复检达标和结算均按真实工作流状态衔接。
+- 每个体验节点改为两步：先高亮并说明当前题目、结果或学习路径，再提示下一步实际操作，避免直接催促点击。
+- 为检测说明、结果卡片、Fork 目标、回流/结束按钮和结算学习路径补充高亮锚点；新增和更新相关前端测试。
+
+**验证情况**：
+- `frontend`: `pnpm check`，passed。
+- `frontend`: `pnpm exec vitest run src/components/__tests__/FocusWorkProvider.test.tsx src/components/focus-work/WorkflowSettlementModal.test.tsx src/components/__tests__/GuestOnboarding.test.tsx`，18 passed。
+
 ### 2026-07-12 · `084a0d6` · feat(guest): complete 408 onboarding journey
 
 **用户需求**："看看游客登录的引导"、"从游客登录开始，完整测试一遍，记录一下出现的问题和对应的改进方案"、"要提供跳出引导 button"，以及"我看引导过程，点击事件后没有引导用户关掉事件弹窗，点击开始学习button也没有引导用户一步进行学习啊"。

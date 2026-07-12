@@ -88,6 +88,8 @@ type RunCompletionPanelProps = {
   secondaryDisabled: boolean;
   onSecondary: () => void;
   busy?: boolean;
+  primaryOnboardingAnchor?: string;
+  isGuest408Demo?: boolean;
 };
 
 function CircularProgress({
@@ -428,6 +430,7 @@ function RecommendCard({
   tint,
   onClick,
   disabled,
+  onboardingAnchor,
 }: {
   icon: ReactNode;
   title: string;
@@ -436,12 +439,14 @@ function RecommendCard({
   tint: 'blue' | 'violet' | 'green';
   onClick?: () => void;
   disabled?: boolean;
+  onboardingAnchor?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-onboarding-anchor={onboardingAnchor}
       className={`completion-recommend-card tint-${tint}`}
     >
       <div className="completion-recommend-icon-row">
@@ -482,6 +487,8 @@ function RunCompletionPanel({
   secondaryDisabled,
   onSecondary,
   busy = false,
+  primaryOnboardingAnchor,
+  isGuest408Demo = false,
 }: RunCompletionPanelProps) {
   const hasMasteryCheck = masteryCheck && masteryCheck.enabled === true;
   const passed = hasMasteryCheck && masteryCheck?.passed === true;
@@ -491,15 +498,16 @@ function RunCompletionPanel({
   const hasChildren = forkChildren && forkChildren.length > 0;
   const showRecommend = hasMasteryCheck && !passed;
 
-  // 构建推荐列表：优先用 forkChildren，不足 3 个用预设补
+  // 构建推荐列表：优先用配置的 Fork 子项。
   const recommendList: RecommendPreset[] = showRecommend
     ? (() => {
         if (hasChildren) {
-          return forkChildren!.slice(0, 3).map((child, index) => {
-            const preset = DEFAULT_RECOMMEND_PRESETS[index] ?? DEFAULT_RECOMMEND_PRESETS[2];
+          return forkChildren!.map((child, index) => {
+            const preset = DEFAULT_RECOMMEND_PRESETS[index % DEFAULT_RECOMMEND_PRESETS.length];
             return {
               ...preset,
               title: child.label || child.config_id,
+              desc: '完成专项检测后返回综合检测，继续下一组新题。',
               isRecommended: child.is_recommended ?? preset.isRecommended,
               configId: child.config_id,
             };
@@ -531,7 +539,7 @@ function RunCompletionPanel({
         </div>
 
         {/* 检验结果卡片 */}
-        <div className="completion-card flex-[4] min-h-0">
+        <div data-onboarding-anchor="guest-408-result-overview" className="completion-card flex-[4] min-h-0">
           <div className="completion-section-title">
             <TargetIcon className="w-[18px] h-[18px]" />
             检验结果
@@ -597,6 +605,7 @@ function RunCompletionPanel({
                     tint={item.tint}
                     onClick={() => handleRecommendClick(index)}
                     disabled={busy || !item.configId}
+                    onboardingAnchor={isGuest408Demo && index === 0 ? 'guest-408-fork-option' : undefined}
                   />
                 ))}
               </div>
@@ -619,6 +628,7 @@ function RunCompletionPanel({
             type="button"
             disabled={primaryDisabled}
             onClick={onPrimary}
+            data-onboarding-anchor={primaryOnboardingAnchor}
             className="completion-btn completion-btn-primary"
           >
             {primaryLabel}
@@ -756,6 +766,8 @@ type FocusWorkbenchPanelProps = {
   onForkWithChild?: (childConfigId: string) => void;
   forkChildren?: { config_id: string; label: string; is_recommended: boolean }[];
   onReturnToParent?: () => void;
+  guestDemoAction?: { label: string; onClick: () => void } | null;
+  isGuest408Demo?: boolean;
   onContentCompleted: (progressSnapshot?: Record<string, unknown>) => void;
 };
 
@@ -773,6 +785,8 @@ export default function FocusWorkbenchPanel({
   onForkWithChild,
   forkChildren,
   onReturnToParent,
+  guestDemoAction,
+  isGuest408Demo = false,
   onContentCompleted,
 }: FocusWorkbenchPanelProps) {
   const noAvailableContent = runHasNoAvailableContent(activeRun);
@@ -785,9 +799,17 @@ export default function FocusWorkbenchPanel({
 
   const hasChildren = forkChildren && forkChildren.length > 0;
   const isChildRun = Boolean(activeRun?.source_run_id);
+  const requiresSpecialistFork = Boolean(hasMasteryCheckFailed && hasChildren && !isChildRun);
+  const requiresSpecialistRetry = Boolean(hasMasteryCheckFailed && isChildRun);
   const durationSeconds = (runSummary?.duration_seconds as number) ?? 0;
   const durationMinutes = Math.ceil(durationSeconds / 60);
   const completionSubtitle = `🎉 棒极了！你刚刚完成了 ${durationMinutes} 分钟的专注`;
+  const childPrimaryLabel = requiresSpecialistRetry ? '再做一轮专项' : '回到原专注工作';
+  const childPrimaryAction = requiresSpecialistRetry ? onCreateExtraRun : () => onReturnToParent?.();
+  const childSecondaryLabel = requiresSpecialistRetry ? '通过后回到检测' : '再来一轮';
+  const childSecondaryDisabled = busy || !activeRun || requiresSpecialistRetry;
+  const parentPrimaryLabel = requiresSpecialistFork ? '选择下方专项练习' : '完成任务并结束阶段';
+  const parentPrimaryDisabled = busy || !activeRun || requiresSpecialistFork;
 
   // ===== 结算阶段 =====
   if (phaseRuntimeState === 'counted_run_completed_confirming') {
@@ -802,13 +824,15 @@ export default function FocusWorkbenchPanel({
           masteryCheck={masteryCheck ?? null}
           forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
           onForkWithChild={onForkWithChild}
-          primaryLabel="回到原专注工作"
+          primaryLabel={childPrimaryLabel}
           primaryDisabled={busy || !activeRun}
-          onPrimary={() => onReturnToParent?.()}
-          secondaryLabel="再来一轮"
-          secondaryDisabled={busy || !activeRun}
+          onPrimary={childPrimaryAction}
+          secondaryLabel={childSecondaryLabel}
+          secondaryDisabled={childSecondaryDisabled}
           onSecondary={onCreateExtraRun}
           busy={busy}
+          isGuest408Demo={isGuest408Demo}
+          primaryOnboardingAnchor={!requiresSpecialistRetry ? 'guest-408-return-parent' : undefined}
         />
       );
     }
@@ -823,13 +847,15 @@ export default function FocusWorkbenchPanel({
         masteryCheck={masteryCheck ?? null}
         forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
         onForkWithChild={onForkWithChild}
-        primaryLabel="进入下一阶段"
-        primaryDisabled={busy || !activeRun}
+        primaryLabel={parentPrimaryLabel}
+        primaryDisabled={parentPrimaryDisabled}
         onPrimary={onCompleteTaskAndEndPhase}
         secondaryLabel="再来一轮"
         secondaryDisabled={busy || !activeRun}
         onSecondary={onCreateExtraRun}
         busy={busy}
+        isGuest408Demo={isGuest408Demo}
+        primaryOnboardingAnchor={!requiresSpecialistFork ? 'guest-408-complete-task' : undefined}
       />
     );
   }
@@ -859,13 +885,15 @@ export default function FocusWorkbenchPanel({
           masteryCheck={masteryCheck ?? null}
           forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
           onForkWithChild={onForkWithChild}
-          primaryLabel="回到原专注工作"
+          primaryLabel={childPrimaryLabel}
           primaryDisabled={busy || !activeRun}
-          onPrimary={() => onReturnToParent?.()}
-          secondaryLabel="再来一轮"
-          secondaryDisabled={busy || !activeRun}
+          onPrimary={childPrimaryAction}
+          secondaryLabel={childSecondaryLabel}
+          secondaryDisabled={childSecondaryDisabled}
           onSecondary={onCreateExtraRun}
           busy={busy}
+          isGuest408Demo={isGuest408Demo}
+          primaryOnboardingAnchor={!requiresSpecialistRetry ? 'guest-408-return-parent' : undefined}
         />
       );
     }
@@ -880,13 +908,15 @@ export default function FocusWorkbenchPanel({
         masteryCheck={masteryCheck ?? null}
         forkChildren={hasMasteryCheckFailed ? (hasChildren ? forkChildren : undefined) : undefined}
         onForkWithChild={onForkWithChild}
-        primaryLabel="结束阶段"
-        primaryDisabled={busy || !activeRun}
+        primaryLabel={requiresSpecialistFork ? '选择下方专项练习' : '结束阶段'}
+        primaryDisabled={busy || !activeRun || requiresSpecialistFork}
         onPrimary={onEndPhase}
         secondaryLabel="再来一轮"
         secondaryDisabled={busy || !activeRun}
         onSecondary={onCreateExtraRun}
         busy={busy}
+        isGuest408Demo={isGuest408Demo}
+        primaryOnboardingAnchor={!requiresSpecialistFork ? 'guest-408-complete-task' : undefined}
       />
     );
   }
@@ -929,11 +959,32 @@ export default function FocusWorkbenchPanel({
   }
 
   if (activeRun && activeDefinition) {
-    return <Fragment key={activeRun.id}>{activeDefinition.render({
-      run: activeRun,
-      disabled: isPaused,
-      onContentCompleted,
-    })}</Fragment>;
+    return (
+      <Fragment key={activeRun.id}>
+        {guestDemoAction ? (
+          <div
+            data-onboarding-anchor="guest-408-demo-overview"
+            className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-[var(--focus-work-blue-border)] bg-[var(--focus-work-blue-bg)] px-4 py-3"
+          >
+            <p className="text-sm text-[var(--focus-work-blue-text)]">快速体验会模拟本轮答题结果，直接进入下一步流程。</p>
+            <button
+              type="button"
+              disabled={busy || isPaused}
+              onClick={guestDemoAction.onClick}
+              data-onboarding-anchor="guest-408-demo-complete"
+              className="shrink-0 rounded-lg bg-[var(--focus-work-blue-text)] px-4 py-2 text-sm font-medium text-[var(--focus-work-primary-button-text)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {guestDemoAction.label}
+            </button>
+          </div>
+        ) : null}
+        {activeDefinition.render({
+          run: activeRun,
+          disabled: isPaused,
+          onContentCompleted,
+        })}
+      </Fragment>
+    );
   }
 
   return (

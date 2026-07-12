@@ -27,6 +27,8 @@ type WorkflowSettlementModalProps = {
   completedAt?: string | null;
   onConfirm?: () => void;
   onClose?: () => void;
+  onboardingAnchor?: string;
+  onboardingContentAnchor?: string;
 };
 
 type IconType = ComponentType<{ className?: string }>;
@@ -56,7 +58,8 @@ function formatDateTime(value?: string | null): string {
 
 function formatPercent(value: number | null | undefined): string {
   if (value == null) return '-';
-  return `${Math.round(value)}%`;
+  const percent = value >= 0 && value <= 1 ? value * 100 : value;
+  return `${Math.round(percent)}%`;
 }
 
 function displayNodeName(name: string): { marker: string | null; title: string } {
@@ -140,13 +143,18 @@ function SectionCard({
   icon: Icon,
   title,
   children,
+  onboardingAnchor,
 }: {
   icon: IconType;
   title: string;
   children: ReactNode;
+  onboardingAnchor?: string;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-[var(--focus-work-card-shadow)]">
+    <section
+      data-onboarding-anchor={onboardingAnchor}
+      className="rounded-xl border border-[var(--focus-work-border)] bg-[var(--focus-work-surface-raised)] p-5 shadow-[var(--focus-work-card-shadow)]"
+    >
       <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--focus-work-text)]">
         <Icon className="h-4 w-4 text-[var(--focus-work-blue-text)]" aria-hidden="true" />
         <h3>{title}</h3>
@@ -262,6 +270,8 @@ export default function WorkflowSettlementModal({
   completedAt,
   onConfirm,
   onClose,
+  onboardingAnchor,
+  onboardingContentAnchor,
 }: WorkflowSettlementModalProps) {
   if (!open) return null;
 
@@ -375,7 +385,7 @@ export default function WorkflowSettlementModal({
               </div>
             </SectionCard>
           ) : nodes.length > 0 ? (
-            <SectionCard icon={Star} title="学习路径">
+            <SectionCard icon={Star} title="学习路径" onboardingAnchor={onboardingContentAnchor}>
               <div className="space-y-1">
                 {nodes.map((node, index) => (
                   <PathNode key={`${node.name}-${node.status}-${index}`} node={node} isLast={index === nodes.length - 1} />
@@ -416,6 +426,7 @@ export default function WorkflowSettlementModal({
                 type="button"
                 disabled={busy}
                 onClick={onConfirm}
+                data-onboarding-anchor={onboardingAnchor}
                 className="inline-flex min-w-[14rem] items-center justify-center gap-2 rounded-full bg-[var(--focus-work-blue-text)] px-8 py-3 text-sm font-semibold text-[var(--focus-work-primary-button-text)] shadow-[0_14px_34px_var(--focus-work-blue-shadow)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Flag className="h-4 w-4" aria-hidden="true" />

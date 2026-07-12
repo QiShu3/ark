@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FocusWorkProvider from '../focus-work/FocusWorkProvider';
+import { useAuthStore } from '../../lib/auth';
 
 const { apiJson } = vi.hoisted(() => ({
   apiJson: vi.fn(),
@@ -46,6 +47,16 @@ vi.mock('../focus-work/focusWorkRegistry', () => ({
               完成任务内容
             </button>
           </div>
+        ),
+      };
+    }
+    if (type === 'choice') {
+      return {
+        type: 'choice',
+        title: '选择题',
+        subtitle: '检测',
+        render: ({ disabled }: { disabled: boolean }) => (
+          <button type="button" disabled={disabled}>完成选择题</button>
         ),
       };
     }
@@ -199,6 +210,7 @@ function mockCurrentWorkflow(overrides: Record<string, unknown> = {}, runOverrid
 describe('FocusWorkProvider', () => {
   beforeEach(() => {
     apiJson.mockReset();
+    useAuthStore.getState().clear();
     mockCurrentWorkflow();
   });
 
@@ -352,6 +364,44 @@ describe('FocusWorkProvider', () => {
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"child_config_id":"child-cfg-1"'),
+      }),
+    );
+  });
+
+  it('makes the returned guest 408 combined check pass in the one-click demo', async () => {
+    const user = userEvent.setup();
+    useAuthStore.getState().setUser({
+      id: 1,
+      username: 'guest',
+      email: null,
+      is_active: true,
+      is_admin: false,
+      is_guest: true,
+      created_at: '2026-07-12T00:00:00Z',
+    });
+    mockCurrentWorkflow({}, {
+      focus_work_type: 'choice',
+      progress_snapshot: { unified_rotation_offset: 10 },
+      config_snapshot: {
+        deliberate_name: '408 综合检测',
+      },
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    const completeButton = await screen.findByRole('button', { name: '一键完成综合检测' });
+    expect(completeButton).toHaveAttribute('data-onboarding-anchor', 'guest-408-demo-complete');
+    await user.click(completeButton);
+
+    expect(apiJson).toHaveBeenCalledWith(
+      '/todo/focus/workflow/runs/run-1/content-complete',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"correct_count":8'),
       }),
     );
   });

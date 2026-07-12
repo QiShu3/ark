@@ -1193,7 +1193,10 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
           {loading ? <div className="text-ark-text-muted">加载中...</div> : null}
           {(error || arrangementsError) ? <div className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">{error || arrangementsError}</div> : null}
 
-          <section className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4">
+          <section
+            data-onboarding-anchor="event-workbench-overview"
+            className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4"
+          >
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <h3 className="text-base font-semibold">基本信息</h3>

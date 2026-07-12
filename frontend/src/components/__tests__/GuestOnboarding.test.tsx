@@ -23,11 +23,12 @@ describe('GuestOnboarding', () => {
     });
   });
 
-  it('guides the guest to close the event workbench after the highlighted event opens', async () => {
+  it('introduces the event workbench before guiding the guest back to the home page', async () => {
     (apiJson as ReturnType<typeof vi.fn>).mockResolvedValue({ event_id: 'event-1' });
     render(
       <>
         <button data-onboarding-anchor="primary-event">主事件</button>
+        <section data-onboarding-anchor="event-workbench-overview">事件基本信息</section>
         <button data-onboarding-anchor="event-workbench-close">关闭</button>
         <button data-onboarding-anchor="guest-learning-entry">开始学习</button>
         <GuestOnboarding />
@@ -41,7 +42,11 @@ describe('GuestOnboarding', () => {
       window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.primaryEventOpened));
     });
 
-    expect(await screen.findByText('先关闭事件工作台')).toBeInTheDocument();
+    expect(await screen.findByText('这里是你的考研事件')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+
+    expect(await screen.findByText('回到首页开始学习')).toBeInTheDocument();
   });
 
   it('guides every learning action and completes only after the workflow starts', async () => {
@@ -49,6 +54,7 @@ describe('GuestOnboarding', () => {
     render(
       <>
         <button data-onboarding-anchor="primary-event">主事件</button>
+        <section data-onboarding-anchor="event-workbench-overview">事件基本信息</section>
         <button data-onboarding-anchor="event-workbench-close">关闭</button>
         <button data-onboarding-anchor="guest-learning-entry">开始学习</button>
         <button data-onboarding-anchor="workflow-sub-app">408 学习</button>
@@ -61,7 +67,9 @@ describe('GuestOnboarding', () => {
     await screen.findByText('这是你的事件');
 
     fireEvent.click(screen.getByRole('button', { name: '主事件' }));
-    await screen.findByText('先关闭事件工作台');
+    await screen.findByText('这里是你的考研事件');
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+    await screen.findByText('回到首页开始学习');
     await act(async () => {
       window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.eventOverviewClosed));
     });
