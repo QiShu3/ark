@@ -8,7 +8,25 @@
 
 ## 提交记录
 
-### 2026-07-12 · `<pending>` · feat(deploy): add Docker Compose production stack
+### 2026-07-12 · `6b65800` · fix(deploy): support system nginx production stack
+
+**用户需求**："那你开始吧"、"汇报一下情况"，以及对 ARM 本机构建与 x86 服务器部署方式的确认。
+
+**完成工作**：
+- 生产环境改为系统 Nginx 处理 HTTPS 和静态文件，Docker Compose 仅运行 PostgreSQL 与 FastAPI；后端仅绑定 `127.0.0.1:8000`。
+- 新增 Nginx 站点配置，静态资源发布到 `/var/www/ark`，避免放宽 `/home/ubuntu` 的访问权限。
+- 修复空数据库首次启动时 ToDo 表在创建前执行迁移的问题，并调整题库初始化顺序。
+- 使用腾讯云 PyPI 镜像构建后端，避免生产构建依赖 GHCR 与默认 PyPI 的不稳定下载。
+- 写入当前生产数据库生成的游客题库 ID；游客完成 408 事件初始化后可生成 408、英语二、数学二、政治四个子应用，408 额外绑定四个专项题库以支持 Fork。
+
+**验证情况**：
+- `backend`: `uv run pytest tests/test_todo_routes.py`，102 passed。
+- `backend`: `uv run ruff check routes/todo/db.py`，passed。
+- `frontend`: `pnpm check` 与 `pnpm build`，passed。
+- 服务器：Docker backend 与 PostgreSQL healthy，`https://strangetalking.xin/` 和 `/health` 均返回 200。
+- 服务器：真实临时游客完成 408 事件初始化后，应用清单返回 408、英语二、数学二、政治及正确题库绑定。
+
+### 2026-07-12 · `f4c39902` · feat(deploy): add Docker Compose production stack
 
 **用户需求**："那直接用nginx就行了吧？"、"OK"，以及"那你开始吧"。
 
