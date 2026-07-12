@@ -2,7 +2,7 @@
 
 ## 提交记录
 
-### 2026-07-12 · `fda6dbb` · feat(guest): guide 408 fork experience in context
+### 2026-07-12 · `994b72e` · feat(guest): guide 408 fork experience in context
 
 **用户需求**："找到时间 和 回到首页之间缺少过渡"、"将 体验流程提示 也扩展为高亮引导吧"，以及"太生硬了，我觉得应该先高亮主题内容，再高亮要按的按钮"。
 
