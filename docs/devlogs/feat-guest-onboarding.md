@@ -2,6 +2,27 @@
 
 ## 提交记录
 
+### 2026-07-12 · `a5ab7e4` · feat(guest): refine 408 onboarding experience
+
+**用户需求**："可以，开干吧"、"这里换成左右排版而非上下"、"这里的svg图标换成png吧"、"我还希望可以分别介绍下面的任务日常 和 工作流"、"在最后结束引导时，在增加一步用于感谢用户使用吧"。
+
+**完成工作**：
+- 首页将今日进度卡片替换为最近完成工作流的结果摘要，展示完成工作、专注时间和正确率；点击可打开既有结算回顾。
+- 工作流记录接口支持跨子应用查询，首页按实际完成时间选择最近一次完成记录。
+- 结果卡片的三项指标改为横向成对排版，标题图标复用现有时钟 PNG 资源。
+- 游客事件工作台引导拆分为事件信息、任务与日程、工作流三步，并修复内部滚动后高亮框坐标漂移。
+- 408 练习体验引导拆分为题干、选项和完成操作，避免提示气泡与高亮目标重叠；结算完成后增加感谢体验页。
+- 补充首页工作流结果、游客引导、工作流结算、选择题引导锚点和跨子应用工作流记录的前后端测试。
+
+**验证情况**：
+- `backend`: `uv run pytest tests/test_focus_workflow_app_work.py`，25 passed。
+- `backend`: `uv run ruff check routes/todo/routes.py tests/test_focus_workflow_app_work.py`，passed。
+- `frontend`: `pnpm test -- HomeRightDashboard.test.tsx`，7 passed。
+- `frontend`: `pnpm test -- GuestOnboarding.test.tsx EventWorkbenchModal.test.tsx`，11 passed。
+- `frontend`: `pnpm test -- ChoiceQuestionFocusTemplate.test.tsx FocusWorkProvider.test.tsx`，20 passed。
+- `frontend`: `pnpm test -- GuestOnboarding.test.tsx FocusWorkProvider.test.tsx ChoiceQuestionFocusTemplate.test.tsx`，26 passed。
+- `frontend`: `pnpm check`，passed。
+
 ### 2026-07-12 · `994b72e` · feat(guest): guide 408 fork experience in context
 
 **用户需求**："找到时间 和 回到首页之间缺少过渡"、"将 体验流程提示 也扩展为高亮引导吧"，以及"太生硬了，我觉得应该先高亮主题内容，再高亮要按的按钮"。
