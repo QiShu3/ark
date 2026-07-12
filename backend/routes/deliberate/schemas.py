@@ -15,6 +15,7 @@ PrimaryFilter = Literal["all", "unstarted", "mistake", "last_wrong", "due_review
 SortOrder = Literal["sequential", "due", "mistake_first", "random"]
 BackflowRule = Literal["none", "wrong_to_end", "wrong_retry"]
 SchedulingMode = Literal["manual", "fsrs"]
+QuestionRotation = Literal["none", "cycle"]
 
 
 class FsrsConfig(BaseModel):
@@ -90,6 +91,7 @@ class DeliberateWorkflowConfigOut(_NormalizedDeliberateBase):
     children: list[dict[str, Any]] = Field(default_factory=list)
     primary_filter: PrimaryFilter = "all"
     sort_order: SortOrder = "sequential"
+    question_rotation: QuestionRotation = "none"
     use_fsrs: bool = False
     backflow_rule: BackflowRule = "none"
     scheduling_mode: SchedulingMode = "manual"
@@ -115,6 +117,7 @@ class DeliberateWorkflowConfigCreate(_NormalizedDeliberateBase):
     children: list[dict[str, Any]] = Field(default_factory=list)
     primary_filter: PrimaryFilter = "all"
     sort_order: SortOrder = "sequential"
+    question_rotation: QuestionRotation = "none"
     use_fsrs: bool = False
     backflow_rule: BackflowRule = "none"
     scheduling_mode: SchedulingMode = "manual"
@@ -134,6 +137,7 @@ class DeliberateWorkflowConfigPatch(_NormalizedDeliberateBase):
     children: list[dict[str, Any]] | None = None
     primary_filter: PrimaryFilter | None = None
     sort_order: SortOrder | None = None
+    question_rotation: QuestionRotation | None = None
     use_fsrs: bool | None = None
     backflow_rule: BackflowRule | None = None
     scheduling_mode: SchedulingMode | None = None

@@ -51,8 +51,11 @@ export interface WorkflowRecord {
   created_at: string;
 }
 
-export function fetchWorkflowRecords(appId?: string | null): Promise<WorkflowRecord[]> {
-  const qs = appId ? `?app_id=${encodeURIComponent(appId)}` : '';
+export function fetchWorkflowRecords(appId?: string | null, includeAllApps = false): Promise<WorkflowRecord[]> {
+  const params = new URLSearchParams();
+  if (appId) params.set('app_id', appId);
+  if (includeAllApps) params.set('include_all_apps', 'true');
+  const qs = params.size ? `?${params.toString()}` : '';
   return apiJson<WorkflowRecord[]>(`/todo/focus/workflow/records${qs}`);
 }
 

@@ -3,7 +3,7 @@ import { Link, Plus, Trash2, X } from 'lucide-react';
 
 import AppModalFrame from '../AppModalFrame';
 import Button from '../Button';
-import { listDeliberateBanks, type DeliberateWorkflowConfig, type DeliberateBankOption, type DeliberateWorkflowChild, type PrimaryFilter, type SortOrder, type BackflowRule, type SchedulingMode, type FsrsConfig } from '../../lib/deliberate/api';
+import { listDeliberateBanks, type DeliberateWorkflowConfig, type DeliberateBankOption, type DeliberateWorkflowChild, type PrimaryFilter, type SortOrder, type BackflowRule, type SchedulingMode, type QuestionRotation, type FsrsConfig } from '../../lib/deliberate/api';
 import type { Task } from '../taskTypes';
 
 type EditFocusWorkModalProps = {
@@ -20,6 +20,7 @@ type EditFocusWorkModalProps = {
     task_id?: string | null;
     primary_filter?: PrimaryFilter;
     sort_order?: SortOrder;
+    question_rotation?: QuestionRotation;
     use_fsrs?: boolean;
     scheduling_mode?: SchedulingMode;
     fsrs_config?: FsrsConfig;
@@ -46,6 +47,11 @@ const sortOrderLabels: Record<SortOrder, string> = {
   random: '随机',
 };
 
+const questionRotationLabels: Record<QuestionRotation, string> = {
+  none: '不轮转',
+  cycle: '按轮次循环',
+};
+
 const backflowRuleLabels: Record<BackflowRule, string> = {
   none: '不回流',
   wrong_to_end: '答错放队尾',
@@ -67,6 +73,7 @@ export default function EditFocusWorkModal({
   const [targetCount, setTargetCount] = useState(config.target_count);
   const [primaryFilter, setPrimaryFilter] = useState<PrimaryFilter>(config.primary_filter || 'all');
   const [sortOrder, setSortOrder] = useState<SortOrder>(config.sort_order || 'sequential');
+  const [questionRotation, setQuestionRotation] = useState<QuestionRotation>(config.question_rotation || 'none');
   const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>(
     config.scheduling_mode ?? (config.use_fsrs ? 'fsrs' : 'manual')
   );
@@ -173,6 +180,7 @@ export default function EditFocusWorkModal({
       scheduling_mode: SchedulingMode;
       primary_filter?: PrimaryFilter;
       sort_order?: SortOrder;
+      question_rotation?: QuestionRotation;
       backflow_rule?: BackflowRule;
       fsrs_config?: FsrsConfig;
     } = {
@@ -193,6 +201,7 @@ export default function EditFocusWorkModal({
     } else {
       payload.primary_filter = primaryFilter;
       payload.sort_order = sortOrder;
+      payload.question_rotation = questionRotation;
       payload.backflow_rule = backflowRule;
     }
 
@@ -252,7 +261,10 @@ export default function EditFocusWorkModal({
                 <button
                   key={item}
                   type="button"
-                  onClick={() => setSchedulingMode(item)}
+                  onClick={() => {
+                    setSchedulingMode(item);
+                    if (item === 'fsrs') setQuestionRotation('none');
+                  }}
                   className={`rounded-md px-3 py-2 text-sm font-medium transition ${
                     schedulingMode === item ? 'bg-ark-surface-strong text-ark-text' : 'text-ark-text-muted hover:text-ark-text'
                   }`}
@@ -284,7 +296,11 @@ export default function EditFocusWorkModal({
                 <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">排序方式</label>
                 <select
                   value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                  onChange={(e) => {
+                    const next = e.target.value as SortOrder;
+                    setSortOrder(next);
+                    if (next !== 'sequential') setQuestionRotation('none');
+                  }}
                   className={inputClass}
                 >
                   {(Object.entries(sortOrderLabels) as [SortOrder, string][]).map(([value, label]) => (
@@ -297,7 +313,11 @@ export default function EditFocusWorkModal({
                 <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">主筛选条件</label>
                 <select
                   value={primaryFilter}
-                  onChange={(e) => setPrimaryFilter(e.target.value as PrimaryFilter)}
+                  onChange={(e) => {
+                    const next = e.target.value as PrimaryFilter;
+                    setPrimaryFilter(next);
+                    if (next !== 'all') setQuestionRotation('none');
+                  }}
                   className={inputClass}
                 >
                   {(Object.entries(primaryFilterLabels) as [PrimaryFilter, string][]).map(([value, label]) => (
@@ -305,6 +325,33 @@ export default function EditFocusWorkModal({
                   ))}
                 </select>
               </div>
+
+              {config.kind === 'choice' && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">题目轮转</label>
+                  <select
+                    value={questionRotation}
+                    onChange={(e) => {
+                      const next = e.target.value as QuestionRotation;
+                      setQuestionRotation(next);
+                      if (next === 'cycle') {
+                        setPrimaryFilter('all');
+                        setSortOrder('sequential');
+                      }
+                    }}
+                    className={inputClass}
+                  >
+                    {(Object.entries(questionRotationLabels) as [QuestionRotation, string][]).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-ark-text-faint">
+                    {questionRotation === 'cycle'
+                      ? '同一工作流再次进入该专注工作时，从上一组题的后面继续；题库用完后从头循环。'
+                      : '每轮都按当前筛选与排序规则取题。'}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ark-text-muted">本场回流规则</label>

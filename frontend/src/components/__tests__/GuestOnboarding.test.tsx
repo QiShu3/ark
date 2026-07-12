@@ -29,6 +29,8 @@ describe('GuestOnboarding', () => {
       <>
         <button data-onboarding-anchor="primary-event">主事件</button>
         <section data-onboarding-anchor="event-workbench-overview">事件基本信息</section>
+        <section data-onboarding-anchor="event-workbench-arrangements">任务与日程</section>
+        <section data-onboarding-anchor="event-workbench-workflows">工作流</section>
         <button data-onboarding-anchor="event-workbench-close">关闭</button>
         <button data-onboarding-anchor="guest-learning-entry">开始学习</button>
         <GuestOnboarding />
@@ -46,6 +48,16 @@ describe('GuestOnboarding', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
 
+    expect(await screen.findByText('任务与日程安排')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+
+    expect(await screen.findByText('工作流负责执行学习')).toBeInTheDocument();
+    fireEvent.scroll(screen.getByText('工作流'));
+    expect(screen.getByText('工作流负责执行学习')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+
     expect(await screen.findByText('回到首页开始学习')).toBeInTheDocument();
   });
 
@@ -55,6 +67,8 @@ describe('GuestOnboarding', () => {
       <>
         <button data-onboarding-anchor="primary-event">主事件</button>
         <section data-onboarding-anchor="event-workbench-overview">事件基本信息</section>
+        <section data-onboarding-anchor="event-workbench-arrangements">任务与日程</section>
+        <section data-onboarding-anchor="event-workbench-workflows">工作流</section>
         <button data-onboarding-anchor="event-workbench-close">关闭</button>
         <button data-onboarding-anchor="guest-learning-entry">开始学习</button>
         <button data-onboarding-anchor="workflow-sub-app">408 学习</button>
@@ -66,8 +80,14 @@ describe('GuestOnboarding', () => {
     fireEvent.click(screen.getByRole('button', { name: /408 计算机学科专业基础/ }));
     await screen.findByText('这是你的事件');
 
-    fireEvent.click(screen.getByRole('button', { name: '主事件' }));
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.primaryEventOpened));
+    });
     await screen.findByText('这里是你的考研事件');
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+    await screen.findByText('任务与日程安排');
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+    await screen.findByText('工作流负责执行学习');
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
     await screen.findByText('回到首页开始学习');
     await act(async () => {

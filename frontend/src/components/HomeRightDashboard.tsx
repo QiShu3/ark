@@ -1,11 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Box, Calendar, Check, ListTodo, Play, Trophy } from 'lucide-react';
+import { BarChart3, Box, Calendar, Check, Clock3, ListTodo, Play, Target, Trophy } from 'lucide-react';
 
 import { apiJson } from '../lib/api';
 import { loadAppRegistry, type AppDeclaration } from '../lib/appRegistry';
 import { getPrimaryEvent } from '../lib/events/api';
-import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../lib/focusWorkflow';
+import {
+  fetchCurrentFocusWorkflow,
+  fetchWorkflowRecordSettlement,
+  fetchWorkflowRecords,
+  startMultiDeliberateWorkflow,
+  type WorkflowRecord,
+} from '../lib/focusWorkflow';
 import { dispatchOnboardingEvent, ONBOARDING_EVENTS } from '../lib/onboardingEvents';
 import { useEventArrangements } from '../hooks/useEventArrangements';
 import { usePrimaryEvent } from '../hooks/usePrimaryEvent';
@@ -18,8 +24,8 @@ import HomeCard from './HomeCard';
 import HomeSectionHeader from './HomeSectionHeader';
 import DeliberateWorkflowPreviewModal from './deliberate/DeliberateWorkflowPreviewModal';
 import { isDeliberateWorkflowPreset, type WorkflowPreset } from './workflowPresetForm';
-import WorkflowPhaseChips from './WorkflowPhaseChips';
-import { normalizeFocusWorkType, type FocusWorkType } from './focus-work/focusWorkTypes';
+import { normalizeFocusWorkType, type FocusWorkType, type WorkflowSettlement } from './focus-work/focusWorkTypes';
+import WorkflowSettlementModal from './focus-work/WorkflowSettlementModal';
 import timerClockPng from '../assets/timer-clock.png';
 
 type FocusWorkflowPhase = {
@@ -43,11 +49,6 @@ type FocusWorkflow = {
   is_paused?: boolean;
 };
 
-type TodayFocusSummary = {
-  minutes: number;
-};
-
-const DAILY_GOAL_MINUTES = 120;
 const DISPLAY_COUNT_SWITCH_TOLERANCE_PX = 10;
 
 function filterDeliberateWorkflowPresets(presets: WorkflowPreset[]): WorkflowPreset[] {
@@ -116,6 +117,33 @@ function formatAppointmentTime(appointment: Appointment): string {
   return formatClock(appointment.starts_at ?? appointment.ends_at);
 }
 
+function formatWorkflowResultTime(value?: string): string {
+  if (!value) return '最近完成';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '最近完成';
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (now.toDateString() === date.toDateString()) return `今天 ${time} 完成`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (yesterday.toDateString() === date.toDateString()) return `昨天 ${time} 完成`;
+  return `${date.toLocaleDateString([], { month: 'numeric', day: 'numeric' })} ${time} 完成`;
+}
+
+function formatFocusDuration(seconds: number): string {
+  if (seconds < 60) return '<1 分钟';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes === 0 ? `${hours} 小时` : `${hours} 小时 ${remainingMinutes} 分钟`;
+}
+
+function formatAccuracy(value: number | null): string {
+  if (value == null) return '--';
+  return `${Math.round(value >= 0 && value <= 1 ? value * 100 : value)}%`;
+}
+
 
 
 function TimerCardArt() {
@@ -174,7 +202,10 @@ export default function HomeRightDashboard() {
   const navigate = useNavigate();
   const isGuest = useAuthStore((s) => s.user?.is_guest ?? false);
   const [workflow, setWorkflow] = useState<FocusWorkflow | null>(null);
-  const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
+  const [lastWorkflowRecord, setLastWorkflowRecord] = useState<WorkflowRecord | null>(null);
+  const [lastWorkflowSettlement, setLastWorkflowSettlement] = useState<WorkflowSettlement | null>(null);
+  const [lastWorkflowLoading, setLastWorkflowLoading] = useState(false);
+  const [lastWorkflowReviewOpen, setLastWorkflowReviewOpen] = useState(false);
   const { primaryEvent } = usePrimaryEvent();
   const { tasks, appointments, refetch: refetchArrangements } = useEventArrangements(primaryEvent?.id ?? null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -194,15 +225,35 @@ export default function HomeRightDashboard() {
   const [visibleAppointmentCount, setVisibleAppointmentCount] = useState(3);
 
   async function loadDashboard() {
-    const [workflowRes, todayFocusRes, achievementRes, presetsRes] = await Promise.allSettled([
+    const [workflowRes, recordsRes, achievementRes, presetsRes] = await Promise.allSettled([
       fetchCurrentFocusWorkflow<FocusWorkflow>(),
-      apiJson<TodayFocusSummary>('/todo/focus/today'),
+      fetchWorkflowRecords(null, true),
       apiJson<AchievementSummary>('/todo/achievements/summary'),
       apiJson<WorkflowPreset[]>('/todo/focus/workflows'),
     ]);
 
     if (workflowRes.status === 'fulfilled') setWorkflow(workflowRes.value);
-    if (todayFocusRes.status === 'fulfilled') setTodayFocusMinutes(todayFocusRes.value.minutes);
+    if (recordsRes.status === 'fulfilled') {
+      const record = recordsRes.value
+        .filter((item) => item.status === 'completed')
+        .sort((a, b) => (
+          new Date(b.completed_at ?? b.created_at).getTime() - new Date(a.completed_at ?? a.created_at).getTime()
+        ))[0] ?? null;
+      setLastWorkflowRecord(record);
+      setLastWorkflowSettlement(null);
+      if (record) {
+        setLastWorkflowLoading(true);
+        try {
+          setLastWorkflowSettlement(await fetchWorkflowRecordSettlement(record.id));
+        } catch {
+          setLastWorkflowSettlement(null);
+        } finally {
+          setLastWorkflowLoading(false);
+        }
+      } else {
+        setLastWorkflowLoading(false);
+      }
+    }
     if (achievementRes.status === 'fulfilled') setAchievementSummary(achievementRes.value);
     if (presetsRes.status === 'fulfilled') {
       const allPresets = Array.isArray(presetsRes.value) ? presetsRes.value : [];
@@ -234,9 +285,6 @@ export default function HomeRightDashboard() {
     return workflow.remaining_seconds ?? 0;
   }, [workflow]);
 
-  const progressPercent = Math.min(100, Math.round((todayFocusMinutes / DAILY_GOAL_MINUTES) * 100));
-  const progressIsZero = progressPercent === 0;
-  const progressVisualPercent = progressIsZero ? 4 : progressPercent;
   const workflowIsActive = !!(workflow && workflow.state !== 'normal' && workflow.phases && workflow.phases.length > 0);
   const todayTasks = useMemo(
     () => tasks
@@ -516,65 +564,68 @@ export default function HomeRightDashboard() {
           </button>
         </HomeCard>
 
-        <HomeCard className="px-6 py-2.5 flex flex-col justify-center min-h-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <svg className="h-5 w-5 shrink-0" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
-                <path
-                  className="text-ark-border/30 dark:text-white/10"
-                  strokeWidth="4.2"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845
-                    a 15.9155 15.9155 0 0 1 0 31.831
-                    a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className="text-[var(--ark-accent)] transition-[stroke-dasharray] duration-500"
-                  strokeWidth="4.2"
-                  strokeDasharray={`${progressPercent}, 100`}
-                  strokeLinecap="round"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845
-                    a 15.9155 15.9155 0 0 1 0 31.831
-                    a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <h3 className="text-base font-semibold text-[var(--ark-text)] flex items-center gap-1.5">
-                <span>今日进度</span>
-                {workflowIsActive && workflow?.workflow_name && (
-                  <>
-                    <span className="text-[var(--ark-text-faint)] font-normal">|</span>
-                    <span className="text-[var(--ark-text-muted)] font-normal">{workflow.workflow_name}</span>
-                  </>
-                )}
-              </h3>
-            </div>
-            <div className="text-right flex flex-col items-end">
-              <span className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent leading-none">
-                {progressPercent}%
-              </span>
-              <span className="text-[10px] text-[var(--ark-text-faint)] mt-0.5 font-medium">整体进度</span>
-            </div>
-          </div>
+        <HomeCard
+          as="button"
+          type="button"
+          aria-disabled={!lastWorkflowRecord || lastWorkflowLoading}
+          onClick={() => {
+            if (lastWorkflowRecord && !lastWorkflowLoading) setLastWorkflowReviewOpen(true);
+          }}
+          className={`group min-h-0 px-6 py-3 text-left ${
+            lastWorkflowRecord && !lastWorkflowLoading
+              ? 'transition-colors hover:bg-ark-surface-subtle'
+              : 'cursor-default'
+          }`}
+        >
+          {lastWorkflowRecord ? (
+            <div className="flex h-full flex-col justify-between">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--ark-accent-soft)] bg-[var(--ark-accent-soft)]">
+                    <img className="h-9 w-9 object-contain" src={timerClockPng} alt="" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-[var(--ark-text)]">上次工作流结果</div>
+                    <div className="mt-0.5 truncate text-base font-semibold text-[var(--ark-text)]">
+                      {lastWorkflowRecord.workflow_name || '工作流'}
+                    </div>
+                    <div className="mt-0.5 text-xs text-[var(--ark-text-faint)]">
+                      {formatWorkflowResultTime(lastWorkflowRecord.completed_at ?? lastWorkflowRecord.created_at)}
+                    </div>
+                  </div>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-[var(--ark-accent)]">
+                  {lastWorkflowLoading ? '加载中' : '查看回顾'}
+                </span>
+              </div>
 
-          {workflowIsActive && workflow?.phases ? (
-            <div className="mt-2 overflow-x-auto scrollbar-none py-0.5">
-              <WorkflowPhaseChips
-                phases={workflow.phases}
-                getTaskTitle={(taskId) => tasks.find((task) => task.id === taskId)?.title}
-                className="flex-nowrap"
-                maxTaskWidthClassName="max-w-[120px]"
-              />
+              <div className="grid grid-cols-3 divide-x divide-ark-border border-t border-ark-border pt-2.5">
+                <div className="flex min-w-0 items-center justify-between gap-2 pr-3">
+                  <span className="flex min-w-0 items-center gap-1 text-[11px] text-[var(--ark-text-faint)]"><Check className="h-3 w-3 shrink-0" aria-hidden="true" />完成工作</span>
+                  <span className="shrink-0 text-sm font-semibold text-[var(--ark-text)]">{lastWorkflowSettlement?.total_phases ?? '--'} 项</span>
+                </div>
+                <div className="flex min-w-0 items-center justify-between gap-2 px-3">
+                  <span className="flex min-w-0 items-center gap-1 text-[11px] text-[var(--ark-text-faint)]"><Clock3 className="h-3 w-3 shrink-0" aria-hidden="true" />专注时间</span>
+                  <span className="shrink-0 truncate text-sm font-semibold text-[var(--ark-text)]">
+                    {lastWorkflowSettlement ? formatFocusDuration(lastWorkflowSettlement.total_duration_seconds) : '--'}
+                  </span>
+                </div>
+                <div className="flex min-w-0 items-center justify-between gap-2 pl-3">
+                  <span className="flex min-w-0 items-center gap-1 text-[11px] text-[var(--ark-text-faint)]"><Target className="h-3 w-3 shrink-0" aria-hidden="true" />正确率</span>
+                  <span className="shrink-0 text-sm font-semibold text-[var(--ark-text)]">
+                    {lastWorkflowSettlement ? formatAccuracy(lastWorkflowSettlement.total_accuracy) : '--'}
+                  </span>
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="mt-3.5 flex flex-col justify-center gap-2">
-              <div className="h-2.5 overflow-hidden rounded-full bg-[var(--ark-surface-subtle)]">
-                <div
-                  className={`ark-home-progress-fill h-full rounded-full transition-[width] duration-500 ${progressIsZero ? 'ark-home-progress-fill-idle' : ''}`}
-                  style={{ width: `${progressVisualPercent}%` }}
-                />
+            <div className="flex h-full items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ark-border bg-ark-surface-subtle text-[var(--ark-text-faint)]">
+                <Trophy className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div>
+                <div className="text-sm font-semibold text-[var(--ark-text)]">上次工作流结果</div>
+                <div className="mt-1 text-xs text-[var(--ark-text-faint)]">完成一次工作流后，在这里回顾学习结果</div>
               </div>
             </div>
           )}
@@ -721,6 +772,19 @@ export default function HomeRightDashboard() {
         initialSummary={achievementSummary}
         returnFocusRef={achievementButtonRef}
       />
+
+      {lastWorkflowRecord && (
+        <WorkflowSettlementModal
+          open={lastWorkflowReviewOpen}
+          settlement={lastWorkflowSettlement}
+          title={lastWorkflowRecord.workflow_name || '工作流'}
+          loading={lastWorkflowLoading}
+          busy={lastWorkflowLoading}
+          startedAt={lastWorkflowRecord.started_at}
+          completedAt={lastWorkflowRecord.completed_at}
+          onClose={() => setLastWorkflowReviewOpen(false)}
+        />
+      )}
     </>
   );
 }

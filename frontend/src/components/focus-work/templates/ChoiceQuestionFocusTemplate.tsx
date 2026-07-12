@@ -137,11 +137,11 @@ export default function ChoiceQuestionFocusTemplate({
                 <div>
                   {currentItem.stemPlacement !== 'material' ? (
                     currentItem.stemBlocks ? (
-                      <div className="space-y-2">
+                      <div data-onboarding-anchor="guest-408-question" className="space-y-2">
                         <ContentBlockRenderer blocks={currentItem.stemBlocks} />
                       </div>
                     ) : (
-                      <div className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">
+                      <div data-onboarding-anchor="guest-408-question" className="text-base font-bold leading-6 text-[var(--focus-work-text)] lg:text-[1.05rem] lg:leading-7">
                         {typeof currentItem.stem === 'string' ? (
                           <MarkdownContent content={currentItem.stem} inline />
                         ) : (
@@ -150,7 +150,7 @@ export default function ChoiceQuestionFocusTemplate({
                       </div>
                     )
                   ) : null}
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div data-onboarding-anchor="guest-408-options" className="mt-4 grid gap-3 md:grid-cols-2">
                     {currentItem.options.map((option) => {
                       const isSelected = selected === option.key;
                       const isCorrect = result?.correctOptionKey === option.key;

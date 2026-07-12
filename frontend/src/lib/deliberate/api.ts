@@ -5,6 +5,7 @@ export type DeliberateFocusWorkType = 'flash_card' | 'choice' | 'input';
 export type DeliberateRunStatus = 'started' | 'content_completed' | 'completed' | 'abandoned';
 export type PrimaryFilter = 'all' | 'unstarted' | 'mistake' | 'last_wrong' | 'due_review';
 export type SortOrder = 'sequential' | 'due' | 'mistake_first' | 'random';
+export type QuestionRotation = 'none' | 'cycle';
 export type BackflowRule = 'none' | 'wrong_to_end' | 'wrong_retry';
 
 export type SchedulingMode = 'manual' | 'fsrs';
@@ -65,6 +66,7 @@ export type DeliberateWorkflowConfig = {
   children: DeliberateWorkflowChild[];
   primary_filter: PrimaryFilter;
   sort_order: SortOrder;
+  question_rotation: QuestionRotation;
   use_fsrs: boolean;
   scheduling_mode: SchedulingMode;
   fsrs_config: FsrsConfig | null;
@@ -96,6 +98,7 @@ export type DeliberateWorkflowPayload = {
   children?: DeliberateWorkflowChild[];
   primary_filter?: PrimaryFilter;
   sort_order?: SortOrder;
+  question_rotation?: QuestionRotation;
   use_fsrs?: boolean;
   scheduling_mode?: SchedulingMode;
   fsrs_config?: FsrsConfig;
@@ -115,6 +118,7 @@ export type DeliberateWorkflowPatch = {
   children?: DeliberateWorkflowChild[];
   primary_filter?: PrimaryFilter;
   sort_order?: SortOrder;
+  question_rotation?: QuestionRotation;
   use_fsrs?: boolean;
   scheduling_mode?: SchedulingMode;
   fsrs_config?: FsrsConfig;

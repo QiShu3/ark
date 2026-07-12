@@ -3562,6 +3562,7 @@ async def list_workflow_records(
     request: Request,
     user: Annotated[Any, Depends(get_current_user)],
     app_id: str | None = Query(None),
+    include_all_apps: bool = Query(False),
 ) -> list[WorkflowRecordOut]:
     pool = _pool_from_request(request)
     async with pool.acquire() as conn:
@@ -3577,6 +3578,18 @@ async def list_workflow_records(
                 """,
                 int(user.id),
                 app_id,
+            )
+        elif include_all_apps:
+            rows = await conn.fetch(
+                """
+                SELECT wr.id, wr.workflow_id, fw.workflow_name, wr.nodes, wr.status,
+                       wr.started_at, wr.completed_at, wr.created_at
+                FROM workflow_records wr
+                LEFT JOIN focus_workflows fw ON fw.id = wr.workflow_id
+                WHERE wr.user_id = $1
+                ORDER BY wr.created_at DESC
+                """,
+                int(user.id),
             )
         else:
             rows = await conn.fetch(
@@ -3956,6 +3969,8 @@ def _phase_config_snapshot(phase: dict[str, Any]) -> dict[str, Any]:
         "deliberate_name",
         "primary_filter",
         "sort_order",
+        "question_rotation",
+        "guest_demo_next_combined_should_pass",
         "use_fsrs",
         "backflow_rule",
         "kind",
@@ -4026,9 +4041,10 @@ async def _ensure_deliberate_run_for_phase(
     phase_index: int,
     config_snapshot: dict[str, Any],
     focus_work_type: str,
+    force_new_run: bool = False,
 ) -> dict[str, Any]:
     deliberate_config_id = config_snapshot.get("deliberate_config_id")
-    if not deliberate_config_id or config_snapshot.get("deliberate_run_id"):
+    if not deliberate_config_id or (config_snapshot.get("deliberate_run_id") and not force_new_run):
         return config_snapshot
 
     config_row = await deliberate_repository.get_config(
@@ -4050,6 +4066,7 @@ async def _ensure_deliberate_run_for_phase(
     completion = _config_payload(config_row["completion_json"])
     primary_filter = str(config_row.get("primary_filter", "all"))
     sort_order = str(config_row.get("sort_order", "sequential"))
+    question_rotation = str(config_row.get("question_rotation", "none"))
     use_fsrs = bool(config_row.get("use_fsrs", False))
     backflow_rule = str(config_row.get("backflow_rule", "none"))
     if config_snapshot.get("choice_scope") is not None:
@@ -4068,6 +4085,7 @@ async def _ensure_deliberate_run_for_phase(
         completion=completion,
         primary_filter=primary_filter,
         sort_order=sort_order,
+        question_rotation=question_rotation,
         use_fsrs=use_fsrs,
         backflow_rule=backflow_rule,
     )
@@ -4323,6 +4341,10 @@ async def create_focus_workflow_run(
             row = await _fetch_active_workflow_row(conn, int(user.id))
             if row is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+            # Serialise automatic run creation across open tabs. Without this
+            # lock, simultaneous returns from a Fork can both observe no active
+            # run and create competing runs for the same phase.
+            await conn.execute("SELECT id FROM focus_workflows WHERE id = $1 FOR UPDATE", row["id"])
             if str(row["current_phase"]) != "focus":
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前阶段不是专注阶段")
             if bool(_row_value(row, "pending_task_selection", False)):
@@ -4332,8 +4354,15 @@ async def create_focus_workflow_run(
 
             existing_run = await _fetch_active_focus_work_run(conn, user_id=int(user.id), workflow_id=row["id"])
             source_run_id = None
+            inherited_parent_phase = None
+            retry_config_snapshot = None
             if existing_run is not None:
                 if existing_run.status == "content_completed" and body.mode == "extra":
+                    raw_parent_phase = (existing_run.config_snapshot or {}).get("parent_phase")
+                    if isinstance(raw_parent_phase, dict) and raw_parent_phase:
+                        inherited_parent_phase = raw_parent_phase
+                    if existing_run.source_run_id is not None and existing_run.config_snapshot:
+                        retry_config_snapshot = dict(existing_run.config_snapshot)
                     completed_existing = await _complete_focus_work_run(
                         conn,
                         user_id=int(user.id),
@@ -4341,14 +4370,46 @@ async def create_focus_workflow_run(
                         completion_reason="run_again",
                     )
                     source_run_id = completed_existing.id
+                elif existing_run.status in {"running", "paused"}:
+                    # A second open tab can race the automatic run creation that
+                    # follows a Fork return. Reuse the run that already won.
+                    latest_row = await _fetch_active_workflow_row(conn, int(user.id))
+                    if latest_row is None:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前无活动工作流")
+                    return await _row_to_focus_workflow_with_task_check(conn, int(user.id), latest_row)
                 else:
                     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前已有进行中的专注轮次")
 
-            task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
-                conn,
-                user_id=int(user.id),
-                workflow_row=row,
-            )
+            if retry_config_snapshot is not None:
+                task_id = None
+                focus_work_type = existing_run.focus_work_type
+                app_id, app_task_type = _focus_work_app_metadata(focus_work_type)
+                config_snapshot = retry_config_snapshot
+                config_snapshot.pop("deliberate_run_id", None)
+                config_snapshot = await _ensure_deliberate_run_for_phase(
+                    conn,
+                    user_id=int(user.id),
+                    workflow_id=row["id"],
+                    phases=_normalize_workflow_phases(
+                        _row_value(row, "phases", []),
+                        fallback_focus_duration=int(_row_value(row, "focus_duration", 60)),
+                        fallback_break_duration=int(_row_value(row, "break_duration", 60)),
+                    ),
+                    phase_index=_safe_int(_row_value(row, "current_phase_index", 0), 0),
+                    config_snapshot=config_snapshot,
+                    focus_work_type=focus_work_type,
+                    force_new_run=True,
+                )
+            else:
+                task_id, focus_work_type, app_id, app_task_type, config_snapshot = await _build_run_metadata(
+                    conn,
+                    user_id=int(user.id),
+                    workflow_row=row,
+                )
+            if inherited_parent_phase is not None:
+                # An extra specialist attempt remains part of the original Fork,
+                # rather than treating the prior specialist attempt as its parent.
+                config_snapshot["parent_phase"] = inherited_parent_phase
             if body.mode == "counted" and task_id is not None:
                 task_completed, _reason = await _check_task_completion_status(conn, int(user.id), task_id)
                 if task_completed:
@@ -4639,8 +4700,35 @@ async def return_to_parent_focus_workflow(
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前轮次非 fork 产生的子专注")
 
             parent_phase = (child_run.config_snapshot or {}).get("parent_phase")
+            # Older extra specialist attempts formed a source-run chain without
+            # copying the original Fork's parent phase. Walk that chain so they
+            # can still resume the combined detection instead of becoming stuck.
+            ancestor_run = child_run
+            while not isinstance(parent_phase, dict) or not parent_phase:
+                if ancestor_run.source_run_id is None:
+                    break
+                ancestor_run = await _fetch_focus_work_run_summary(
+                    conn,
+                    user_id=int(user.id),
+                    run_id=ancestor_run.source_run_id,
+                )
+                if ancestor_run is None:
+                    break
+                parent_phase = (ancestor_run.config_snapshot or {}).get("parent_phase")
             if not isinstance(parent_phase, dict) or not parent_phase:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="子专注缺少父阶段配置")
+
+            # The guest 408 shortcut demonstrates one complete Fork loop: the
+            # first combined check fails, the specialist passes, then the new
+            # combined question group passes on its one-click completion.
+            child_name = str((child_run.config_snapshot or {}).get("deliberate_name") or "")
+            parent_name = str(parent_phase.get("deliberate_name") or "")
+            if (
+                bool(getattr(user, "is_guest", False))
+                and child_name in {"数据结构巩固", "计算机组成原理巩固", "操作系统巩固", "计算机网络巩固"}
+                and parent_name == "408 综合检测"
+            ):
+                parent_phase["guest_demo_next_combined_should_pass"] = True
 
             await _complete_focus_work_run(
                 conn,
@@ -5527,6 +5615,7 @@ def _deliberate_config_snapshot_payload(
     completion: dict[str, Any] | None,
     primary_filter: str = "all",
     sort_order: str = "sequential",
+    question_rotation: str = "none",
     use_fsrs: bool = False,
     backflow_rule: str = "none",
 ) -> dict[str, Any]:
@@ -5544,6 +5633,7 @@ def _deliberate_config_snapshot_payload(
         "completion": dict(completion or {}),
         "primary_filter": primary_filter,
         "sort_order": sort_order,
+        "question_rotation": question_rotation,
         "use_fsrs": use_fsrs,
         "backflow_rule": backflow_rule,
     }
@@ -5685,6 +5775,7 @@ async def start_deliberate_workflow(
                 completion = _config_payload(config_row["completion_json"])
                 primary_filter = str(config_row.get("primary_filter", "all"))
                 sort_order = str(config_row.get("sort_order", "sequential"))
+                question_rotation = str(config_row.get("question_rotation", "none"))
                 use_fsrs = bool(config_row.get("use_fsrs", False))
                 backflow_rule = str(config_row.get("backflow_rule", "none"))
             else:
@@ -5706,6 +5797,7 @@ async def start_deliberate_workflow(
                 completion = body.completion or {}
                 primary_filter = "all"
                 sort_order = "sequential"
+                question_rotation = "none"
                 use_fsrs = False
                 backflow_rule = "none"
 
@@ -5725,6 +5817,7 @@ async def start_deliberate_workflow(
                 completion=completion,
                 primary_filter=primary_filter,
                 sort_order=sort_order,
+                question_rotation=question_rotation,
                 use_fsrs=use_fsrs,
                 backflow_rule=backflow_rule,
             )

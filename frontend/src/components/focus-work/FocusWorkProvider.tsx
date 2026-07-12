@@ -1,4 +1,5 @@
 import React from 'react';
+import { Sparkles } from 'lucide-react';
 
 import { apiJson } from '../../lib/api';
 import { useAuthStore } from '../../lib/auth';
@@ -49,6 +50,7 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
   const [pendingStart, setPendingStart] = React.useState<PendingStart | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [showAbandonConfirm, setShowAbandonConfirm] = React.useState(false);
+  const [showGuestExperienceThanks, setShowGuestExperienceThanks] = React.useState(false);
   const [headerRight, setHeaderRight] = React.useState<React.ReactNode>(null);
   const creatingRunRef = React.useRef(false);
   const autoRunAttemptRef = React.useRef<string | null>(null);
@@ -379,11 +381,13 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
 
   async function confirmSettlement() {
     if (busy) return;
+    const isGuest408Settlement = isGuest && snapshot?.workflow_settlement?.workflow_name.includes('408');
     setBusy(true);
     try {
       await confirmWorkflowSettlement();
       const next = await fetchCurrentFocusWorkflow<FocusWorkSnapshot>();
       setSnapshot(next);
+      if (isGuest408Settlement && next.state === 'normal') setShowGuestExperienceThanks(true);
       window.dispatchEvent(new CustomEvent('ark:reload-focus'));
     } catch (err) {
       console.error('Failed to confirm settlement', err);
@@ -562,6 +566,30 @@ export default function FocusWorkProvider({ children }: FocusWorkProviderProps) 
         />
       ) : null}
       {isGuest ? <Guest408DemoOnboarding snapshot={snapshot} /> : null}
+      <AppModalFrame
+        open={showGuestExperienceThanks}
+        onClose={() => setShowGuestExperienceThanks(false)}
+        closeOnBackdrop={false}
+        zIndexClassName="z-[100]"
+        ariaLabel="体验结束"
+        backdropClassName="ark-focus-work-shell ark-focus-work-backdrop"
+        panelClassName="ark-focus-work-dialog w-[min(92vw,28rem)] rounded-[2rem] border border-[var(--focus-work-border-strong)] p-7 text-center shadow-2xl"
+      >
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.25rem] border border-[var(--focus-work-emerald-border)] bg-[var(--focus-work-emerald-bg)] text-[var(--focus-work-emerald-text)]" aria-hidden="true">
+          <Sparkles className="h-8 w-8" />
+        </div>
+        <h2 className="mt-5 text-2xl font-semibold text-[var(--focus-work-text)]">感谢完成 Ark 体验</h2>
+        <p className="mt-3 text-sm leading-6 text-[var(--focus-work-text-muted)]">
+          你已经走完了从综合检测、专项巩固到回流复检的完整学习路径。接下来可以继续安排任务，开启自己的学习节奏。
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowGuestExperienceThanks(false)}
+          className="mt-6 inline-flex min-w-[14rem] items-center justify-center rounded-full bg-[var(--focus-work-blue-text)] px-6 py-3 text-sm font-semibold text-[var(--focus-work-primary-button-text)] shadow-[0_14px_34px_var(--focus-work-blue-shadow)] transition hover:opacity-95"
+        >
+          开始使用 Ark
+        </button>
+      </AppModalFrame>
     </>
   );
 }

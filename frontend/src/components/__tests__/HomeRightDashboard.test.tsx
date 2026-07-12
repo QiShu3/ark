@@ -6,7 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HomeRightDashboard from '../HomeRightDashboard';
 import { apiJson } from '../../lib/api';
-import { fetchCurrentFocusWorkflow, startMultiDeliberateWorkflow } from '../../lib/focusWorkflow';
+import {
+  fetchCurrentFocusWorkflow,
+  fetchWorkflowRecordSettlement,
+  fetchWorkflowRecords,
+  startMultiDeliberateWorkflow,
+} from '../../lib/focusWorkflow';
 import { getPrimaryEvent } from '../../lib/events/api';
 import { loadAppRegistry } from '../../lib/appRegistry';
 import { useAuthStore } from '../../lib/auth';
@@ -57,6 +62,8 @@ vi.mock('../../lib/api', () => ({
 
 vi.mock('../../lib/focusWorkflow', () => ({
   fetchCurrentFocusWorkflow: vi.fn(),
+  fetchWorkflowRecords: vi.fn(),
+  fetchWorkflowRecordSettlement: vi.fn(),
   startMultiDeliberateWorkflow: vi.fn(),
 }));
 
@@ -76,6 +83,8 @@ vi.mock('../../lib/onboardingEvents', () => ({
 const mockApiJson = vi.mocked(apiJson);
 const mockStartMulti = vi.mocked(startMultiDeliberateWorkflow);
 const mockFetchWorkflow = vi.mocked(fetchCurrentFocusWorkflow);
+const mockFetchWorkflowRecords = vi.mocked(fetchWorkflowRecords);
+const mockFetchWorkflowSettlement = vi.mocked(fetchWorkflowRecordSettlement);
 const mockGetPrimaryEvent = vi.mocked(getPrimaryEvent);
 const mockLoadAppRegistry = vi.mocked(loadAppRegistry);
 const mockDispatchOnboardingEvent = vi.mocked(dispatchOnboardingEvent);
@@ -133,6 +142,22 @@ describe('HomeRightDashboard', () => {
     useAuthStore.getState().clear();
     mockApiJson.mockImplementation((path: string) => defaultApiResponse(path));
     mockStartMulti.mockResolvedValue(undefined as never);
+    mockFetchWorkflowRecords.mockResolvedValue([]);
+    mockFetchWorkflowSettlement.mockResolvedValue({
+      workflow_name: '默认番茄',
+      result: 'completed',
+      phases: [],
+      nodes: [],
+      total_phases: 0,
+      total_answered: 0,
+      total_correct: 0,
+      total_accuracy: null,
+      total_duration_seconds: 0,
+      fork_count: 0,
+      retry_count: 0,
+      best_accuracy: null,
+      first_try_passed_count: 0,
+    });
     mockDispatchOnboardingEvent.mockClear();
     mockGetPrimaryEvent.mockRejectedValue(new Error('主事件不存在'));
     mockLoadAppRegistry.mockResolvedValue([]);
@@ -145,7 +170,7 @@ describe('HomeRightDashboard', () => {
     expect(startLearning).toBeInTheDocument();
     expect(startLearning).not.toHaveAttribute('data-onboarding-anchor');
     expect(screen.getByText('当前工作流：默认番茄')).toBeInTheDocument();
-    expect(screen.getByText('今日进度')).toBeInTheDocument();
+    expect(screen.getByText('上次工作流结果')).toBeInTheDocument();
     expect(screen.getByText('任务')).toBeInTheDocument();
     expect(screen.getByText('日程')).toBeInTheDocument();
     expect(screen.getByTestId('calendar-widget')).toBeInTheDocument();
@@ -282,12 +307,63 @@ describe('HomeRightDashboard', () => {
 
     renderDashboard();
 
-    expect(await screen.findByText('今日进度')).toBeInTheDocument();
+    expect(await screen.findByText('上次工作流结果')).toBeInTheDocument();
     expect(screen.getByText('当前工作流：考研英语')).toBeInTheDocument();
-    expect(screen.getByText('考研英语')).toBeInTheDocument();
-    expect(screen.getByText('今日单词')).toBeInTheDocument();
-    expect(screen.getAllByText('选择练习').length).toBe(2);
     expect(screen.getByText('下个任务')).toBeInTheDocument();
     expect(screen.queryByText('10:00')).not.toBeInTheDocument();
+  });
+
+  it('shows the latest completed workflow result and opens its review', async () => {
+    const user = userEvent.setup();
+    mockFetchWorkflowRecords.mockResolvedValue([
+      {
+        id: 'record-old',
+        workflow_id: 'workflow-0',
+        workflow_name: '较早完成的工作流',
+        nodes: [],
+        status: 'completed',
+        started_at: '2026-07-11T08:00:00+08:00',
+        completed_at: '2026-07-11T09:00:00+08:00',
+        created_at: '2026-07-12T11:00:00+08:00',
+      },
+      {
+        id: 'record-1',
+        workflow_id: 'workflow-1',
+        workflow_name: '408 冲刺',
+        nodes: [],
+        status: 'completed',
+        started_at: '2026-07-12T09:30:00+08:00',
+        completed_at: '2026-07-12T10:42:00+08:00',
+        created_at: '2026-07-12T09:30:00+08:00',
+      },
+    ]);
+    mockFetchWorkflowSettlement.mockResolvedValue({
+      workflow_name: '408 冲刺',
+      result: 'completed',
+      phases: [],
+      nodes: [],
+      total_phases: 4,
+      total_answered: 20,
+      total_correct: 17,
+      total_accuracy: 0.85,
+      total_duration_seconds: 72 * 60,
+      fork_count: 0,
+      retry_count: 0,
+      best_accuracy: 0.9,
+      first_try_passed_count: 4,
+    });
+
+    renderDashboard();
+
+    expect(await screen.findByText('408 冲刺')).toBeInTheDocument();
+    expect(screen.queryByText('较早完成的工作流')).not.toBeInTheDocument();
+    expect(screen.getByText('4 项')).toBeInTheDocument();
+    expect(await screen.findByText('1 小时 12 分钟')).toBeInTheDocument();
+    expect(screen.getByText('85%')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /上次工作流结果/ }));
+
+    expect(await screen.findByRole('dialog', { name: '工作流结算' })).toBeInTheDocument();
+    expect(mockFetchWorkflowSettlement).toHaveBeenCalledWith('record-1');
   });
 });

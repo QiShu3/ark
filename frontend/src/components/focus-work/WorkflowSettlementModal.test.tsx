@@ -51,4 +51,31 @@ describe('WorkflowSettlementModal', () => {
     expect(screen.getByText('<1m')).toBeInTheDocument();
     expect(screen.getByText(/用时 <1m/)).toBeInTheDocument();
   });
+
+  it('formats ratio accuracy values as percentages', () => {
+    render(
+      <WorkflowSettlementModal
+        open
+        settlement={{
+          ...baseSettlement,
+          nodes: [{
+            name: 'A 数据结构巩固',
+            focus_work_type: 'choice',
+            answered_count: 3,
+            correct_count: 2,
+            accuracy: 2 / 3,
+            duration_seconds: 15,
+            status: 'passed',
+            is_return_node: false,
+            return_to_name: null,
+            children: [],
+          }],
+          best_accuracy: 2 / 3,
+        }}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getAllByText('67%')).toHaveLength(2);
+  });
 });

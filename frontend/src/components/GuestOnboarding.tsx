@@ -14,6 +14,8 @@ type GuestPhase =
   | 'creating'
   | 'guide-event'
   | 'guide-event-overview'
+  | 'guide-event-arrangements'
+  | 'guide-event-workflows'
   | 'guide-event-close'
   | 'guide-start'
   | 'guide-learning-select'
@@ -29,6 +31,7 @@ type GuideStep = {
   title: string;
   body: string;
   placement: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left';
+  scrollIntoView?: boolean;
 };
 
 const GUIDE_STEPS: GuideStep[] = [
@@ -43,8 +46,23 @@ const GUIDE_STEPS: GuideStep[] = [
     id: 'event-workbench-overview',
     anchor: 'event-workbench-overview',
     title: '这里是你的考研事件',
-    body: '事件把截止时间、学习任务和学习应用放在一起。接下来会从首页启动第一轮 408 综合检测。',
+    body: '事件用于确定学习目标和截止时间，也会汇总后续的日常安排与工作流。',
     placement: 'bottom',
+  },
+  {
+    id: 'event-workbench-arrangements',
+    anchor: 'event-workbench-arrangements',
+    title: '任务与日程安排',
+    body: '任务记录每天要完成的学习目标；日程安排具体的学习时间。它们一起构成你的日常计划。',
+    placement: 'bottom',
+  },
+  {
+    id: 'event-workbench-workflows',
+    anchor: 'event-workbench-workflows',
+    title: '工作流负责执行学习',
+    body: '工作流把多个专注工作串成一次学习流程。开始学习后，Ark 会按这里的顺序带你推进。',
+    placement: 'top',
+    scrollIntoView: true,
   },
   {
     id: 'close-event-workbench',
@@ -107,12 +125,14 @@ function useAnchorRect(anchor: string | null, visible: boolean): DOMRect | null 
 
     updateRect();
     mutationObserver.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('scroll', updateRect, { passive: true });
+    // The event workbench scrolls inside its modal, so capture every scroll
+    // event instead of only listening to the window.
+    document.addEventListener('scroll', updateRect, { capture: true, passive: true });
     window.addEventListener('resize', updateRect, { passive: true });
     return () => {
       observer.disconnect();
       mutationObserver.disconnect();
-      window.removeEventListener('scroll', updateRect);
+      document.removeEventListener('scroll', updateRect, true);
       window.removeEventListener('resize', updateRect);
     };
   }, [anchor, visible]);
@@ -147,6 +167,12 @@ function GuideHighlight({
     el.addEventListener('click', handler);
     return () => el.removeEventListener('click', handler);
   }, [visible, rect, step.anchor, onTargetAction]);
+
+  useEffect(() => {
+    if (!visible || !step.scrollIntoView) return;
+    const anchor = document.querySelector<HTMLElement>(`[data-onboarding-anchor="${step.anchor}"]`);
+    anchor?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [visible, step.anchor, step.scrollIntoView]);
 
   if (!visible || !rect) return null;
 
@@ -360,6 +386,14 @@ export default function GuestOnboarding() {
   }, []);
 
   const handleEventOverviewContinue = useCallback(() => {
+    setPhase('guide-event-arrangements');
+  }, []);
+
+  const handleEventArrangementsContinue = useCallback(() => {
+    setPhase('guide-event-workflows');
+  }, []);
+
+  const handleEventWorkflowsContinue = useCallback(() => {
     setPhase('guide-event-close');
   }, []);
 
@@ -440,7 +474,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-event-close' && (
         <GuideHighlight
-          step={GUIDE_STEPS[2]}
+          step={GUIDE_STEPS[4]}
           visible={true}
           onTargetAction={() => undefined}
           onSkip={handleSkip}
@@ -458,10 +492,32 @@ export default function GuestOnboarding() {
         />
       )}
 
+      {phase === 'guide-event-arrangements' && (
+        <GuideHighlight
+          step={GUIDE_STEPS[2]}
+          visible={true}
+          onTargetAction={() => undefined}
+          onBubbleAction={handleEventArrangementsContinue}
+          bubbleActionLabel="继续"
+          onSkip={handleSkip}
+        />
+      )}
+
+      {phase === 'guide-event-workflows' && (
+        <GuideHighlight
+          step={GUIDE_STEPS[3]}
+          visible={true}
+          onTargetAction={() => undefined}
+          onBubbleAction={handleEventWorkflowsContinue}
+          bubbleActionLabel="继续"
+          onSkip={handleSkip}
+        />
+      )}
+
       {/* Guided tour: highlight start learning */}
       {phase === 'guide-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[3]}
+          step={GUIDE_STEPS[5]}
           visible={true}
           onTargetAction={handleLearningEntryClick}
           onSkip={handleSkip}
@@ -470,7 +526,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-learning-select' && (
         <GuideHighlight
-          step={GUIDE_STEPS[4]}
+          step={GUIDE_STEPS[6]}
           visible={true}
           onTargetAction={handleLearningAppClick}
           onSkip={handleSkip}
@@ -479,7 +535,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-workflow-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[5]}
+          step={GUIDE_STEPS[7]}
           visible={true}
           onTargetAction={handleWorkflowStartClick}
           onSkip={handleSkip}

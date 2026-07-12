@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from routes.todo.helpers import (
     _build_workflow_settlement,
@@ -21,6 +22,7 @@ from routes.todo_routes import (
     _resolve_vocab_app_deck_id,
     complete_focus_workflow_run_task_and_end_phase,
     get_workflow_record_settlement,
+    list_workflow_records,
 )
 
 
@@ -114,6 +116,15 @@ class FakeWorkflowRecordSettlementConn(FakeSettlementConn):
         return self.record_row
 
 
+class FakeWorkflowRecordListConn:
+    def __init__(self):
+        self.fetch_calls: list[tuple[str, tuple[object, ...]]] = []
+
+    async def fetch(self, query: str, *args: object):
+        self.fetch_calls.append((query, args))
+        return []
+
+
 def test_focus_workflow_phase_accepts_task_focus_type():
     phase = FocusWorkflowPhase(
         phase_type="focus",
@@ -123,6 +134,22 @@ def test_focus_workflow_phase_accepts_task_focus_type():
     )
 
     assert phase.focus_work_type == "task_focus"
+
+
+@pytest.mark.asyncio
+async def test_list_workflow_records_can_include_all_sub_apps():
+    conn = FakeWorkflowRecordListConn()
+    app = type("App", (), {"state": type("State", (), {"auth_pool": FakePool(conn)})()})()
+    request = Request({"type": "http", "app": app})
+    user = type("User", (), {"id": 7})()
+
+    records = await list_workflow_records(request, user, app_id=None, include_all_apps=True)
+
+    assert records == []
+    query, args = conn.fetch_calls[0]
+    assert "wr.app_id IS NULL" not in query
+    assert "WHERE wr.user_id = $1" in query
+    assert args == (7,)
 
 
 def test_focus_workflow_out_exposes_focus_work_runtime_fields():
@@ -268,6 +295,63 @@ async def test_build_workflow_settlement_filters_to_record_run_ids():
     assert len(settlement.nodes) == 1
     assert settlement.nodes[0].name == "A 本次记录"
     assert "id = ANY" in conn.fetch_calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_build_workflow_settlement_flattens_specialist_retries_under_the_same_parent():
+    workflow_id = uuid4()
+    parent_id = uuid4()
+    first_retry_id = uuid4()
+    second_retry_id = uuid4()
+    final_retry_id = uuid4()
+    resumed_parent_id = uuid4()
+
+    def run(
+        run_id: UUID,
+        name: str,
+        config_id: str,
+        source_run_id: UUID | None,
+        accuracy: float,
+        passed: bool,
+        completion_reason: str = "task_confirmed",
+    ) -> Row:
+        return Row(
+            id=run_id,
+            focus_work_type="choice",
+            config_snapshot={"deliberate_name": name, "deliberate_config_id": config_id},
+            progress_snapshot={
+                "run_summary": {"answered_count": 3, "correct_count": 2, "accuracy": accuracy, "duration_seconds": 30},
+                "mastery_check": {"enabled": True, "passed": passed, "accuracy": accuracy},
+            },
+            phase_index=0,
+            completion_reason=completion_reason,
+            source_run_id=source_run_id,
+            created_at=datetime.now(UTC),
+        )
+
+    conn = FakeSettlementConn([
+        run(parent_id, "408 综合检测", "combined", None, 0.3, False),
+        run(first_retry_id, "数据结构巩固", "data-structure", parent_id, 0.33, False),
+        run(second_retry_id, "数据结构巩固", "data-structure", first_retry_id, 0.33, False),
+        run(final_retry_id, "数据结构巩固", "data-structure", second_retry_id, 0.67, True, "returned_to_parent"),
+        run(resumed_parent_id, "408 综合检测", "combined", None, 0.8, True),
+    ])
+
+    settlement = await _build_workflow_settlement(conn, workflow_id, "408 综合检测", 1)
+
+    parent = settlement.nodes[0]
+    assert parent.name == "A 408 综合检测"
+    assert [child.name for child in parent.children] == [
+        "A 数据结构巩固",
+        "A 数据结构巩固",
+        "A 数据结构巩固",
+    ]
+    assert all(not child.children for child in parent.children)
+    assert settlement.nodes[1].name == "A 408 综合检测"
+    assert parent.accuracy == 30
+    assert parent.children[2].accuracy == 67
+    assert settlement.fork_count == 1
+    assert settlement.retry_count == 2
 
 
 @pytest.mark.asyncio
@@ -583,6 +667,8 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
                 "task_title": "选择练习",
                 "choice_scope": choice_scope,
                 "choice_completion": choice_completion,
+                "question_rotation": "cycle",
+                "guest_demo_next_combined_should_pass": True,
             }
         ],
         current_phase_index=0,
@@ -604,6 +690,8 @@ async def test_build_run_metadata_uses_test_choice_phase_config():
     assert config_snapshot["choice_scope"] == choice_scope
     assert config_snapshot["choice_completion"] == choice_completion
     assert config_snapshot["task_title"] == "选择练习"
+    assert config_snapshot["question_rotation"] == "cycle"
+    assert config_snapshot["guest_demo_next_combined_should_pass"] is True
 
 
 def test_deliberate_config_snapshot_payload_includes_unified_bank_fields():

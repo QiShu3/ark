@@ -229,43 +229,58 @@ POLITICS_ARTICLES = [
 ]
 
 
-# ── 408 input data ──────────────────────────────────────────────────
+# ── 408 Fork demo data ──────────────────────────────────────────────
 
-INPUT_408_ARTICLES = [
-    {
-        "article_id": "guest-408-001",
-        "title": "数据结构基础",
-        "paragraphs": [
-            (1, "栈是一种后进先出（LIFO）的线性数据结构。只允许在栈顶进行插入和删除操作。队列是一种先进先出（FIFO）的线性数据结构，允许在一端插入（队尾）另一端删除（队头）。"),
-        ],
+GUEST_408_SUBJECT_BANKS = {
+    "data-structure": {
+        "name": "408 数据结构专项",
+        "description": "线性表、树、图与查找的基础专项训练",
+        "subject": "数据结构",
         "questions": [
-            {
-                "question_id": "guest-408-001-q1",
-                "question_no": 1,
-                "stem": "栈的特点是后进先出，简称____。",
-                "mode": "fill",
-                "accepted_answers": ["LIFO", "lifo"],
-                "explanation": "栈（Stack）是一种后进先出（Last In First Out, LIFO）的数据结构。",
-            },
-            {
-                "question_id": "guest-408-001-q2",
-                "question_no": 2,
-                "stem": "一个栈的入栈序列为 1, 2, 3, 4，则不可能的出栈序列是____。（用逗号分隔数字，如：1,2,3,4）",
-                "mode": "fill",
-                "accepted_answers": ["4,1,3,2", "4,1,2,3", "3,1,4,2", "3,1,2,4"],
-                "explanation": "4最先出栈说明1,2,3,4全部入栈，然后4出栈。此时栈中从顶到底为3,2,1。接下来1不可能先出栈，因为3在1上面。所以4,1,3,2和4,1,2,3都不可能。同理可分析其他序列。",
-            },
-            {
-                "question_id": "guest-408-001-q3",
-                "question_no": 3,
-                "stem": "队列的特点是先进先出，简称____。",
-                "mode": "fill",
-                "accepted_answers": ["FIFO", "fifo"],
-                "explanation": "队列（Queue）是一种先进先出（First In First Out, FIFO）的数据结构。",
-            },
+            ("栈的操作受限于表的一端，最符合其特点的描述是？", {"A": "先进先出", "B": "后进先出", "C": "随机访问", "D": "循环访问"}, "B", "栈只在栈顶插入和删除，遵循后进先出。"),
+            ("一个含 n 个结点的二叉树，其边数为？", {"A": "n", "B": "n-1", "C": "n+1", "D": "2n"}, "B", "树中任意非根结点恰有一条来自父结点的边。"),
+            ("对无向图进行深度优先遍历，常用的辅助数据结构是？", {"A": "队列", "B": "栈", "C": "优先队列", "D": "哈希表"}, "B", "深度优先遍历按最近访问的分支继续，栈最适合保存回溯路径。"),
+            ("在有序顺序表中使用二分查找，其时间复杂度为？", {"A": "O(1)", "B": "O(log n)", "C": "O(n)", "D": "O(n log n)"}, "B", "每次比较将待查区间缩小一半。"),
+            ("下列排序算法中，平均时间复杂度为 O(n log n) 且通常不稳定的是？", {"A": "冒泡排序", "B": "插入排序", "C": "快速排序", "D": "直接选择排序"}, "C", "快速排序的平均复杂度为 O(n log n)，标准实现通常不稳定。"),
         ],
     },
-]
+    "computer-organization": {
+        "name": "408 计算机组成原理专项",
+        "description": "数据表示、存储系统和处理器基础专项训练",
+        "subject": "计算机组成原理",
+        "questions": [
+            ("在补码表示中，8 位有符号整数的取值范围是？", {"A": "-127 到 127", "B": "-128 到 127", "C": "-128 到 128", "D": "-255 到 255"}, "B", "n 位补码整数范围为 -2^(n-1) 到 2^(n-1)-1。"),
+            ("CPU 访问速度最快的存储部件是？", {"A": "主存", "B": "磁盘", "C": "寄存器", "D": "高速缓存"}, "C", "寄存器直接位于 CPU 内部，访问速度最快。"),
+            ("Cache 的主要作用是？", {"A": "永久保存数据", "B": "弥合 CPU 与主存速度差距", "C": "扩展指令集", "D": "管理进程调度"}, "B", "Cache 利用局部性原理减少 CPU 等待主存的时间。"),
+            ("一条指令的执行通常包含取指、译码和执行等阶段，其中 PC 的主要作用是？", {"A": "保存当前指令地址", "B": "保存操作数", "C": "保存运算结果", "D": "保存状态字"}, "A", "程序计数器 PC 保存下一条待取指令的地址。"),
+            ("DMA 方式传送数据时，数据直接在什么部件之间传送？", {"A": "CPU 与寄存器", "B": "外设与主存", "C": "Cache 与寄存器", "D": "外设与 Cache"}, "B", "DMA 控制器让外设与主存直接交换数据，减少 CPU 搬运开销。"),
+        ],
+    },
+    "operating-system": {
+        "name": "408 操作系统专项",
+        "description": "进程、内存、文件与设备管理专项训练",
+        "subject": "操作系统",
+        "questions": [
+            ("进程从运行态因时间片用完转为？", {"A": "阻塞态", "B": "就绪态", "C": "终止态", "D": "创建态"}, "B", "时间片用完只是失去处理机，进程仍具备运行条件，进入就绪队列。"),
+            ("临界区互斥访问的基本要求不包括？", {"A": "空闲让进", "B": "忙则等待", "C": "有限等待", "D": "无限优先"}, "D", "临界区管理要求互斥、进展和有限等待，不存在无限优先。"),
+            ("虚拟存储器管理中，缺页中断发生时通常需要？", {"A": "立即终止进程", "B": "从外存调入所需页面", "C": "清空全部页表", "D": "重启操作系统"}, "B", "缺页表示所访问页面不在内存，需要从外存调入。"),
+            ("死锁的四个必要条件中，允许进程同时占有资源并等待其他资源称为？", {"A": "互斥", "B": "不可剥夺", "C": "请求与保持", "D": "循环等待"}, "C", "请求与保持是指进程已持有资源，同时请求新的资源。"),
+            ("文件系统中，为用户提供文件名到物理块映射的是？", {"A": "文件目录", "B": "设备驱动", "C": "中断向量表", "D": "进程控制块"}, "A", "目录项保存文件控制信息，支持按文件名定位文件。"),
+        ],
+    },
+    "computer-network": {
+        "name": "408 计算机网络专项",
+        "description": "分层模型、传输、路由与应用协议专项训练",
+        "subject": "计算机网络",
+        "questions": [
+            ("TCP 协议位于 OSI 参考模型的哪一层？", {"A": "网络层", "B": "传输层", "C": "会话层", "D": "应用层"}, "B", "TCP 为应用提供端到端的可靠传输服务，属于传输层。"),
+            ("IP 地址的主要作用是？", {"A": "标识网络接口并支持路由", "B": "标识应用进程", "C": "标识物理网卡厂商", "D": "加密报文内容"}, "A", "IP 地址用于在网络层标识接口并让路由器转发分组。"),
+            ("DNS 的核心功能是？", {"A": "分配动态地址", "B": "域名解析为 IP 地址", "C": "传输网页内容", "D": "验证数字签名"}, "B", "DNS 将人类可读的域名解析为网络通信使用的 IP 地址。"),
+            ("HTTP 默认使用的传输层协议是？", {"A": "TCP", "B": "UDP", "C": "ICMP", "D": "ARP"}, "A", "传统 HTTP 基于 TCP 提供可靠字节流传输。"),
+            ("路由器转发 IP 数据报时，主要依据是？", {"A": "源 MAC 地址", "B": "目的 IP 地址", "C": "源端口号", "D": "应用层协议名"}, "B", "路由器根据目的 IP 地址查询路由表并决定下一跳。"),
+        ],
+    },
+}
 
 
 async def main() -> None:
@@ -418,54 +433,85 @@ async def main() -> None:
             pol_article_count, pol_question_count, politics_set_id,
         )
 
-        # ── 408 input set ───────────────────────────────────────────
-        input_set_id = await conn.fetchval(
-            """
-            INSERT INTO input_sets (key, name, description, exam, is_guest_only)
-            VALUES ('guest-408', '408计算机综合训练', '数据结构、计算机组成原理、操作系统、计算机网络基础题', '408', true)
-            ON CONFLICT (key) DO UPDATE SET
-                name = EXCLUDED.name,
-                is_guest_only = true
-            RETURNING id::text
-            """
-        )
-        inp_article_count = 0
-        inp_question_count = 0
-        for art in INPUT_408_ARTICLES:
+        # ── 408 Fork demo choice sets ──────────────────────────────
+        async def seed_408_set(
+            key: str,
+            name: str,
+            description: str,
+            subject: str,
+            questions: list[tuple[str, dict[str, str], str, str]],
+        ) -> str:
+            set_id = await conn.fetchval(
+                """
+                INSERT INTO choice_sets (key, name, description, exam, source_version, is_published, is_guest_only)
+                VALUES ($1, $2, $3, '408', 'fork-demo-v1', true, true)
+                ON CONFLICT (key) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description,
+                    source_version = EXCLUDED.source_version,
+                    is_published = true,
+                    is_guest_only = true
+                RETURNING id::text
+                """,
+                key,
+                name,
+                description,
+            )
+            article_id = f"{key}-article"
             article_pk = await conn.fetchval(
                 """
-                INSERT INTO input_articles (set_id, article_id, title, sort_order)
-                VALUES ($1::uuid, $2, $3, 0)
+                INSERT INTO choice_articles (set_id, article_id, exam, year, text_no, title, sort_order)
+                VALUES ($1::uuid, $2, '408', 2026, 1, $3, 1)
                 ON CONFLICT (article_id) DO UPDATE SET title = EXCLUDED.title
                 RETURNING id::text
                 """,
-                input_set_id, art["article_id"], art["title"],
+                set_id,
+                article_id,
+                subject,
             )
-            for pno, ptxt in art["paragraphs"]:
+            for question_no, (stem, options, answer, explanation) in enumerate(questions, start=1):
                 await conn.execute(
                     """
-                    INSERT INTO input_paragraphs (article_pk, paragraph_no, text)
-                    VALUES ($1::uuid, $2, $3)
-                    ON CONFLICT (article_pk, paragraph_no) DO UPDATE SET text = EXCLUDED.text
+                    INSERT INTO choice_questions
+                        (article_pk, question_id, question_no, stem, options_json, answer, evidence_json, explanation, question_type, sort_order)
+                    VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, '{}'::jsonb, $7, 'single', $3)
+                    ON CONFLICT (question_id) DO UPDATE
+                    SET stem = EXCLUDED.stem, options_json = EXCLUDED.options_json,
+                        answer = EXCLUDED.answer, explanation = EXCLUDED.explanation
                     """,
-                    article_pk, pno, ptxt,
+                    article_pk,
+                    f"{key}-q{question_no}",
+                    question_no,
+                    stem,
+                    json.dumps(options, ensure_ascii=False),
+                    answer,
+                    explanation,
                 )
-            for q in art["questions"]:
-                await conn.execute(
-                    """
-                    INSERT INTO input_questions
-                        (article_pk, question_id, question_no, stem, mode, accepted_answers, explanation, sort_order)
-                    VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb, $7, $3)
-                    ON CONFLICT (question_id) DO UPDATE SET stem = EXCLUDED.stem, accepted_answers = EXCLUDED.accepted_answers
-                    """,
-                    article_pk, q["question_id"], q["question_no"], q["stem"],
-                    q["mode"], json.dumps(q["accepted_answers"], ensure_ascii=False), q["explanation"],
-                )
-            inp_article_count += 1
-            inp_question_count += len(art["questions"])
-        await conn.execute(
-            "UPDATE input_sets SET article_count = $1, question_count = $2 WHERE id = $3::uuid",
-            inp_article_count, inp_question_count, input_set_id,
+            await conn.execute(
+                "UPDATE choice_sets SET article_count = 1, question_count = $1 WHERE id = $2::uuid",
+                len(questions),
+                set_id,
+            )
+            return str(set_id)
+
+        subject_bank_ids: dict[str, str] = {}
+        combined_questions: list[tuple[str, dict[str, str], str, str]] = []
+        for key, bank in GUEST_408_SUBJECT_BANKS.items():
+            subject_bank_ids[key] = await seed_408_set(
+                f"guest-408-{key}",
+                bank["name"],
+                bank["description"],
+                bank["subject"],
+                bank["questions"],
+            )
+            combined_questions.extend(bank["questions"])
+
+        combined_408_id = await seed_408_set(
+            "guest-408-combined",
+            "408 综合检测",
+            "覆盖数据结构、计算机组成原理、操作系统、计算机网络的 408 综合检测题库",
+            "408 综合检测",
+            combined_questions,
         )
 
     await pool.close()
@@ -474,7 +520,8 @@ async def main() -> None:
         "english_deck_id": str(deck_id),
         "math_set_id": str(math_set_id),
         "politics_set_id": str(politics_set_id),
-        "input_408_id": str(input_set_id),
+        "combined_408_id": combined_408_id,
+        "subject_408_ids": subject_bank_ids,
     }
     print("\n=== Guest Bank IDs ===")
     print(json.dumps(result, indent=2))

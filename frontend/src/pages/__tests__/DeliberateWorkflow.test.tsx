@@ -13,9 +13,13 @@ vi.mock('../../lib/deliberate/api', () => ({
   listDeliberateRuns: vi.fn().mockResolvedValue([]),
   startDeliberateWorkflow: vi.fn(),
   listDeliberateSubApps: vi.fn().mockResolvedValue([]),
+  listOwnedDeliberateSubApps: vi.fn().mockResolvedValue([]),
   createDeliberateSubApp: vi.fn(),
+  createOwnedDeliberateSubApp: vi.fn(),
   patchDeliberateSubApp: vi.fn(),
+  patchOwnedDeliberateSubApp: vi.fn(),
   deleteDeliberateSubApp: vi.fn(),
+  deleteOwnedDeliberateSubApp: vi.fn(),
 }));
 
 vi.mock('../../lib/focusWorkflow', () => ({
@@ -69,6 +73,7 @@ const mockConfig: DeliberateWorkflowConfig = {
   children: [],
   primary_filter: 'all',
   sort_order: 'sequential',
+  question_rotation: 'none',
   use_fsrs: false,
   scheduling_mode: 'manual',
   fsrs_config: null,
@@ -81,6 +86,15 @@ const mockConfig: DeliberateWorkflowConfig = {
 const mockBanks: DeliberateBankOption[] = [
   { id: 'bank-1', name: '408题库', kind: 'choice', count: 100, item_count: 100, question_count: 100 },
 ];
+
+const mockInputBank: DeliberateBankOption = {
+  id: 'input-bank-1',
+  name: '408 输入题库',
+  kind: 'input',
+  count: 3,
+  item_count: 3,
+  question_count: 3,
+};
 
 const mockRuns: DeliberateWorkflowRun[] = [
   {
@@ -245,5 +259,38 @@ describe('DeliberateWorkflow', () => {
     await waitFor(() => {
       expect(window.localStorage.getItem('ark:deliberate-workflow:selected-id')).toBe('cfg-1');
     });
+  });
+
+  it('calculates the accuracy trend from input snapshot answers', async () => {
+    (listDeliberateBanks as ReturnType<typeof vi.fn>).mockImplementation((kind: string) => (
+      Promise.resolve(kind === 'input' ? [mockInputBank] : [])
+    ));
+    (apiJson as ReturnType<typeof vi.fn>).mockImplementation((path: string) => {
+      if (path.startsWith('/api/input/snapshots?bank_id=input-bank-1')) {
+        return Promise.resolve([
+          {
+            id: 'input-snapshot-1',
+            set_id: 'input-bank-1',
+            total_questions: 3,
+            answered_count: 3,
+            correct_count: 3,
+            mode_breakdown: { fill: 3 },
+            focus_stats: { total_sessions: 1, total_minutes: 2 },
+            trigger_reason: 'phase_end',
+            created_at: '2026-07-12T10:25:00Z',
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    renderPage();
+
+    const inputBankOption = await screen.findByRole('option', { name: '408 输入题库 (3 题)' });
+    const bankSelect = inputBankOption.parentElement as HTMLSelectElement;
+    fireEvent.change(bankSelect, { target: { value: 'input-bank-1' } });
+
+    expect(await screen.findByLabelText('正确率 100%')).toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
   });
 });

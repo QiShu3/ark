@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -404,6 +404,62 @@ describe('FocusWorkProvider', () => {
         body: expect.stringContaining('"correct_count":8'),
       }),
     );
+  });
+
+  it('thanks a guest after they finish the 408 workflow settlement', async () => {
+    const user = userEvent.setup();
+    useAuthStore.getState().setUser({
+      id: 1,
+      username: 'guest',
+      email: null,
+      is_active: true,
+      is_admin: false,
+      is_guest: true,
+      created_at: '2026-07-12T00:00:00Z',
+    });
+    const settlement = {
+      workflow_name: '408 综合检测',
+      result: 'completed',
+      phases: [],
+      nodes: [],
+      total_phases: 1,
+      total_answered: 10,
+      total_correct: 8,
+      total_accuracy: 0.8,
+      total_duration_seconds: 180,
+      fork_count: 0,
+      retry_count: 0,
+      best_accuracy: 0.8,
+      first_try_passed_count: 1,
+    };
+    let settlementConfirmed = false;
+    apiJson.mockImplementation(async (path: string) => {
+      if (path === '/todo/focus/workflow/current') {
+        if (settlementConfirmed) return { state: 'normal' };
+        return {
+          state: 'settlement',
+          phase_runtime_state: 'workflow_settlement',
+          workflow_settlement: settlement,
+        };
+      }
+      if (path === '/todo/focus/workflow/confirm-settlement') {
+        settlementConfirmed = true;
+        return {};
+      }
+      return { state: 'normal' };
+    });
+
+    render(
+      <FocusWorkProvider>
+        <div>App</div>
+      </FocusWorkProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '结束工作流' }));
+
+    expect(await screen.findByRole('dialog', { name: '体验结束' })).toHaveTextContent('感谢完成 Ark 体验');
+    await user.click(screen.getByRole('button', { name: '开始使用 Ark' }));
+    expect(screen.queryByRole('dialog', { name: '体验结束' })).not.toBeInTheDocument();
   });
 
   it('lets extra completion end the phase or start another extra run', async () => {

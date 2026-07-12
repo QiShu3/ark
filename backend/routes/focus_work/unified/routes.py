@@ -67,6 +67,34 @@ def _resolve_scheduling_mode(snapshot: dict[str, Any]) -> str:
     return "manual"
 
 
+async def _workflow_rotation_offset(
+    conn: Any,
+    *,
+    workflow_id: Any,
+    user_id: int,
+    config_id: str,
+    target_count: int,
+) -> int:
+    """Advance fixed question pools only within the current workflow instance."""
+    if not workflow_id or not config_id:
+        return 0
+    completed = await conn.fetchval(
+        """
+        SELECT COUNT(*)::int
+        FROM focus_work_runs
+        WHERE workflow_id = $1::uuid
+          AND user_id = $2
+          AND source_run_id IS NULL
+          AND status IN ('content_completed', 'completed')
+          AND config_snapshot ->> 'deliberate_config_id' = $3
+        """,
+        workflow_id,
+        user_id,
+        config_id,
+    )
+    return max(0, int(completed or 0)) * max(1, target_count)
+
+
 async def _resolve_unified_config_snapshot(
     conn: Any,
     *,
@@ -94,7 +122,7 @@ async def _resolve_unified_config_snapshot(
     config_id = _config_str(resolved, "deliberate_config_id", "") or _config_str(resolved, "config_id", "")
     missing_fields = [
         key for key in (
-            "kind", "target_count", "primary_filter", "sort_order",
+            "kind", "target_count", "primary_filter", "sort_order", "question_rotation",
             "use_fsrs", "backflow_rule", "scheduling_mode", "fsrs_config",
         )
         if key not in resolved
@@ -107,6 +135,7 @@ async def _resolve_unified_config_snapshot(
             resolved.setdefault("target_count", int(config_row["target_count"]))
             resolved.setdefault("primary_filter", str(config_row.get("primary_filter", "all")))
             resolved.setdefault("sort_order", str(config_row.get("sort_order", "sequential")))
+            resolved.setdefault("question_rotation", str(config_row.get("question_rotation", "none")))
             resolved.setdefault("use_fsrs", bool(config_row.get("use_fsrs", False)))
             resolved.setdefault("backflow_rule", str(config_row.get("backflow_rule", "none")))
             if config_row.get("scheduling_mode") is not None:
@@ -207,7 +236,7 @@ async def init_question_pool(
     pool = _pool(request)
     async with pool.acquire() as conn:
         run = await conn.fetchrow(
-            "SELECT id, user_id, config_snapshot, progress_snapshot, focus_work_type, status "
+            "SELECT id, workflow_id, user_id, config_snapshot, progress_snapshot, focus_work_type, status "
             "FROM focus_work_runs WHERE id = $1::uuid AND user_id = $2",
             run_id,
             int(user.id),
@@ -234,6 +263,7 @@ async def init_question_pool(
         target_count = _config_int(config_snapshot, "target_count", 10)
         primary_filter = _config_str(config_snapshot, "primary_filter", "all")
         sort_order = _config_str(config_snapshot, "sort_order", "sequential")
+        question_rotation = _config_str(config_snapshot, "question_rotation", "none")
         scheduling_mode = _resolve_scheduling_mode(config_snapshot)
         fsrs_config = _config_dict(config_snapshot, "fsrs_config")
         use_fsrs = scheduling_mode == "fsrs"
@@ -241,6 +271,23 @@ async def init_question_pool(
 
         if not bank_id:
             raise HTTPException(status_code=400, detail="题库未配置")
+
+        rotation_offset = 0
+        if (
+            question_rotation == "cycle"
+            and kind == "choice"
+            and scheduling_mode == "manual"
+            and primary_filter == "all"
+            and sort_order == "sequential"
+        ):
+            config_id = _config_str(config_snapshot, "deliberate_config_id", "") or _config_str(config_snapshot, "config_id", "")
+            rotation_offset = await _workflow_rotation_offset(
+                conn,
+                workflow_id=run["workflow_id"],
+                user_id=int(user.id),
+                config_id=config_id,
+                target_count=target_count,
+            )
 
         questions, warning = await build_question_list(
             conn,
@@ -252,6 +299,7 @@ async def init_question_pool(
             sort_order=sort_order,
             scheduling_mode=scheduling_mode,
             fsrs_config=fsrs_config,
+            rotation_offset=rotation_offset,
         )
 
         def _parse_paragraphs(raw: Any) -> list[str]:
@@ -297,6 +345,8 @@ async def init_question_pool(
             "unified_kind": kind,
             "unified_primary_filter": primary_filter,
             "unified_sort_order": sort_order,
+            "unified_question_rotation": question_rotation,
+            "unified_rotation_offset": rotation_offset,
             "unified_use_fsrs": use_fsrs,
             "unified_scheduling_mode": scheduling_mode,
             "unified_backflow_rule": backflow_rule,

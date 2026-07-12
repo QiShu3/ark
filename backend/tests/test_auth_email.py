@@ -37,9 +37,29 @@ class _GuestSetupConn:
         self.configs: list[dict[str, object]] = []
         self.presets: list[dict[str, object]] = []
         self.sub_apps: list[dict[str, object]] = []
+        self.banks = [
+            {"id": f"bank-{index}", "key": key}
+            for index, key in enumerate(
+                (
+                    "guest-408-combined",
+                    "guest-408-data-structure",
+                    "guest-408-computer-organization",
+                    "guest-408-operating-system",
+                    "guest-408-computer-network",
+                    "guest-math-2",
+                    "guest-politics",
+                ),
+                start=1,
+            )
+        ]
 
     def transaction(self) -> _GuestSetupTransaction:
         return _GuestSetupTransaction()
+
+    async def fetch(self, sql: str, *args: object) -> list[dict[str, object]]:
+        if "FROM choice_sets" in sql:
+            return self.banks
+        return []
 
     async def fetchrow(self, sql: str, *args: object) -> dict[str, object] | None:
         if "FROM events" in sql:
@@ -50,9 +70,26 @@ class _GuestSetupConn:
             return event
         if "FROM deliberate_workflow_configs" in sql:
             app_id = args[1]
-            return next((item for item in self.configs if item["app_id"] == app_id), None)
+            name = args[2] if len(args) > 2 else None
+            return next(
+                (
+                    item
+                    for item in self.configs
+                    if item["app_id"] == app_id and (name is None or item["name"] == name)
+                ),
+                None,
+            )
         if "INSERT INTO deliberate_workflow_configs" in sql:
-            config = {"id": str(uuid4()), "app_id": args[3], "event_id": args[4]}
+            is_standard_config = args[2] in {"choice", "flash_card"}
+            config = {
+                "id": str(uuid4()),
+                "name": args[1],
+                "app_id": args[3] if is_standard_config else args[2],
+                "event_id": args[4] if is_standard_config else args[3],
+                "bank_id": args[5] if is_standard_config else args[4],
+                "target_count": args[6] if is_standard_config else args[5],
+                "children": [],
+            }
             self.configs.append(config)
             return config
         if "FROM focus_workflow_presets" in sql:
@@ -60,9 +97,25 @@ class _GuestSetupConn:
             return next((item for item in self.presets if item["app_id"] == app_id), None)
         return None
 
+    async def fetchval(self, sql: str, *args: object) -> str | None:
+        if "FROM vocab_decks" in sql:
+            return "english-bank"
+        return None
+
     async def execute(self, sql: str, *args: object) -> str:
         if "INSERT INTO deliberate_sub_apps" in sql:
-            self.sub_apps.append({"id": args[0], "event_id": args[7]})
+            if not any(item["id"] == args[0] for item in self.sub_apps):
+                self.sub_apps.append({"id": args[0], "event_id": args[-1]})
+        if "UPDATE deliberate_workflow_configs\n                        SET name" in sql:
+            config_id_index = 6 if "focus_work_type = $2" in sql else 7
+            config = next(item for item in self.configs if item["id"] == args[config_id_index])
+            if "focus_work_type = $2" in sql:
+                config.update({"name": args[0], "event_id": args[2], "bank_id": args[3], "target_count": args[4]})
+            else:
+                config.update({"name": args[0], "event_id": args[1], "bank_id": args[2], "target_count": args[3]})
+        if "SET children_json" in sql:
+            config = next(item for item in self.configs if item["id"] == args[1])
+            config["children"] = json.loads(str(args[0]))
         if "UPDATE deliberate_workflow_configs SET event_id" in sql:
             for config in self.configs:
                 config["event_id"] = args[2]
@@ -168,10 +221,24 @@ def test_guest_event_setup_is_idempotent(monkeypatch) -> None:
     assert second.status_code == 200
     assert second.json()["event_id"] == first.json()["event_id"]
     assert len(conn.events) == 1
-    assert len(conn.configs) == 1
-    assert len(conn.presets) == 1
-    assert first.json()["app_ids"] == ["guest-408-42"]
+    assert len(conn.configs) == 8
+    assert len(conn.presets) == 4
+    assert first.json()["app_ids"] == ["guest-408-42", "guest-english-42", "guest-math-42", "guest-politics-42"]
     event_id = first.json()["event_id"]
     assert {str(app["event_id"]) for app in conn.sub_apps} == {event_id}
     assert {str(config["event_id"]) for config in conn.configs} == {event_id}
     assert {str(preset["event_id"]) for preset in conn.presets} == {event_id}
+    assert {app["id"] for app in conn.sub_apps} == {
+        "guest-408-42",
+        "guest-english-42",
+        "guest-math-42",
+        "guest-politics-42",
+    }
+    combined = next(config for config in conn.configs if config["name"] == "408 综合检测")
+    assert combined["target_count"] == 10
+    assert {child["label"] for child in combined["children"]} == {
+        "数据结构巩固",
+        "计算机组成原理巩固",
+        "操作系统巩固",
+        "计算机网络巩固",
+    }

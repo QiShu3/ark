@@ -5,7 +5,12 @@ import type { FocusWorkRunSummary, FocusWorkSnapshot } from './focusWorkTypes';
 
 type GuideStep = {
   key: string;
-  contentAnchor: string;
+  contentSteps: Array<{
+    anchor: string;
+    title: string;
+    body: string;
+    placement: 'top' | 'bottom' | 'left' | 'right';
+  }>;
   actionAnchor: string;
   title: string;
   body: string;
@@ -48,7 +53,25 @@ function getGuideStep(snapshot: FocusWorkSnapshot | null): GuideStep | null {
     if (isCombinedCheck) {
       return {
         key: isRetry ? 'combined-retry' : 'combined-first',
-        contentAnchor: 'guest-408-demo-overview',
+        contentSteps: isRetry ? [{
+          anchor: 'guest-408-question',
+          title: '这是一组新的综合题',
+          body: '回流后会换一组题，确认专项巩固是否真正提升了你的综合掌握情况。',
+          placement: 'right',
+        }] : [
+          {
+            anchor: 'guest-408-question',
+            title: '先看题目',
+            body: '左侧展示当前要判断的知识点。先读清题意，再根据已有知识作出选择。',
+            placement: 'right',
+          },
+          {
+            anchor: 'guest-408-options',
+            title: '在这里选择答案',
+            body: '右侧是可选答案。正常学习时选择后提交，Ark 会记录结果并给出解析。',
+            placement: 'left',
+          },
+        ],
         actionAnchor: 'guest-408-demo-complete',
         title: isRetry ? '重新检测新的题组' : '完成首轮综合检测',
         body: isRetry
@@ -59,7 +82,12 @@ function getGuideStep(snapshot: FocusWorkSnapshot | null): GuideStep | null {
     }
     return {
       key: 'specialist-check',
-      contentAnchor: 'guest-408-demo-overview',
+      contentSteps: [{
+        anchor: 'guest-408-question',
+        title: '这是专项巩固题',
+        body: '这里聚焦首轮检测中发现的薄弱知识点，完成后会回到综合检测复检。',
+        placement: 'right',
+      }],
       actionAnchor: 'guest-408-demo-complete',
       title: '完成专项巩固',
       body: '点击一键完成专项检测。通过后将回到刚才的综合检测，进入一组新题。',
@@ -70,7 +98,12 @@ function getGuideStep(snapshot: FocusWorkSnapshot | null): GuideStep | null {
   if (runtimeState === 'counted_run_completed_confirming' && failed && !run?.source_run_id) {
     return {
       key: 'fork-recommendation',
-      contentAnchor: 'guest-408-result-overview',
+      contentSteps: [{
+        anchor: 'guest-408-result-overview',
+        title: '这里是本轮检测结果',
+        body: 'Ark 会根据答题表现识别薄弱项，并推荐下一步的专项巩固。',
+        placement: 'top',
+      }],
       actionAnchor: 'guest-408-fork-option',
       title: '按薄弱项 Fork',
       body: '首轮未通过后，选择推荐的专项巩固。系统会暂时分流到这个任务，完成后再回到综合检测。',
@@ -81,7 +114,12 @@ function getGuideStep(snapshot: FocusWorkSnapshot | null): GuideStep | null {
   if (runtimeState === 'counted_run_completed_confirming' && passed && run?.source_run_id) {
     return {
       key: 'return-to-parent',
-      contentAnchor: 'guest-408-result-overview',
+      contentSteps: [{
+        anchor: 'guest-408-result-overview',
+        title: '专项结果已经生成',
+        body: '通过专项巩固后，可以回到原来的综合检测，使用新题确认提升效果。',
+        placement: 'top',
+      }],
       actionAnchor: 'guest-408-return-parent',
       title: '回流到综合检测',
       body: '专项已经通过。点击这里回到原任务，系统会给你一组新的综合检测题。',
@@ -92,7 +130,12 @@ function getGuideStep(snapshot: FocusWorkSnapshot | null): GuideStep | null {
   if (runtimeState === 'counted_run_completed_confirming' && passed && isCombinedCheck) {
     return {
       key: 'combined-passed',
-      contentAnchor: 'guest-408-result-overview',
+      contentSteps: [{
+        anchor: 'guest-408-result-overview',
+        title: '综合检测已达标',
+        body: '这次学习路径已完成，可以结束阶段并查看完整的检测与巩固记录。',
+        placement: 'top',
+      }],
       actionAnchor: 'guest-408-complete-task',
       title: '完成这条学习路径',
       body: '复检已达标。点击结束阶段，查看本次检测、专项补强与回流复检的完整路径。',
@@ -103,7 +146,12 @@ function getGuideStep(snapshot: FocusWorkSnapshot | null): GuideStep | null {
   if (runtimeState === 'workflow_settlement') {
     return {
       key: 'workflow-settlement',
-      contentAnchor: 'guest-408-settlement-overview',
+      contentSteps: [{
+        anchor: 'guest-408-settlement-overview',
+        title: '这里是学习路径回顾',
+        body: '它汇总了综合检测、专项巩固、回流复检和最终达标的全过程。',
+        placement: 'top',
+      }],
       actionAnchor: 'guest-408-finish-workflow',
       title: '查看并结束体验',
       body: '这里汇总了你的学习路径：综合检测未通过、专项巩固、回流复检和最终达标。',
@@ -143,9 +191,13 @@ function useAnchorRect(anchor: string | null): DOMRect | null {
 
 export default function Guest408DemoOnboarding({ snapshot }: { snapshot: FocusWorkSnapshot | null }) {
   const step = getGuideStep(snapshot);
-  const [explainedStepKey, setExplainedStepKey] = useState<string | null>(null);
-  const showingAction = step != null && explainedStepKey === step.key;
-  const rect = useAnchorRect(step ? (showingAction ? step.actionAnchor : step.contentAnchor) : null);
+  const [stage, setStage] = useState(0);
+  useEffect(() => setStage(0), [step?.key]);
+
+  const showingAction = step != null && stage >= step.contentSteps.length;
+  const contentStep = step && !showingAction ? step.contentSteps[stage] : null;
+  const anchor = showingAction ? step?.actionAnchor ?? null : contentStep?.anchor ?? null;
+  const rect = useAnchorRect(anchor);
 
   if (!step || !rect) return null;
 
@@ -157,14 +209,25 @@ export default function Guest408DemoOnboarding({ snapshot }: { snapshot: FocusWo
   const bubbleWidth = 292;
   const bubbleHeight = 142;
   const gap = 12;
-  const preferred = {
+  const placements = {
     top: { top: top - bubbleHeight - gap, left: left + width / 2 - bubbleWidth / 2 },
     bottom: { top: top + height + gap, left: left + width / 2 - bubbleWidth / 2 },
     left: { top: top + height / 2 - bubbleHeight / 2, left: left - bubbleWidth - gap },
     right: { top: top + height / 2 - bubbleHeight / 2, left: left + width + gap },
-  }[step.placement];
-  const bubbleTop = Math.max(16, Math.min(preferred.top, window.innerHeight - bubbleHeight - 16));
-  const bubbleLeft = Math.max(16, Math.min(preferred.left, window.innerWidth - bubbleWidth - 16));
+  };
+  const placement = showingAction ? step.placement : contentStep?.placement ?? 'bottom';
+  const orderedPlacements = [placement, ...(['bottom', 'top', 'right', 'left'] as const).filter((item) => item !== placement)];
+  const candidate = orderedPlacements
+    .map((item) => placements[item])
+    .find((position) => (
+      position.top >= 16
+      && position.left >= 16
+      && position.top + bubbleHeight <= window.innerHeight - 16
+      && position.left + bubbleWidth <= window.innerWidth - 16
+    ));
+  const fallback = placements.bottom;
+  const bubbleTop = candidate?.top ?? Math.max(16, Math.min(fallback.top, window.innerHeight - bubbleHeight - 16));
+  const bubbleLeft = candidate?.left ?? Math.max(16, Math.min(fallback.left, window.innerWidth - bubbleWidth - 16));
   const overlayStyle: CSSProperties = { position: 'fixed', inset: 0, zIndex: 9998, pointerEvents: 'none' };
 
   return createPortal(
@@ -183,17 +246,17 @@ export default function Guest408DemoOnboarding({ snapshot }: { snapshot: FocusWo
         style={{ position: 'fixed', top: bubbleTop, left: bubbleLeft, width: bubbleWidth, zIndex: 10000, pointerEvents: 'auto' }}
         className="rounded-xl border border-ark-border bg-ark-surface p-4 shadow-2xl"
       >
-        <div className="text-sm font-semibold text-ark-text">{step.title}</div>
-        <p className="mt-1.5 text-xs leading-5 text-ark-text-muted">{step.body}</p>
+        <div className="text-sm font-semibold text-ark-text">{showingAction ? step.title : contentStep?.title}</div>
+        <p className="mt-1.5 text-xs leading-5 text-ark-text-muted">{showingAction ? step.body : contentStep?.body}</p>
         {showingAction ? (
           <div className="mt-3 text-xs font-medium text-[var(--ark-accent)]">请点击高亮操作继续</div>
         ) : (
           <button
             type="button"
-            onClick={() => setExplainedStepKey(step.key)}
+            onClick={() => setStage((current) => current + 1)}
             className="mt-3 h-8 w-full rounded-lg bg-[var(--ark-accent)] px-3 text-xs font-medium text-white transition-opacity hover:opacity-90"
           >
-            继续查看下一步
+            {stage === step.contentSteps.length - 1 ? '查看完成操作' : '继续查看下一步'}
           </button>
         )}
       </div>

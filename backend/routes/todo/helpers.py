@@ -1708,6 +1708,8 @@ def _normalize_workflow_phases(
                         "completion",
                         "primary_filter",
                         "sort_order",
+                        "question_rotation",
+                        "guest_demo_next_combined_should_pass",
                         "use_fsrs",
                         "backflow_rule",
                     ):
@@ -2529,7 +2531,10 @@ async def _build_workflow_settlement(
 
         accuracy: float | None = None
         if isinstance(raw_accuracy, (int, float)):
+            # Focus work writes 0-1 ratios; settlement exposes percentages.
             accuracy = float(raw_accuracy)
+            if 0 <= accuracy <= 1:
+                accuracy *= 100
 
         node_status = "completed"
         if isinstance(mastery_check, dict) and mastery_check.get("enabled"):
@@ -2571,6 +2576,9 @@ async def _build_workflow_settlement(
         node = extract_node(r_dict, phase_letters.get(pi, ""))
         node["_rid"] = str(r_dict["id"])
         node["_source_run_id"] = str(r_dict["source_run_id"]) if r_dict.get("source_run_id") else None
+        config = parse_json(r_dict.get("config_snapshot"))
+        node["_config_id"] = str(config.get("deliberate_config_id") or config.get("config_id") or "")
+        node["_order"] = len(all_nodes)
         all_nodes.append(node)
 
     node_by_id: dict[str, dict[str, Any]] = {n["_rid"]: n for n in all_nodes}
@@ -2578,14 +2586,25 @@ async def _build_workflow_settlement(
     for node in all_nodes:
         parent_id = node.get("_source_run_id")
         if parent_id and parent_id in node_by_id:
-            node_by_id[parent_id]["children"].append(node)
+            parent = node_by_id[parent_id]
+            if node.get("_config_id") and node.get("_config_id") == parent.get("_config_id"):
+                # A repeat of the same specialist is a retry, not a nested Fork.
+                while (
+                    parent.get("_source_run_id")
+                    and parent.get("_source_run_id") in node_by_id
+                    and parent.get("_config_id") == node.get("_config_id")
+                ):
+                    parent = node_by_id[parent["_source_run_id"]]
+                parent["children"].append(node)
+            else:
+                parent["children"].append(node)
         else:
             top_nodes.append(node)
 
-    top_nodes.sort(key=lambda n: (n.get("phase_index", 0), n.get("_rid", "")))
+    top_nodes.sort(key=lambda n: (n.get("phase_index", 0), n.get("_order", 0)))
 
     for node in all_nodes:
-        node["children"].sort(key=lambda c: c.get("_rid", ""))
+        node["children"].sort(key=lambda c: c.get("_order", 0))
 
     def _clean_node(n: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -2601,45 +2620,26 @@ async def _build_workflow_settlement(
             "children": [_clean_node(c) for c in n.get("children", [])],
         }
 
-    def _inject_return_nodes(children: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-        for child in children:
-            result.append(child)
-            if child.get("completion_reason") == "returned_to_parent":
-                return_name = None
-                source_id = child.get("_source_run_id")
-                if source_id and source_id in run_map:
-                    c = parse_json(run_map[source_id].get("config_snapshot"))
-                    return_name = c.get("deliberate_name") or c.get("name") or c.get("task_title") or ""
-                result.append({
-                    "name": "回到" + (f"《{return_name}》" if return_name else "原工作"),
-                    "focus_work_type": None,
-                    "answered_count": 0,
-                    "correct_count": 0,
-                    "accuracy": None,
-                    "duration_seconds": 0,
-                    "status": "return",
-                    "is_return_node": True,
-                    "return_to_name": return_name,
-                    "children": [],
-                    "_rid": "",
-                    "_source_run_id": None,
-                    "completion_reason": None,
-                })
-            child["children"] = _inject_return_nodes(child.get("children", []))
-        return result
-
-    for node in top_nodes:
-        node["children"] = _inject_return_nodes(node.get("children", []))
-
     nodes = [_clean_node(n) for n in top_nodes]
 
-    fork_count = sum(1 for n in all_nodes if n.get("_source_run_id"))
+    fork_count = sum(
+        1
+        for n in all_nodes
+        if n.get("_source_run_id")
+        and n.get("_source_run_id") in node_by_id
+        and n.get("_config_id") != node_by_id[n["_source_run_id"]].get("_config_id")
+    )
     phase_attempts: dict[int, list[dict[str, Any]]] = {}
     for n in top_nodes:
         pi = n.get("phase_index", 0)
         phase_attempts.setdefault(pi, []).append(n)
-    retry_count = sum(max(0, len(attempts) - 1) for attempts in phase_attempts.values())
+    retry_count = sum(
+        1
+        for n in all_nodes
+        if n.get("_source_run_id")
+        and n.get("_source_run_id") in node_by_id
+        and n.get("_config_id") == node_by_id[n["_source_run_id"]].get("_config_id")
+    )
     first_try_passed = 0
     for pi, attempts in phase_attempts.items():
         if attempts and attempts[0].get("status") == "passed":

@@ -46,6 +46,7 @@ import {
   type DeliberateWorkflowRun,
   type FsrsConfig,
   type PrimaryFilter,
+  type QuestionRotation,
   type SchedulingMode,
   type SortOrder,
 } from '../lib/deliberate/api';
@@ -98,6 +99,11 @@ function safeRecord(value: unknown): Record<string, number> {
 
 function latestAccuracy(snapshot: SetSnapshot | null) {
   if (!snapshot) return 0;
+  if (isInputSnapshot(snapshot)) {
+    return snapshot.answered_count > 0
+      ? Math.round((snapshot.correct_count / snapshot.answered_count) * 100)
+      : 0;
+  }
   return Math.round((safeRecord(snapshot.focus_stats).accuracy ?? 0) * 100);
 }
 
@@ -477,6 +483,7 @@ export default function DeliberateWorkflow({
     scheduling_mode: SchedulingMode;
     primary_filter?: PrimaryFilter;
     sort_order?: SortOrder;
+    question_rotation?: QuestionRotation;
     backflow_rule?: BackflowRule;
     fsrs_config?: FsrsConfig;
   }) {
@@ -502,6 +509,7 @@ export default function DeliberateWorkflow({
     task_id?: string | null;
     primary_filter?: PrimaryFilter;
     sort_order?: SortOrder;
+    question_rotation?: QuestionRotation;
     use_fsrs?: boolean;
     backflow_rule?: BackflowRule;
   }) {

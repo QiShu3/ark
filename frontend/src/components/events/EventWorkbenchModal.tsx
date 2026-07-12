@@ -1283,10 +1283,14 @@ export default function EventWorkbenchModal({ event, onClose, onChanged, onBack 
               </Button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {renderArrangementColumn('task', taskArrangements)}
-              {renderArrangementColumn('appointment', appointmentArrangements)}
+              <div data-onboarding-anchor="event-workbench-arrangements" className="grid gap-3 md:col-span-2 md:grid-cols-2">
+                {renderArrangementColumn('task', taskArrangements)}
+                {renderArrangementColumn('appointment', appointmentArrangements)}
+              </div>
               <div className="md:col-span-2">
-                {renderWorkflowColumn()}
+                <div data-onboarding-anchor="event-workbench-workflows">
+                  {renderWorkflowColumn()}
+                </div>
               </div>
             </div>
           </section>

@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 
+import pytest
+
 
 class _Record(dict):
     """dict subclass that mimics asyncpg Record: supports [] access, .get(), .items(), and dict()."""
@@ -33,6 +35,60 @@ class TestGetAdapter:
             assert False, "expected ValueError"
         except ValueError:
             pass
+
+
+@pytest.mark.asyncio
+async def test_question_rotation_offsets_by_completed_rounds(monkeypatch):
+    from lib import question_selector
+
+    class FakeAdapter:
+        async def count_available(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            return 20
+
+        async def select_questions(self, *args, offset: int, limit: int, **kwargs):  # noqa: ANN002, ANN003
+            return [{"question_pk": f"q-{index}"} for index in range(offset, min(offset + limit, 20))]
+
+    monkeypatch.setattr(question_selector, "get_adapter", lambda _kind: FakeAdapter())
+
+    questions, warning = await question_selector.build_question_list(
+        object(),
+        kind="choice",
+        user_id=1,
+        bank_id="bank-1",
+        target_count=10,
+        rotation_offset=10,
+    )
+
+    assert [item["question_pk"] for item in questions] == [f"q-{index}" for index in range(10, 20)]
+    assert warning is None
+
+
+@pytest.mark.asyncio
+async def test_question_rotation_wraps_at_bank_end(monkeypatch):
+    from lib import question_selector
+
+    class FakeAdapter:
+        async def count_available(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            return 25
+
+        async def select_questions(self, *args, offset: int, limit: int, **kwargs):  # noqa: ANN002, ANN003
+            return [{"question_pk": f"q-{index}"} for index in range(offset, min(offset + limit, 25))]
+
+    monkeypatch.setattr(question_selector, "get_adapter", lambda _kind: FakeAdapter())
+
+    questions, warning = await question_selector.build_question_list(
+        object(),
+        kind="choice",
+        user_id=1,
+        bank_id="bank-1",
+        target_count=10,
+        rotation_offset=20,
+    )
+
+    assert [item["question_pk"] for item in questions] == [
+        "q-20", "q-21", "q-22", "q-23", "q-24", "q-0", "q-1", "q-2", "q-3", "q-4",
+    ]
+    assert warning is None
 
 
 class TestBuildFilterClause:

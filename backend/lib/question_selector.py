@@ -51,6 +51,7 @@ class QuestionAdapter(ABC):
         sort_order: SortOrder,
         scheduling_mode: SchedulingMode = "manual",
         fsrs_config: FsrsConfig | None = None,
+        offset: int = 0,
         limit: int,
     ) -> list[dict[str, Any]]:
         ...
@@ -95,6 +96,7 @@ class ChoiceQuestionAdapter(QuestionAdapter):
         sort_order: SortOrder,
         scheduling_mode: SchedulingMode = "manual",
         fsrs_config: FsrsConfig | None = None,
+        offset: int = 0,
         limit: int,
     ) -> list[dict[str, Any]]:
         if scheduling_mode == "fsrs":
@@ -122,9 +124,10 @@ class ChoiceQuestionAdapter(QuestionAdapter):
             WHERE a.set_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             {order_sql}
-            LIMIT ${params['idx']}
+            OFFSET ${params['idx']} LIMIT ${params['idx'] + 1}
             """,
             *params["args"],
+            max(0, offset),
             limit,
         )
         return [dict(r) for r in rows]
@@ -314,6 +317,7 @@ class VocabQuestionAdapter(QuestionAdapter):
         sort_order: SortOrder,
         scheduling_mode: SchedulingMode = "manual",
         fsrs_config: FsrsConfig | None = None,
+        offset: int = 0,
         limit: int,
     ) -> list[dict[str, Any]]:
         if scheduling_mode == "fsrs":
@@ -340,9 +344,10 @@ class VocabQuestionAdapter(QuestionAdapter):
             WHERE w.deck_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             {order_sql}
-            LIMIT ${params['idx']}
+            OFFSET ${params['idx']} LIMIT ${params['idx'] + 1}
             """,
             *params["args"],
+            max(0, offset),
             limit,
         )
         return [dict(r) for r in rows]
@@ -532,6 +537,7 @@ class InputQuestionAdapter(QuestionAdapter):
         sort_order: SortOrder,
         scheduling_mode: SchedulingMode = "manual",
         fsrs_config: FsrsConfig | None = None,
+        offset: int = 0,
         limit: int,
     ) -> list[dict[str, Any]]:
         # scheduling_mode=="fsrs" 时回退到 manual 逻辑(input 表无 fsrs 字段)
@@ -556,9 +562,10 @@ class InputQuestionAdapter(QuestionAdapter):
             WHERE art.set_id = $2::uuid
               AND ({' OR '.join(params['conditions']) if params['conditions'] else 'TRUE'})
             {order_sql}
-            LIMIT ${params['idx']}
+            OFFSET ${params['idx']} LIMIT ${params['idx'] + 1}
             """,
             *params["args"],
+            max(0, offset),
             limit,
         )
         return [dict(r) for r in rows]
@@ -638,6 +645,7 @@ async def build_question_list(
     sort_order: SortOrder = "sequential",
     scheduling_mode: SchedulingMode = "manual",
     fsrs_config: FsrsConfig | None = None,
+    rotation_offset: int = 0,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Build a fixed question list with strict mode rules.
 
@@ -647,6 +655,19 @@ async def build_question_list(
     - matched == 0: return empty, error message
     """
     adapter = get_adapter(kind)
+    offset = 0
+    available_count = 0
+    if rotation_offset > 0:
+        available_count = await adapter.count_available(
+            conn,
+            user_id=user_id,
+            bank_id=bank_id,
+            primary_filter=primary_filter,
+            scheduling_mode=scheduling_mode,
+            fsrs_config=fsrs_config,
+        )
+        if available_count:
+            offset = rotation_offset % available_count
     questions = await adapter.select_questions(
         conn,
         user_id=user_id,
@@ -655,8 +676,26 @@ async def build_question_list(
         sort_order=sort_order,
         scheduling_mode=scheduling_mode,
         fsrs_config=fsrs_config,
+        offset=offset,
         limit=target_count,
     )
+
+    # A cycle may begin near the tail of a bank. Fill the remaining slots from
+    # the start so each configured round keeps its intended size when possible.
+    if rotation_offset > 0 and available_count >= target_count and len(questions) < target_count:
+        questions.extend(
+            await adapter.select_questions(
+                conn,
+                user_id=user_id,
+                bank_id=bank_id,
+                primary_filter=primary_filter,
+                sort_order=sort_order,
+                scheduling_mode=scheduling_mode,
+                fsrs_config=fsrs_config,
+                offset=0,
+                limit=target_count - len(questions),
+            )
+        )
 
     matched = len(questions)
     warning: str | None = None

@@ -148,6 +148,11 @@ async def create_deliberate_workflow(
     user: Annotated[_AuthUser, Depends(get_current_user)],
 ) -> DeliberateWorkflowConfigOut:
     validate_config_shape(payload.kind, payload.focus_work_type, payload.target_count)
+    question_rotation = (
+        payload.question_rotation
+        if payload.kind == CHOICE_KIND and payload.scheduling_mode == "manual"
+        else "none"
+    )
 
     # Ensure completion.question_count matches target_count
     completion = dict(payload.completion)
@@ -194,6 +199,7 @@ async def create_deliberate_workflow(
             pass_criteria=payload.pass_criteria,
             primary_filter=payload.primary_filter,
             sort_order=payload.sort_order,
+            question_rotation=question_rotation,
             use_fsrs=payload.use_fsrs,
             backflow_rule=payload.backflow_rule,
             scheduling_mode=payload.scheduling_mode,
@@ -241,6 +247,9 @@ async def update_deliberate_workflow(
         next_type = patch.get("focus_work_type", current["focus_work_type"])
         next_count = patch.get("target_count", current["target_count"])
         validate_config_shape(next_kind, next_type, int(next_count))
+        next_scheduling_mode = patch.get("scheduling_mode", current.get("scheduling_mode") or "manual")
+        if next_kind != CHOICE_KIND or next_scheduling_mode != "manual":
+            patch["question_rotation"] = "none"
         row = await repository.update_config(conn, user_id=int(user.id), config_id=str(config_id), patch=patch)
         if row is None:
             raise HTTPException(status_code=404, detail="配置不存在")

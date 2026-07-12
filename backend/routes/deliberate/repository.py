@@ -96,6 +96,13 @@ async def init_tables(pool: asyncpg.Pool) -> None:
             "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS sort_order TEXT NOT NULL DEFAULT 'sequential';"
         )
         await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS question_rotation TEXT NOT NULL DEFAULT 'none';"
+        )
+        await conn.execute("ALTER TABLE deliberate_workflow_configs DROP CONSTRAINT IF EXISTS chk_deliberate_configs_question_rotation;")
+        await conn.execute(
+            "ALTER TABLE deliberate_workflow_configs ADD CONSTRAINT chk_deliberate_configs_question_rotation CHECK (question_rotation IN ('none', 'cycle'));"
+        )
+        await conn.execute(
             "ALTER TABLE deliberate_workflow_configs ADD COLUMN IF NOT EXISTS use_fsrs BOOLEAN NOT NULL DEFAULT false;"
         )
         await conn.execute(
@@ -240,6 +247,7 @@ def config_to_dict(row: asyncpg.Record | dict[str, Any], *, bank_summary: Any = 
         "children": _json_value(row["children_json"]) or [],
         "primary_filter": row.get("primary_filter", "all"),
         "sort_order": row.get("sort_order", "sequential"),
+        "question_rotation": row.get("question_rotation", "none"),
         "use_fsrs": bool(row.get("use_fsrs", False)),
         "backflow_rule": row.get("backflow_rule", "none"),
         "scheduling_mode": scheduling_mode,
@@ -282,7 +290,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int, app_id: str | 
             """
             SELECT id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                    scope_json, completion_json, pass_criteria_json, children_json,
-                   primary_filter, sort_order, use_fsrs, backflow_rule,
+                   primary_filter, sort_order, question_rotation, use_fsrs, backflow_rule,
                    scheduling_mode, fsrs_config_json,
                    created_at, updated_at
             FROM deliberate_workflow_configs
@@ -296,7 +304,7 @@ async def list_configs(conn: asyncpg.Connection, *, user_id: int, app_id: str | 
         """
         SELECT id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                scope_json, completion_json, pass_criteria_json, children_json,
-               primary_filter, sort_order, use_fsrs, backflow_rule,
+               primary_filter, sort_order, question_rotation, use_fsrs, backflow_rule,
                scheduling_mode, fsrs_config_json,
                created_at, updated_at
         FROM deliberate_workflow_configs
@@ -312,7 +320,7 @@ async def get_config(conn: asyncpg.Connection, *, user_id: int, config_id: str) 
         """
         SELECT id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                scope_json, completion_json, pass_criteria_json, children_json,
-               primary_filter, sort_order, use_fsrs, backflow_rule,
+               primary_filter, sort_order, question_rotation, use_fsrs, backflow_rule,
                scheduling_mode, fsrs_config_json,
                created_at, updated_at
         FROM deliberate_workflow_configs
@@ -341,29 +349,34 @@ async def create_config(
     children: list[dict[str, Any]] | None = None,
     primary_filter: str = "all",
     sort_order: str = "sequential",
+    question_rotation: str = "none",
     use_fsrs: bool = False,
     backflow_rule: str = "none",
     scheduling_mode: str = "manual",
     fsrs_config: dict[str, Any] | None = None,
 ) -> asyncpg.Record:
-    # FSRS 模式下强制覆盖三个手动调度字段
+    # FSRS and fixed-pool rotation each own their selection strategy.
     if scheduling_mode == "fsrs":
         primary_filter = "all"
         sort_order = "sequential"
         backflow_rule = "none"
+        question_rotation = "none"
+    elif question_rotation == "cycle":
+        primary_filter = "all"
+        sort_order = "sequential"
     return await conn.fetchrow(
         """
         INSERT INTO deliberate_workflow_configs(
             user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
             scope_json, completion_json, pass_criteria_json, children_json,
-            primary_filter, sort_order, use_fsrs, backflow_rule,
+            primary_filter, sort_order, question_rotation, use_fsrs, backflow_rule,
             scheduling_mode, fsrs_config_json
         )
         VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8::uuid, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb,
-                $14, $15, $16, $17, $18, $19::jsonb)
+                $14, $15, $16, $17, $18, $19, $20::jsonb)
         RETURNING id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                   scope_json, completion_json, pass_criteria_json, children_json,
-                  primary_filter, sort_order, use_fsrs, backflow_rule,
+                  primary_filter, sort_order, question_rotation, use_fsrs, backflow_rule,
                   scheduling_mode, fsrs_config_json,
                   created_at, updated_at
         """,
@@ -382,6 +395,7 @@ async def create_config(
         _json_param(children or []),
         primary_filter,
         sort_order,
+        question_rotation,
         use_fsrs,
         backflow_rule,
         scheduling_mode,
@@ -398,13 +412,20 @@ async def update_config(
 ) -> asyncpg.Record | None:
     fields: list[str] = []
     values: list[Any] = []
-    # 若 patch 切换为 fsrs 模式,强制覆盖三个手动调度字段为默认值
+    # FSRS and fixed-pool rotation each own their selection strategy.
     if patch.get("scheduling_mode") == "fsrs":
         patch = {
             **patch,
             "primary_filter": "all",
             "sort_order": "sequential",
+            "question_rotation": "none",
             "backflow_rule": "none",
+        }
+    elif patch.get("question_rotation") == "cycle":
+        patch = {
+            **patch,
+            "primary_filter": "all",
+            "sort_order": "sequential",
         }
     mapping = {
         "name": "name",
@@ -415,6 +436,7 @@ async def update_config(
         "target_count": "target_count",
         "primary_filter": "primary_filter",
         "sort_order": "sort_order",
+        "question_rotation": "question_rotation",
         "use_fsrs": "use_fsrs",
         "backflow_rule": "backflow_rule",
         "scheduling_mode": "scheduling_mode",
@@ -446,9 +468,9 @@ async def update_config(
         UPDATE deliberate_workflow_configs
         SET {', '.join(fields)}, updated_at = NOW()
         WHERE id = ${len(values) - 1}::uuid AND user_id = ${len(values)}
-        RETURNING id, user_id, name, kind, focus_work_type, bank_id, task_id, target_count,
+        RETURNING id, user_id, name, kind, focus_work_type, app_id, event_id, bank_id, task_id, target_count,
                   scope_json, completion_json, pass_criteria_json, children_json,
-                  primary_filter, sort_order, use_fsrs, backflow_rule,
+                  primary_filter, sort_order, question_rotation, use_fsrs, backflow_rule,
                   scheduling_mode, fsrs_config_json,
                   created_at, updated_at
         """,
