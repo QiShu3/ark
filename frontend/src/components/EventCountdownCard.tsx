@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Save, ShoppingBag, Trash2, X } from 'lucide-react';
 
@@ -172,6 +172,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [workbenchEvent, setWorkbenchEvent] = useState<EventItem | null>(null);
+  const guestEventMayBeReadyRef = useRef(false);
   const [showCreateEditor, setShowCreateEditor] = useState(false);
   const [createForm, setCreateForm] = useState<EventFormState>(CREATE_EVENT_DEFAULTS);
   const [createWorkbenchItems, setCreateWorkbenchItems] = useState<CreateWorkbenchItemState[]>([]);
@@ -204,6 +205,15 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
 
   useEffect(() => {
     void loadPrimaryEvent();
+  }, []);
+
+  useEffect(() => {
+    const handleGuestEventReady = () => {
+      guestEventMayBeReadyRef.current = true;
+      void loadPrimaryEvent();
+    };
+    window.addEventListener(ONBOARDING_EVENTS.guestEventReady, handleGuestEventReady);
+    return () => window.removeEventListener(ONBOARDING_EVENTS.guestEventReady, handleGuestEventReady);
   }, []);
 
   useEffect(() => {
@@ -1565,10 +1575,25 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
     dispatchOnboardingEvent(ONBOARDING_EVENTS.primaryEventOpened);
   }
 
-  function handleEventClick(): void {
+  async function handleEventClick(): Promise<void> {
     if (primaryEvent) {
       openWorkbench(primaryEvent);
-    } else {
+      return;
+    }
+
+    if (!guestEventMayBeReadyRef.current) {
+      openEventOverview();
+      return;
+    }
+
+    // Guest onboarding may finish after this component's first event request.
+    // Refresh once on click so a freshly created primary event opens directly
+    // into its workbench instead of falling back to the unrelated event list.
+    try {
+      const refreshedPrimaryEvent = await getPrimaryEvent();
+      setPrimaryEvent(refreshedPrimaryEvent);
+      openWorkbench(refreshedPrimaryEvent);
+    } catch {
       openEventOverview();
     }
   }
@@ -1795,7 +1820,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       {variant === 'nav' ? (
         <button
           type="button"
-          onClick={handleEventClick}
+          onClick={() => void handleEventClick()}
           data-onboarding-anchor="primary-event"
           className="ark-event-nav-trigger ark-focus-ring flex h-[64px] min-w-[172px] max-w-[240px] flex-col justify-center rounded-[24px] px-2 text-left transition-colors"
           aria-label={`打开主事件：${primaryEvent ? primaryEvent.name : '未设置主事件'}，倒计时 ${countdownText}`}
@@ -1810,7 +1835,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
       ) : (
         <button
           type="button"
-          onClick={handleEventClick}
+          onClick={() => void handleEventClick()}
           data-onboarding-anchor="primary-event"
           className="ark-panel-card ark-focus-ring absolute left-12 top-24 z-20 flex h-44 w-44 flex-col items-center justify-center rounded-full border-[6px] text-[var(--ark-text)] shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-colors hover:bg-[var(--ark-surface-subtle)]"
         >
@@ -1837,7 +1862,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                 {showCreateEditor ? '添加事件' : '事件总览'}
               </h3>
               <button
-                data-onboarding-anchor="event-overview-close"
+                data-onboarding-anchor="event-workbench-close"
                 onClick={closeModal}
                 className="p-2 hover:bg-ark-surface-subtle rounded-full transition-colors text-ark-text-muted hover:text-ark-text"
               >
@@ -1990,6 +2015,7 @@ const EventCountdownCard: React.FC<EventCountdownCardProps> = ({ variant = 'floa
                           key={event.id}
                           type="button"
                           onClick={() => openWorkbench(event)}
+                          data-onboarding-anchor={event.is_primary ? 'event-workbench-overview' : undefined}
                           className="rounded-xl border border-ark-border bg-ark-surface-subtle p-4 flex items-start justify-between gap-4 text-left hover:bg-ark-surface-subtle transition-colors"
                         >
                           <div className="min-w-0">

@@ -13,6 +13,7 @@ type GuestPhase =
   | 'experience'
   | 'creating'
   | 'guide-event'
+  | 'guide-event-list'
   | 'guide-event-overview'
   | 'guide-event-arrangements'
   | 'guide-event-workflows'
@@ -41,6 +42,13 @@ const GUIDE_STEPS: GuideStep[] = [
     title: '这是你的事件',
     body: '点击这里查看 22408 考研事件的详细内容和倒计时。',
     placement: 'right',
+  },
+  {
+    id: 'event-list-item',
+    anchor: 'event-workbench-overview',
+    title: '这是你的 22408 考研事件',
+    body: '它已经设为主事件，并记录了考研截止时间。点击这张卡片，查看事件中的学习安排。',
+    placement: 'bottom',
   },
   {
     id: 'event-workbench-overview',
@@ -346,7 +354,12 @@ export default function GuestOnboarding() {
   // the same as the bubble CTA so the guide does not cover the event overview.
   useEffect(() => {
     if (phase !== 'guide-event') return;
-    const handler = () => setPhase('guide-event-overview');
+    const handler = () => {
+      window.setTimeout(() => {
+        const workbench = document.querySelector('[data-onboarding-anchor="event-workbench-overview"]');
+        setPhase(workbench?.tagName === 'BUTTON' ? 'guide-event-list' : 'guide-event-overview');
+      }, 0);
+    };
     window.addEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
     return () => window.removeEventListener(ONBOARDING_EVENTS.primaryEventOpened, handler);
   }, [phase]);
@@ -373,6 +386,7 @@ export default function GuestOnboarding() {
       });
       // Refresh app registry so new sub-apps appear
       clearAppRegistryCache();
+      window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.guestEventReady));
       setPhase('guide-event');
     } catch (err) {
       console.error('Guest event setup failed:', err);
@@ -382,6 +396,13 @@ export default function GuestOnboarding() {
   }, []);
 
   const handleGuideEventAction = useCallback(() => {
+    window.setTimeout(() => {
+      const workbench = document.querySelector('[data-onboarding-anchor="event-workbench-overview"]');
+      setPhase(workbench?.tagName === 'BUTTON' ? 'guide-event-list' : 'guide-event-overview');
+    }, 0);
+  }, []);
+
+  const handleEventListOpen = useCallback(() => {
     setPhase('guide-event-overview');
   }, []);
 
@@ -474,7 +495,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-event-close' && (
         <GuideHighlight
-          step={GUIDE_STEPS[4]}
+          step={GUIDE_STEPS[5]}
           visible={true}
           onTargetAction={() => undefined}
           onSkip={handleSkip}
@@ -483,7 +504,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-event-overview' && (
         <GuideHighlight
-          step={GUIDE_STEPS[1]}
+          step={GUIDE_STEPS[2]}
           visible={true}
           onTargetAction={() => undefined}
           onBubbleAction={handleEventOverviewContinue}
@@ -494,7 +515,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-event-arrangements' && (
         <GuideHighlight
-          step={GUIDE_STEPS[2]}
+          step={GUIDE_STEPS[3]}
           visible={true}
           onTargetAction={() => undefined}
           onBubbleAction={handleEventArrangementsContinue}
@@ -505,7 +526,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-event-workflows' && (
         <GuideHighlight
-          step={GUIDE_STEPS[3]}
+          step={GUIDE_STEPS[4]}
           visible={true}
           onTargetAction={() => undefined}
           onBubbleAction={handleEventWorkflowsContinue}
@@ -514,10 +535,19 @@ export default function GuestOnboarding() {
         />
       )}
 
+      {phase === 'guide-event-list' && (
+        <GuideHighlight
+          step={GUIDE_STEPS[1]}
+          visible={true}
+          onTargetAction={handleEventListOpen}
+          onSkip={handleSkip}
+        />
+      )}
+
       {/* Guided tour: highlight start learning */}
       {phase === 'guide-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[5]}
+          step={GUIDE_STEPS[6]}
           visible={true}
           onTargetAction={handleLearningEntryClick}
           onSkip={handleSkip}
@@ -526,7 +556,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-learning-select' && (
         <GuideHighlight
-          step={GUIDE_STEPS[6]}
+          step={GUIDE_STEPS[7]}
           visible={true}
           onTargetAction={handleLearningAppClick}
           onSkip={handleSkip}
@@ -535,7 +565,7 @@ export default function GuestOnboarding() {
 
       {phase === 'guide-workflow-start' && (
         <GuideHighlight
-          step={GUIDE_STEPS[7]}
+          step={GUIDE_STEPS[8]}
           visible={true}
           onTargetAction={handleWorkflowStartClick}
           onSkip={handleSkip}

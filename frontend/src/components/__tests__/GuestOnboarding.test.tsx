@@ -44,7 +44,7 @@ describe('GuestOnboarding', () => {
       window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.primaryEventOpened));
     });
 
-    expect(await screen.findByText('这里是你的考研事件')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('这里是你的考研事件')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
 
@@ -83,7 +83,7 @@ describe('GuestOnboarding', () => {
     await act(async () => {
       window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.primaryEventOpened));
     });
-    await screen.findByText('这里是你的考研事件');
+    await waitFor(() => expect(screen.getByText('这里是你的考研事件')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
     await screen.findByText('任务与日程安排');
     fireEvent.click(screen.getByRole('button', { name: '继续' }));

@@ -19,6 +19,7 @@ export const FIRST_GUIDE_EVENTS = {
   workflowStarted: 'ark:first-guide-workflow-started',
   workflowPhaseEnded: 'ark:first-guide-workflow-phase-ended',
   workflowStopped: 'ark:first-guide-workflow-stopped',
+  guestEventReady: 'ark:guest-event-ready',
 } as const;
 
 export const HOME_ONBOARDING_STORAGE_KEY = FIRST_GUIDE_STORAGE_KEY;

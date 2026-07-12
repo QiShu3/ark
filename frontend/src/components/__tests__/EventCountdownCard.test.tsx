@@ -105,6 +105,41 @@ describe('EventCountdownCard', () => {
     expect(screen.getByText('--')).toBeInTheDocument();
   });
 
+  it('refreshes a just-created primary event before deciding which event surface to open', async () => {
+    const user = userEvent.setup();
+    const event = {
+      id: 'event-408',
+      user_id: 7,
+      name: '22408考研',
+      start_date: '2026-07-12',
+      due_at: '2026-12-20T00:00:00Z',
+      is_primary: true,
+      created_at: '2026-07-12T00:00:00Z',
+      updated_at: '2026-07-12T00:00:00Z',
+    };
+    let primaryRequestCount = 0;
+    (apiJson as Mock).mockImplementation(async (url: string) => {
+      if (url === '/todo/events/primary') {
+        primaryRequestCount += 1;
+        if (primaryRequestCount === 1) throw new Error('主事件不存在');
+        return event;
+      }
+      if (url === '/todo/events') return [event];
+      if (url.includes('/todo/achievements/summary')) return null;
+      if (url === `/todo/events/${event.id}/workflows`) return [];
+      return [];
+    });
+
+    render(<EventCountdownCard />);
+    window.dispatchEvent(new CustomEvent(ONBOARDING_EVENTS.guestEventReady));
+    const eventButton = await screen.findByRole('button', { name: /未设置主事件/i });
+
+    await user.click(eventButton);
+
+    expect(await screen.findByRole('button', { name: '关闭安排' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '事件总览' })).not.toBeInTheDocument();
+  });
+
   it('returns to the event overview after creating an event from the add-event editor', async () => {
     const user = userEvent.setup();
     const createdEvents: Array<{
