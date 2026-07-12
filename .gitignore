@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 /backend/.env
+/deploy/.env
 *.pyc
 __pycache__/
 

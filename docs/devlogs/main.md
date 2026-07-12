@@ -8,6 +8,21 @@
 
 ## 提交记录
 
+### 2026-07-12 · `<pending>` · feat(deploy): add Docker Compose production stack
+
+**用户需求**："那直接用nginx就行了吧？"、"OK"，以及"那你开始吧"。
+
+**完成工作**：
+- 新增单机 Docker Compose 生产栈，包含前端 Nginx、FastAPI 后端和 PostgreSQL；仅暴露 80/443。
+- 前端 Nginx 使用 `strangetalking.xin` 的既有证书，代理 Ark 的 API、认证、任务、上传、后台和健康检查路由。
+- 新增服务器本地环境变量模板和部署说明；数据库与上传文件使用命名卷持久化。
+- 收紧前后端 Docker 构建上下文，排除本地密钥、依赖和运行时目录。
+
+**验证情况**：
+- `frontend`: `pnpm build`，passed。
+- `frontend`: `pnpm check`，passed。
+- `docker compose --env-file /tmp/ark-deploy.env -f deploy/compose.yml config`，passed。
+
 ### 2026-07-11 · `72355e0` · feat: 新增游客登录功能
 
 **用户需求**："我想设置一个游客登录，你有什么想法吗？" — 体验试用场景，游客可使用大部分功能，数据仅 localStorage，暂不清理。
