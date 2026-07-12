@@ -8,6 +8,19 @@
 
 ## 提交记录
 
+### 2026-07-12 · `791d57f` · feat(deploy): add repeatable update scripts
+
+**用户需求**："未来更新要怎么办呢？"、"你可以帮我实现吗？"
+
+**完成工作**：
+- 新增本机 `deploy/publish.sh`：确认本地 `main` 已推送、构建前端并发布静态文件。
+- 新增服务器 `deploy/update.sh`：快进拉取代码、更新 Nginx、在 x86 服务器重建后端并等待健康检查。
+- 两个脚本均会在发现未提交文件时中止，避免覆盖本地或服务器上的人工修改。
+
+**验证情况**：
+- `bash -n deploy/update.sh deploy/publish.sh`，passed。
+- `frontend`: `pnpm check`，passed。
+
 ### 2026-07-12 · `6b65800` · fix(deploy): support system nginx production stack
 
 **用户需求**："那你开始吧"、"汇报一下情况"，以及对 ARM 本机构建与 x86 服务器部署方式的确认。
