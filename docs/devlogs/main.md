@@ -8,6 +8,16 @@
 
 ## 提交记录
 
+### 2026-07-12 · `b28fa15` · chore(deploy): ignore server certificates
+
+**用户需求**："未来更新要怎么办呢？"、"你可以帮我实现吗？"
+
+**完成工作**：
+- 将服务器本地 TLS 证书目录加入 Git 忽略规则，使更新脚本不会把私钥和证书误判为未提交变更。
+
+**验证情况**：
+- `git check-ignore deploy/certs/strangetalking.xin.key`，passed。
+
 ### 2026-07-12 · `791d57f` · feat(deploy): add repeatable update scripts
 
 **用户需求**："未来更新要怎么办呢？"、"你可以帮我实现吗？"
