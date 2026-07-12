@@ -32,10 +32,24 @@ curl -fsS https://strangetalking.xin/health
 
 ## Updating
 
+From the local development machine, after committing and pushing the intended
+`main` revision:
+
+```bash
+./deploy/publish.sh
+```
+
+The script builds the frontend locally, publishes its static files to Nginx,
+then asks the server to fast-forward its Git checkout and rebuild only the x86
+backend image. It refuses to deploy if the local or server checkout has
+uncommitted changes, or if local `HEAD` has not been pushed to `origin/main`.
+
+To update only the backend from the server (for example, after static assets
+have already been published), run:
+
 ```bash
 cd /home/ubuntu/ark
-git pull --ff-only origin main
-docker compose --env-file deploy/.env -f deploy/compose.yml up -d --build
+./deploy/update.sh
 ```
 
 ## Operations
